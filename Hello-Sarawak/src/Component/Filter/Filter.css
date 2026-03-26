@@ -1,0 +1,52 @@
+.filter-layout {
+    background-color: #f8f9fa;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.filters {
+    display: flex;
+    gap: 60px;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.filter-item {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    min-width: 150px;
+    flex-basis: 0;
+}
+
+.filter-item select {
+    padding: 8px;
+    font-size: 14px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    width: 100%;
+}
+
+.filter-item label {
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.apply-filters-btn {
+    background: linear-gradient(90deg, #87cd51 50%, #bdf094 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.apply-filters-btn:hover {
+    background: linear-gradient(90deg, #bdf094 0%, #87cd51 100%);
+}
+

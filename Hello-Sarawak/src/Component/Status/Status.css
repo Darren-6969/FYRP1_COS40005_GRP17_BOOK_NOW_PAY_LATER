@@ -1,0 +1,91 @@
+ .status {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 1.2;
+    letter-spacing: 0.3px;
+    text-transform: capitalize;
+    border: 1px solid transparent;
+  }
+  
+  .status.pending {
+    background-color: rgba(255, 193, 7, 0.25);  
+    color: #b88600;  
+    border-color: rgba(255, 193, 7, 0.5);  
+  }
+  
+  
+  .status.active {
+    background-color: rgba(40, 167, 69, 0.15);
+    color: #28a745;
+    border-color: rgba(40, 167, 69, 0.3);
+  }
+  
+  .status.inactive {
+    background-color: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+    border: 1px solid rgba(231, 76, 60, 0.3);
+  }
+  
+  .status.available {
+    background-color: rgba(39, 174, 96, 0.15);
+    color: #27ae60;
+    border: 1px solid rgba(39, 174, 96, 0.3);
+  }
+  
+  .status.unavailable {
+    background-color: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+    border: 1px solid rgba(231, 76, 60, 0.3);
+  }
+
+  .status.accepted {
+    background-color: rgba(39, 174, 96, 0.15);
+    color: #27ae60;
+    border: 1px solid rgba(39, 174, 96, 0.3);
+  }
+  
+  .status.rejected {
+    background-color: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+    border: 1px solid rgba(231, 76, 60, 0.3);
+  }
+  
+  .status.canceled {
+    background-color: rgba(88, 88, 88, 0.15);
+    color: #585858;
+    border: 1px solid rgba(88, 88, 88, 0.3);
+  }
+
+  .status.paid {
+    background-color: rgba(52, 152, 219, 0.15);
+    color: #3498db;
+    border: 1px solid rgba(52, 152, 219, 0.3);
+  }
+  
+  .status.expired {
+    background-color: rgba(139, 69, 19, 0.15);
+    color: #8b4513;
+    border: 1px solid rgba(139, 69, 19, 0.3);
+  }
+  
+  .status.unknown {
+    background-color: rgba(160, 160, 160, 0.15);
+    color: #666;
+    border-color: rgba(160, 160, 160, 0.3);
+  }
+  
+  .status.published {
+    background-color: rgba(147, 112, 219, 0.15);  
+    color: #9370DB; 
+    border: 1px solid rgba(147, 112, 219, 0.3);
+  }
+
+  .status.suggested {
+    background-color: rgba(255, 127, 80, 0.15);
+    color: #FF7F50;  
+    border: 1px solid rgba(255, 127, 80, 0.3);
+  }
+  

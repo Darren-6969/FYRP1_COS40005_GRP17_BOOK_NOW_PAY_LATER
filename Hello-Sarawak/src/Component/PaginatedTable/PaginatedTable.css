@@ -1,0 +1,185 @@
+.paginated-table {
+    width: 100%;
+    margin-top: 20px;
+    overflow-x: auto;
+  }
+  
+  .paginated-table .styled-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .paginated-table .pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin: 24px 0;
+    flex-wrap: wrap;
+  }
+  
+  .paginated-table .pagination button,
+  .paginated-table .pagination .page-number {
+    min-width: 36px;
+    height: 36px;
+    padding: 0 10px;
+    margin: 2px;
+    border: 1px solid #ddd;
+    background: #fff;
+    color: #333;
+    font-size: 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, border 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .paginated-table .pagination button[disabled] {
+    background: #f5f5f5;
+    color: #bbb;
+    cursor: not-allowed;
+    border: 1px solid #eee;
+  }
+  
+  .paginated-table .pagination .active,
+  .paginated-table .pagination .page-number.active {
+    background: #333;
+    color: #fff;
+    border: 1.5px solid #333;
+    font-weight: bold;
+  }
+  
+  .paginated-table .pagination .ellipsis {
+    padding: 0 8px;
+    color: #888;
+    font-size: 18px;
+    user-select: none;
+  }
+  
+  .sort-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 5px;
+  }
+  
+  .styled-table-wrapper {
+    overflow-x: visible;
+    max-width: 100%;
+  }
+  
+  .styled-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 25px 0;
+    font-size: 18px;
+    text-align: left;
+    table-layout: auto;
+    border-spacing: 0;
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    margin-bottom: 2rem;
+    min-width: 600px;
+  }
+  
+  .styled-table thead tr {
+    background: #D3D3D3;
+    color: #333;
+    font-weight: bold;
+    text-align: left;
+  }
+  
+  .styled-table th {
+    background-color: #f8fafc;
+    color: #64748b;
+    font-weight: 600;
+    text-align: left;
+    padding: 12px 18px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  
+  .styled-table td {
+    padding: 12px 20px;
+    border-bottom: 1px solid #ddd;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    text-align: left;
+  }
+  
+  .styled-table tbody tr {
+    background-color: #f1f4f9;
+  }
+  
+
+  @media (max-width: 990px) {
+    .styled-table {
+        width: 100%;
+    }
+
+    .pagination {
+        gap: 6px;
+    }
+
+    .pagination button,
+    .pagination .page-number {
+        min-width: 32px;
+        height: 32px;
+        font-size: 15px;
+        padding: 0 8px;
+    }
+  }
+  
+
+  @media (max-width: 768px) {
+    .styled-table {
+        width: 100%;
+    }
+
+    .pagination {
+        gap: 4px;
+    }
+
+    .pagination button,
+    .pagination .page-number {
+        min-width: 28px;
+        height: 28px;
+        font-size: 14px;
+        padding: 0 6px;
+    }
+  }
+  
+
+  @media (max-width: 480px) {
+    .paginated-table {
+      overflow-x: auto !important;
+    }
+    .styled-table {
+      min-width: 700px !important;
+      width: min-content !important;
+    }
+
+    .pagination {
+        gap: 2px;
+        flex-wrap: wrap;
+    }
+
+    .pagination button,
+    .pagination .page-number {
+        min-width: 24px;
+        height: 24px;
+        font-size: 12px;
+        padding: 0 4px;
+        margin: 1px;
+    }
+
+    .pagination .ellipsis {
+        font-size: 14px;
+        padding: 0 4px;
+    }
+  }
+  
+  

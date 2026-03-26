@@ -1,0 +1,331 @@
+:root {
+  --blackColor: #333;
+  --inputColor: #f5f5f5;
+  --errorColor: #ff3b30;
+  --successColor: #34c759;
+  --shadowColor: rgba(0, 0, 0, 0.3);
+  --borderRadius: 8px;
+}
+
+/* Modal Overlay */
+.moderator-form-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  opacity: 0;
+  animation: fadeIn 0.3s forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Modal Content */
+.moderator-form-content {
+  background: white;
+  padding: 2rem;
+  border-radius: var(--borderRadius);
+  width: 90%;
+  max-width: 800px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px var(--shadowColor);
+  position: relative;
+  transform: translateY(20px);
+  animation: slideUp 0.3s forwards;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Scrollbar Styling */
+.moderator-form-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.moderator-form-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.moderator-form-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+.moderator-form-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Form Title */
+.moderator-form-content h1 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: var(--blackColor);
+  font-size: 1.75rem;
+  font-weight: 600;
+  position: relative;
+  padding-bottom: 1rem;
+}
+
+.moderator-form-content h1:after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 3px;
+  background-color: var(--primaryColor);
+  border-radius: 10px;
+}
+
+/* Close Button */
+.moderator-form-close-button {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: #f5f5f5;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #777;
+  font-weight: bold;
+  z-index: 1001;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.moderator-form-close-button:hover {
+  color: #ff3b30;
+  background: #e9e9e9;
+  transform: rotate(90deg);
+}
+
+/* Form Layout */
+.moderator-form-content .form {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+/* Input Fields */
+.moderator-form-content .inputDiv {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.moderator-form-content .inputDiv label {
+  font-size: 14px;
+  color: var(--blackColor);
+  font-weight: 500;
+}
+
+.moderator-form-content .inputDiv .input {
+  display: flex;
+  align-items: center;
+  padding: 0.8rem;
+  background: var(--inputColor);
+  border-radius: var(--borderRadius);
+  gap: 0.5rem;
+  border: 1px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.moderator-form-content .inputDiv .input:focus-within {
+  border-color: var(--primaryColor);
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+.moderator-form-content .inputDiv .input input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: none;
+  font-size: 15px;
+}
+
+.moderator-form-content .inputDiv .input .icon {
+  color: #777;
+  min-width: 18px;
+}
+
+/* Form Validation States */
+.inputDiv.error .input {
+  border-color: var(--errorColor);
+  background-color: rgba(255, 59, 48, 0.05);
+}
+
+.inputDiv.error .input .icon {
+  color: var(--errorColor);
+}
+
+.inputDiv.success .input {
+  border-color: var(--successColor);
+}
+
+.form-error-message {
+  color: var(--errorColor);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Submit Button */
+.moderator-form-submit-button {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  background-color: var(--primaryColor);
+  color: white;
+  border: none;
+  border-radius: var(--borderRadius);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  grid-column: 1 / -1; 
+}
+
+.moderator-form-submit-button:hover {
+  background: var(--hoverColor);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.moderator-form-submit-button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.moderator-form-submit-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.moderator-form-message {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 14px;
+  grid-column: 1 / -1;
+  padding: 8px 12px;
+  border-radius: var(--borderRadius);
+  font-weight: 500;
+}
+
+.moderator-form-message.success {
+  background-color: rgba(52, 199, 89, 0.1);
+  color: var(--successColor);
+  border: 1px solid rgba(52, 199, 89, 0.2);
+}
+
+.moderator-form-message.error {
+  background-color: rgba(255, 59, 48, 0.1);
+  color: var(--errorColor);
+  border: 1px solid rgba(255, 59, 48, 0.2);
+}
+
+@media (max-width: 768px) {
+  .moderator-form-content {
+    padding: 1.5rem;
+    width: 95%;
+  }
+  
+  .moderator-form-content .form {
+    grid-template-columns: 1fr;
+  }
+  
+  .moderator-form-content h1 {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .moderator-form-content {
+    padding: 1rem;
+    max-height: 90vh;
+  }
+  
+  .moderator-form-submit-button {
+    padding: 10px;
+  }
+  
+  .moderator-form-content h1:after {
+    width: 40px;
+  }
+}
+
+.moderator-form-content .inputDiv {
+  animation: fadeInUp 0.4s forwards;
+  opacity: 0;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.moderator-form-content .inputDiv:nth-child(1) { animation-delay: 0.1s; }
+.moderator-form-content .inputDiv:nth-child(2) { animation-delay: 0.15s; }
+.moderator-form-content .inputDiv:nth-child(3) { animation-delay: 0.2s; }
+.moderator-form-content .inputDiv:nth-child(4) { animation-delay: 0.25s; }
+.moderator-form-content .inputDiv:nth-child(5) { animation-delay: 0.3s; }
+.moderator-form-content .inputDiv:nth-child(6) { animation-delay: 0.35s; }
+.moderator-form-content .inputDiv:nth-child(7) { animation-delay: 0.4s; }
+.moderator-form-content .inputDiv:nth-child(8) { animation-delay: 0.45s; }
+.moderator-form-content .inputDiv:nth-child(9) { animation-delay: 0.5s; }
+.moderator-form-content .inputDiv:nth-child(10) { animation-delay: 0.55s; }
+
+.moderator-form-submit-button {
+  animation: fadeIn 0.5s 0.6s forwards;
+  opacity: 0;
+}
+
+.moderator-form-content input:focus {
+  outline: none;
+}
+
+.moderator-form-close-button:focus {
+  outline: 2px solid var(--primaryColor);
+  outline-offset: 2px;
+}
+
+.moderator-form-submit-button:focus {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+.moderator-form-content .inputDiv label::after {
+  content: "*";
+  color: var(--errorColor);
+  margin-left: 3px;
+}
+
+.moderator-form-content .inputDiv .input input[readonly] {
+  background-color: rgba(0, 0, 0, 0.03);
+  color: #777;
+  cursor: not-allowed;
+}

@@ -1,0 +1,197 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Poppins", sans-serif;
+}
+
+.contact {
+    width: 100%;
+    position: relative;
+    padding: 20px 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    padding-bottom: 100px;
+}
+
+.contact .content {
+    max-width: 800px;
+    text-align: center;
+}
+
+.contact .content h2 {
+    font-size: 36px;
+    font-weight: 500;
+    color: #000000;
+}
+
+.contact .content p {
+    font-weight: 300;
+    color: #000000;
+}
+
+.container_contact_us {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 30px;
+    gap: 25px;
+}
+
+.container_contact_us .google_map {
+    width: 50%;
+    display: flex;
+    flex-direction: column;
+}
+
+.contactForm {
+    width: 40%;
+    padding: 40px;
+    background: #ffffff;
+    box-shadow: 0 7px 20px rgb(191, 191, 191);
+}
+
+.contactForm h2 {
+    font-size: 30px;
+    color: #333;
+    font-weight: 500;
+}
+
+.contactForm .inputBox {
+    position: relative;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.contactForm .inputBox input,
+.contactForm .inputBox textarea {
+    width: 100%;
+    padding: 5px 0;
+    font-size: 16px;
+    margin: 10px 0;
+    border: none;
+    border-bottom: 2px solid #333;
+    outline: none;
+    resize: none;
+}
+
+.contactForm .inputBox span {
+    position: absolute;
+    left: 0;
+    padding: 5px 0;
+    font-size: 16px;
+    margin: 10px 0;
+    pointer-events: none;
+    transition: 0.5s;
+    color: #666;
+}
+
+.contactForm .inputBox input:focus~span,
+.contactForm .inputBox input:valid~span,
+.contactForm .inputBox textarea:valid~span,
+.contactForm .inputBox textarea:valid~span {
+    color: #87cd51;
+    font-size: 12px;
+    transform: translateY(-20px);
+}
+
+.contactForm .btn_submit {
+    width: 100px;
+    background: #87cd51;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    padding: 10px;
+    font-size: 15px;
+    border-radius: 10px;
+    margin-top: 25px;
+}
+
+.contactForm .btn_submit:hover {
+    background: #bdf094;
+    color: #000000;
+    transition: 0.4s;
+}
+
+@media (max-width: 990px) {
+    .contact{
+      padding: 0;
+      padding-bottom: 50px;
+    }
+}
+
+@media (max-width: 768px) {
+    .contact {
+        padding: 50px;
+        margin-top: 10px;
+    }
+
+    .container_contact_us {
+        flex-direction: column;
+    }
+
+    .container_contact_us .google_map {
+        margin-bottom: 60px;
+    }
+
+    .container_contact_us .google_map iframe {
+        width: 100%;
+        height: 100%;
+    }
+
+    .container_contact_us .google_map,
+    .contactForm {
+        width: 100%;
+    }
+
+    .contact .content {
+        margin-top: 45px;
+    }
+}
+
+@media (max-width: 480px) {
+    .contact {
+      padding: 20px; 
+      margin-top: 0; 
+    }
+  
+    .contact .content h2 {
+      font-size: 28px; 
+    }
+  
+    .contactForm {
+      padding: 20px; 
+      margin-bottom: 30px;
+    }
+  
+    .contactForm h2 {
+      font-size: 24px; 
+    }
+  
+    .container_contact_us .google_map iframe {
+      height: 250px; 
+    }
+  
+    .contactForm .inputBox input,
+    .contactForm .inputBox textarea {
+      font-size: 14px; 
+    }
+  
+    .contactForm .inputBox span {
+      font-size: 14px; 
+    }
+  
+    .contactForm .btn_submit {
+      width: 100%; 
+      margin-top: 15px;
+    }
+      
+    .container_contact_us .google_map {
+      margin-bottom: 20px; 
+    }
+}

@@ -1,0 +1,27 @@
+# Logs
+logs/
+*.log
+
+# Dependency directories
+node_modules/
+.venv/
+env/
+# add other dependency folders as needed
+
+# Build output
+build/
+dist/
+target/
+*.pyc
+*.class
+
+# Environment variables
+.env*
+.ecosystem.config.js*
+# !.env.example (optional: include a template for env variables)
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

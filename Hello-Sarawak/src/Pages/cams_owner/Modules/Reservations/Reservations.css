@@ -1,0 +1,37 @@
+.reservation-status {
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: #333;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.accepted {
+  background-color: rgb(74, 255, 74);
+  color: #333;
+}
+
+.rejected {
+  background-color: rgb(255, 74, 74);
+  color: #333;
+}
+
+.canceled {
+  background-color: rgb(188, 188, 188);
+  color: #333;
+}
+
+.pending {
+  background-color: rgb(255, 221, 0);
+  color: #333;
+}
+
+.paid {
+  background-color: rgb(248, 161, 0);
+  color: #333;
+}
+
+.expired {
+  background-color: rgb(175, 120, 120);
+  color: #333;
+}

@@ -1,0 +1,28 @@
+{
+  "scripts": {
+    "test": "echo \"Error: no test specified \" && exit 1",
+    "start": "node server/server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "express-session": "^1.18.1",
+    "google-auth-library": "^9.15.1",
+    "jsonwebtoken": "^9.0.2",
+    "mssql": "^11.0.1",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^6.10.1",
+    "pg": "^8.20.0",
+    "sharp": "^0.33.5"
+  },
+  "name": "cams_backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "ecosystem.config.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

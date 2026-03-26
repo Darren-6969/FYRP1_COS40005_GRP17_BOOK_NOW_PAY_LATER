@@ -1,0 +1,134 @@
+.tour-slider {
+    width: 100%;
+    max-width: 800px;
+    margin: auto;
+    position: relative;
+    overflow: hidden;
+    contain: content;
+}
+
+.tour-property-image {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+    border-radius: 10px;
+    will-change: transform;
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+.tour-slider-placeholder {
+    width: 100%;
+    height: 300px;
+    background-color: #f0f0f0;
+    border-radius: 10px;
+}
+
+.swiper-pagination-bullet {
+    background-color: rgba(255, 255, 255, 0.5);
+    width: 8px;
+    height: 8px;
+    opacity: 1;
+}
+
+.swiper-pagination-bullet-active {
+    background-color: rgba(255, 255, 255, 1);
+    transform: scale(1.2);
+    transition: transform 0.3s ease;
+}
+
+.custom-prev-btn,
+.custom-next-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    font-size: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    z-index: 10;
+    transition: background-color 0.3s ease;
+}
+
+.custom-prev-btn:hover,
+.custom-next-btn:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+.custom-prev-btn {
+    left: 10px;
+}
+
+.custom-next-btn {
+    right: 10px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0.6; }
+    to { opacity: 1; }
+}
+
+/* Media query for tablets */
+@media (max-width: 768px) {
+    .tour-slider {
+        max-width: 100%;
+    }
+    
+    .tour-property-image {
+        height: 250px;
+    }
+    
+    .custom-prev-btn,
+    .custom-next-btn {
+        width: 35px;
+        height: 35px;
+        font-size: 25px;
+    }
+    
+    .swiper-pagination-bullet {
+        width: 10px;
+        height: 10px;
+    }
+}
+
+/* Mobile View */
+@media (max-width: 480px) {
+    .tour-slider {
+        max-width: 100%;
+    }
+    
+    .tour-property-image {
+        height: 230px;
+        border-radius: 8px;
+    }
+    
+    .custom-prev-btn,
+    .custom-next-btn {
+        width: 30px;
+        height: 30px;
+        font-size: 20px;
+    }
+    
+    .custom-prev-btn {
+        left: 5px;
+    }
+    
+    .custom-next-btn {
+        right: 5px;
+    }
+    
+    .swiper-pagination-bullet {
+        width: 8px;
+        height: 8px;
+    }
+    
+    .swiper-pagination-bullet-active {
+        transform: scale(1.1);
+    }
+}

@@ -1,0 +1,23 @@
+.create-moderator-button {
+    background: linear-gradient(90deg, #87cd51 50%, #bdf094 100%);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+.create-moderator-button:hover {
+    background: linear-gradient(90deg, #bdf094 0%, #87cd51 100%);
+    box-shadow: 0 2px 8px rgba(99,102,241,0.13);
+    color: white;
+  }
+  
+  .create-moderator-button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+  }

@@ -1,0 +1,99 @@
+@import url(https://fonts.googleapis.com/css?family=Poppins:100,100italic,200,200italic,300,300italic,regular,italic,500,500italic,600,600italic,700,700italic,800,800italic,900,900italic);
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.No_access {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin-top: 100px;
+}
+
+img {
+  width: 480px;
+}
+
+.No_Access_Text {
+  font-family: "Poppins", sans-serif;
+}
+
+.No_Access_Text h2 {
+  font-weight: 600;
+  font-size: 30px;
+}
+
+.No_Access_Text p {
+  font-size: 15px;
+  font-weight: 300;
+  margin-top: 10px;
+}
+
+.button_No_Access {
+  background: #493829;
+  width: 200px;
+  height: 40px;
+  margin: 25px;
+  border-radius: 20px;
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button_No_Access:hover {
+  background: #CC8C18;
+  transition: 0.3s;
+}
+
+@media screen and (max-width: 768px) {
+  .No_access {
+    margin-top: 80px;
+  }
+  
+  img {
+    width: 380px;
+  }
+  
+  .No_Access_Text h2 {
+    font-size: 25px;
+  }
+  
+  .No_Access_Text p {
+    font-size: 14px;
+  }
+  
+  .button_No_Access {
+    width: 180px;
+    height: 38px;
+    margin: 20px;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .No_access {
+    margin-top: 50px;
+  }
+  
+  img {
+    width: 280px;
+  }
+  
+  .No_Access_Text h2 {
+    font-size: 20px;
+  }
+  
+  .No_Access_Text p {
+    font-size: 12px;
+  }
+  
+  .button_No_Access {
+    width: 160px;
+    height: 35px;
+    margin: 15px;
+    font-size: 14px;
+  }
+}

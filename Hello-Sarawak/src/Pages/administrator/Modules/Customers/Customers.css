@@ -1,0 +1,58 @@
+.user-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 200px; 
+  }
+
+.avatar-container {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+.table-user-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+.status-dot {
+    position: absolute;
+    bottom: 4px;
+    right: 0;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    border: 2px solid white;
+  }
+
+.status-login {
+    background-color: #22c55e; 
+  }
+
+.status-registered {
+    background-color: #9ca3af; 
+  }
+
+.status-logout {
+    background-color: #DC143C; 
+  }
+
+.table-user-username {
+    font-size: 18px;
+    color: #333; 
+    white-space: nowrap; 
+    overflow: hidden;
+    text-overflow: ellipsis; 
+ }
+  
+
+  
+
+  
+
+
+  
+  

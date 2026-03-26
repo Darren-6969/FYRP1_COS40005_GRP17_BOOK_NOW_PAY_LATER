@@ -1,0 +1,1181 @@
+.sx-react-calendar-wrapper {
+  width: 1200px;
+  max-width: 100vw;
+  height: 800px;
+  max-height: 90vh;
+}
+
+.sx__event {
+border-radius: 50%;
+width: 10px !important;
+height: 10px;
+margin-top: 45px;
+margin-left: 80px;
+padding: 0;
+background-color: #008832 !important;
+border: none !important;
+cursor: pointer;
+}
+
+/* Calendar container */
+.sx__calendar-container {
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 20px;
+}
+
+/* Custom Calendar Styles */
+.custom-calendar-wrapper {
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+/* Calendar Header */
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding: 10px 0;
+}
+
+.calendar-navigation {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.calendar-nav-button {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.2s;
+}
+
+.calendar-nav-button:hover {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.calendar-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #333;
+  min-width: 200px;
+  text-align: center;
+}
+
+.calendar-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.calendar-today-button {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 15px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.calendar-today-button:hover {
+  background-color: #3d8b40;
+}
+
+/* Calendar Summary */
+.calendar-summary {
+  margin-bottom: 15px;
+  color: #666;
+  font-size: 0.9rem;
+  padding: 0 10px;
+}
+
+.reservation-count {
+  font-weight: 500;
+}
+
+/* Calendar Grid */
+.calendar-grid {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: white;
+}
+
+/* Day Headers */
+.calendar-days-header {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #ddd;
+}
+
+.day-header {
+  padding: 10px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+/* Calendar Days Grid */
+.calendar-days-grid {
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.calendar-week:last-child {
+  border-bottom: none;
+}
+
+.calendar-day {
+  min-height: 80px;
+  padding: 10px;
+  position: relative;
+  cursor: pointer;
+  border-right: 1px solid #f0f0f0;
+  transition: background-color 0.2s;
+}
+
+.calendar-day:last-child {
+  border-right: none;
+}
+
+.calendar-day:hover {
+  background-color: rgba(0, 136, 50, 0.1);
+}
+
+.day-number {
+  display: inline-block;
+  width: 25px;
+  height: 25px;
+  text-align: center;
+  line-height: 25px;
+  border-radius: 50%;
+  font-weight: 500;
+}
+
+.calendar-day.current-month {
+  background-color: white;
+  color: #333;
+}
+
+.calendar-day.other-month {
+  background-color: #f9f9f9;
+  color: #aaa;
+}
+
+.calendar-day.today .day-number {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.reservation-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #4CAF50;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+/* Calendar overlay */
+.calendar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.calendar-overlay-content {
+  background-color: white;
+  width: 90%;
+  max-width: 1200px;
+  height: 80%;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar-overlay-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #ddd;
+  background-color: #f8f9fa;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.calendar-overlay-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #333;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  transition: color 0.2s;
+}
+
+.close-button:hover {
+  color: #333;
+}
+
+.no-reservations-message {
+  padding: 50px;
+  text-align: center;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+/* Make the paginated table inside the overlay look better */
+.calendar-overlay-content .paginated-table-container {
+  flex: 1;
+  overflow: auto;
+}
+
+/* Loader styling */
+.loader-box {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .calendar-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .calendar-day {
+    min-height: 60px;
+    padding: 5px;
+  }
+  
+  .day-number {
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    font-size: 0.9rem;
+  }
+  
+  .calendar-title {
+    min-width: auto;
+  }
+}
+
+/* Calendar Styling */
+.scheduler-container {
+  width: 100%;
+  max-width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: white;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  overflow: hidden;
+}
+
+/* Calendar Controls */
+.scheduler-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: white;
+}
+
+.left-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.today-button {
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 6px 15px;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+}
+
+.today-button:hover {
+  background-color: #e8e8e8;
+}
+
+.nav-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.scheduler-nav-button {
+  background: none;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #555;
+}
+
+.scheduler-nav-button:hover {
+  background-color: #f5f5f5;
+}
+
+.scheduler-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.right-controls {
+  display: flex;
+  gap: 10px;
+}
+
+/* View Toggle */
+/* .view-toggle {
+  display: flex;
+  border: 1px solid #6f42c1;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.view-toggle-button {
+  background-color: #f5f5f5;
+  border: none;
+  padding: 6px 15px;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+}
+
+.view-toggle-button.active {
+  background-color: #6f42c1;
+  color: white;
+}
+
+.view-toggle-button:hover:not(.active) {
+  background-color: #e8e8e8;
+}
+
+.view-toggle-button:first-child {
+  border-right: 1px solid #6f42c1;
+} */
+
+.date-picker {
+  position: relative;
+  margin-top: 10px;
+}
+
+.date-label {
+  position: absolute;
+  top: -8px;
+  left: 10px;
+  background-color: white;
+  padding: 0 5px;
+  font-size: 12px;
+  color: #6f42c1;
+  z-index: 1;
+}
+
+.date-picker-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.date-input {
+  padding: 8px 12px;
+  border: 1px solid #6f42c1;
+  border-radius: 4px;
+  font-size: 14px;
+  width: 120px;
+  color: #333;
+  cursor: pointer;
+}
+
+.date-dropdown-button {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #6f42c1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+}
+
+.date-dropdown-icon {
+  font-size: 10px;
+  color: #6f42c1;
+}
+
+.date-picker-dropdown {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  width: 380px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+  padding-bottom: 10px;
+}
+
+.date-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: white;
+  position: relative;
+}
+
+.date-picker-header::before,
+.date-picker-header::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background-color: #e0e0e0;
+}
+
+.date-picker-header::before {
+  top: 0;
+}
+
+.date-picker-header::after {
+  bottom: 0;
+}
+
+.date-picker-month-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+}
+
+.date-picker-nav-button {
+  background: none;
+  border: none;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  color: #555;
+}
+
+.date-picker-calendar {
+  padding: 8px 16px;
+}
+
+.date-picker-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  padding: 8px 0;
+  margin-bottom: 4px;
+}
+
+.date-picker-weekday {
+  font-size: 12px;
+  font-weight: 500;
+  color: #777;
+}
+
+.date-picker-days {
+  display: flex;
+  flex-direction: column;
+}
+
+.date-picker-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.date-picker-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  margin: 2px auto;
+  color: #333;
+}
+
+.date-picker-day:hover {
+  background-color: #f0f0f0;
+}
+
+.date-picker-day.today {
+  background-color: #6f42c1;
+  color: white;
+}
+
+.date-picker-day.other-month {
+  color: #aaa;
+}
+
+.date-picker-day.selected {
+  background-color: #6f42c1;
+  color: white;
+}
+
+/* Add styles for a "currently selected" date in the calendar */
+.date-picker-day.selected:not(.today) {
+  background-color: rgba(111, 66, 193, 0.15);
+  color: #6f42c1;
+  font-weight: 600;
+}
+
+/* Calendar Grid */
+.scheduler-calendar {
+  width: 100%;
+}
+
+.scheduler-days-header {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: white;
+}
+
+.scheduler-day-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #777;
+}
+
+.scheduler-grid {
+  display: flex;
+  flex-direction: column;
+}
+
+.scheduler-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.scheduler-week:last-child .scheduler-cell {
+  border-bottom: none;
+}
+
+.scheduler-cell {
+  min-height: 110px;
+  padding: 10px;
+  border-right: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.scheduler-cell:hover {
+  background-color: rgba(111, 66, 193, 0.05);
+  border-color: rgba(111, 66, 193, 0.3);
+  z-index: 1;
+}
+
+.scheduler-cell:last-child {
+  border-right: none;
+}
+
+.other-month {
+  color: #aaa;
+  background-color: #fafafa;
+}
+
+.other-month:hover {
+  background-color: rgba(111, 66, 193, 0.05);
+}
+
+.day-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.cell-date {
+  font-size: 14px;
+  font-weight: normal;
+  margin-bottom: 5px;
+}
+
+.today .cell-date {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: #6f42c1;
+  color: white;
+}
+
+.selected-indicator {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #6f42c1;
+}
+
+/* Week View Styling */
+.week-view {
+  display: flex;
+  flex-direction: column;
+  height: 800px;
+  overflow-y: auto;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.week-header {
+  display: flex;
+  border-bottom: 1px solid #e0e0e0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background-color: white;
+}
+
+.time-column-header {
+  width: 80px;
+  flex-shrink: 0;
+  border-right: 1px solid #e0e0e0;
+}
+
+.day-column-header {
+  flex: 1;
+  padding: 10px;
+  text-align: center;
+  border-right: 1px solid #e0e0e0;
+}
+
+.day-column-header:last-child {
+  border-right: none;
+}
+
+.day-column-header.today {
+  background-color: rgba(111, 66, 193, 0.05);
+}
+
+.day-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #777;
+  margin-bottom: 5px;
+}
+
+.day-number {
+  font-size: 24px;
+  font-weight: 500;
+  color: #333;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.today-circle {
+  background-color: #6f42c1;
+  color: white;
+  border-radius: 50%;
+}
+
+.week-grid {
+  display: flex;
+  flex: 1;
+}
+
+.time-labels {
+  width: 80px;
+  flex-shrink: 0;
+  border-right: 1px solid #e0e0e0;
+}
+
+.time-label {
+  height: 60px;
+  padding: 5px;
+  font-size: 12px;
+  color: #777;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: flex-start;
+}
+
+.day-columns {
+  display: flex;
+  flex: 1;
+}
+
+.day-column {
+  flex: 1;
+  border-right: 1px solid #e0e0e0;
+}
+
+.day-column:last-child {
+  border-right: none;
+}
+
+.day-column.today {
+  background-color: rgba(111, 66, 193, 0.05);
+}
+
+.time-slot {
+  height: 60px;
+  border-bottom: 1px solid #e0e0e0;
+  position: relative;
+  cursor: pointer;
+}
+
+.time-slot:hover {
+  background-color: rgba(111, 66, 193, 0.05);
+}
+
+.reservation-item {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  min-height: 20px;
+  background-color: #6f42c1;
+  color: white;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .scheduler-controls {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  
+  .right-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .scheduler-cell {
+    min-height: 80px;
+    padding: 5px;
+  }
+  
+  .cell-date {
+    font-size: 12px;
+  }
+  
+  .today .cell-date {
+    width: 25px;
+    height: 25px;
+  }
+  
+  .week-view {
+    height: 600px;
+  }
+  
+  .time-column-header, .time-labels {
+    width: 50px;
+  }
+  
+  .time-label {
+    font-size: 10px;
+  }
+  
+  .day-name {
+    font-size: 10px;
+  }
+  
+  .day-number {
+    font-size: 18px;
+    width: 30px;
+    height: 30px;
+  }
+}
+
+/* View Mode Dropdown */
+.view-mode-dropdown {
+  position: relative;
+}
+
+.view-mode-button {
+  margin-top: 10px;
+  margin-right: 5px;
+  background-color: white;
+  color: black;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 15px;
+  cursor: pointer;
+  min-width: 80px;
+  text-align: center;
+}
+
+/* Add black border when dropdown is open */
+.view-mode-dropdown.active .view-mode-button {
+  border: 1px solid black;
+}
+
+.view-mode-options {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 0 0 4px 4px;
+  overflow: hidden;
+  z-index: 10;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.view-mode-option {
+  padding: 8px 16px;
+  cursor: pointer;
+  text-align: center;
+  transition: background-color 0.2s;
+  font-size: 15px;
+}
+
+.view-mode-option:hover {
+  background-color: #6f42c1;
+  color: white;
+}
+
+.scheduler-cell.has-reservations:hover {
+  background-color: rgba(111, 66, 193, 0.1);
+}
+
+.scheduler-cell.today:hover {
+  background-color: rgba(111, 66, 193, 0.15);
+}
+
+/* Reservation status indicators */
+.reservation-status-indicators {
+  display: row;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 3px;
+  justify-content: center;
+}
+
+.planner-status-dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  position: relative;
+  margin-top: 5px;
+}
+
+/* Status colors */
+.legend-dot-status-pending {
+  background-color: rgb(255, 246, 68); /* Yellow */
+}
+
+.legend-dot-status-accepted {
+  background-color: rgb(0, 200, 0); /* Green */
+}
+
+.legend-dot-status-rejected {
+  background-color: #FF0000; /* Red */
+}
+
+/* Counter badges */
+.count-badge {
+  position: absolute;
+  right: -15px;
+  top: -2px;
+  font-size: 10px;
+  color: #333;
+  white-space: nowrap;
+  align-items: baseline;
+}
+
+/* Week view status indicators */
+.week-status-indicators {
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.week-planner-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* Legend for calendar status */
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 10px;
+  padding: 10px;
+  border-top: 1px solid #eee;
+  font-size: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-label {
+  font-size: 12px;
+  color: #555;
+}
+
+/* Pending Reservations Notification */
+.pending-notification {
+  position: relative;
+  margin-right: 15px;
+}
+
+.notification-button {
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-top: 10px;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.notification-button:hover {
+  background-color: #f5f5f5;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background-color: #f44336;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+/* Pending Reservations Message Box */
+.pending-message-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1100;
+}
+
+.pending-message-box {
+  background-color: white;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.pending-message-header {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #ddd;
+  background-color: #f8f9fa;
+  position: relative;
+}
+
+.pending-message-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #333;
+  flex: 1;
+}
+
+.pending-reservations-list {
+  padding: 10px;
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+.pending-reservation-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #eee;
+  transition: background-color 0.2s;
+}
+
+.pending-reservation-item:hover {
+  background-color: #f9f9f9;
+}
+
+.pending-reservation-item:last-child {
+  border-bottom: none;
+}
+
+.pending-property-info {
+  flex: 1;
+}
+
+.pending-date {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.pending-property-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+}
+
+.pending-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pending-view-button {
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.pending-view-button {
+  background-color: #2196F3;
+  color: white;
+}
+
+.pending-view-button:hover {
+  background-color: #1976D2;
+}
+
+.no-pending-message {
+  padding: 30px;
+  text-align: center;
+  color: #666;
+  font-size: 16px;
+}
+
+.pending-close-button {
+  background-color: #f8f9fa;
+  color: black;
+  border: none;
+  border-radius: 50%;
+  padding: 8px;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  min-width: auto;
+}
+
+.pending-close-button:hover {
+  background-color: #e0e0e0;
+}

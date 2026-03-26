@@ -1,0 +1,192 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap");
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Poppins", sans-serif;
+}
+
+:root {
+    --primaryColor: hsl(94, 55%, 56%);
+    --hoverColor: hsl(93, 75%, 76%);
+    --whiteColor: hsl(0, 0%, 100%);
+    --blackColor: hsl(0, 0%, 18%);
+}
+
+body {
+    transition: margin-left 0.3s ease;
+}
+
+
+.sidebar-wrapper {
+    width: 250px;
+    background: var(--blackColor);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20px;
+    color: black;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1000;
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+}
+
+.sidebar-wrapper.collapsed {
+    transform: translateX(-100%);
+}
+
+.sidebar-wrapper.expanded {
+    transform: translateX(0);
+}
+.sidebar-title {
+    font-size: 1.5rem;
+    margin-bottom: 30px;
+    text-align: center;
+    color: white;
+}
+
+.sideMenus {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    text-decoration: none;
+    color: white;
+    font-size: 0.9rem;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    position: relative;
+    margin-bottom: 10px;
+    border-radius: 0px 8px 8px 0px;
+    font-weight: bold;
+}
+
+.menu-icon {
+    margin-right: 10px;
+    font-size: 1.8rem;
+    color: inherit;
+    display: flex;
+    align-items: center;
+}
+
+.menu-item:hover {
+    background-color: white;
+    color: black;
+}
+
+.menu-item.active {
+    background-color: white;
+    color: black;
+}
+
+.menu-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 10px;
+    background: var(--primaryColor);
+}
+
+.logout-container {
+    margin-top: auto;
+}
+
+.logout-item {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 15px;
+    background-color: #d9534f;
+    color: white;
+    border-radius: 10px;
+    font-size: 1.2rem;
+    width: 100%;
+    border: none;
+    margin-top: 20px;
+    cursor: pointer;
+}
+
+.logout-item:hover {
+    background-color: #c9302c;
+}
+
+.menu-toggle {
+    position: fixed;
+    top: 20px;
+    left: 8px;
+    z-index: 3000;
+    background: #fff;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    font-size: 1rem;
+    cursor: pointer;
+    color: #333;
+    padding: 4px 8px;
+    transition: background 0.2s;
+    text-align: center;
+}
+
+.menu-toggle:hover {
+    background: #f0f0f0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .sidebar-wrapper {
+        width: 100%;
+        min-width: 200px;
+    }
+
+    .menu-toggle {
+        display: block;
+    }
+
+    .sidebar-title {
+        font-size: 1.2rem;
+        margin-bottom: 20px;
+    }
+
+    .menu-item {
+        padding: 15px;
+        font-size: 1rem;
+    }
+
+    .logout-item {
+        padding: 10px;
+        font-size: 1rem;
+    }
+}
+
+
+@media (max-width: 480px) {
+    .sidebar-wrapper {
+        min-width: 180px;
+    }
+
+    .menu-toggle {
+        display: block;
+        font-size: 1.4rem;
+    }
+
+    .menu-item {
+        font-size: 0.9rem;
+        padding: 10px;
+    }
+
+    .logout-item {
+        font-size: 0.9rem;
+        padding: 8px;
+    }
+}

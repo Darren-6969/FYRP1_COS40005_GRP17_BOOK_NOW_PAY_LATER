@@ -1,0 +1,170 @@
+.footer {
+    padding: 4rem 6rem;
+    background: #493829;
+    color: #fff;
+}
+
+.footer-row {
+    display: flex;
+    justify-content: left;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10rem;
+}
+
+.top p {
+    font-size: 1.5rem;
+    padding: 1rem 0 .8rem 0;
+}
+
+.icons_footer {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.icon_footer {
+    color: #fff;
+    font-size: 1.5rem;
+}
+
+.icon_footer:hover {
+    color: #816C5B;
+}
+
+.bottom {
+    display: flex;
+    gap: 8rem;
+}
+
+.bottom div {
+    display: flex;
+    flex-direction: column;
+}
+
+.bottom h3 {
+    font-size: 1.5rem;
+    padding: 1rem 0 .8rem 0;
+}
+
+.bottom a {
+    text-decoration: none;
+    color: #fff;
+    padding-bottom: 0.4rem;
+    font-size: 1.1rem;
+    transition: color 0.3s ease;
+}
+
+.bottom a:hover {
+    color: #a38d7b;
+    transform: translateX(5px);
+}
+
+.bottom p {
+    text-decoration: none;
+    color: #fff;
+    padding-bottom: 0.4rem;
+    font-size: 1.1rem;
+    display: flex;
+    gap: 0.8rem;
+}
+
+.bottom p .icon {
+    font-size: 1.5rem;
+    color: #fff;
+}
+
+@media(max-width: 991px) {
+    .footer {
+        padding: 3.5rem 4rem;
+    }
+    
+    .footer-row {
+        gap: 6rem;
+    }
+    
+    .bottom {
+        gap: 5rem;
+    }
+    
+    .top h1 {
+        font-size: 2rem;
+    }
+    
+    .top p {
+        font-size: 1.3rem;
+    }
+}
+
+@media(max-width: 768px) {
+    
+    .footer {
+        padding: 3rem 2rem;
+    }
+
+    .footer-row {
+        flex-direction: column;
+        gap: 5rem;
+    }
+
+    .bottom {
+        flex-direction: column;
+        gap: 1.5rem;
+        margin-bottom: 30px;
+    }
+
+    .bottom div {
+        width: 100%;
+    }
+}
+
+@media(max-width: 480px) {
+    .footer {
+        padding: 2rem 1rem;
+    }
+    
+    .footer-row {
+        gap: 3rem;
+    }
+    
+    .top h1 {
+        font-size: 1.8rem;
+    }
+    
+    .top p {
+        font-size: 1.2rem;
+        padding: 0.5rem 0;
+    }
+    
+    .icons_footer {
+        gap: 0.8rem;
+    }
+    
+    .icon_footer {
+        font-size: 1.3rem;
+    }
+    
+    .bottom {
+        gap: 1rem;
+    }
+    
+    .bottom h3 {
+        font-size: 1.2rem;
+        padding: 0.8rem 0 0.5rem 0;
+    }
+    
+    .bottom a {
+        font-size: 0.9rem;
+        padding-bottom: 0.3rem;
+    }
+    
+    .bottom p {
+        font-size: 0.9rem;
+        align-items: center;
+        padding-bottom: 0.3rem;
+    }
+    
+    .bottom p .icon {
+        font-size: 1.2rem;
+    }
+}

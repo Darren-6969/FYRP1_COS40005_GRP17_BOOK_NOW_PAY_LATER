@@ -1,0 +1,410 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900&display=swap");
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
+}
+
+:root {
+  --primaryColor: hsl(94, 55%, 56%);
+  --hoverColor: hsl(93, 75%, 76%);
+  --paleGreen: hsl(96, 75%, 89%);
+  --whiteColor: hsl(0, 0%, 100%);
+  --blackColor: hsl(0, 0%, 18%);
+  --greyText: hsl(0, 0%, 75%);
+  --bgColor: hsl(113, 11%, 85%);
+  --inputColor: hsl(330, 12%, 97%);
+  --biggestFontSize: 2.5rem;
+  --h1FontSize: 1.5rem;
+  --h2FontSize: 1.25rem;
+  --h3FontSize: 1rem;
+  --normalFontSize: .938rem;
+  --smallFontSize: .813rem;
+  --smallestFontSize: .75rem;
+}
+
+.flex {
+  display: flex;
+  align-items: center;
+}
+
+.grid {
+  display: grid;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+html {
+  font-size: 90%;
+}
+
+a {
+  text-decoration: none;
+}
+
+li {
+  list-style: none;
+}
+
+.icon {
+  font-size: var(--h2FontSize);
+}
+
+img,
+video {
+  height: auto;
+  width: 100%;
+}
+
+.message {
+  display: none;
+}
+
+.btn {
+  border: none;
+  outline: none;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  color: var(--greyText);
+}
+
+.btn:hover {
+  color: var(--primaryColor);
+  background: var(--paleGreen);
+}
+
+.btn_responsive {
+  border: none;
+  outline: none;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  color: var(--greyText);
+  display: none;
+}
+
+.btn_responsive:hover {
+  color: var(--primaryColor);
+  background: var(--paleGreen);
+}
+
+.registerPage {
+  height: 100vh;
+  width: 100%;
+  margin: auto;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 7px 50px rgb(214, 223, 213);
+}
+
+.registerPage .container {
+  height: 100vh;
+  width: 100%;
+  overflow: auto;
+  margin: auto;
+  justify-content: space-between;
+  border-radius: 10px;
+  background: hsl(0, 0%, 91%);
+  max-width: 1600px;
+  max-height: 1100px;
+}
+
+.registerPage .container .videoDiv {
+  position: relative;
+  display: flex;
+  flex-basis: 57%;
+  width: 100%;
+  height: 100%;
+  padding: 0 1.5rem;
+  text-align: center;
+  justify-content: center;
+  flex-direction: column;
+  margin: auto;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.registerPage .container .videoDiv video,
+.registerPage .container .videoDiv .footerDiv {
+  position: absolute;
+}
+
+.registerPage .container .videoDiv video {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  left: 0;
+  position: absolute;
+}
+
+.registerPage .container .videoDiv .textDiv {
+  position: relative;
+}
+
+.registerPage .container .videoDiv .textDiv .title_A {
+  color: var(--whiteColor);
+  font-size: 35px;
+  font-weight: 800;
+  text-shadow: 1px 2px 2px black;
+}
+
+.registerPage .container .videoDiv .textDiv .title_B {
+  color: var(--whiteColor);
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 1px 2px 2px black;
+}
+
+.registerPage .container .videoDiv .textDiv .title_C {
+  color: var(--blackColor);
+  font-size: 33px;
+  font-weight: 800;
+  font-family: "Poppins", sans-serif;
+}
+
+.registerPage .container .videoDiv .textDiv p {
+  color: var(--whiteColor);
+  padding: 1rem;
+  font-weight: 400;
+}
+
+.registerPage .container .formDiv .form .btn_responsive {
+  padding: 0.8rem;
+  background: var(--primaryColor);
+  border-radius: 10px;
+  color: var(--whiteColor);
+  align-items: center;
+  margin: auto;
+  justify-content: center;
+  font-size: 16px;
+  width: 100%;
+  gap: 0.5rem;
+  transition: 0.3s ease;
+}
+
+.registerPage .container .formDiv .form .btn_responsive:hover {
+  background: var(--hoverColor);
+  color: var(--blackColor);
+}
+
+.registerPage .container .videoDiv .footerDiv {
+  bottom: 10px;
+  padding: 0 1rem;
+  height: 60px;
+  background: rgba(128, 128, 128, 0.25);
+  left: 10px;
+  right: 10px;
+  justify-content: space-between;
+  -webkit-backdrop-filter: blur(30px);
+  backdrop-filter: blur(30px);
+  border-radius: 10px;
+  flex-basis: 40%;
+}
+
+.registerPage .container .videoDiv .footerDiv .text {
+  color: var(--whiteColor);
+}
+
+.registerPage .container .videoDiv .footerDiv .btn {
+  background: var(--whiteColor);
+  color: var(--primaryColor);
+  padding: 0.8rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 700;
+  transition: 0.3s ease;
+}
+
+.registerPage .container .videoDiv .footerDiv .btn:hover {
+  background: var(--hoverColor);
+  color: var(--blackColor);
+}
+
+.registerPage .container .formDiv {
+  flex-basis: 50%;
+  margin: auto;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.registerPage .container .formDiv .headerDiv {
+  text-align: center;
+}
+
+.registerPage .container .formDiv .headerDiv img {
+  width: 100px;
+}
+
+.registerPage .container .formDiv .headerDiv h3 {
+  font-size: 25px;
+  color: var(--blackColor);
+  font-weight: 600;
+}
+
+.registerPage .container .formDiv .form {
+  gap: 1rem;
+  padding: 1rem;
+  width: 100%;
+  max-width: 400px;
+  margin: auto;
+}
+
+.registerPage .container .formDiv .form .inputDiv .icon {
+  color: var(--greyText);
+}
+
+.registerPage .container .formDiv .form .inputDiv .icon_eye {
+  color: var(--greyText);
+  cursor: pointer;
+}
+
+.registerPage .container .formDiv .form .inputDiv input {
+  background: none;
+  outline: none;
+  border: none;
+  width: 100%;
+  flex: 1;
+}
+
+.registerPage .container .formDiv .form .inputDiv label {
+  color: var(--blackColor);
+  font-weight: 400;
+  font-size: 14px;
+  padding: 0.5rem 0;
+  display: block;
+}
+
+.registerPage .container .formDiv .form .inputDiv .input {
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--inputColor);
+  border-radius: 10px;
+  width: 100%;
+}
+
+.registerPage .container .formDiv .form .btn {
+  padding: 0.8rem;
+  background: var(--primaryColor);
+  border-radius: 10px;
+  color: var(--whiteColor);
+  align-items: center;
+  margin: auto;
+  justify-content: center;
+  font-size: 16px;
+  width: 100%;
+  gap: 0.5rem;
+  transition: 0.3s ease;
+  margin-top: 30px;
+}
+
+.registerPage .container .formDiv .form .btn:hover {
+  background: var(--hoverColor);
+  color: var(--blackColor);
+}
+
+.registerPage .container .formDiv .form .forgotpassword {
+  font-size: 13px;
+  color: var(--blackColor);
+  opacity: 0.7;
+  text-align: center;
+}
+
+.registerPage .container .formDiv .form .forgotpassword a {
+  text-decoration: underline;
+  cursor: pointer;
+  opacity: 1;
+}
+
+.container_button {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+@media (max-width: 950px) {
+
+  .registerPage {
+    height: 100%;
+    min-height: 100vh;
+  }
+
+  .btn_responsive {
+    border: none;
+    outline: none;
+    cursor: pointer;
+    display: flex;
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    color: var(--greyText);
+  }
+
+  .registerPage .container {
+    flex-direction: column-reverse;
+    padding: 0;
+    width: 100%;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .registerPage .container .videoDiv {
+    display: none;
+  }
+
+  .registerPage .container .formDiv {
+    flex-basis: 100%;
+    padding: 1.2rem;
+    width: 100%;
+    max-width: 400px;
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .registerPage .container .formDiv .form {
+    max-width: 100%;
+    width: 100%;
+    padding: 0.5rem;
+  }
+
+  .registerPage .container .formDiv .headerDiv h3 {
+    font-size: 20px;
+  }
+
+  .registerPage .container .formDiv .form .inputDiv .input {
+    padding: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+
+  .registerPage .container .formDiv {
+    max-width: none !important;
+  }
+
+  .registerPage .container .formDiv .headerDiv img {
+    width: 100px;
+  }
+
+  .registerPage .container .formDiv .headerDiv h3 {
+    font-size: 20px;
+  }
+
+  .registerPage .container .formDiv .form {
+    gap: 0.8rem;
+  }
+
+  .registerPage .container .formDiv .form .inputDiv label {
+    font-size: 12px;
+  }
+
+  .container_button .btn, .btn_responsive {
+    padding: 0.7rem !important;
+    font-size: 14px !important;
+  }
+}

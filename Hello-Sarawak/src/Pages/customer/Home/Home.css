@@ -1,0 +1,51 @@
+.Home_Container_Main{
+    margin: 0 auto;
+    max-width: 1800px;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+  }
+  .Home_Container_Main{
+    margin: 0 auto;
+    max-width: 1800px;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+}
+
+/* SPRINT 1 ENHANCEMENT: Interactive Map Tabs */
+.interactive-map-section {
+    max-width: 1400px;
+    margin: 4rem auto;
+    padding: 0 2rem;
+}
+
+.map-tabs-container {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.sarawak-tab-btn {
+    background-color: transparent;
+    color: #333;
+    border: 2px solid #CC8C18; 
+    padding: 12px 35px;
+    border-radius: 30px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.sarawak-tab-btn.active {
+    background-color: #CC8C18;
+    color: white;
+}
+
+.sarawak-tab-btn:hover {
+    background-color: #e09e22;
+    color: white;
+    border-color: #e09e22;
+}

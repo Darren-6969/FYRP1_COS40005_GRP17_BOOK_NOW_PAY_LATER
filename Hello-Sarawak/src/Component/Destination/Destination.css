@@ -1,0 +1,567 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Poppins, sans-serif;
+    font-size: 12px;
+}
+
+.destination-container {
+    overflow-x: hidden;
+    width: 100%;
+}
+
+.destination {
+    margin: 4rem 6rem;
+}
+
+.destination h1 {
+    font-size: 2.8rem;
+    text-align: center;
+}
+
+.Main_description {
+    font-size: 18px;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease-in 0.2s, transform 0.6s ease-in 0.2s;
+}
+
+.destinations-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 4rem;
+}
+
+.first-des {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4.5rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease-in 0.3s, transform 0.5s ease-in 0.3s;
+}
+
+.des-text {
+    width: 45%;
+    text-align: start;
+    font-size: 1.1rem;
+    transition: opacity 0.5s ease-in 0.4s, transform 0.5s ease-in 0.4s;
+}
+
+.des-text h2 {
+    color: #CC8C18;
+    padding-bottom: 1rem;
+}
+
+.first-des .des-text .location {
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.first-des .des-text .icon_location {
+    font-size: 25px;
+    color: #ff0000;
+}
+
+.first-des .des-text .location_description {
+    font-size: 18px;
+    margin-top: 35px;
+    line-height: 1.6;
+}
+
+.image {
+    position: relative;
+    width: 50%;
+    display: flex;
+    justify-content: space-between;
+    perspective: 1000px;
+}
+
+.image img {
+    width: 49%;
+    height: 350px;
+    object-fit: cover;
+    border-radius: 6px;
+    box-shadow: -1px 1px 62px -18px rgba(0, 0, 0, 0.19);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transform: rotateX(var(--rX, 0deg)) rotateY(var(--rY, 0deg));
+}
+
+.image img:nth-child(2) {
+    position: absolute;
+    top: -10%;
+    right: 0;
+}
+
+.buttons_destination {
+    display: grid;
+    grid-template-columns: repeat(2, 130px);
+    grid-template-rows: 40px;
+    gap: 5px;
+    margin-top: 2rem;
+}
+
+.buttons_destination button {
+    border: none;
+    background-color: #CC8C18;
+    color: #fff;
+    letter-spacing: 3px;
+    font-family: Poppins, sans-serif;
+    font-weight: 500;
+    border-radius: 5px;
+    transition: 0.3s;
+    cursor: pointer;
+}
+
+.buttons_destination button:hover {
+    background-color: #493829;
+}
+
+/* Trip section */
+.trip {
+    margin: 6.5rem 6rem;
+    color: #2a2a2a;
+    text-align: center;
+}
+
+.trip h1 {
+    font-size: 3rem;
+}
+
+.trip p {
+    font-size: 1.2rem;
+    color: #555;
+}
+
+.tripcard {
+    margin-top: 3rem;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 2rem;
+}
+
+.t-card {
+    width: 31%;
+    text-align: start;
+    box-shadow: 0 5px 25px 2px rgba(0, 0, 0, 0.1);
+    border-radius: 7px;
+    padding: 1rem 1.5rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+}
+
+.t-card p {
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.t-image {
+    height: 250px;
+    overflow: hidden;
+    border-radius: 7px;
+}
+
+.t-image img {
+    width: 100%;
+    height: 100%;
+    transition: 0.3s ease-in-out;
+    border-radius: 7px;
+    object-fit: cover;
+}
+
+.t-image:hover img {
+    transform: scale(1.2);
+}
+
+.t-card h3 {
+    padding: 2rem 0 1.2rem 0;
+    margin: 0;
+    color: #000000;
+}
+
+.t-card.fade-in {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.fade-in {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Room section */
+.room_section {
+    width: 100%;
+    padding: 2rem 0 4rem;
+}
+
+.room_des {
+    text-align: center;
+    font-size: 18px;
+    margin-bottom: 2rem;
+}
+
+.room_des h1 {
+    font-size: 2.8rem;
+    margin-bottom: 0.5rem;
+}
+
+.wrapper_room {
+    width: 100%;
+    min-height: 600px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-x: hidden;
+    padding: 0 1rem;
+}
+
+.container_room {
+    height: 550px;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 0.5rem;
+    max-width: 1200px;
+}
+
+.card_room {
+    width: 100px;
+    height: 450px;
+    border-radius: 2rem;
+    background-size: cover;
+    background-position: center;
+    overflow: hidden;
+    margin: 0 10px;
+    display: flex;
+    align-items: flex-end;
+    transition: .6s cubic-bezier(.28, -0.03, 0, .99);
+    cursor: pointer;
+}
+
+.card_room .row {
+    color: white;
+    display: flex;
+    flex-wrap: nowrap;
+}
+
+.card_room .row .icon_room {
+    background: #CC8C18;
+    color: white;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 30px;
+    margin-bottom: 10px;
+    cursor: pointer;
+}
+
+.card_room .row .description_room {
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+    overflow: hidden;
+    height: 80px;
+    width: 520px;
+    opacity: 0;
+    transform: translateY(30px);
+    transition-delay: .3s;
+    transition: all .3s ease;
+}
+
+.card_room:hover {
+    transform: scale(1.05);
+}
+
+.description_room p {
+    color: #ffffff;
+    padding-top: 5px;
+}
+
+.description_room h4 {
+    text-transform: uppercase;
+}
+
+.room_display {
+    display: none;
+}
+
+.room_display:checked+label {
+    width: 600px;
+}
+
+.room_display:checked+label .description_room {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+}
+
+.card_room[for="c1"] {
+    background-image: url('../../public/Room1.jpg');
+}
+
+.card_room[for="c2"] {
+    background-image: url('../../public/Room2.jpg');
+}
+
+.card_room[for="c3"] {
+    background-image: url('../../public/Room3.jpg');
+}
+
+.card_room[for="c4"] {
+    background-image: url('../../public/Room4.jpg');
+}
+
+.card_room[for="c5"] {
+    background-image: url('../../public/Room5.jpg');
+}
+
+.card_room[for="c6"] {
+    background-image: url('../../public/Room6.jpg');
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media only screen and (max-width: 768px) {
+    .destination {
+        margin: 3rem 2rem;
+    }
+
+    .destination h1 {
+        font-size: 2.2rem;
+    }
+
+    .Main_description {
+        font-size: 16px;
+    }
+
+    .first-des {
+        flex-direction: column-reverse;
+        margin-top: 2.5rem;
+    }
+
+    .des-text {
+        width: 100%;
+        margin-top: 1.5rem;
+    }
+
+    .des-text h2 {
+        font-size: 1.6rem;
+    }
+
+    .first-des .des-text .location_description {
+        font-size: 16px;
+        line-height: 1.5;
+    }
+
+    .image {
+        width: 100%;
+        margin: 1.8rem 0;
+    }
+
+    .image img {
+        height: 250px;
+    }
+
+    .image img:nth-child(2) {
+        top: -10%;
+    }
+
+    .buttons_destination {
+        grid-template-columns: 1fr;
+        margin-top: 1.5rem;
+    }
+
+    .trip {
+        margin: 4rem 2rem;
+    }
+
+    .trip h1 {
+        font-size: 2.2rem;
+    }
+
+    .trip p {
+        font-size: 1rem;
+    }
+
+    .tripcard {
+        gap: 1.5rem;
+    }
+
+    .t-card {
+        width: 45%;
+        margin-bottom: 1rem;
+    }
+
+    .wrapper_room {
+        min-height: auto;
+        padding: 2rem 1rem;
+    }
+
+    .container_room {
+        flex-wrap: wrap;
+        justify-content: center;
+        height: auto;
+        gap: 1rem;
+    }
+
+    .card_room {
+        width: 45%;
+        height: 250px;
+        margin: 5px;
+    }
+
+    .room_display:checked+label {
+        width: 90%;
+        height: 300px;
+    }
+
+    .card_room .row .description_room {
+        width: auto;
+        max-width: 300px;
+    }
+
+    .description_room {
+        padding-left: 20px;
+    }
+}
+
+@media only screen and (max-width: 480px) {
+    .destination {
+        margin: 2rem 1rem;
+    }
+
+    .destination h1 {
+        font-size: 1.8rem;
+    }
+
+    .Main_description {
+        font-size: 14px;
+    }
+
+    .des-text h2 {
+        font-size: 1.4rem;
+    }
+
+    .first-des .des-text .location {
+        font-size: 14px;
+    }
+
+    .first-des .des-text .icon_location {
+        font-size: 20px;
+    }
+
+    .first-des .des-text .location_description {
+        font-size: 14px;
+        margin-top: 20px;
+    }
+
+    .image img {
+        height: 180px;
+    }
+
+    .buttons_destination {
+        grid-template-columns: 1fr;
+    }
+
+    .buttons_destination button {
+        width: 100%;
+        font-size: 12px;
+    }
+
+    .trip {
+        margin: 3rem 1rem;
+    }
+
+    .trip h1 {
+        font-size: 1.8rem;
+    }
+
+    .trip p {
+        font-size: 0.9rem;
+    }
+
+    .t-card {
+        width: 100%;
+        padding: 1rem;
+    }
+
+    .t-image {
+        height: 200px;
+    }
+
+    .t-card h3 {
+        padding: 1rem 0 0.8rem 0;
+        font-size: 1.2rem;
+    }
+
+    .t-card p {
+        font-size: 12px;
+    }
+
+    .room_des h1 {
+        font-size: 1.8rem;
+    }
+
+    .room_des p {
+        font-size: 14px;
+    }
+
+    .wrapper_room {
+        padding: 1rem 0.5rem;
+    }
+
+    .container_room {
+        gap: 0.5rem;
+    }
+
+    .card_room {
+        width: 90%;
+        height: 80px;
+        margin: 5px 0;
+    }
+
+    .room_display:checked+label {
+        width: 90%;
+        height: 250px;
+    }
+
+    .card_room .row .icon_room {
+        width: 30px;
+        height: 30px;
+        margin: 20px;
+    }
+
+    .card_room .row .description_room {
+        height: 70px;
+        max-width: 200px;
+    }
+
+    .description_room h4 {
+        font-size: 1rem;
+    }
+
+    .description_room p {
+        font-size: 0.8rem;
+    }
+}
