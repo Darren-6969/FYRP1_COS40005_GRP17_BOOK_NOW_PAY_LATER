@@ -377,6 +377,13 @@ body {
   box-shadow: 0 14px 35px rgba(37, 99, 235, 0.22);
 }
 
+.customer-nav-icon {
+  display: inline-grid;
+  width: 20px;
+  place-items: center;
+  font-weight: 900;
+}
+
 .customer-main {
   min-width: 0;
   flex: 1;
@@ -845,9 +852,25 @@ body {
   margin-right: 8px;
 }
 
-.customer-profile-card {
-  max-width: 760px;
+.customer-profile-card,
+.customer-profile-shell {
+  max-width: 920px;
   margin: 0 auto;
+}
+
+.customer-profile-card {
+  text-align: center;
+}
+
+.customer-profile-shell {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+  gap: 24px;
+  align-items: start;
+  padding: 28px;
+}
+
+.customer-profile-summary {
   text-align: center;
 }
 
@@ -871,6 +894,10 @@ body {
   margin-top: 26px;
 }
 
+.customer-profile-list-detailed {
+  margin-top: 0;
+}
+
 .customer-profile-list button {
   border: 0;
   border-radius: 18px;
@@ -882,6 +909,21 @@ body {
   justify-content: space-between;
   font-weight: 800;
   cursor: pointer;
+}
+
+.customer-profile-list button span:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.customer-profile-list button small {
+  color: #64748b;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.customer-logout-row strong {
+  color: #be123c;
 }
 
 .customer-empty-state {
@@ -959,8 +1001,13 @@ body {
   .customer-card-grid.two,
   .customer-detail-layout,
   .customer-checkout-layout,
-  .customer-info-list.detail {
+  .customer-info-list.detail,
+  .customer-profile-shell {
     grid-template-columns: 1fr;
+  }
+
+  .customer-profile-shell {
+    padding: 22px;
   }
 
   .customer-info-list div {
