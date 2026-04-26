@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../../services/auth_service";
 import "../../assets/styles/global.css";
+import "../../assets/styles/auth.css";
 
 function normalizeRole(role) {
   if (!role) return "";
@@ -38,17 +39,9 @@ function getDashboardPathByRole(role) {
     "lister",
   ];
 
-  if (customerRoles.includes(normalizedRole)) {
-    return "/customer/bookings";
-  }
-
-  if (adminRoles.includes(normalizedRole)) {
-    return "/master/dashboard";
-  }
-
-  if (operatorRoles.includes(normalizedRole)) {
-    return "/master/dashboard";
-  }
+  if (customerRoles.includes(normalizedRole)) return "/customer/bookings";
+  if (adminRoles.includes(normalizedRole)) return "/master/dashboard";
+  if (operatorRoles.includes(normalizedRole)) return "/master/dashboard";
 
   return null;
 }
@@ -130,11 +123,7 @@ export default function Login() {
     clearSession();
 
     try {
-      const response = await login({
-        email,
-        password,
-      });
-
+      const response = await login({ email, password });
       const data = response.data;
 
       const token = extractToken(data);
@@ -164,17 +153,9 @@ export default function Login() {
         return;
       }
 
-      const normalizedUser = {
-        ...user,
-        role,
-      };
+      const normalizedUser = { ...user, role };
 
-      saveSession({
-        token,
-        user: normalizedUser,
-        role,
-      });
-
+      saveSession({ token, user: normalizedUser, role });
       navigate(redirectPath, { replace: true });
     } catch (err) {
       console.error("Login error:", err);
@@ -190,88 +171,83 @@ export default function Login() {
   };
 
   return (
-    <div className="auth-container">
-      <form onSubmit={handleSubmit} className="auth-card">
-        <h2>BNPL Login</h2>
+    <div className="bnpl-auth-page">
+      <section className="bnpl-auth-shell">
+        <div className="bnpl-auth-panel">
+          <form onSubmit={handleSubmit} className="bnpl-auth-form">
+            <h1>Book Now<br />Pay Later</h1>
+            <p className="bnpl-auth-subtitle">Welcome back! Please sign in to continue.</p>
 
-        <p className="auth-subtitle">
-          Sign in as customer, operator, or admin.
-        </p>
+            {error && <p className="bnpl-auth-error">{error}</p>}
 
-        {error && <p className="error">{error}</p>}
-
-        <input
-          name="email"
-          type="email"
-          placeholder="Email"
-          value={form.email}
-          onChange={handleChange}
-          className="input"
-          autoComplete="email"
-          disabled={loading}
-        />
-
-        <div className="password-field">
-          <input
-            name="password"
-            type={showPassword ? "text" : "password"}
-            placeholder="Password"
-            value={form.password}
-            onChange={handleChange}
-            className="input"
-            autoComplete="current-password"
-            disabled={loading}
-          />
-
-          <button
-            type="button"
-            className="password-toggle"
-            onClick={() => setShowPassword((prev) => !prev)}
-            disabled={loading}
-          >
-            {showPassword ? "Hide" : "Show"}
-          </button>
-        </div>
-
-        <div className="auth-options">
-          <label className="remember-me">
             <input
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
+              name="email"
+              type="email"
+              placeholder="Email address"
+              value={form.email}
+              onChange={handleChange}
+              autoComplete="email"
               disabled={loading}
             />
-            Remember me
-          </label>
 
-          <button
-            type="button"
-            className="text-link"
-            onClick={() => navigate("/forgot-password")}
-          >
-            Forgot password?
-          </button>
+            <div className="bnpl-password-field">
+              <input
+                name="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Password"
+                value={form.password}
+                onChange={handleChange}
+                autoComplete="current-password"
+                disabled={loading}
+              />
+
+              <button
+                type="button"
+                className="bnpl-password-toggle"
+                onClick={() => setShowPassword((prev) => !prev)}
+                disabled={loading}
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+
+            <div className="bnpl-auth-row">
+              <label className="bnpl-remember">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={loading}
+                />
+                Remember me
+              </label>
+
+              <button
+                type="button"
+                className="bnpl-auth-link"
+                onClick={() => navigate("/forgot-password")}
+              >
+                Forgot password?
+              </button>
+            </div>
+
+            <button className="bnpl-auth-submit" disabled={loading}>
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
+
+            <p className="bnpl-auth-switch">
+              Don&apos;t have an account?{" "}
+              <button type="button" onClick={() => navigate("/register")}>Register</button>
+            </p>
+          </form>
         </div>
 
-        <button className="btn primary" disabled={loading}>
-          {loading ? "Logging in..." : "Login"}
-        </button>
-
-        <p>
-          No account?{" "}
-          <span onClick={() => navigate("/register")} className="link">
-            Register
-          </span>
-        </p>
-
-        <div className="auth-note">
-          <strong>Redirect rules:</strong>
-          <br />
-          Customer → Customer booking dashboard
-          <br />
-          Admin / Master Seller / Operator → Admin dashboard
+        <div className="bnpl-auth-art" aria-hidden="true">
+          <div className="bnpl-liquid-shape shape-one" />
+          <div className="bnpl-liquid-shape shape-two" />
+          <div className="bnpl-logo-tile">BNPL</div>
         </div>
-      </form>
+      </section>
     </div>
   );
 }
