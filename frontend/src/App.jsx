@@ -15,6 +15,17 @@ import CronJobs from "./pages/master/CronJobs";
 import SystemLogs from "./pages/master/SystemLogs";
 import SystemSettings from "./pages/master/SystemSettings";
 
+import CustomerLayout from "./pages/customer/layout/CustomerLayout";
+import MyBookings from "./pages/customer/MyBookings";
+import BookingDetail from "./pages/customer/BookingDetail";
+import Checkout from "./pages/customer/Checkout";
+import PaymentStatus from "./pages/customer/PaymentStatus";
+import UploadReceipt from "./pages/customer/UploadReceipt";
+import CustomerPayments from "./pages/customer/CustomerPayments";
+import CustomerInvoices from "./pages/customer/CustomerInvoices";
+import CustomerNotifications from "./pages/customer/CustomerNotifications";
+import CustomerProfile from "./pages/customer/CustomerProfile";
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -36,6 +47,19 @@ export default function App() {
           <Route path="cron-jobs" element={<CronJobs />} />
           <Route path="system-logs" element={<SystemLogs />} />
           <Route path="system-settings" element={<SystemSettings />} />
+        </Route>
+
+        <Route path="/customer" element={<CustomerLayout />}>
+          <Route index element={<Navigate to="bookings" replace />} />
+          <Route path="bookings" element={<MyBookings />} />
+          <Route path="bookings/:id" element={<BookingDetail />} />
+          <Route path="checkout/:id" element={<Checkout />} />
+          <Route path="payment-status/:id" element={<PaymentStatus />} />
+          <Route path="upload-receipt/:id" element={<UploadReceipt />} />
+          <Route path="payments" element={<CustomerPayments />} />
+          <Route path="invoices" element={<CustomerInvoices />} />
+          <Route path="notifications" element={<CustomerNotifications />} />
+          <Route path="profile" element={<CustomerProfile />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />

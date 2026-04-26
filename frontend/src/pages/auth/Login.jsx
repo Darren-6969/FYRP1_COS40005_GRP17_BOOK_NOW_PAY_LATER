@@ -31,8 +31,12 @@ export default function Login() {
       // save token
       localStorage.setItem("bnpl_token", res.data.token);
 
-      // redirect to admin dashboard
-      navigate("/master/dashboard");
+      const userRole = res.data.user?.role;
+      if (userRole === "CUSTOMER") {
+        navigate("/customer/bookings");
+      } else {
+        navigate("/master/dashboard");
+      }
     } catch (err) {
       setError(err.response?.data?.message || "Login failed");
     }
