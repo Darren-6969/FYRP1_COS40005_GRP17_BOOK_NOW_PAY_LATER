@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  MASTER_SELLER
+  NORMAL_SELLER
+  CUSTOMER
+}
+
+enum BookingStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  PENDING_PAYMENT
+  PAID
+  OVERDUE
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING_VERIFICATION
+  PAID
+  FAILED
+  OVERDUE
+}
+
+enum ReceiptStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum InvoiceStatus {
+  GENERATED
+  SENT
+  PAID
+  CANCELLED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      UserRole @default(CUSTOMER)
+
+  operatorId String?
+  operator   Operator? @relation(fields: [operatorId], references: [id])
+
+  bookings      Booking[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Operator {
+  id          String  @id @default(uuid())
+  companyName String
+  email       String  @unique
+  phone       String?
+  logoUrl     String?
+  status      String  @default("ACTIVE")
+
+  users    User[]
+  bookings Booking[]
+  configs  BNPLConfig[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Booking {
+  id String @id @default(uuid())
+
+  customerId String
+  customer   User @relation(fields: [customerId], references: [id])
+
+  operatorId String
+  operator   Operator @relation(fields: [operatorId], references: [id])
+
+  serviceName   String
+  serviceType   String?
+  bookingDate   DateTime
+  pickupDate    DateTime?
+  returnDate    DateTime?
+  location      String?
+
+  totalAmount   Decimal @db.Decimal(10, 2)
+  status        BookingStatus @default(PENDING)
+
+  paymentDeadline DateTime?
+
+  payment Payment?
+  receipt Receipt?
+  invoice Invoice?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  bookingId String @unique
+  booking   Booking @relation(fields: [bookingId], references: [id])
+
+  amount        Decimal @db.Decimal(10, 2)
+  method        String
+  status        PaymentStatus @default(UNPAID)
+  paidAt        DateTime?
+  transactionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Receipt {
+  id String @id @default(uuid())
+
+  bookingId String @unique
+  booking   Booking @relation(fields: [bookingId], references: [id])
+
+  imageUrl String
+  status   ReceiptStatus @default(PENDING)
+  remarks  String?
+
+  uploadedAt DateTime @default(now())
+  verifiedAt DateTime?
+}
+
+model Invoice {
+  id String @id @default(uuid())
+
+  bookingId String @unique
+  booking   Booking @relation(fields: [bookingId], references: [id])
+
+  invoiceNo String @unique
+  amount    Decimal @db.Decimal(10, 2)
+  status    InvoiceStatus @default(GENERATED)
+  pdfUrl    String?
+
+  issuedAt DateTime @default(now())
+  sentAt   DateTime?
+}
+
+model Notification {
+  id String @id @default(uuid())
+
+  userId String
+  user   User @relation(fields: [userId], references: [id])
+
+  title   String
+  message String
+  type    String
+  isRead  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+}
+
+model BNPLConfig {
+  id String @id @default(uuid())
+
+  operatorId String
+  operator   Operator @relation(fields: [operatorId], references: [id])
+
+  paymentDeadlineDays Int @default(3)
+  allowReceiptUpload  Boolean @default(true)
+  autoCancelOverdue   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id String @id @default(uuid())
+
+  userId String?
+  user   User? @relation(fields: [userId], references: [id])
+
+  action     String
+  entityType String
+  entityId   String?
+  details    Json?
+
+  createdAt DateTime @default(now())
+}
