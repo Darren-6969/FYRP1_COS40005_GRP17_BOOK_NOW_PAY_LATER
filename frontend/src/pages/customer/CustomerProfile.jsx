@@ -1,8 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getMe } from "../../services/auth_service";
-
-const PROFILE_IMAGE_KEY = "bnpl_customer_profile_image";
 
 function getStoredUser() {
   try {
@@ -24,15 +22,9 @@ function clearSession() {
   sessionStorage.removeItem("role");
 }
 
-function getStoredProfileImage() {
-  return localStorage.getItem(PROFILE_IMAGE_KEY) || "";
-}
-
 export default function CustomerProfile() {
   const navigate = useNavigate();
-  const fileInputRef = useRef(null);
   const [user, setUser] = useState(getStoredUser());
-  const [profileImage, setProfileImage] = useState(getStoredProfileImage());
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -57,31 +49,6 @@ export default function CustomerProfile() {
     { label: "Help & Support", icon: "?" },
   ];
 
-  const handleImageSelect = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      setError("Please select a valid image file.");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const imageData = String(reader.result || "");
-      setProfileImage(imageData);
-      localStorage.setItem(PROFILE_IMAGE_KEY, imageData);
-      setError("");
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleRemoveImage = () => {
-    setProfileImage("");
-    localStorage.removeItem(PROFILE_IMAGE_KEY);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
   const handleLogout = () => {
     clearSession();
     navigate("/login", { replace: true });
@@ -89,98 +56,72 @@ export default function CustomerProfile() {
 
   return (
     <div className="customer-page">
-      <section className="customer-profile-shell customer-glass-card">
-        <div className="customer-profile-summary">
-          <p style={{ textAlign: "left", margin: "0 0 24px", fontWeight: 800 }}>
+      <section
+        className="customer-glass-card"
+        style={{
+          maxWidth: 980,
+          width: "100%",
+          margin: "0 auto",
+          padding: 0,
+          overflow: "hidden",
+          display: "grid",
+          gridTemplateColumns: "320px 1fr",
+          minHeight: 430,
+        }}
+      >
+        <div
+          style={{
+            padding: "34px 32px",
+            borderRight: "1px solid rgba(226, 232, 240, 0.8)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ alignSelf: "flex-start", margin: "0 0 52px", fontWeight: 800 }}>
             Profile
           </p>
 
-          <div style={{ position: "relative", width: 112, height: 112, margin: "0 auto 18px" }}>
-            <div
-              className="customer-profile-avatar"
-              style={
-                profileImage
-                  ? {
-                      width: 112,
-                      height: 112,
-                      margin: 0,
-                      backgroundImage: `url(${profileImage})`,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                      color: "transparent",
-                    }
-                  : { width: 112, height: 112, margin: 0 }
-              }
-            >
-              {!profileImage && avatarInitial}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="Upload profile picture"
-              style={{
-                position: "absolute",
-                right: 0,
-                bottom: 4,
-                width: 34,
-                height: 34,
-                borderRadius: "50%",
-                border: "3px solid white",
-                background: "#eff6ff",
-                color: "#2563eb",
-                fontWeight: 900,
-                cursor: "pointer",
-                boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)",
-              }}
-            >
-              ✎
-            </button>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageSelect}
-              hidden
-            />
+          <div
+            className="customer-profile-avatar"
+            style={{ width: 108, height: 108, margin: "0 auto 18px" }}
+          >
+            {avatarInitial}
           </div>
 
-          <h1>{displayName}</h1>
-          <p className="customer-muted">{displayEmail}</p>
-
-          {profileImage && (
-            <button
-              type="button"
-              className="customer-secondary-btn small"
-              onClick={handleRemoveImage}
-              style={{ margin: "14px auto 0" }}
-            >
-              Remove photo
-            </button>
-          )}
-
-          {error && <div className="customer-alert customer-alert-danger">{error}</div>}
+          <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>{displayName}</h1>
+          <p className="customer-muted" style={{ margin: 0 }}>{displayEmail}</p>
+          {error && <div className="customer-alert customer-alert-danger" style={{ marginTop: 16 }}>{error}</div>}
         </div>
 
-        <div className="customer-profile-list customer-profile-list-detailed">
-          {menuItems.map((item) => (
-            <button key={item.label} type="button">
-              <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ width: 18, textAlign: "center", color: "#64748b" }}>{item.icon}</span>
-                <strong>{item.label}</strong>
+        <div
+          style={{
+            padding: "32px",
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          <div className="customer-profile-list" style={{ width: "100%", marginTop: 0 }}>
+            {menuItems.map((item) => (
+              <button key={item.label} type="button">
+                <span style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <span style={{ width: 20, textAlign: "center", color: "#64748b" }}>{item.icon}</span>
+                  <strong>{item.label}</strong>
+                </span>
+                <span>›</span>
+              </button>
+            ))}
+
+            <button type="button" onClick={handleLogout} className="customer-logout-row">
+              <span style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <span style={{ width: 20, textAlign: "center", color: "#64748b" }}>↪</span>
+                <strong>Logout</strong>
               </span>
               <span>›</span>
             </button>
-          ))}
-
-          <button type="button" onClick={handleLogout} className="customer-logout-row">
-            <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ width: 18, textAlign: "center", color: "#64748b" }}>↪</span>
-              <strong>Logout</strong>
-            </span>
-            <span>›</span>
-          </button>
+          </div>
         </div>
       </section>
     </div>
