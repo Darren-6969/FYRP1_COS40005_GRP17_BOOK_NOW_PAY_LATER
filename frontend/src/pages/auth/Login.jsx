@@ -20,34 +20,49 @@ export default function Login() {
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+const handleLogin = async (e) => {
+  e.preventDefault();
 
-    try {
-      const res = await login(form);
+  try {
+    const res = await fetch("http://localhost:5000/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        password,
+      }),
+    });
 
-      // save token
-      localStorage.setItem("bnpl_token", res.data.token);
+    const data = await res.json();
 
-      const userRole = res.data.user?.role;
-      if (userRole === "CUSTOMER") {
-        navigate("/customer/bookings");
-      } else {
-        navigate("/master/dashboard");
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || "Login failed");
+    if (!res.ok) {
+      alert(data.message || "Login failed");
+      return;
     }
 
-    setLoading(false);
-  };
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    localStorage.setItem("role", data.user.role);
+
+    if (data.user.role === "customer") {
+      navigate("/customer/bookings");
+    } else if (data.user.role === "admin" || data.user.role === "operator") {
+      navigate("/master/dashboard");
+    } else {
+      alert("Unknown user role");
+    }
+  } catch (error) {
+    console.error("Login error:", error);
+    alert("Cannot connect to server");
+  }
+}; 
 
   return (
     <div className="auth-container">
       <form onSubmit={handleSubmit} className="auth-card">
-        <h2>Admin Login</h2>
+        <h2>Book Now Pay Later Login</h2>
 
         {error && <p className="error">{error}</p>}
 
