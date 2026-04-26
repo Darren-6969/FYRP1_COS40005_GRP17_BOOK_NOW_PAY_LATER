@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api";
+import "../../assets/styles/global.css";
+import "../../assets/styles/auth.css";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -12,67 +14,96 @@ export default function Register() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleChange = (e) => {
-    setForm({
-      ...form,
-      [e.target.name]: e.target.value,
-    });
+    setForm({ ...form, [e.target.name]: e.target.value });
+    if (error) setError("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
 
-    try {
-      await api.post("/auth/register", form);
-      alert("Registered successfully!");
-      navigate("/login");
-    } catch {
-      alert("Register failed");
+    if (!form.name.trim() || !form.email.trim() || !form.password) {
+      setError("Please complete all fields.");
+      return;
     }
 
-    setLoading(false);
+    setLoading(true);
+    setError("");
+
+    try {
+      await api.post("/auth/register", {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+      });
+
+      navigate("/login");
+    } catch (err) {
+      setError(err.response?.data?.message || err.response?.data?.error || "Register failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="auth-container">
-      <form onSubmit={handleSubmit} className="auth-card">
-        <h2>Register</h2>
+    <div className="bnpl-auth-page">
+      <section className="bnpl-auth-shell">
+        <div className="bnpl-auth-panel">
+          <form onSubmit={handleSubmit} className="bnpl-auth-form">
+            <h1>Create<br />Account</h1>
+            <p className="bnpl-auth-subtitle">Register to use Book Now Pay Later.</p>
 
-        <input
-          name="name"
-          placeholder="Name"
-          onChange={handleChange}
-          className="input"
-        />
+            {error && <p className="bnpl-auth-error">{error}</p>}
 
-        <input
-          name="email"
-          placeholder="Email"
-          onChange={handleChange}
-          className="input"
-        />
+            <input
+              name="name"
+              type="text"
+              placeholder="Full name"
+              value={form.name}
+              onChange={handleChange}
+              autoComplete="name"
+              disabled={loading}
+            />
 
-        <input
-          name="password"
-          type="password"
-          placeholder="Password"
-          onChange={handleChange}
-          className="input"
-        />
+            <input
+              name="email"
+              type="email"
+              placeholder="Email address"
+              value={form.email}
+              onChange={handleChange}
+              autoComplete="email"
+              disabled={loading}
+            />
 
-        <button className="btn primary" disabled={loading}>
-          {loading ? "Registering..." : "Register"}
-        </button>
+            <input
+              name="password"
+              type="password"
+              placeholder="Password"
+              value={form.password}
+              onChange={handleChange}
+              autoComplete="new-password"
+              disabled={loading}
+            />
 
-        <p>
-          Already have account?{" "}
-          <span onClick={() => navigate("/login")} className="link">
-            Login
-          </span>
-        </p>
-      </form>
+            <button className="bnpl-auth-submit" disabled={loading}>
+              {loading ? "Creating account..." : "Register"}
+            </button>
+
+            <p className="bnpl-auth-switch">
+              Already have an account?{" "}
+              <button type="button" onClick={() => navigate("/login")}>Sign In</button>
+            </p>
+          </form>
+        </div>
+
+        <div className="bnpl-auth-art" aria-hidden="true">
+          <div className="bnpl-liquid-shape shape-one" />
+          <div className="bnpl-liquid-shape shape-two" />
+          <div className="bnpl-logo-tile">BNPL</div>
+        </div>
+      </section>
     </div>
   );
 }
