@@ -26,6 +26,18 @@ import CustomerInvoices from "./pages/customer/CustomerInvoices";
 import CustomerNotifications from "./pages/customer/CustomerNotifications";
 import CustomerProfile from "./pages/customer/CustomerProfile";
 
+import OperatorLayout from "./pages/operator/layout/OperatorLayout";
+import OperatorDashboard from "./pages/operator/OperatorDashboard";
+import OperatorBookingRequests from "./pages/operator/OperatorBookingRequests";
+import OperatorBookingDetail from "./pages/operator/OperatorBookingDetail";
+import OperatorPaymentVerification from "./pages/operator/OperatorPaymentVerification";
+import OperatorBookingLog from "./pages/operator/OperatorBookingLog";
+import OperatorInvoices from "./pages/operator/OperatorInvoices";
+import OperatorSalesReport from "./pages/operator/OperatorSalesReport";
+import OperatorNotifications from "./pages/operator/OperatorNotifications";
+import OperatorServicesInventory from "./pages/operator/OperatorServicesInventory";
+import OperatorSettings from "./pages/operator/OperatorSettings";
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -47,6 +59,20 @@ export default function App() {
           <Route path="cron-jobs" element={<CronJobs />} />
           <Route path="system-logs" element={<SystemLogs />} />
           <Route path="system-settings" element={<SystemSettings />} />
+        </Route>
+
+        <Route path="/operator" element={<OperatorLayout />}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<OperatorDashboard />} />
+          <Route path="booking-requests" element={<OperatorBookingRequests />} />
+          <Route path="bookings/:id" element={<OperatorBookingDetail />} />
+          <Route path="payment-verification" element={<OperatorPaymentVerification />} />
+          <Route path="booking-log" element={<OperatorBookingLog />} />
+          <Route path="invoices" element={<OperatorInvoices />} />
+          <Route path="sales-report" element={<OperatorSalesReport />} />
+          <Route path="notifications" element={<OperatorNotifications />} />
+          <Route path="services" element={<OperatorServicesInventory />} />
+          <Route path="settings" element={<OperatorSettings />} />
         </Route>
 
         <Route path="/customer" element={<CustomerLayout />}>

@@ -40,7 +40,7 @@ function getDashboardPathByRole(role) {
 
   if (customerRoles.includes(normalizedRole)) return "/customer/bookings";
   if (adminRoles.includes(normalizedRole)) return "/master/dashboard";
-  if (operatorRoles.includes(normalizedRole)) return "/master/dashboard";
+  if (operatorRoles.includes(normalizedRole)) return "/operator/dashboard";
 
   return null;
 }
