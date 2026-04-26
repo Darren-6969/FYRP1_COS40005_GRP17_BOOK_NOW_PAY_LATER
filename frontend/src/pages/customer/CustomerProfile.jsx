@@ -89,22 +89,50 @@ export default function CustomerProfile() {
 
   return (
     <div className="customer-page">
-      <section className="customer-profile-clean customer-glass-card">
-        <div className="customer-profile-photo-panel">
-          <p className="customer-profile-title">Profile</p>
+      <section className="customer-profile-shell customer-glass-card">
+        <div className="customer-profile-summary">
+          <p style={{ textAlign: "left", margin: "0 0 24px", fontWeight: 800 }}>
+            Profile
+          </p>
 
-          <div className="customer-profile-photo-wrap">
-            {profileImage ? (
-              <img className="customer-profile-photo" src={profileImage} alt="Customer profile" />
-            ) : (
-              <div className="customer-profile-photo customer-profile-photo-fallback">{avatarInitial}</div>
-            )}
+          <div style={{ position: "relative", width: 112, height: 112, margin: "0 auto 18px" }}>
+            <div
+              className="customer-profile-avatar"
+              style={
+                profileImage
+                  ? {
+                      width: 112,
+                      height: 112,
+                      margin: 0,
+                      backgroundImage: `url(${profileImage})`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                      color: "transparent",
+                    }
+                  : { width: 112, height: 112, margin: 0 }
+              }
+            >
+              {!profileImage && avatarInitial}
+            </div>
 
             <button
               type="button"
-              className="customer-profile-photo-edit"
               onClick={() => fileInputRef.current?.click()}
               aria-label="Upload profile picture"
+              style={{
+                position: "absolute",
+                right: 0,
+                bottom: 4,
+                width: 34,
+                height: 34,
+                borderRadius: "50%",
+                border: "3px solid white",
+                background: "#eff6ff",
+                color: "#2563eb",
+                fontWeight: 900,
+                cursor: "pointer",
+                boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)",
+              }}
             >
               ✎
             </button>
@@ -122,7 +150,12 @@ export default function CustomerProfile() {
           <p className="customer-muted">{displayEmail}</p>
 
           {profileImage && (
-            <button type="button" className="customer-remove-photo-btn" onClick={handleRemoveImage}>
+            <button
+              type="button"
+              className="customer-secondary-btn small"
+              onClick={handleRemoveImage}
+              style={{ margin: "14px auto 0" }}
+            >
               Remove photo
             </button>
           )}
@@ -130,23 +163,23 @@ export default function CustomerProfile() {
           {error && <div className="customer-alert customer-alert-danger">{error}</div>}
         </div>
 
-        <div className="customer-profile-menu-card">
+        <div className="customer-profile-list customer-profile-list-detailed">
           {menuItems.map((item) => (
-            <button key={item.label} type="button" className="customer-profile-menu-row">
-              <span className="customer-profile-menu-left">
-                <span className="customer-profile-menu-icon">{item.icon}</span>
+            <button key={item.label} type="button">
+              <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ width: 18, textAlign: "center", color: "#64748b" }}>{item.icon}</span>
                 <strong>{item.label}</strong>
               </span>
-              <span className="customer-profile-chevron">›</span>
+              <span>›</span>
             </button>
           ))}
 
-          <button type="button" onClick={handleLogout} className="customer-profile-menu-row customer-profile-logout-row">
-            <span className="customer-profile-menu-left">
-              <span className="customer-profile-menu-icon">↪</span>
+          <button type="button" onClick={handleLogout} className="customer-logout-row">
+            <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ width: 18, textAlign: "center", color: "#64748b" }}>↪</span>
               <strong>Logout</strong>
             </span>
-            <span className="customer-profile-chevron">›</span>
+            <span>›</span>
           </button>
         </div>
       </section>
