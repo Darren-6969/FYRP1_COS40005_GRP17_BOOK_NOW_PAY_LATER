@@ -1,5 +1,18 @@
 import api from "./api";
 
+/**
+ * Master seller operator management
+ * Used by: frontend/src/pages/master/Operators.jsx
+ */
+export const getOperators = () => api.get("/operators");
+
+export const updateOperatorStatus = (id, status) =>
+  api.patch(`/operators/${id}/status`, { status });
+
+/**
+ * Normal seller / operator dashboard APIs
+ * Used by: frontend/src/pages/operator/*
+ */
 export const operatorService = {
   getDashboard() {
     return api.get("/operators/dashboard");
@@ -110,11 +123,23 @@ export function formatOperatorDateTime(value) {
 export function operatorStatusClass(status) {
   const normalized = String(status || "").toUpperCase();
 
-  if (["PAID", "APPROVED", "ACCEPTED", "COMPLETED", "SENT", "ACTIVE"].includes(normalized)) {
+  if (
+    ["PAID", "APPROVED", "ACCEPTED", "COMPLETED", "SENT", "ACTIVE"].includes(
+      normalized
+    )
+  ) {
     return "success";
   }
 
-  if (["PENDING", "PENDING_PAYMENT", "PENDING_VERIFICATION", "UNPAID", "GENERATED"].includes(normalized)) {
+  if (
+    [
+      "PENDING",
+      "PENDING_PAYMENT",
+      "PENDING_VERIFICATION",
+      "UNPAID",
+      "GENERATED",
+    ].includes(normalized)
+  ) {
     return "warning";
   }
 
@@ -122,7 +147,11 @@ export function operatorStatusClass(status) {
     return "info";
   }
 
-  if (["FAILED", "OVERDUE", "CANCELLED", "REJECTED", "SUSPENDED"].includes(normalized)) {
+  if (
+    ["FAILED", "OVERDUE", "CANCELLED", "REJECTED", "SUSPENDED"].includes(
+      normalized
+    )
+  ) {
     return "danger";
   }
 
