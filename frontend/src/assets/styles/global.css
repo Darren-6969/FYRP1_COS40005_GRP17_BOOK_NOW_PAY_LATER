@@ -991,3 +991,153 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.auth-container,
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(191, 219, 254, 0.5), transparent 32%),
+    linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  padding: 32px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(22px);
+}
+
+.auth-card h2 {
+  margin: 0 0 10px;
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.auth-subtitle {
+  margin: 0 0 22px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.input,
+.auth-card input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+  font-size: 14px;
+  outline: none;
+  margin-bottom: 14px;
+  box-sizing: border-box;
+}
+
+.input:focus,
+.auth-card input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.password-field {
+  position: relative;
+}
+
+.password-field .input {
+  padding-right: 72px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 12px;
+  top: 13px;
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 2px 0 18px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.remember-me {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.remember-me input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.text-link,
+.link {
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn.primary,
+.auth-card button.btn.primary {
+  width: 100%;
+  height: 46px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.24);
+}
+
+.btn.primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.error {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 12px 14px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.4;
+  border: 1px solid #fecaca;
+}
+
+.auth-card p {
+  font-size: 14px;
+}
+
+.auth-note {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #e5e7eb;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
