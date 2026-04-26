@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "../../services/auth_service";
 import "../../assets/styles/global.css";
-import "../../assets/styles/auth.css";
 
 function normalizeRole(role) {
   if (!role) return "";
