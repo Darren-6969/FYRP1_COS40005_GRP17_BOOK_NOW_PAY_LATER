@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  acceptCustomerAlternative,
   cancelCustomerBooking,
   getCustomerBookingActivity,
   getCustomerBookingById,
   getCustomerBookings,
+  rejectCustomerAlternative,
 } from "../services/customer_service";
 
 export function useCustomerBookings() {
@@ -65,5 +67,19 @@ export function useCustomerBooking(id) {
     loadBooking();
   }, [loadBooking]);
 
-  return { booking, activity, loading, error, reload: loadBooking, cancelBooking };
+  const acceptAlternative = async () => {
+    const res = await acceptCustomerAlternative(id);
+    setBooking(res.data);
+    await loadBooking();
+    return res.data;
+  };
+
+  const rejectAlternative = async () => {
+    const res = await rejectCustomerAlternative(id);
+    setBooking(res.data);
+    await loadBooking();
+    return res.data;
+  };
+  
+  return { booking, activity, loading, error, reload: loadBooking, cancelBooking, acceptAlternative, rejectAlternative };
 }

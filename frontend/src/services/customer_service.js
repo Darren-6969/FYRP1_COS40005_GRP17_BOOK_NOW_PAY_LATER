@@ -8,6 +8,12 @@ export const createCustomerBooking = (payload) =>
 export const getCustomerBookingById = (id) =>
   api.get(`/customer/bookings/${id}`);
 
+export const acceptCustomerAlternative = (id) =>
+  api.patch(`/customer/bookings/${id}/accept-alternative`);
+
+export const rejectCustomerAlternative = (id) =>
+  api.patch(`/customer/bookings/${id}/reject-alternative`);
+
 export const cancelCustomerBooking = (id) =>
   api.patch(`/customer/bookings/${id}/cancel`);
 

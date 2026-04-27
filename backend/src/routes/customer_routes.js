@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  acceptAlternativeBooking,
   cancelCustomerBooking,
   createCustomerBooking,
   getCustomerBookingActivity,
@@ -12,6 +13,7 @@ import {
   markAllCustomerNotificationsRead,
   markCustomerNotificationRead,
   payCustomerBooking,
+  rejectAlternativeBooking,
   uploadCustomerReceipt,
 } from "../controllers/customer_controller.js";
 import { verifyToken } from "../middlewares/auth_middleware.js";
@@ -25,6 +27,8 @@ router.use(allowRoles("CUSTOMER"));
 router.get("/bookings", getCustomerBookings);
 router.post("/bookings", createCustomerBooking);
 router.get("/bookings/:id", getCustomerBookingById);
+router.patch("/bookings/:id/accept-alternative", acceptAlternativeBooking);
+router.patch("/bookings/:id/reject-alternative", rejectAlternativeBooking);
 router.patch("/bookings/:id/cancel", cancelCustomerBooking);
 router.get("/bookings/:id/activity", getCustomerBookingActivity);
 

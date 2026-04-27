@@ -478,7 +478,16 @@ export async function suggestAlternative(req, res, next) {
 
     const updatedBooking = await prisma.booking.update({
       where: { id: booking.id },
-      data: { status: "REJECTED" },
+      data: {
+        status: "ALTERNATIVE_SUGGESTED",
+        alternativeServiceName,
+        alternativePrice: alternativePrice ? Number(alternativePrice) : null,
+        alternativePickupDate: alternativePickupDate ? new Date(alternativePickupDate) : null,
+        alternativeReturnDate: alternativeReturnDate ? new Date(alternativeReturnDate) : null,
+        alternativeReason: reason,
+        alternativeSuggestedAt: new Date(),
+        alternativeUsed: true,
+      },
       include: includeBookingRelations(),
     });
 
@@ -486,7 +495,7 @@ export async function suggestAlternative(req, res, next) {
       req,
       action: "ALTERNATIVE_SUGGESTED",
       entityType: "Booking",
-      entityId: booking.id,
+      entityId: String(booking.id),
       details,
     });
 

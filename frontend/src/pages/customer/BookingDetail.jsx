@@ -12,11 +12,29 @@ import {
 export default function BookingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { booking, activity, loading, error, cancelBooking } = useCustomerBooking(id);
+  const {
+    booking,
+    activity,
+    loading,
+    error,
+    cancelBooking,
+    acceptAlternative,
+    rejectAlternative,
+  } = useCustomerBooking(id);
 
   const handleCancel = async () => {
     if (!window.confirm("Cancel this booking?")) return;
     await cancelBooking();
+  };
+
+  const handleAcceptAlternative = async () => {
+    if (!window.confirm("Accept this alternative booking option?")) return;
+    await acceptAlternative();
+  };
+
+  const handleRejectAlternative = async () => {
+    if (!window.confirm("Reject this alternative booking option?")) return;
+    await rejectAlternative();
   };
 
   if (loading) {
@@ -45,7 +63,7 @@ export default function BookingDetail() {
         ← Back to My Bookings
       </button>
 
-      <section className="customer-booking-detail-grid">
+      <section className="customer-booking-detail-grid with-alternative">
         <article className="customer-glass-card customer-booking-detail-card">
           <div className="customer-card-head">
             <span className={`customer-status status-${customerStatusClass(booking.status)}`}>
@@ -119,6 +137,89 @@ export default function BookingDetail() {
             )}
           </div>
         </article>
+
+      {booking.status === "ALTERNATIVE_SUGGESTED" && (
+        <article className="customer-glass-card customer-alternative-card">
+          <div className="customer-alternative-head">
+            <div>
+              <p className="customer-eyebrow">Alternative Booking Suggested</p>
+              <h2>Review the operator’s suggested option</h2>
+            </div>
+            <span className="customer-status status-warning">Action Required</span>
+          </div>
+
+          <div className="customer-alternative-compare">
+            <div className="customer-alt-box original">
+              <p>Original Booking</p>
+              <h3>{booking.serviceName}</h3>
+
+              <div>
+                <span>Pick-up / Check-in</span>
+                <strong>{formatCustomerDate(booking.pickupDate)}</strong>
+              </div>
+
+              <div>
+                <span>Return / Check-out</span>
+                <strong>{formatCustomerDate(booking.returnDate)}</strong>
+              </div>
+
+              <div>
+                <span>Total Amount</span>
+                <strong>{formatMoney(booking.totalAmount)}</strong>
+              </div>
+            </div>
+
+            <div className="customer-alt-arrow">→</div>
+
+            <div className="customer-alt-box suggested">
+              <p>Suggested Alternative</p>
+              <h3>{booking.alternativeServiceName || "Alternative option"}</h3>
+
+              <div>
+                <span>Pick-up / Check-in</span>
+                <strong>
+                  {formatCustomerDate(booking.alternativePickupDate || booking.pickupDate)}
+                </strong>
+              </div>
+
+              <div>
+                <span>Return / Check-out</span>
+                <strong>
+                  {formatCustomerDate(booking.alternativeReturnDate || booking.returnDate)}
+                </strong>
+              </div>
+
+              <div>
+                <span>Total Amount</span>
+                <strong>
+                  {formatMoney(booking.alternativePrice || booking.totalAmount)}
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          {booking.alternativeReason && (
+            <div className="customer-alternative-reason">
+              <strong>Reason from operator</strong>
+              <p>{booking.alternativeReason}</p>
+            </div>
+          )}
+
+          <div className="customer-card-actions">
+            <button className="customer-secondary-btn" onClick={handleRejectAlternative}>
+              Reject Alternative
+            </button>
+
+            <button className="customer-primary-btn" onClick={handleAcceptAlternative}>
+              Accept Alternative
+            </button>
+          </div>
+
+          <p className="customer-alt-note">
+            You can only receive one alternative suggestion for this booking.
+          </p>
+        </article>
+      )}
 
         <article className="customer-glass-card customer-timeline-card">
           <h2>Booking Timeline</h2>

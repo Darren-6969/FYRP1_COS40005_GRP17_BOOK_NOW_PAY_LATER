@@ -23,10 +23,22 @@ function mapBooking(booking) {
     totalAmount: toNumber(booking.totalAmount),
     status: booking.status,
     paymentDeadline: booking.paymentDeadline,
+
+    // Alternative suggestion fields
+    alternativeServiceName: booking.alternativeServiceName,
+    alternativePrice: toNumber(booking.alternativePrice),
+    alternativePickupDate: booking.alternativePickupDate,
+    alternativeReturnDate: booking.alternativeReturnDate,
+    alternativeReason: booking.alternativeReason,
+    alternativeSuggestedAt: booking.alternativeSuggestedAt,
+    alternativeUsed: booking.alternativeUsed,
+
+    // Audit fields
     createdAt: booking.createdAt,
     updatedAt: booking.updatedAt,
     customer: booking.customer,
     operator: booking.operator,
+
     payment: booking.payment
       ? {
           ...booking.payment,
@@ -610,3 +622,118 @@ export async function getCustomerBookingActivity(req, res, next) {
   }
 }
 
+export async function acceptAlternativeBooking(req, res, next) {
+  try {
+    const booking = await assertCustomerBooking(req.params.id, req.user.id);
+
+    if (booking.status !== "ALTERNATIVE_SUGGESTED") {
+      return res.status(400).json({
+        message: "This booking does not have an alternative suggestion to accept.",
+      });
+    }
+
+    if (!booking.alternativeServiceName) {
+      return res.status(400).json({
+        message: "No alternative booking details found.",
+      });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const accepted = await tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          serviceName: booking.alternativeServiceName,
+          totalAmount: booking.alternativePrice || booking.totalAmount,
+          pickupDate: booking.alternativePickupDate || booking.pickupDate,
+          returnDate: booking.alternativeReturnDate || booking.returnDate,
+          status: "ACCEPTED",
+        },
+        include: {
+          customer: { select: { id: true, userCode: true, name: true, email: true } },
+          operator: true,
+          payment: true,
+          receipt: true,
+          invoice: true,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: req.user.id,
+          action: "CUSTOMER_ACCEPTED_ALTERNATIVE",
+          entityType: "Booking",
+          entityId: String(booking.id),
+          details: {
+            alternativeServiceName: booking.alternativeServiceName,
+            alternativePrice: booking.alternativePrice,
+          },
+        },
+      });
+
+      await createCustomerNotification(
+        tx,
+        req.user.id,
+        "Alternative Accepted",
+        `You accepted the alternative option for booking ${booking.bookingCode || booking.id}.`,
+        "ALTERNATIVE_ACCEPTED"
+      );
+
+      return accepted;
+    });
+
+    res.json(mapBooking(updated));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function rejectAlternativeBooking(req, res, next) {
+  try {
+    const booking = await assertCustomerBooking(req.params.id, req.user.id);
+
+    if (booking.status !== "ALTERNATIVE_SUGGESTED") {
+      return res.status(400).json({
+        message: "This booking does not have an alternative suggestion to reject.",
+      });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const rejected = await tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: "REJECTED",
+        },
+        include: {
+          customer: { select: { id: true, userCode: true, name: true, email: true } },
+          operator: true,
+          payment: true,
+          receipt: true,
+          invoice: true,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: req.user.id,
+          action: "CUSTOMER_REJECTED_ALTERNATIVE",
+          entityType: "Booking",
+          entityId: String(booking.id),
+        },
+      });
+
+      await createCustomerNotification(
+        tx,
+        req.user.id,
+        "Alternative Rejected",
+        `You rejected the alternative option for booking ${booking.bookingCode || booking.id}.`,
+        "ALTERNATIVE_REJECTED"
+      );
+
+      return rejected;
+    });
+
+    res.json(mapBooking(updated));
+  } catch (err) {
+    next(err);
+  }
+}
