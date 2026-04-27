@@ -63,14 +63,14 @@ export async function register(req, res, next) {
       },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        action: "USER_REGISTERED",
-        entityType: "User",
-        entityId: user.id,
-      },
-    });
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "USER_REGISTERED",
+      entityType: "User",
+      entityId: String(user.id),
+    },
+  });
 
     res.status(201).json(user);
   } catch (err) {
@@ -111,10 +111,10 @@ export async function login(req, res, next) {
         userId: user.id,
         action: "USER_LOGIN",
         entityType: "User",
-        entityId: user.id,
+        entityId: String(user.id),
       },
     });
-
+    
     res.json({
       token,
       user: {

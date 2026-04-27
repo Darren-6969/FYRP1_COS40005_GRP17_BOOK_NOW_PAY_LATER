@@ -53,14 +53,28 @@ async function createCustomerNotification(tx, userId, title, message, type = "IN
   });
 }
 
+function parseId(value, label = "id") {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    const error = new Error(`Invalid ${label}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return parsed;
+}
+
 async function assertCustomerBooking(bookingId, customerId) {
+  const id = parseId(bookingId, "booking id");
+
   const booking = await prisma.booking.findFirst({
     where: {
-      id: bookingId,
+      id,
       customerId,
     },
     include: {
-      customer: { select: { id: true, name: true, email: true } },
+      customer: { select: { id: true, userCode: true, name: true, email: true } },
       operator: true,
       payment: true,
       receipt: true,
@@ -75,6 +89,11 @@ async function assertCustomerBooking(bookingId, customerId) {
   }
 
   return booking;
+}
+
+async function generateBookingCode(tx) {
+  const count = await tx.booking.count();
+  return `BNPL-${String(count + 1).padStart(4, "0")}`;
 }
 
 export async function createCustomerBooking(req, res, next) {
@@ -113,36 +132,40 @@ export async function createCustomerBooking(req, res, next) {
       resolvedOperatorId = fallbackOperator.id;
     }
 
+    const bookingCode = await generateBookingCode(tx);
+
     const booking = await prisma.$transaction(async (tx) => {
-      const created = await tx.booking.create({
-        data: {
-          customerId: req.user.id,
-          operatorId: resolvedOperatorId,
-          serviceName,
-          serviceType: serviceType || null,
-          bookingDate: new Date(bookingDate),
-          pickupDate: pickupDate ? new Date(pickupDate) : null,
-          returnDate: returnDate ? new Date(returnDate) : null,
-          location: location || null,
-          totalAmount,
-          status: "PENDING",
-        },
-        include: {
-          customer: { select: { id: true, name: true, email: true } },
-          operator: true,
-          payment: true,
-          receipt: true,
-          invoice: true,
-        },
-      });
+    const created = await tx.booking.create({
+      data: {
+        bookingCode,
+        customerId: req.user.id,
+        operatorId: resolvedOperatorId,
+        serviceName,
+        serviceType: serviceType || null,
+        bookingDate: new Date(bookingDate),
+        pickupDate: pickupDate ? new Date(pickupDate) : null,
+        returnDate: returnDate ? new Date(returnDate) : null,
+        location: location || null,
+        totalAmount,
+        status: "PENDING",
+      },
+      include: {
+        customer: { select: { id: true, userCode: true, name: true, email: true } },
+        operator: true,
+        payment: true,
+        receipt: true,
+        invoice: true,
+      },
+    });
 
       await tx.auditLog.create({
         data: {
           userId: req.user.id,
           action: "CUSTOMER_BOOKING_CREATED",
           entityType: "Booking",
-          entityId: created.id,
+          entityId: String(created.id),
           details: {
+            bookingCode: created.bookingCode,
             source: "customer_bnpl_web_app",
           },
         },
@@ -222,7 +245,7 @@ export async function cancelCustomerBooking(req, res, next) {
           userId: req.user.id,
           action: "CUSTOMER_BOOKING_CANCELLED",
           entityType: "Booking",
-          entityId: booking.id,
+          entityId: String(booking.id),
         },
       });
 
@@ -311,7 +334,7 @@ export async function payCustomerBooking(req, res, next) {
           userId: req.user.id,
           action: "CUSTOMER_PAYMENT_COMPLETED",
           entityType: "Payment",
-          entityId: payment.id,
+          entityId: String(payment.id),
           details: { method: normalizedMethod },
         },
       });
@@ -397,7 +420,7 @@ export async function uploadCustomerReceipt(req, res, next) {
           userId: req.user.id,
           action: "CUSTOMER_RECEIPT_UPLOADED",
           entityType: "Receipt",
-          entityId: booking.id,
+          entityId: String(booking.id),
         },
       });
 
@@ -453,7 +476,7 @@ export async function getCustomerInvoiceById(req, res, next) {
   try {
     const invoice = await prisma.invoice.findFirst({
       where: {
-        id: req.params.id,
+        id: parseId(req.params.id, "invoice id"),
         booking: {
           customerId: req.user.id,
         },
@@ -567,16 +590,16 @@ export async function markAllCustomerNotificationsRead(req, res, next) {
 
 export async function getCustomerBookingActivity(req, res, next) {
   try {
-    await assertCustomerBooking(req.params.id, req.user.id);
+    const booking = await assertCustomerBooking(req.params.id, req.user.id);
 
     const logs = await prisma.auditLog.findMany({
       where: {
         entityType: "Booking",
-        entityId: req.params.id,
+        entityId: String(booking.id),
       },
       orderBy: { createdAt: "asc" },
       include: {
-        user: { select: { id: true, name: true, email: true, role: true } },
+        user: { select: { id: true, userCode: true, name: true, email: true, role: true } },
       },
     });
 
