@@ -126,3 +126,146 @@
 .clean-card h3 {
   margin-top: 0;
 }
+
+/* =========================
+   Shared Notification Dropdown
+   Used by Customer + Operator
+   ========================= */
+
+.portal-bell-icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.portal-notification-badge {
+  position: absolute;
+  top: -6px;
+  right: -5px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: white;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 900;
+  border: 2px solid white;
+}
+
+.portal-notification-dropdown {
+  position: absolute;
+  right: 0;
+  top: 54px;
+  z-index: 9999;
+  width: min(390px, calc(100vw - 32px));
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(24px);
+  overflow: hidden;
+}
+
+.portal-dropdown-head {
+  padding: 18px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.portal-dropdown-head strong {
+  display: block;
+  font-size: 16px;
+}
+
+.portal-dropdown-head p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.portal-dropdown-head button {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.portal-dropdown-head button:disabled {
+  color: #94a3b8;
+}
+
+.portal-dropdown-list {
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.portal-dropdown-item {
+  width: 100%;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  gap: 10px;
+  text-align: left;
+}
+
+.portal-dropdown-item:hover,
+.portal-dropdown-item.unread {
+  background: #eff6ff;
+}
+
+.portal-dropdown-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2563eb;
+  margin-top: 6px;
+}
+
+.portal-dropdown-item:not(.unread) .portal-dropdown-dot {
+  background: #cbd5e1;
+}
+
+.portal-dropdown-item strong {
+  display: block;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.portal-dropdown-item small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.portal-dropdown-empty {
+  padding: 22px;
+  color: #64748b;
+  text-align: center;
+  font-weight: 700;
+}
+
+.portal-dropdown-error {
+  color: #be123c;
+}
+
+.portal-dropdown-footer {
+  display: block;
+  padding: 14px 18px 18px;
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+  text-align: center;
+  text-decoration: none;
+  color: #2563eb;
+  font-weight: 900;
+  font-size: 13px;
+}

@@ -75,13 +75,13 @@ export default function CustomerLayout() {
               onClick={() => setOpenNotifications((prev) => !prev)}
               aria-label="Open notifications"
             >
-              <span className="customer-bell-icon">◇</span>
-              {unreadCount > 0 && <span className="customer-notification-badge">{unreadCount}</span>}
+              <span className="customer-bell-icon">🔔</span>
+              {unreadCount > 0 && <span className="portal-notification-badge">{unreadCount}</span>}
             </button>
 
             {openNotifications && (
-              <div className="customer-notification-dropdown">
-                <div className="customer-dropdown-head">
+              <div className="portal-notification-dropdown customer-notification-dropdown">
+                <div className="portal-dropdown-head">
                   <div>
                     <strong>Notifications</strong>
                     <p>{unreadCount} unread update{unreadCount === 1 ? "" : "s"}</p>
@@ -95,19 +95,19 @@ export default function CustomerLayout() {
                   </button>
                 </div>
 
-                {loading && <div className="customer-dropdown-empty">Loading notifications...</div>}
-                {error && <div className="customer-dropdown-empty customer-dropdown-error">{error}</div>}
+                {loading && <div className="portal-dropdown-empty">Loading notifications...</div>}
+                {error && <div className="portal-dropdown-empty portal-dropdown-error">{error}</div>}
 
                 {!loading && !error && recentNotifications.length > 0 && (
-                  <div className="customer-dropdown-list">
+                  <div className="portal-dropdown-list">
                     {recentNotifications.map((item) => (
                       <button
                         key={item.id}
                         type="button"
-                        className={`customer-dropdown-item ${!item.isRead ? "unread" : ""}`}
+                        className={`portal-dropdown-item ${!item.isRead ? "unread" : ""}`}
                         onClick={() => markRead(item.id)}
                       >
-                        <span className="customer-dropdown-dot" />
+                        <span className="portal-dropdown-dot" />
                         <span>
                           <strong>{item.title || item.type || "Notification"}</strong>
                           <small>{item.message || item.description || "Booking update received."}</small>
@@ -118,11 +118,11 @@ export default function CustomerLayout() {
                 )}
 
                 {!loading && !error && !recentNotifications.length && (
-                  <div className="customer-dropdown-empty">No notifications yet.</div>
+                  <div className="portal-dropdown-empty">No notifications yet.</div>
                 )}
 
                 <Link
-                  className="customer-dropdown-footer"
+                  className="portal-dropdown-footer"
                   to="/customer/notifications"
                   onClick={() => setOpenNotifications(false)}
                 >

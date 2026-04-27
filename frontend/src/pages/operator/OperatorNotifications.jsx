@@ -1,85 +1,81 @@
-import { useEffect, useState } from "react";
-import {
-  operatorService,
-  formatOperatorDateTime,
-} from "../../services/operator_service";
+import { useOperatorNotifications } from "../../hooks/useNotifications";
+import { formatOperatorDateTime } from "../../services/operator_service";
 
 export default function OperatorNotifications() {
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const {
+    notifications,
+    loading,
+    error,
+    reload,
+    markRead,
+    markAllRead,
+  } = useOperatorNotifications();
 
-  const loadNotifications = async () => {
-    try {
-      setLoading(true);
-      setError("");
-
-      const res = await operatorService.getNotifications();
-
-      setNotifications(res.data.notifications || []);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to load notifications");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadNotifications();
-  }, []);
-
-  const markRead = async (id) => {
-    await operatorService.markNotificationRead(id);
-    await loadNotifications();
-  };
-
-  const markAllRead = async () => {
-    await operatorService.markAllNotificationsRead();
-    await loadNotifications();
-  };
+  const unreadCount = notifications.filter((item) => !item.isRead).length;
 
   return (
     <div className="operator-page">
-      <section className="operator-page-head">
+      <section className="operator-page-head operator-notifications-hero">
         <div>
+          <p className="operator-eyebrow">Real-time Updates</p>
           <h1>Notifications</h1>
-          <p>View real-time booking and payment updates.</p>
+          <p>
+            View booking requests, payment updates, invoice activity, and customer actions.
+          </p>
         </div>
 
-        <button className="operator-secondary-btn" onClick={markAllRead}>
-          Mark All Read
-        </button>
+        <div className="operator-notification-summary-card">
+          <strong>{unreadCount}</strong>
+          <span>Unread</span>
+        </div>
       </section>
 
       {error && (
         <div className="operator-alert danger">
           {error}
-          <button type="button" onClick={loadNotifications}>Retry</button>
+          <button type="button" onClick={reload}>Retry</button>
         </div>
       )}
 
-      <section className="operator-card">
+      <section className="operator-card operator-notifications-panel">
+        <div className="operator-card-head">
+          <div>
+            <h2>Notification Centre</h2>
+            <p>{notifications.length} total update{notifications.length === 1 ? "" : "s"}</p>
+          </div>
+
+          <button
+            className="operator-secondary-btn"
+            type="button"
+            onClick={markAllRead}
+            disabled={!unreadCount}
+          >
+            Mark All Read
+          </button>
+        </div>
+
         {loading ? (
           <div className="operator-empty-state">Loading notifications...</div>
         ) : (
-          <div className="operator-notification-list">
+          <div className="operator-notification-list page-list">
             {notifications.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                className="operator-notification-item"
+                className={`operator-notification-item ${!item.isRead ? "unread" : ""}`}
                 onClick={() => markRead(item.id)}
               >
                 <span className={`operator-notification-icon ${item.isRead ? "neutral" : "info"}`}>
-                  ◇
+                  🔔
                 </span>
 
                 <div>
-                  <strong>{item.title}</strong>
-                  <p>{item.message}</p>
+                  <strong>{item.title || item.type || "Notification"}</strong>
+                  <p>{item.message || "Booking update received."}</p>
+                  <small>{formatOperatorDateTime(item.createdAt)}</small>
                 </div>
 
-                <small>{formatOperatorDateTime(item.createdAt)}</small>
+                {!item.isRead && <span className="operator-unread-pill">Unread</span>}
               </button>
             ))}
 

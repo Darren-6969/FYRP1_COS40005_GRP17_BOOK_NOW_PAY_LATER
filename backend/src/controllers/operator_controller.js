@@ -4,6 +4,18 @@ function toNumber(value) {
   return value == null ? 0 : Number(value);
 }
 
+function parseId(value, label = "id") {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    const error = new Error(`Invalid ${label}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return parsed;
+}
+
 function canAccessOperator(req) {
   return ["NORMAL_SELLER", "MASTER_SELLER"].includes(req.user?.role);
 }
@@ -75,7 +87,7 @@ function mapBooking(booking) {
 async function findOperatorBooking(req, bookingId) {
   return prisma.booking.findFirst({
     where: {
-      id: bookingId,
+      id: parseId(bookingId, "booking id"),
       ...bookingWhere(req),
     },
     include: includeBookingRelations(),
@@ -88,7 +100,7 @@ async function createAuditLog({ req, action, entityType, entityId, details = {} 
       userId: req.user?.id || null,
       action,
       entityType,
-      entityId,
+      entityId: entityId === null || entityId === undefined ? null : String(entityId),
       details,
     },
   });
@@ -191,7 +203,7 @@ export async function getOperators(req, res, next) {
 
 export async function updateOperatorStatus(req, res, next) {
   try {
-    const { id } = req.params;
+    const id = parseId(req.params.id, "operator id");
     const { status } = req.body;
 
     if (!["ACTIVE", "SUSPENDED", "PENDING"].includes(status)) {
@@ -299,8 +311,9 @@ export async function getOperatorBookings(req, res, next) {
     }
 
     if (q) {
-      where.OR = [
-        { id: { contains: q, mode: "insensitive" } },
+      const numericQuery = Number(q);
+      const searchableFields = [
+        { bookingCode: { contains: q, mode: "insensitive" } },
         { serviceName: { contains: q, mode: "insensitive" } },
         { serviceType: { contains: q, mode: "insensitive" } },
         { location: { contains: q, mode: "insensitive" } },
@@ -321,6 +334,12 @@ export async function getOperatorBookings(req, res, next) {
           },
         },
       ];
+
+      if (Number.isInteger(numericQuery) && numericQuery > 0) {
+        searchableFields.unshift({ id: numericQuery });
+      }
+
+      where.OR = searchableFields;
     }
 
     const finalWhere =
@@ -360,7 +379,7 @@ export async function getOperatorBookingById(req, res, next) {
     const timeline = await prisma.auditLog.findMany({
       where: {
         entityType: "Booking",
-        entityId: booking.id,
+        entityId: String(booking.id),
       },
       orderBy: { createdAt: "asc" },
       include: {
@@ -408,7 +427,7 @@ async function updateBookingStatus(req, res, next, status, action) {
     await createCustomerNotification({
       booking,
       title: `Booking ${status.replace("_", " ").toLowerCase()}`,
-      message: `Your booking ${booking.id} has been updated to ${status}.`,
+      message: `Your booking ${booking.bookingCode || booking.id} has been updated to ${status}.`,
       type: action,
     });
 
@@ -443,7 +462,7 @@ export async function suggestAlternative(req, res, next) {
     const existingAlternative = await prisma.auditLog.findFirst({
       where: {
         entityType: "Booking",
-        entityId: booking.id,
+        entityId: String(booking.id),
         action: "ALTERNATIVE_SUGGESTED",
       },
     });
@@ -502,7 +521,7 @@ export async function suggestAlternative(req, res, next) {
     await createCustomerNotification({
       booking,
       title: "Alternative booking suggested",
-      message: `An alternative option has been suggested for booking ${booking.id}.`,
+      message: `An alternative option has been suggested for booking ${booking.bookingCode || booking.id}.`,
       type: "ALTERNATIVE_SUGGESTED",
     });
 
@@ -562,7 +581,7 @@ export async function sendPaymentRequest(req, res, next) {
     await createCustomerNotification({
       booking,
       title: "Payment required",
-      message: `Please complete payment for booking ${booking.id} before the deadline.`,
+      message: `Please complete payment for booking ${booking.bookingCode || booking.id} before the deadline.`,
       type: "PAYMENT_REQUIRED",
     });
 
@@ -609,7 +628,7 @@ export async function approvePayment(req, res, next) {
   try {
     const payment = await prisma.payment.findFirst({
       where: {
-        id: req.params.id,
+        id: parseId(req.params.id, "payment id"),
         booking: {
           is: bookingRelationWhere(req),
         },
@@ -656,7 +675,7 @@ export async function rejectPayment(req, res, next) {
   try {
     const payment = await prisma.payment.findFirst({
       where: {
-        id: req.params.id,
+        id: parseId(req.params.id, "payment id"),
         booking: {
           is: bookingRelationWhere(req),
         },
@@ -724,7 +743,7 @@ export async function sendInvoice(req, res, next) {
   try {
     const invoice = await prisma.invoice.findFirst({
       where: {
-        id: req.params.id,
+        id: parseId(req.params.id, "invoice id"),
         booking: {
           is: bookingRelationWhere(req),
         },
@@ -783,7 +802,7 @@ export async function markNotificationRead(req, res, next) {
   try {
     await prisma.notification.updateMany({
       where: {
-        id: req.params.id,
+        id: parseId(req.params.id, "notification id"),
         userId: req.user.id,
       },
       data: {
