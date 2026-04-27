@@ -11,6 +11,7 @@ function mapBooking(booking) {
 
   return {
     id: booking.id,
+    bookingCode: booking.bookingCode,
     customerId: booking.customerId,
     operatorId: booking.operatorId,
     serviceName: booking.serviceName,

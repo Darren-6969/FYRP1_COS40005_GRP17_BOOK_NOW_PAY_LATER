@@ -111,6 +111,7 @@
   flex: 1;
   min-width: 0;
   padding: 24px;
+  position: relative;
 }
 
 .operator-topbar {
@@ -125,6 +126,9 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative;
+  z-index: 200;
+  overflow: visible;
 }
 
 .operator-topbar h1 {
@@ -145,6 +149,12 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  position: relative;
+  z-index: 220;
+}
+
+.operator-notification-dropdown {
+  z-index: 9999;
 }
 
 .operator-icon-btn {
