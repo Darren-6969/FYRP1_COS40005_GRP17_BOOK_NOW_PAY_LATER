@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   getOperators,
   updateOperatorStatus,
-} from "../../services/operator_service";
+} from "../../services/admin_service";
 
 export default function Operators() {
   const [operators, setOperators] = useState([]);

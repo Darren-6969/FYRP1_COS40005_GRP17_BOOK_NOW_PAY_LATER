@@ -41,7 +41,7 @@ app.use("/api/invoices", invoiceRoutes);
 app.use("/api/operators", operatorRoutes);
 app.use("/api/config", configRoutes);
 app.use("/api/logs", logRoutes);
-app.use("/api/customers", customerRoutes);
+app.use("/api/customer", customerRoutes);
 
 app.use(errorHandler);
 

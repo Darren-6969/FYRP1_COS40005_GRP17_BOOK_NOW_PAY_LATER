@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 
+// Master Pages
 import MasterLayout from "./pages/master/layout/MasterLayout";
 import Dashboard from "./pages/master/Dashboard";
 import Bookings from "./pages/master/Bookings";
@@ -15,6 +16,7 @@ import CronJobs from "./pages/master/CronJobs";
 import SystemLogs from "./pages/master/SystemLogs";
 import SystemSettings from "./pages/master/SystemSettings";
 
+// Customer Pages
 import CustomerLayout from "./pages/customer/layout/CustomerLayout";
 import MyBookings from "./pages/customer/MyBookings";
 import BookingDetail from "./pages/customer/BookingDetail";
@@ -26,6 +28,7 @@ import CustomerInvoices from "./pages/customer/CustomerInvoices";
 import CustomerNotifications from "./pages/customer/CustomerNotifications";
 import CustomerProfile from "./pages/customer/CustomerProfile";
 
+// Operator Pages
 import OperatorLayout from "./pages/operator/layout/OperatorLayout";
 import OperatorDashboard from "./pages/operator/OperatorDashboard";
 import OperatorBookingRequests from "./pages/operator/OperatorBookingRequests";
