@@ -80,11 +80,7 @@ export const operatorService = {
 
   getReports(params = {}) {
     return api.get("/operators/reports", { params });
-  },
-
-  getServices(params = {}) {
-    return api.get("/operators/services", { params });
-  },
+  }, 
 
   getSettings() {
     return api.get("/operators/settings");

@@ -2,6 +2,28 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import prisma from "../config/db.js";
 
+async function generateUserCode(role) {
+  const prefixMap = {
+    CUSTOMER: "CUS",
+    NORMAL_SELLER: "OPR",
+    MASTER_SELLER: "ADN",
+  };
+
+  const prefix = prefixMap[role] || "USR";
+
+  const count = await prisma.user.count({
+    where: {
+      role,
+    },
+  });
+
+  return `${prefix}${String(count + 1).padStart(4, "0")}`;
+}
+
+async function generateOperatorCode() {
+  const count = await prisma.operator.count();
+  return `OPR${String(count + 1).padStart(4, "0")}`;
+}
 
 export async function register(req, res, next) {
   try {
@@ -21,15 +43,24 @@ export async function register(req, res, next) {
     const safeRole = allowedRoles.includes(role) ? role : "CUSTOMER";
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const userCode = await generateUserCode(safeRole);
 
     const user = await prisma.user.create({
       data: {
+        userCode,
         name,
         email,
         password: hashedPassword,
         role: safeRole,
       },
-      select: { id: true, name: true, email: true, role: true, createdAt: true },
+      select: {
+        id: true,
+        userCode: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+      },
     });
 
     await prisma.auditLog.create({
@@ -88,6 +119,7 @@ export async function login(req, res, next) {
       token,
       user: {
         id: user.id,
+        userCode: user.userCode,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -102,6 +134,7 @@ export async function login(req, res, next) {
 export async function me(req, res) {
   res.json({
     id: req.user.id,
+    userCode: req.user.userCode,
     name: req.user.name,
     email: req.user.email,
     role: req.user.role,

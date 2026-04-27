@@ -38,7 +38,6 @@ import OperatorBookingLog from "./pages/operator/OperatorBookingLog";
 import OperatorInvoices from "./pages/operator/OperatorInvoices";
 import OperatorSalesReport from "./pages/operator/OperatorSalesReport";
 import OperatorNotifications from "./pages/operator/OperatorNotifications";
-import OperatorServicesInventory from "./pages/operator/OperatorServicesInventory";
 import OperatorSettings from "./pages/operator/OperatorSettings";
 
 export default function App() {
@@ -50,6 +49,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
+        // Master Routes
         <Route path="/master" element={<MasterLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
@@ -64,6 +64,7 @@ export default function App() {
           <Route path="system-settings" element={<SystemSettings />} />
         </Route>
 
+        // Operator Routes
         <Route path="/operator" element={<OperatorLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<OperatorDashboard />} />
@@ -74,10 +75,10 @@ export default function App() {
           <Route path="invoices" element={<OperatorInvoices />} />
           <Route path="sales-report" element={<OperatorSalesReport />} />
           <Route path="notifications" element={<OperatorNotifications />} />
-          <Route path="services" element={<OperatorServicesInventory />} />
           <Route path="settings" element={<OperatorSettings />} />
         </Route>
 
+        // Customer Routes
         <Route path="/customer" element={<CustomerLayout />}>
           <Route index element={<Navigate to="bookings" replace />} />
           <Route path="bookings" element={<MyBookings />} />

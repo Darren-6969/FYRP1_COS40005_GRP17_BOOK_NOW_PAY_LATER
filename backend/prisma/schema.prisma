@@ -13,10 +13,17 @@ enum UserRole {
   CUSTOMER
 }
 
+enum OperatorStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+}
+
 enum BookingStatus {
   PENDING
   ACCEPTED
   REJECTED
+  ALTERNATIVE_SUGGESTED
   PENDING_PAYMENT
   PAID
   OVERDUE
@@ -30,6 +37,16 @@ enum PaymentStatus {
   PAID
   FAILED
   OVERDUE
+}
+
+enum PaymentMethod {
+  PENDING
+  PAYPAL
+  STRIPE
+  DUITNOW
+  SPAY
+  BANK_TRANSFER
+  CASH
 }
 
 enum ReceiptStatus {
@@ -46,13 +63,14 @@ enum InvoiceStatus {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      UserRole @default(CUSTOMER)
+  id       Int      @id @default(autoincrement())
+  userCode String   @unique
+  name     String
+  email    String   @unique
+  password String
+  role     UserRole @default(CUSTOMER)
 
-  operatorId String?
+  operatorId Int?
   operator   Operator? @relation(fields: [operatorId], references: [id])
 
   bookings      Booking[]
@@ -61,15 +79,20 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userCode])
+  @@index([operatorId])
+  @@index([role])
 }
 
 model Operator {
-  id          String  @id @default(uuid())
-  companyName String
-  email       String  @unique
-  phone       String?
-  logoUrl     String?
-  status      String  @default("ACTIVE")
+  id           Int            @id @default(autoincrement())
+  operatorCode String         @unique
+  companyName  String
+  email        String         @unique
+  phone        String?
+  logoUrl      String?
+  status       OperatorStatus @default(ACTIVE)
 
   users    User[]
   bookings Booking[]
@@ -77,28 +100,41 @@ model Operator {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([operatorCode])
+  @@index([status])
 }
 
 model Booking {
-  id String @id @default(uuid())
+  id          Int    @id @default(autoincrement())
+  bookingCode String @unique
 
-  customerId String
+  customerId Int
   customer   User @relation(fields: [customerId], references: [id])
 
-  operatorId String
+  operatorId Int
   operator   Operator @relation(fields: [operatorId], references: [id])
 
-  serviceName   String
-  serviceType   String?
-  bookingDate   DateTime
-  pickupDate    DateTime?
-  returnDate    DateTime?
-  location      String?
+  serviceName String
+  serviceType String?
 
-  totalAmount   Decimal @db.Decimal(10, 2)
-  status        BookingStatus @default(PENDING)
+  bookingDate DateTime
+  pickupDate  DateTime?
+  returnDate  DateTime?
+  location    String?
+
+  totalAmount Decimal       @db.Decimal(10, 2)
+  status      BookingStatus @default(PENDING)
 
   paymentDeadline DateTime?
+
+  alternativeServiceName String?
+  alternativePrice       Decimal? @db.Decimal(10, 2)
+  alternativePickupDate  DateTime?
+  alternativeReturnDate  DateTime?
+  alternativeReason      String?
+  alternativeSuggestedAt DateTime?
+  alternativeUsed        Boolean  @default(false)
 
   payment Payment?
   receipt Receipt?
@@ -106,28 +142,37 @@ model Booking {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([bookingCode])
+  @@index([customerId])
+  @@index([operatorId])
+  @@index([status])
+  @@index([paymentDeadline])
 }
 
 model Payment {
-  id String @id @default(uuid())
+  id Int @id @default(autoincrement())
 
-  bookingId String @unique
+  bookingId Int     @unique
   booking   Booking @relation(fields: [bookingId], references: [id])
 
-  amount        Decimal @db.Decimal(10, 2)
-  method        String
+  amount        Decimal       @db.Decimal(10, 2)
+  method        PaymentMethod @default(PENDING)
   status        PaymentStatus @default(UNPAID)
   paidAt        DateTime?
   transactionId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([method])
 }
 
 model Receipt {
-  id String @id @default(uuid())
+  id Int @id @default(autoincrement())
 
-  bookingId String @unique
+  bookingId Int     @unique
   booking   Booking @relation(fields: [bookingId], references: [id])
 
   imageUrl String
@@ -136,27 +181,32 @@ model Receipt {
 
   uploadedAt DateTime @default(now())
   verifiedAt DateTime?
+
+  @@index([status])
 }
 
 model Invoice {
-  id String @id @default(uuid())
+  id Int @id @default(autoincrement())
 
-  bookingId String @unique
+  bookingId Int     @unique
   booking   Booking @relation(fields: [bookingId], references: [id])
 
-  invoiceNo String @unique
-  amount    Decimal @db.Decimal(10, 2)
+  invoiceNo String        @unique
+  amount    Decimal       @db.Decimal(10, 2)
   status    InvoiceStatus @default(GENERATED)
   pdfUrl    String?
 
   issuedAt DateTime @default(now())
   sentAt   DateTime?
+
+  @@index([invoiceNo])
+  @@index([status])
 }
 
 model Notification {
-  id String @id @default(uuid())
+  id Int @id @default(autoincrement())
 
-  userId String
+  userId Int
   user   User @relation(fields: [userId], references: [id])
 
   title   String
@@ -165,26 +215,35 @@ model Notification {
   isRead  Boolean @default(false)
 
   createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
 }
 
 model BNPLConfig {
-  id String @id @default(uuid())
+  id Int @id @default(autoincrement())
 
-  operatorId String
+  operatorId Int
   operator   Operator @relation(fields: [operatorId], references: [id])
 
-  paymentDeadlineDays Int @default(3)
+  paymentDeadlineDays Int     @default(3)
   allowReceiptUpload  Boolean @default(true)
   autoCancelOverdue   Boolean @default(true)
 
+  invoiceLogoUrl    String?
+  invoiceFooterText String?
+  manualPaymentNote String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([operatorId])
 }
 
 model AuditLog {
-  id String @id @default(uuid())
+  id Int @id @default(autoincrement())
 
-  userId String?
+  userId Int?
   user   User? @relation(fields: [userId], references: [id])
 
   action     String
@@ -193,4 +252,8 @@ model AuditLog {
   details    Json?
 
   createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([entityId])
 }

@@ -24,3 +24,5 @@ export const updateOperatorStatus = (id, status) =>
 export const getBNPLConfigs = () => api.get("/config/bnpl");
 export const updateBNPLConfig = (operatorId, data) =>
   api.patch(`/config/bnpl/${operatorId}`, data);
+
+export const createOperator = (payload) => api.post("/operators", payload);

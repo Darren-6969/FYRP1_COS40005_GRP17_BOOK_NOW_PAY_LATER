@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  createOperator,
   getOperators,
   updateOperatorStatus,
 
@@ -24,7 +25,6 @@ import {
   markAllNotificationsRead,
 
   getOperatorReports,
-  getOperatorServices,
   getOperatorSettings,
 } from "../controllers/operator_controller.js";
 
@@ -35,6 +35,8 @@ const router = express.Router();
 
 const masterOnly = [verifyToken, allowRoles("MASTER_SELLER")];
 const operatorAccess = [verifyToken, allowRoles("MASTER_SELLER", "NORMAL_SELLER")];
+
+router.post("/", verifyToken, allowRoles("MASTER_SELLER"), createOperator);
 
 router.get("/", ...masterOnly, getOperators);
 router.patch("/:id/status", ...masterOnly, updateOperatorStatus);
@@ -61,7 +63,6 @@ router.patch("/notifications/:id/read", ...operatorAccess, markNotificationRead)
 router.patch("/notifications/read-all", ...operatorAccess, markAllNotificationsRead);
 
 router.get("/reports", ...operatorAccess, getOperatorReports);
-router.get("/services", ...operatorAccess, getOperatorServices);
 router.get("/settings", ...operatorAccess, getOperatorSettings);
 
 export default router;

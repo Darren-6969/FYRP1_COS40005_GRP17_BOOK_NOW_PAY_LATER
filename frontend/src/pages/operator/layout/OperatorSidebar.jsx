@@ -7,7 +7,6 @@ const links = [
   { to: "/operator/payment-verification", label: "Payments", icon: "◉" },
   { to: "/operator/invoices", label: "Invoices", icon: "▧" },
   { to: "/operator/sales-report", label: "Reports", icon: "◌" },
-  { to: "/operator/services", label: "Services & Inventory", icon: "▣" },
   { to: "/operator/notifications", label: "Notifications", icon: "◇" },
   { to: "/operator/settings", label: "Settings", icon: "⚙" },
 ];

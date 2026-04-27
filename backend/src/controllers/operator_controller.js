@@ -105,9 +105,66 @@ async function createCustomerNotification({ booking, title, message, type }) {
   });
 }
 
+async function generateOperatorCode() {
+  const count = await prisma.operator.count();
+  return `OPR${String(count + 1).padStart(4, "0")}`;
+}
+
 /**
  * Existing Master Seller operator management
  */
+
+export async function createOperator(req, res, next) {
+  try {
+    const { companyName, email, phone, logoUrl } = req.body;
+
+    if (!companyName || !email) {
+      return res.status(400).json({
+        message: "Company name and email are required",
+      });
+    }
+
+    const existingOperator = await prisma.operator.findUnique({
+      where: { email },
+    });
+
+    if (existingOperator) {
+      return res.status(409).json({
+        message: "Operator email already exists",
+      });
+    }
+
+    const operatorCode = await generateOperatorCode();
+
+    const operator = await prisma.operator.create({
+      data: {
+        operatorCode,
+        companyName,
+        email,
+        phone: phone || null,
+        logoUrl: logoUrl || null,
+        status: "ACTIVE",
+      },
+    });
+
+    await createAuditLog({
+      req,
+      action: "OPERATOR_CREATED",
+      entityType: "Operator",
+      entityId: String(operator.id),
+      details: {
+        operatorCode,
+        companyName,
+        email,
+      },
+    });
+
+    res.status(201).json(operator);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getOperators(req, res, next) {
   try {
     const operators = await prisma.operator.findMany({
@@ -809,21 +866,6 @@ export async function getOperatorReports(req, res, next) {
         amount,
       })),
       demandForecast: [],
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * Services inventory placeholder.
- * Your current Prisma schema has no Service / Vehicle / Room model yet,
- * so this returns an empty list instead of dummy data.
- */
-export async function getOperatorServices(req, res, next) {
-  try {
-    res.json({
-      services: [],
     });
   } catch (err) {
     next(err);
