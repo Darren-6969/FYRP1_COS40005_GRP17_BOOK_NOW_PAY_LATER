@@ -62,6 +62,13 @@ enum InvoiceStatus {
   CANCELLED
 }
 
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
 model User {
   id       Int      @id @default(autoincrement())
   userCode String   @unique
@@ -256,4 +263,30 @@ model AuditLog {
   @@index([userId])
   @@index([entityType])
   @@index([entityId])
+}
+
+model EmailLog {
+  id Int @id @default(autoincrement())
+
+  toEmail String
+  subject String
+  type    String
+  status  EmailStatus @default(PENDING)
+
+  relatedEntityType String?
+  relatedEntityId   String?
+
+  userId Int?
+  error  String?
+
+  createdAt DateTime @default(now())
+  sentAt    DateTime?
+  updatedAt DateTime @updatedAt
+
+  @@index([toEmail])
+  @@index([type])
+  @@index([status])
+  @@index([relatedEntityType])
+  @@index([relatedEntityId])
+  @@index([userId])
 }

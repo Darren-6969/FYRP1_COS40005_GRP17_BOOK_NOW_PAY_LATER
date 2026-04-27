@@ -1,4 +1,14 @@
 import prisma from "../config/db.js";
+import {
+  notifyCustomerByBooking,
+} from "../services/notification_email_service.js";
+import {
+  alternativeSuggestionTemplate,
+  bookingStatusTemplate,
+  invoiceSentTemplate,
+  paymentConfirmedTemplate,
+  paymentRequestTemplate,
+} from "../services/email_templates.js";
 
 function toNumber(value) {
   return value == null ? 0 : Number(value);
@@ -106,14 +116,21 @@ async function createAuditLog({ req, action, entityType, entityId, details = {} 
   });
 }
 
-async function createCustomerNotification({ booking, title, message, type }) {
-  return prisma.notification.create({
-    data: {
-      userId: booking.customerId,
-      title,
-      message,
-      type,
-    },
+async function createCustomerNotification({
+  booking,
+  title,
+  message,
+  type,
+  emailSubject,
+  emailHtml,
+}) {
+  return notifyCustomerByBooking({
+    booking,
+    title,
+    message,
+    type,
+    emailSubject,
+    emailHtml,
   });
 }
 
@@ -424,11 +441,19 @@ async function updateBookingStatus(req, res, next, status, action) {
       details: { status },
     });
 
+    const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;
+
     await createCustomerNotification({
-      booking,
+      booking: updatedBooking,
       title: `Booking ${status.replace("_", " ").toLowerCase()}`,
       message: `Your booking ${booking.bookingCode || booking.id} has been updated to ${status}.`,
       type: action,
+      emailSubject: `Booking Update - ${booking.bookingCode || booking.id}`,
+      emailHtml: bookingStatusTemplate({
+        booking: updatedBooking,
+        status,
+        customerUrl,
+      }),
     });
 
     res.json({
@@ -518,11 +543,18 @@ export async function suggestAlternative(req, res, next) {
       details,
     });
 
+    const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;
+
     await createCustomerNotification({
-      booking,
+      booking: updatedBooking,
       title: "Alternative booking suggested",
       message: `An alternative option has been suggested for booking ${booking.bookingCode || booking.id}.`,
       type: "ALTERNATIVE_SUGGESTED",
+      emailSubject: `Alternative Booking Suggested - ${booking.bookingCode || booking.id}`,
+      emailHtml: alternativeSuggestionTemplate({
+        booking: updatedBooking,
+        customerUrl,
+      }),
     });
 
     res.json({
@@ -578,11 +610,18 @@ export async function sendPaymentRequest(req, res, next) {
       },
     });
 
+    const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/checkout/${booking.id}`;
+
     await createCustomerNotification({
-      booking,
+      booking: updatedBooking,
       title: "Payment required",
       message: `Please complete payment for booking ${booking.bookingCode || booking.id} before the deadline.`,
       type: "PAYMENT_REQUIRED",
+      emailSubject: `Payment Required - ${booking.bookingCode || booking.id}`,
+      emailHtml: paymentRequestTemplate({
+        booking: updatedBooking,
+        customerUrl,
+      }),
     });
 
     res.json({
@@ -650,9 +689,24 @@ export async function approvePayment(req, res, next) {
       },
     });
 
-    await prisma.booking.update({
+    const updatedBooking = await prisma.booking.update({
       where: { id: payment.bookingId },
       data: { status: "PAID" },
+      include: includeBookingRelations(),
+    });
+
+    const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${updatedBooking.id}`;
+
+    await createCustomerNotification({
+      booking: updatedBooking,
+      title: "Payment confirmed",
+      message: `Your payment for booking ${updatedBooking.bookingCode || updatedBooking.id} has been confirmed.`,
+      type: "PAYMENT_APPROVED",
+      emailSubject: `Payment Confirmed - ${updatedBooking.bookingCode || updatedBooking.id}`,
+      emailHtml: paymentConfirmedTemplate({
+        booking: updatedBooking,
+        customerUrl,
+      }),
     });
 
     await createAuditLog({
@@ -748,6 +802,11 @@ export async function sendInvoice(req, res, next) {
           is: bookingRelationWhere(req),
         },
       },
+      include: {
+        booking: {
+          include: includeBookingRelations(),
+        },
+      },
     });
 
     if (!invoice) {
@@ -768,6 +827,25 @@ export async function sendInvoice(req, res, next) {
       entityType: "Invoice",
       entityId: invoice.id,
       details: {},
+    });
+
+    const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/invoices`;
+
+    await createCustomerNotification({
+      booking: invoice.booking,
+      title: "Invoice sent",
+      message: `Invoice ${invoice.invoiceNo} for booking ${
+        invoice.booking.bookingCode || invoice.booking.id
+      } has been sent.`,
+      type: "INVOICE_SENT",
+      emailSubject: `Invoice ${invoice.invoiceNo} - ${
+        invoice.booking.bookingCode || invoice.booking.id
+      }`,
+      emailHtml: invoiceSentTemplate({
+        invoice: updatedInvoice,
+        booking: invoice.booking,
+        customerUrl,
+      }),
     });
 
     res.json({

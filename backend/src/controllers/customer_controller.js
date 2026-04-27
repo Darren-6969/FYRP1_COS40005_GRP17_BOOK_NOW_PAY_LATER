@@ -1,5 +1,16 @@
 import prisma from "../config/db.js";
 import { generateInvoiceId } from "../utils/generateInvoiceId.js";
+import {
+  notifyCustomerByBooking,
+  notifyOperatorUsersByBooking,
+} from "../services/notification_email_service.js";
+import {
+  bookingSubmittedTemplate,
+  customerAlternativeResponseTemplate,
+  invoiceSentTemplate,
+  paymentConfirmedTemplate,
+  receiptUploadedTemplate,
+} from "../services/email_templates.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -128,7 +139,7 @@ export async function createCustomerBooking(req, res, next) {
       });
     }
 
-    let resolvedOperatorId = operatorId;
+    let resolvedOperatorId = operatorId ? Number(operatorId) : null;
 
     if (!resolvedOperatorId) {
       const fallbackOperator = await prisma.operator.findFirst({
@@ -145,31 +156,31 @@ export async function createCustomerBooking(req, res, next) {
       resolvedOperatorId = fallbackOperator.id;
     }
 
-    const bookingCode = await generateBookingCode(tx);
-
     const booking = await prisma.$transaction(async (tx) => {
-    const created = await tx.booking.create({
-      data: {
-        bookingCode,
-        customerId: req.user.id,
-        operatorId: resolvedOperatorId,
-        serviceName,
-        serviceType: serviceType || null,
-        bookingDate: new Date(bookingDate),
-        pickupDate: pickupDate ? new Date(pickupDate) : null,
-        returnDate: returnDate ? new Date(returnDate) : null,
-        location: location || null,
-        totalAmount,
-        status: "PENDING",
-      },
-      include: {
-        customer: { select: { id: true, userCode: true, name: true, email: true } },
-        operator: true,
-        payment: true,
-        receipt: true,
-        invoice: true,
-      },
-    });
+      const bookingCode = await generateBookingCode(tx);
+
+      const created = await tx.booking.create({
+        data: {
+          bookingCode,
+          customerId: req.user.id,
+          operatorId: resolvedOperatorId,
+          serviceName,
+          serviceType: serviceType || null,
+          bookingDate: new Date(bookingDate),
+          pickupDate: pickupDate ? new Date(pickupDate) : null,
+          returnDate: returnDate ? new Date(returnDate) : null,
+          location: location || null,
+          totalAmount,
+          status: "PENDING",
+        },
+        include: {
+          customer: { select: { id: true, userCode: true, name: true, email: true } },
+          operator: true,
+          payment: true,
+          receipt: true,
+          invoice: true,
+        },
+      });
 
       await tx.auditLog.create({
         data: {
@@ -189,10 +200,24 @@ export async function createCustomerBooking(req, res, next) {
         req.user.id,
         "Booking Submitted",
         `Your booking request for ${serviceName} has been submitted.`,
-        "BOOKING"
+        "BOOKING_SUBMITTED"
       );
 
       return created;
+    });
+
+    const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/bookings/${booking.id}`;
+
+    await notifyOperatorUsersByBooking({
+      booking,
+      title: "New booking request",
+      message: `${booking.bookingCode || booking.id} requires operator review.`,
+      type: "BOOKING_SUBMITTED",
+      emailSubject: `New Booking Request - ${booking.bookingCode || booking.id}`,
+      emailHtml: bookingSubmittedTemplate({
+        booking,
+        operatorUrl,
+      }),
     });
 
     res.status(201).json(mapBooking(booking));
@@ -364,6 +389,38 @@ export async function payCustomerBooking(req, res, next) {
     });
 
     const refreshed = await assertCustomerBooking(updated.id, req.user.id);
+    const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${refreshed.id}`;
+
+    await notifyCustomerByBooking({
+      booking: refreshed,
+      title: "Payment confirmed",
+      message: `Your payment for booking ${refreshed.bookingCode || refreshed.id} has been completed.`,
+      type: "PAYMENT_CONFIRMED",
+      emailSubject: `Payment Confirmed - ${refreshed.bookingCode || refreshed.id}`,
+      emailHtml: paymentConfirmedTemplate({
+        booking: refreshed,
+        customerUrl,
+      }),
+    });
+
+    if (refreshed.invoice) {
+      const invoiceUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/invoices`;
+
+      await notifyCustomerByBooking({
+        booking: refreshed,
+        title: "Invoice generated",
+        message: `Invoice ${refreshed.invoice.invoiceNo} has been generated for booking ${
+          refreshed.bookingCode || refreshed.id
+        }.`,
+        type: "INVOICE_GENERATED",
+        emailSubject: `Invoice ${refreshed.invoice.invoiceNo} - ${refreshed.bookingCode || refreshed.id}`,
+        emailHtml: invoiceSentTemplate({
+          invoice: refreshed.invoice,
+          booking: refreshed,
+          customerUrl: invoiceUrl,
+        }),
+      });
+    }
     res.json(mapBooking(refreshed));
   } catch (err) {
     next(err);
@@ -448,6 +505,19 @@ export async function uploadCustomerReceipt(req, res, next) {
       return receiptBooking;
     });
 
+    const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/payment-verification`;
+
+    await notifyOperatorUsersByBooking({
+      booking: updated,
+      title: "Receipt uploaded",
+      message: `Customer uploaded a payment receipt for booking ${updated.bookingCode || updated.id}.`,
+      type: "RECEIPT_UPLOADED",
+      emailSubject: `Receipt Uploaded - ${updated.bookingCode || updated.id}`,
+      emailHtml: receiptUploadedTemplate({
+        booking: updated,
+        operatorUrl,
+      }),
+    });
     res.status(201).json(mapBooking(updated));
   } catch (err) {
     next(err);
@@ -566,9 +636,11 @@ export async function getCustomerNotifications(req, res, next) {
 
 export async function markCustomerNotificationRead(req, res, next) {
   try {
+    const notificationId = parseId(req.params.id, "notification id");
+
     const notification = await prisma.notification.findFirst({
       where: {
-        id: req.params.id,
+        id: notificationId,
         userId: req.user.id,
       },
     });
@@ -578,7 +650,7 @@ export async function markCustomerNotificationRead(req, res, next) {
     }
 
     const updated = await prisma.notification.update({
-      where: { id: req.params.id },
+      where: { id: notificationId },
       data: { isRead: true },
     });
 
@@ -680,7 +752,22 @@ export async function acceptAlternativeBooking(req, res, next) {
 
       return accepted;
     });
+    const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/bookings/${updated.id}`;
 
+    await notifyOperatorUsersByBooking({
+      booking: updated,
+      title: "Customer accepted alternative",
+      message: `${updated.customer?.name || "Customer"} accepted the alternative suggestion for booking ${
+        updated.bookingCode || updated.id
+      }.`,
+      type: "CUSTOMER_ACCEPTED_ALTERNATIVE",
+      emailSubject: `Customer Accepted Alternative - ${updated.bookingCode || updated.id}`,
+      emailHtml: customerAlternativeResponseTemplate({
+        booking: updated,
+        accepted: true,
+        operatorUrl,
+      }),
+    });
     res.json(mapBooking(updated));
   } catch (err) {
     next(err);
@@ -730,6 +817,23 @@ export async function rejectAlternativeBooking(req, res, next) {
       );
 
       return rejected;
+    });
+
+    const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/bookings/${updated.id}`;
+
+    await notifyOperatorUsersByBooking({
+      booking: updated,
+      title: "Customer rejected alternative",
+      message: `${updated.customer?.name || "Customer"} rejected the alternative suggestion for booking ${
+        updated.bookingCode || updated.id
+      }.`,
+      type: "CUSTOMER_REJECTED_ALTERNATIVE",
+      emailSubject: `Customer Rejected Alternative - ${updated.bookingCode || updated.id}`,
+      emailHtml: customerAlternativeResponseTemplate({
+        booking: updated,
+        accepted: false,
+        operatorUrl,
+      }),
     });
 
     res.json(mapBooking(updated));

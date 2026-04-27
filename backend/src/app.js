@@ -12,6 +12,7 @@ import operatorRoutes from "./routes/operator_routes.js";
 import configRoutes from "./routes/config_routes.js";
 import logRoutes from "./routes/log_routes.js";
 import customerRoutes from "./routes/customer_routes.js";
+import emailRoutes from "./routes/email_routes.js";
 
 import { errorHandler } from "./middlewares/errorHandler.js";
 
@@ -42,6 +43,7 @@ app.use("/api/operators", operatorRoutes);
 app.use("/api/config", configRoutes);
 app.use("/api/logs", logRoutes);
 app.use("/api/customer", customerRoutes);
+app.use("/api/emails", emailRoutes);
 
 app.use(errorHandler);
 
