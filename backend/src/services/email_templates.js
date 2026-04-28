@@ -255,3 +255,60 @@ export function invoiceSentTemplate({ invoice, booking, customerUrl }) {
     `,
   });
 }
+
+export function paymentReceiptTemplate({ booking, payment, customerUrl }) {
+  return baseTemplate({
+    title: "Payment Receipt",
+    buttonText: "View Booking",
+    buttonUrl: customerUrl,
+    body: `
+      <p>Dear ${booking.customer?.name || "Customer"},</p>
+      <p>This is your payment receipt confirmation for booking <strong>${
+        booking.bookingCode || booking.id
+      }</strong>.</p>
+
+      <table style="width:100%;border-collapse:collapse;margin-top:16px;">
+        <tr>
+          <td style="padding:9px 0;color:#64748b;">Booking ID</td>
+          <td style="padding:9px 0;text-align:right;"><strong>${
+            booking.bookingCode || booking.id
+          }</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#64748b;">Service</td>
+          <td style="padding:9px 0;text-align:right;"><strong>${
+            booking.serviceName || "-"
+          }</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#64748b;">Payment Method</td>
+          <td style="padding:9px 0;text-align:right;"><strong>${
+            payment.method || "-"
+          }</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#64748b;">Payment Status</td>
+          <td style="padding:9px 0;text-align:right;"><strong>${
+            payment.status || "-"
+          }</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#64748b;">Amount Paid</td>
+          <td style="padding:9px 0;text-align:right;"><strong>${formatMoney(
+            payment.amount || booking.totalAmount
+          )}</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#64748b;">Paid At</td>
+          <td style="padding:9px 0;text-align:right;"><strong>${formatDate(
+            payment.paidAt
+          )}</strong></td>
+        </tr>
+      </table>
+
+      <p style="margin-top:18px;">
+        Your payment has been verified by the operator.
+      </p>
+    `,
+  });
+}

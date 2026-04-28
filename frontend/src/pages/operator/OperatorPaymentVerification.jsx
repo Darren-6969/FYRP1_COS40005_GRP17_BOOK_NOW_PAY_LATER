@@ -34,7 +34,7 @@ export default function OperatorPaymentVerification() {
 
   const handleApprove = async (id) => {
     try {
-      setActionLoading(id);
+      setActionLoading(`approve-${id}`);
       await operatorService.approvePayment(id);
       await loadPayments();
     } catch (err) {
@@ -46,11 +46,37 @@ export default function OperatorPaymentVerification() {
 
   const handleReject = async (id) => {
     try {
-      setActionLoading(id);
+      setActionLoading(`reject-${id}`);
       await operatorService.rejectPayment(id);
       await loadPayments();
     } catch (err) {
       alert(err.response?.data?.message || "Failed to reject payment");
+    } finally {
+      setActionLoading("");
+    }
+  };
+
+  const handleSendInvoice = async (id) => {
+    try {
+      setActionLoading(`invoice-${id}`);
+      await operatorService.sendPaymentInvoice(id);
+      alert("Invoice sent successfully.");
+      await loadPayments();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to send invoice");
+    } finally {
+      setActionLoading("");
+    }
+  };
+
+  const handleSendReceipt = async (id) => {
+    try {
+      setActionLoading(`receipt-${id}`);
+      await operatorService.sendPaymentReceipt(id);
+      alert("Receipt sent successfully.");
+      await loadPayments();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to send receipt");
     } finally {
       setActionLoading("");
     }
@@ -76,12 +102,74 @@ export default function OperatorPaymentVerification() {
     });
   };
 
+  const renderActions = (payment) => {
+    const status = String(payment.status || "").toUpperCase();
+    const isLoading = actionLoading.includes(String(payment.id));
+
+    if (status === "PENDING_VERIFICATION") {
+      return (
+        <div className="operator-table-actions">
+          <button
+            className="success"
+            disabled={isLoading}
+            onClick={() => handleApprove(payment.id)}
+            title="Approve payment"
+          >
+            ✓
+          </button>
+
+          <button
+            className="danger"
+            disabled={isLoading}
+            onClick={() => handleReject(payment.id)}
+            title="Reject payment"
+          >
+            ×
+          </button>
+        </div>
+      );
+    }
+
+    if (status === "PAID") {
+      return (
+        <div className="operator-paid-actions">
+          <button
+            type="button"
+            className="operator-mini-action primary"
+            disabled={isLoading}
+            onClick={() => handleSendInvoice(payment.id)}
+          >
+            Send Invoice
+          </button>
+
+          <button
+            type="button"
+            className="operator-mini-action secondary"
+            disabled={isLoading}
+            onClick={() => handleSendReceipt(payment.id)}
+          >
+            Send Receipt
+          </button>
+        </div>
+      );
+    }
+
+    if (status === "FAILED") {
+      return <span className="operator-muted-text">Rejected</span>;
+    }
+
+    return <span className="operator-muted-text">No action</span>;
+  };
+
   return (
     <div className="operator-page">
       <section className="operator-page-head">
         <div>
           <h1>Payment Verification</h1>
-          <p>Review and verify payments submitted by customers.</p>
+          <p>
+            Review pending manual payments. For paid bookings, resend invoice or
+            receipt when the customer requests another copy.
+          </p>
         </div>
       </section>
 
@@ -107,7 +195,7 @@ export default function OperatorPaymentVerification() {
                   <th>Customer</th>
                   <th>Method</th>
                   <th>Amount</th>
-                  <th>Receipt</th>
+                  <th>Receipt Proof</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -117,14 +205,17 @@ export default function OperatorPaymentVerification() {
                 {payments.map((payment) => (
                   <tr key={payment.id}>
                     <td>{formatOperatorDateTime(payment.createdAt)}</td>
+
                     <td>
                       <strong>
                         {payment.booking?.bookingCode || payment.bookingId}
                       </strong>
                     </td>
+
                     <td>{payment.booking?.customer?.name || "-"}</td>
                     <td>{payment.method || "-"}</td>
                     <td>{formatOperatorMoney(payment.amount)}</td>
+
                     <td>
                       {payment.booking?.receipt?.imageUrl ? (
                         <button
@@ -138,6 +229,7 @@ export default function OperatorPaymentVerification() {
                         "-"
                       )}
                     </td>
+
                     <td>
                       <span
                         className={`operator-status ${operatorStatusClass(
@@ -147,27 +239,8 @@ export default function OperatorPaymentVerification() {
                         {operatorStatusLabel(payment.status)}
                       </span>
                     </td>
-                    <td>
-                      <div className="operator-table-actions">
-                        <button
-                          className="success"
-                          disabled={!!actionLoading}
-                          onClick={() => handleApprove(payment.id)}
-                          title="Approve payment"
-                        >
-                          ✓
-                        </button>
 
-                        <button
-                          className="danger"
-                          disabled={!!actionLoading}
-                          onClick={() => handleReject(payment.id)}
-                          title="Reject payment"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </td>
+                    <td>{renderActions(payment)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -193,7 +266,7 @@ export default function OperatorPaymentVerification() {
           >
             <div className="operator-card-head">
               <div>
-                <p className="operator-eyebrow">Payment Receipt</p>
+                <p className="operator-eyebrow">Payment Receipt Proof</p>
                 <h2>{selectedReceipt.bookingCode}</h2>
                 <p>
                   {selectedReceipt.customerName} · {selectedReceipt.method} ·{" "}
@@ -222,7 +295,9 @@ export default function OperatorPaymentVerification() {
 
               <div>
                 <span>Uploaded At</span>
-                <strong>{formatOperatorDateTime(selectedReceipt.uploadedAt)}</strong>
+                <strong>
+                  {formatOperatorDateTime(selectedReceipt.uploadedAt)}
+                </strong>
               </div>
 
               <div>

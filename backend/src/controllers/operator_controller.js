@@ -8,6 +8,7 @@ import {
   bookingStatusTemplate,
   invoiceSentTemplate,
   paymentConfirmedTemplate,
+  paymentReceiptTemplate,
   paymentRequestTemplate,
 } from "../services/email_templates.js";
 
@@ -684,119 +685,106 @@ export async function approvePayment(req, res, next) {
       return res.status(404).json({ message: "Payment not found" });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const updatedPayment = await tx.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: "PAID",
-          paidAt: new Date(),
-        },
+    if (payment.status === "PAID") {
+      return res.status(400).json({
+        message: "This payment has already been approved.",
       });
+    }
 
-      const existingReceipt = await tx.receipt.findUnique({
+    const updatedPayment = await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: "PAID",
+        paidAt: new Date(),
+      },
+    });
+
+    const existingReceipt = await prisma.receipt.findUnique({
+      where: {
+        bookingId: payment.bookingId,
+      },
+    });
+
+    if (existingReceipt) {
+      await prisma.receipt.update({
         where: {
           bookingId: payment.bookingId,
         },
-      });
-
-      if (existingReceipt) {
-        await tx.receipt.update({
-          where: {
-            bookingId: payment.bookingId,
-          },
-          data: {
-            status: "APPROVED",
-            verifiedAt: new Date(),
-          },
-        });
-      }
-
-      const existingInvoice = await tx.invoice.findUnique({
-        where: {
-          bookingId: payment.bookingId,
-        },
-      });
-
-      const invoice = await tx.invoice.upsert({
-        where: {
-          bookingId: payment.bookingId,
-        },
-        create: {
-          bookingId: payment.bookingId,
-          invoiceNo: generateInvoiceId(),
-          amount: payment.amount,
-          status: "SENT",
-          sentAt: new Date(),
-        },
-        update: {
-          amount: payment.amount,
-          status: "SENT",
-          sentAt: new Date(),
-        },
-      });
-
-      const updatedBooking = await tx.booking.update({
-        where: { id: payment.bookingId },
         data: {
-          status: "PAID",
-        },
-        include: includeBookingRelations(),
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: req.user?.id || null,
-          action: "PAYMENT_APPROVED",
-          entityType: "Payment",
-          entityId: String(payment.id),
-          details: {
-            bookingId: payment.bookingId,
-            bookingCode: updatedBooking.bookingCode,
-            invoiceId: invoice.id,
-            invoiceNo: invoice.invoiceNo,
-            receiptApproved: Boolean(existingReceipt),
-            invoiceCreated: !existingInvoice,
-          },
+          status: "APPROVED",
+          verifiedAt: new Date(),
         },
       });
+    }
 
-      await tx.auditLog.create({
-        data: {
-          userId: req.user?.id || null,
-          action: "INVOICE_GENERATED",
-          entityType: "Invoice",
-          entityId: String(invoice.id),
-          details: {
-            bookingId: payment.bookingId,
-            bookingCode: updatedBooking.bookingCode,
-            invoiceNo: invoice.invoiceNo,
-          },
-        },
-      });
+    const invoice = await prisma.invoice.upsert({
+      where: {
+        bookingId: payment.bookingId,
+      },
+      create: {
+        bookingId: payment.bookingId,
+        invoiceNo: generateInvoiceId(),
+        amount: payment.amount,
+        status: "SENT",
+        sentAt: new Date(),
+      },
+      update: {
+        amount: payment.amount,
+        status: "SENT",
+        sentAt: new Date(),
+      },
+    });
 
-      return {
-        updatedPayment,
-        updatedBooking,
-        invoice,
-      };
+    const updatedBooking = await prisma.booking.update({
+      where: { id: payment.bookingId },
+      data: {
+        status: "PAID",
+      },
+      include: includeBookingRelations(),
+    });
+
+    await createAuditLog({
+      req,
+      action: "PAYMENT_APPROVED",
+      entityType: "Payment",
+      entityId: payment.id,
+      details: {
+        bookingId: payment.bookingId,
+        bookingCode: updatedBooking.bookingCode,
+        invoiceId: invoice.id,
+        invoiceNo: invoice.invoiceNo,
+        receiptApproved: Boolean(existingReceipt),
+      },
+    });
+
+    await createAuditLog({
+      req,
+      action: "INVOICE_GENERATED",
+      entityType: "Invoice",
+      entityId: invoice.id,
+      details: {
+        bookingId: payment.bookingId,
+        bookingCode: updatedBooking.bookingCode,
+        invoiceNo: invoice.invoiceNo,
+      },
     });
 
     const customerBookingUrl = `${
       process.env.FRONTEND_URL || "http://localhost:5173"
-    }/customer/bookings/${result.updatedBooking.id}`;
+    }/customer/bookings/${updatedBooking.id}`;
 
     await createCustomerNotification({
-      booking: result.updatedBooking,
+      booking: updatedBooking,
       title: "Payment confirmed",
       message: `Your payment for booking ${
-        result.updatedBooking.bookingCode || result.updatedBooking.id
+        updatedBooking.bookingCode || updatedBooking.id
       } has been confirmed.`,
       type: "PAYMENT_APPROVED",
       emailSubject: `Payment Confirmed - ${
-        result.updatedBooking.bookingCode || result.updatedBooking.id
+        updatedBooking.bookingCode || updatedBooking.id
       }`,
       emailHtml: paymentConfirmedTemplate({
-        booking: result.updatedBooking,
+        booking: updatedBooking,
         customerUrl: customerBookingUrl,
       }),
     });
@@ -806,26 +794,26 @@ export async function approvePayment(req, res, next) {
     }/customer/invoices`;
 
     await createCustomerNotification({
-      booking: result.updatedBooking,
+      booking: updatedBooking,
       title: "Invoice generated",
-      message: `Invoice ${result.invoice.invoiceNo} has been generated for booking ${
-        result.updatedBooking.bookingCode || result.updatedBooking.id
+      message: `Invoice ${invoice.invoiceNo} has been generated for booking ${
+        updatedBooking.bookingCode || updatedBooking.id
       }.`,
       type: "INVOICE_SENT",
-      emailSubject: `Invoice ${result.invoice.invoiceNo} - ${
-        result.updatedBooking.bookingCode || result.updatedBooking.id
+      emailSubject: `Invoice ${invoice.invoiceNo} - ${
+        updatedBooking.bookingCode || updatedBooking.id
       }`,
       emailHtml: invoiceSentTemplate({
-        invoice: result.invoice,
-        booking: result.updatedBooking,
+        invoice,
+        booking: updatedBooking,
         customerUrl: customerInvoiceUrl,
       }),
     });
 
     res.json({
-      payment: mapPayment(result.updatedPayment),
-      booking: mapBooking(result.updatedBooking),
-      invoice: mapInvoice(result.invoice),
+      payment: mapPayment(updatedPayment),
+      booking: mapBooking(updatedBooking),
+      invoice: mapInvoice(invoice),
     });
   } catch (err) {
     next(err);
@@ -852,87 +840,78 @@ export async function rejectPayment(req, res, next) {
       return res.status(404).json({ message: "Payment not found" });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const updatedPayment = await tx.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: "FAILED",
-        },
-      });
+    const updatedPayment = await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: "FAILED",
+      },
+    });
 
-      const existingReceipt = await tx.receipt.findUnique({
+    const existingReceipt = await prisma.receipt.findUnique({
+      where: {
+        bookingId: payment.bookingId,
+      },
+    });
+
+    if (existingReceipt) {
+      await prisma.receipt.update({
         where: {
           bookingId: payment.bookingId,
         },
-      });
-
-      if (existingReceipt) {
-        await tx.receipt.update({
-          where: {
-            bookingId: payment.bookingId,
-          },
-          data: {
-            status: "REJECTED",
-            remarks:
-              req.body?.remarks ||
-              existingReceipt.remarks ||
-              "Receipt rejected by operator.",
-            verifiedAt: new Date(),
-          },
-        });
-      }
-
-      const updatedBooking = await tx.booking.update({
-        where: { id: payment.bookingId },
         data: {
-          status: "PENDING_PAYMENT",
-        },
-        include: includeBookingRelations(),
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: req.user?.id || null,
-          action: "PAYMENT_REJECTED",
-          entityType: "Payment",
-          entityId: String(payment.id),
-          details: {
-            bookingId: payment.bookingId,
-            bookingCode: updatedBooking.bookingCode,
-            receiptRejected: Boolean(existingReceipt),
-            remarks: req.body?.remarks || null,
-          },
+          status: "REJECTED",
+          remarks:
+            req.body?.remarks ||
+            existingReceipt.remarks ||
+            "Receipt rejected by operator.",
+          verifiedAt: new Date(),
         },
       });
+    }
 
-      return {
-        updatedPayment,
-        updatedBooking,
-      };
+    const updatedBooking = await prisma.booking.update({
+      where: { id: payment.bookingId },
+      data: {
+        status: "PENDING_PAYMENT",
+      },
+      include: includeBookingRelations(),
+    });
+
+    await createAuditLog({
+      req,
+      action: "PAYMENT_REJECTED",
+      entityType: "Payment",
+      entityId: payment.id,
+      details: {
+        bookingId: payment.bookingId,
+        bookingCode: updatedBooking.bookingCode,
+        receiptRejected: Boolean(existingReceipt),
+        remarks: req.body?.remarks || null,
+      },
     });
 
     await createCustomerNotification({
-      booking: result.updatedBooking,
+      booking: updatedBooking,
       title: "Payment receipt rejected",
       message: `Your payment receipt for booking ${
-        result.updatedBooking.bookingCode || result.updatedBooking.id
+        updatedBooking.bookingCode || updatedBooking.id
       } was rejected. Please upload a valid receipt again.`,
       type: "PAYMENT_REJECTED",
       emailSubject: `Payment Receipt Rejected - ${
-        result.updatedBooking.bookingCode || result.updatedBooking.id
+        updatedBooking.bookingCode || updatedBooking.id
       }`,
       emailHtml: bookingStatusTemplate({
-        booking: result.updatedBooking,
+        booking: updatedBooking,
         status: "PAYMENT_REJECTED",
         customerUrl: `${
           process.env.FRONTEND_URL || "http://localhost:5173"
-        }/customer/upload-receipt/${result.updatedBooking.id}`,
+        }/customer/upload-receipt/${updatedBooking.id}`,
       }),
     });
 
     res.json({
-      payment: mapPayment(result.updatedPayment),
-      booking: mapBooking(result.updatedBooking),
+      payment: mapPayment(updatedPayment),
+      booking: mapBooking(updatedBooking),
     });
   } catch (err) {
     next(err);
@@ -1026,6 +1005,170 @@ export async function sendInvoice(req, res, next) {
 
     res.json({
       invoice: mapInvoice(updatedInvoice),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resendInvoiceByPayment(req, res, next) {
+  try {
+    const payment = await prisma.payment.findFirst({
+      where: {
+        id: parseId(req.params.id, "payment id"),
+        booking: {
+          is: bookingRelationWhere(req),
+        },
+      },
+      include: {
+        booking: {
+          include: includeBookingRelations(),
+        },
+      },
+    });
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    if (payment.status !== "PAID") {
+      return res.status(400).json({
+        message: "Invoice can only be sent after payment is paid.",
+      });
+    }
+
+    const invoice = await prisma.invoice.upsert({
+      where: {
+        bookingId: payment.bookingId,
+      },
+      create: {
+        bookingId: payment.bookingId,
+        invoiceNo: generateInvoiceId(),
+        amount: payment.amount,
+        status: "SENT",
+        sentAt: new Date(),
+      },
+      update: {
+        amount: payment.amount,
+        status: "SENT",
+        sentAt: new Date(),
+      },
+    });
+
+    const booking = await prisma.booking.findUnique({
+      where: {
+        id: payment.bookingId,
+      },
+      include: includeBookingRelations(),
+    });
+
+    await createAuditLog({
+      req,
+      action: "INVOICE_RESENT",
+      entityType: "Invoice",
+      entityId: invoice.id,
+      details: {
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        invoiceNo: invoice.invoiceNo,
+      },
+    });
+
+    const customerUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/customer/invoices`;
+
+    await createCustomerNotification({
+      booking,
+      title: "Invoice sent",
+      message: `Invoice ${invoice.invoiceNo} for booking ${
+        booking.bookingCode || booking.id
+      } has been sent again.`,
+      type: "INVOICE_RESENT",
+      emailSubject: `Invoice ${invoice.invoiceNo} - ${
+        booking.bookingCode || booking.id
+      }`,
+      emailHtml: invoiceSentTemplate({
+        invoice,
+        booking,
+        customerUrl,
+      }),
+    });
+
+    res.json({
+      message: "Invoice sent successfully",
+      invoice: mapInvoice(invoice),
+      booking: mapBooking(booking),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resendReceiptByPayment(req, res, next) {
+  try {
+    const payment = await prisma.payment.findFirst({
+      where: {
+        id: parseId(req.params.id, "payment id"),
+        booking: {
+          is: bookingRelationWhere(req),
+        },
+      },
+      include: {
+        booking: {
+          include: includeBookingRelations(),
+        },
+      },
+    });
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    if (payment.status !== "PAID") {
+      return res.status(400).json({
+        message: "Receipt can only be sent after payment is paid.",
+      });
+    }
+
+    const booking = payment.booking;
+
+    await createAuditLog({
+      req,
+      action: "PAYMENT_RECEIPT_RESENT",
+      entityType: "Payment",
+      entityId: payment.id,
+      details: {
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        method: payment.method,
+        amount: toNumber(payment.amount),
+      },
+    });
+
+    const customerUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/customer/bookings/${booking.id}`;
+
+    await createCustomerNotification({
+      booking,
+      title: "Payment receipt sent",
+      message: `Payment receipt for booking ${
+        booking.bookingCode || booking.id
+      } has been sent again.`,
+      type: "PAYMENT_RECEIPT_RESENT",
+      emailSubject: `Payment Receipt - ${booking.bookingCode || booking.id}`,
+      emailHtml: paymentReceiptTemplate({
+        booking,
+        payment,
+        customerUrl,
+      }),
+    });
+
+    res.json({
+      message: "Receipt sent successfully",
+      payment: mapPayment(payment),
+      booking: mapBooking(booking),
     });
   } catch (err) {
     next(err);

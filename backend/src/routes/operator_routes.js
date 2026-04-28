@@ -19,6 +19,8 @@ import {
 
   getOperatorInvoices,
   sendInvoice,
+  resendInvoiceByPayment,
+  resendReceiptByPayment,
 
   getOperatorNotifications,
   markNotificationRead,
@@ -54,6 +56,8 @@ router.patch("/bookings/:id/send-payment-request", ...operatorAccess, sendPaymen
 router.get("/payments", ...operatorAccess, getOperatorPaymentVerifications);
 router.patch("/payments/:id/approve", ...operatorAccess, approvePayment);
 router.patch("/payments/:id/reject", ...operatorAccess, rejectPayment);
+router.patch("/payments/:id/send-invoice", ...operatorAccess, resendInvoiceByPayment);
+router.patch("/payments/:id/send-receipt", ...operatorAccess, resendReceiptByPayment);
 
 router.get("/invoices", ...operatorAccess, getOperatorInvoices);
 router.patch("/invoices/:id/send", ...operatorAccess, sendInvoice);

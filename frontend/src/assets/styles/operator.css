@@ -1161,3 +1161,45 @@
     max-height: 54vh;
   }
 }
+
+/* =========================
+   Operator Payment Manual Send Actions
+   ========================= */
+
+.operator-paid-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.operator-mini-action {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 11px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.operator-mini-action.primary {
+  background: #2563eb;
+  color: white;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
+}
+
+.operator-mini-action.secondary {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+}
+
+.operator-mini-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.operator-muted-text {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 800;
+}

@@ -58,6 +58,14 @@ export const operatorService = {
     return api.patch(`/operators/payments/${id}/reject`, payload);
   },
 
+  sendPaymentInvoice(id) {
+    return api.patch(`/operators/payments/${id}/send-invoice`);
+  },
+
+  sendPaymentReceipt(id) {
+    return api.patch(`/operators/payments/${id}/send-receipt`);
+  },
+
   getInvoices(params = {}) {
     return api.get("/operators/invoices", { params });
   },
