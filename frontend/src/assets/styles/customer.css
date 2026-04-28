@@ -1013,3 +1013,72 @@
     text-align: left;
   }
 }
+
+/* =========================
+   Customer Receipt Upload
+   ========================= */
+
+.customer-receipt-form {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.customer-upload-box {
+  display: grid;
+  gap: 10px;
+}
+
+.customer-upload-box input[type="file"] {
+  display: none;
+}
+
+.customer-upload-dropzone {
+  min-height: 220px;
+  border: 2px dashed rgba(37, 99, 235, 0.28);
+  border-radius: 24px;
+  background: rgba(239, 246, 255, 0.68);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  text-align: center;
+  color: #2563eb;
+  cursor: pointer;
+  overflow: hidden;
+  transition: 0.18s ease;
+}
+
+.customer-upload-dropzone:hover {
+  border-color: rgba(37, 99, 235, 0.55);
+  background: rgba(219, 234, 254, 0.82);
+}
+
+.customer-upload-dropzone strong,
+.customer-upload-dropzone small {
+  display: block;
+}
+
+.customer-upload-dropzone strong {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.customer-upload-dropzone small {
+  margin-top: 6px;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.customer-upload-dropzone img {
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: 18px;
+  background: white;
+}
+
+.customer-upload-file-name {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}

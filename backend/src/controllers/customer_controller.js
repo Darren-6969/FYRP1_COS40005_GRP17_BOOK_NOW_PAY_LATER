@@ -433,7 +433,7 @@ export async function uploadCustomerReceipt(req, res, next) {
     const booking = await assertCustomerBooking(req.params.id, req.user.id);
 
     if (!imageUrl) {
-      return res.status(400).json({ message: "imageUrl is required" });
+      return res.status(400).json({ message: "Receipt image is required" });
     }
 
     if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
@@ -442,75 +442,76 @@ export async function uploadCustomerReceipt(req, res, next) {
       });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
-      await tx.payment.upsert({
-        where: { bookingId: booking.id },
-        create: {
-          bookingId: booking.id,
-          amount: booking.totalAmount,
-          method,
-          status: "PENDING_VERIFICATION",
-        },
-        update: {
-          method,
-          status: "PENDING_VERIFICATION",
-        },
-      });
-
-      await tx.receipt.upsert({
-        where: { bookingId: booking.id },
-        create: {
-          bookingId: booking.id,
-          imageUrl,
-          remarks: remarks || null,
-          status: "PENDING",
-        },
-        update: {
-          imageUrl,
-          remarks: remarks || null,
-          status: "PENDING",
-          verifiedAt: null,
-        },
-      });
-
-      const receiptBooking = await tx.booking.update({
-        where: { id: booking.id },
-        data: { status: "PENDING_PAYMENT" },
-        include: {
-          customer: { select: { id: true, name: true, email: true } },
-          operator: true,
-          payment: true,
-          receipt: true,
-          invoice: true,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: req.user.id,
-          action: "CUSTOMER_RECEIPT_UPLOADED",
-          entityType: "Receipt",
-          entityId: String(booking.id),
-        },
-      });
-
-      await createCustomerNotification(
-        tx,
-        req.user.id,
-        "Receipt Uploaded",
-        "Your payment receipt has been submitted for verification.",
-        "PAYMENT"
-      );
-
-      return receiptBooking;
+    await prisma.payment.upsert({
+      where: { bookingId: booking.id },
+      create: {
+        bookingId: booking.id,
+        amount: booking.totalAmount,
+        method,
+        status: "PENDING_VERIFICATION",
+      },
+      update: {
+        method,
+        status: "PENDING_VERIFICATION",
+      },
     });
 
-    const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/payment-verification`;
+    await prisma.receipt.upsert({
+      where: { bookingId: booking.id },
+      create: {
+        bookingId: booking.id,
+        imageUrl,
+        remarks: remarks || null,
+        status: "PENDING",
+      },
+      update: {
+        imageUrl,
+        remarks: remarks || null,
+        status: "PENDING",
+        verifiedAt: null,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: "CUSTOMER_RECEIPT_UPLOADED",
+        entityType: "Receipt",
+        entityId: String(booking.id),
+      },
+    });
+
+    await prisma.notification.create({
+      data: {
+        userId: req.user.id,
+        title: "Receipt Uploaded",
+        message: "Your payment receipt has been submitted for verification.",
+        type: "PAYMENT",
+      },
+    });
+
+    const updated = await prisma.booking.update({
+      where: { id: booking.id },
+      data: { status: "PENDING_PAYMENT" },
+      include: {
+        customer: { select: { id: true, userCode: true, name: true, email: true } },
+        operator: true,
+        payment: true,
+        receipt: true,
+        invoice: true,
+      },
+    });
+
+    const operatorUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/operator/payment-verification`;
 
     await notifyOperatorUsersByBooking({
       booking: updated,
       title: "Receipt uploaded",
-      message: `Customer uploaded a payment receipt for booking ${updated.bookingCode || updated.id}.`,
+      message: `Customer uploaded a payment receipt for booking ${
+        updated.bookingCode || updated.id
+      }.`,
       type: "RECEIPT_UPLOADED",
       emailSubject: `Receipt Uploaded - ${updated.bookingCode || updated.id}`,
       emailHtml: receiptUploadedTemplate({
@@ -518,6 +519,7 @@ export async function uploadCustomerReceipt(req, res, next) {
         operatorUrl,
       }),
     });
+
     res.status(201).json(mapBooking(updated));
   } catch (err) {
     next(err);
