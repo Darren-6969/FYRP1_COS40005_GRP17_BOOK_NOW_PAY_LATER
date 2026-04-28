@@ -12,6 +12,7 @@ export default function OperatorPaymentVerification() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
   const [error, setError] = useState("");
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
 
   const loadPayments = async () => {
     try {
@@ -19,7 +20,6 @@ export default function OperatorPaymentVerification() {
       setError("");
 
       const res = await operatorService.getPayments();
-
       setPayments(res.data.payments || []);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load payments");
@@ -56,6 +56,26 @@ export default function OperatorPaymentVerification() {
     }
   };
 
+  const openReceipt = (payment) => {
+    const receipt = payment.booking?.receipt;
+
+    if (!receipt?.imageUrl) {
+      alert("No receipt image found for this payment.");
+      return;
+    }
+
+    setSelectedReceipt({
+      imageUrl: receipt.imageUrl,
+      remarks: receipt.remarks,
+      status: receipt.status,
+      uploadedAt: receipt.uploadedAt,
+      bookingCode: payment.booking?.bookingCode || payment.bookingId,
+      customerName: payment.booking?.customer?.name || "-",
+      method: payment.method || "-",
+      amount: payment.amount,
+    });
+  };
+
   return (
     <div className="operator-page">
       <section className="operator-page-head">
@@ -68,7 +88,9 @@ export default function OperatorPaymentVerification() {
       {error && (
         <div className="operator-alert danger">
           {error}
-          <button type="button" onClick={loadPayments}>Retry</button>
+          <button type="button" onClick={loadPayments}>
+            Retry
+          </button>
         </div>
       )}
 
@@ -95,21 +117,33 @@ export default function OperatorPaymentVerification() {
                 {payments.map((payment) => (
                   <tr key={payment.id}>
                     <td>{formatOperatorDateTime(payment.createdAt)}</td>
-                    <td>{payment.bookingId}</td>
+                    <td>
+                      <strong>
+                        {payment.booking?.bookingCode || payment.bookingId}
+                      </strong>
+                    </td>
                     <td>{payment.booking?.customer?.name || "-"}</td>
                     <td>{payment.method || "-"}</td>
                     <td>{formatOperatorMoney(payment.amount)}</td>
                     <td>
                       {payment.booking?.receipt?.imageUrl ? (
-                        <a href={payment.booking.receipt.imageUrl} target="_blank" rel="noreferrer">
-                          View
-                        </a>
+                        <button
+                          type="button"
+                          className="operator-link-btn"
+                          onClick={() => openReceipt(payment)}
+                        >
+                          View Receipt
+                        </button>
                       ) : (
                         "-"
                       )}
                     </td>
                     <td>
-                      <span className={`operator-status ${operatorStatusClass(payment.status)}`}>
+                      <span
+                        className={`operator-status ${operatorStatusClass(
+                          payment.status
+                        )}`}
+                      >
                         {operatorStatusLabel(payment.status)}
                       </span>
                     </td>
@@ -119,6 +153,7 @@ export default function OperatorPaymentVerification() {
                           className="success"
                           disabled={!!actionLoading}
                           onClick={() => handleApprove(payment.id)}
+                          title="Approve payment"
                         >
                           ✓
                         </button>
@@ -127,6 +162,7 @@ export default function OperatorPaymentVerification() {
                           className="danger"
                           disabled={!!actionLoading}
                           onClick={() => handleReject(payment.id)}
+                          title="Reject payment"
                         >
                           ×
                         </button>
@@ -145,6 +181,68 @@ export default function OperatorPaymentVerification() {
           </div>
         )}
       </section>
+
+      {selectedReceipt && (
+        <div
+          className="operator-modal-backdrop"
+          onClick={() => setSelectedReceipt(null)}
+        >
+          <div
+            className="operator-modal operator-receipt-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="operator-card-head">
+              <div>
+                <p className="operator-eyebrow">Payment Receipt</p>
+                <h2>{selectedReceipt.bookingCode}</h2>
+                <p>
+                  {selectedReceipt.customerName} · {selectedReceipt.method} ·{" "}
+                  {formatOperatorMoney(selectedReceipt.amount)}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedReceipt(null)}
+                aria-label="Close receipt preview"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="operator-receipt-preview">
+              <img src={selectedReceipt.imageUrl} alt="Uploaded receipt" />
+            </div>
+
+            <div className="operator-receipt-meta">
+              <div>
+                <span>Status</span>
+                <strong>{selectedReceipt.status || "-"}</strong>
+              </div>
+
+              <div>
+                <span>Uploaded At</span>
+                <strong>{formatOperatorDateTime(selectedReceipt.uploadedAt)}</strong>
+              </div>
+
+              <div>
+                <span>Remarks</span>
+                <strong>{selectedReceipt.remarks || "-"}</strong>
+              </div>
+            </div>
+
+            <div className="operator-modal-actions">
+              <button
+                type="button"
+                className="operator-secondary-btn"
+                onClick={() => setSelectedReceipt(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
