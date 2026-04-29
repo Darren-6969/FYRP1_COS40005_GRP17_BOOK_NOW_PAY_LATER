@@ -1,119 +1,104 @@
 import prisma from "../config/db.js";
-import { generateInvoiceId } from "../utils/generateInvoiceId.js";
+
+function formatReceiptNo(payment) {
+  const paidDate = payment.paidAt || payment.updatedAt || payment.createdAt;
+  const year = new Date(paidDate).getFullYear();
+  return `RCP-${year}${String(payment.id).padStart(4, "0")}`;
+}
+
+function mapOfficialReceipt(payment) {
+  const booking = payment.booking;
+
+  const totalBookingValue = Number(booking?.totalAmount || payment.amount || 0);
+  const amountPaid = Number(payment.amount || 0);
+  const balanceRemaining = Math.max(totalBookingValue - amountPaid, 0);
+
+  return {
+    id: payment.id,
+    receiptNo: formatReceiptNo(payment),
+    bookingId: payment.bookingId,
+    bookingCode: booking?.bookingCode || String(payment.bookingId),
+    customerName: booking?.customer?.name || "-",
+    customerEmail: booking?.customer?.email || "-",
+    customerPhone: booking?.customer?.phone || "-",
+    operatorName: booking?.operator?.companyName || "-",
+    operatorEmail: booking?.operator?.email || "-",
+    operatorPhone: booking?.operator?.phone || "-",
+    operatorLogoUrl: booking?.operator?.logoUrl || null,
+
+    serviceName: booking?.serviceName || "-",
+    serviceType: booking?.serviceType || "-",
+    pickupDate: booking?.pickupDate,
+    returnDate: booking?.returnDate,
+
+    paymentDate: payment.paidAt || payment.updatedAt,
+    amountPaid,
+    method: payment.method,
+    transactionId: payment.transactionId || "-",
+    paymentType: balanceRemaining > 0 ? "Deposit" : "Full Payment",
+
+    totalBookingValue,
+    amountPaidToDate: amountPaid,
+    balanceRemaining,
+
+    paymentStatus: payment.status,
+    booking,
+    payment,
+  };
+}
 
 export async function getReceipts(req, res, next) {
   try {
-    const receipts = await prisma.receipt.findMany({
-      orderBy: { uploadedAt: "desc" },
+    const where = {
+      status: "PAID",
+    };
+
+    if (req.user.role === "NORMAL_SELLER") {
+      where.booking = {
+        operatorId: req.user.operatorId,
+      };
+    }
+
+    const payments = await prisma.payment.findMany({
+      where,
+      orderBy: {
+        paidAt: "desc",
+      },
       include: {
         booking: {
           include: {
             customer: {
-              select: { id: true, name: true, email: true },
+              select: {
+                id: true,
+                userCode: true,
+                name: true,
+                email: true,
+              },
             },
-            payment: true,
+            operator: true,
+            receipt: true,
+            invoice: true,
           },
         },
       },
     });
 
-    res.json(receipts);
+    res.json(payments.map(mapOfficialReceipt));
   } catch (err) {
     next(err);
   }
 }
 
-export async function approveReceipt(req, res, next) {
-  try {
-    const { id } = req.params;
-
-    const receipt = await prisma.receipt.findUnique({
-      where: { id },
-      include: { booking: true },
-    });
-
-    if (!receipt) {
-      return res.status(404).json({ message: "Receipt not found" });
-    }
-
-    const updated = await prisma.$transaction(async (tx) => {
-      const approvedReceipt = await tx.receipt.update({
-        where: { id },
-        data: {
-          status: "APPROVED",
-          verifiedAt: new Date(),
-        },
-      });
-
-      await tx.payment.update({
-        where: { bookingId: receipt.bookingId },
-        data: {
-          status: "PAID",
-          paidAt: new Date(),
-        },
-      });
-
-      const booking = await tx.booking.update({
-        where: { id: receipt.bookingId },
-        data: { status: "PAID" },
-      });
-
-      await tx.invoice.upsert({
-        where: { bookingId: receipt.bookingId },
-        create: {
-          bookingId: receipt.bookingId,
-          invoiceNo: generateInvoiceId(),
-          amount: booking.totalAmount,
-          status: "GENERATED",
-        },
-        update: {
-          status: "GENERATED",
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: req.user.id,
-          action: "RECEIPT_APPROVED",
-          entityType: "Receipt",
-          entityId: id,
-        },
-      });
-
-      return approvedReceipt;
-    });
-
-    res.json(updated);
-  } catch (err) {
-    next(err);
-  }
+export async function approveReceipt(req, res) {
+  return res.status(400).json({
+    message:
+      "Receipt approval has moved to the Payments page. The Receipts page is read-only and only shows completed payment receipts.",
+  });
 }
 
-export async function rejectReceipt(req, res, next) {
-  try {
-    const { id } = req.params;
-    const { remarks } = req.body;
-
-    const updated = await prisma.receipt.update({
-      where: { id },
-      data: {
-        status: "REJECTED",
-        remarks: remarks || "Receipt rejected by admin",
-        verifiedAt: new Date(),
-      },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        userId: req.user.id,
-        action: "RECEIPT_REJECTED",
-        entityType: "Receipt",
-        entityId: id,
-      },
-    });
-
-    res.json(updated);
-  } catch (err) {
-    next(err);
-  }
+export async function rejectReceipt(req, res) {
+  return res.status(400).json({
+    message:
+      "Receipt rejection has moved to the Payments page. The Receipts page is read-only and only shows completed payment receipts.",
+  });
 }
