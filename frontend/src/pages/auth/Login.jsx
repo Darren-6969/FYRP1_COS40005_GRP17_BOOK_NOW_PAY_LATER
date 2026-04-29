@@ -138,23 +138,34 @@ export default function Login() {
         return;
       }
 
-      const role = normalizeRole(user.role || user.user_role || user.type);
+      const rawRole = user.role || user.user_role || user.type;
+      const normalizedRole = normalizeRole(rawRole);
 
-      if (!role) {
+      if (!normalizedRole) {
         setError("This account has no role. Please check the user role in database.");
         return;
       }
 
-      const redirectPath = getDashboardPathByRole(role);
+      const redirectPath = getDashboardPathByRole(normalizedRole);
 
       if (!redirectPath) {
-        setError(`Unknown role "${role}". Please contact admin.`);
+        setError(`Unknown role "${normalizedRole}". Please contact admin.`);
         return;
       }
 
-      const normalizedUser = { ...user, role };
+      const roleForStorage = String(rawRole).toUpperCase();
 
-      saveSession({ token, user: normalizedUser, role });
+      const normalizedUser = {
+        ...user,
+        role: roleForStorage,
+      };
+
+      saveSession({
+        token,
+        user: normalizedUser,
+        role: roleForStorage,
+      });
+
       navigate(redirectPath, { replace: true });
     } catch (err) {
       console.error("Login error:", err);
