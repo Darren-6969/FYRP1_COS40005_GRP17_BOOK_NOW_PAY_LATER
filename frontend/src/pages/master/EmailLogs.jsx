@@ -6,12 +6,20 @@ export default function EmailLogs() {
   const [status, setStatus] = useState("ALL");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const res = await getEmailLogs();
-    setLogs(res.data?.emailLogs || []);
-    setLoading(false);
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await getEmailLogs();
+      setLogs(res.data?.emailLogs || []);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to load email logs");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -21,8 +29,22 @@ export default function EmailLogs() {
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
       const matchesStatus = status === "ALL" || log.status === status;
-      const text = `${log.toEmail} ${log.subject} ${log.type} ${log.error || ""}`.toLowerCase();
-      const matchesQuery = !query || text.includes(query.toLowerCase());
+
+      const searchableText = [
+        log.toEmail,
+        log.subject,
+        log.type,
+        log.status,
+        log.relatedEntityType,
+        log.relatedEntityId,
+        log.error,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      const matchesQuery =
+        !query || searchableText.includes(query.toLowerCase());
 
       return matchesStatus && matchesQuery;
     });
@@ -33,20 +55,29 @@ export default function EmailLogs() {
       <div className="section-header">
         <div>
           <h3>Email Logs</h3>
-          <p>Track automated invoice, receipt, payment, and notification emails.</p>
+          <p>
+            Track automated invoice, receipt, payment, and notification emails.
+          </p>
         </div>
 
-        <button className="btn" onClick={load}>Refresh</button>
+        <button className="btn" onClick={load}>
+          Refresh
+        </button>
       </div>
 
+      {error && <div className="alert danger">{error}</div>}
+
       <div className="admin-filter-row">
-        <input 
+        <input
           placeholder="Search recipient, subject, type, error..."
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
 
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
+        <select
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+        >
           <option value="ALL">All Status</option>
           <option value="SENT">Sent</option>
           <option value="FAILED">Failed</option>
