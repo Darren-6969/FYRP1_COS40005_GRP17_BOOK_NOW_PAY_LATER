@@ -699,6 +699,7 @@ export async function sendPaymentRequest(req, res, next) {
     }
 
     const method = req.body?.method || "PENDING";
+    const paymentDeadline = await calculatePaymentDeadline(booking.operatorId);
 
     const payment = await prisma.payment.upsert({
       where: {
@@ -717,40 +718,80 @@ export async function sendPaymentRequest(req, res, next) {
       },
     });
 
+    const invoice = await generateInvoiceForBooking(
+      booking.id,
+      booking.totalAmount,
+      prisma,
+      { status: "SENT" }
+    );
+
     const updatedBooking = await prisma.booking.update({
       where: { id: booking.id },
-      data: { status: "PENDING_PAYMENT" },
-      include: includeBookingRelations(),
-    });
-
-    await createAuditLog({
-      req,
-      action: "PAYMENT_REQUEST_SENT",
-      entityType: "Booking",
-      entityId: booking.id,
-      details: {
-        paymentId: payment.id,
-        method,
+      data: {
+        status: "PENDING_PAYMENT",
+        paymentDeadline,
+      },
+      include: {
+        customer: {
+          select: {
+            id: true,
+            userCode: true,
+            name: true,
+            email: true,
+          },
+        },
+        operator: true,
+        payment: true,
+        receipt: true,
+        invoice: true,
       },
     });
 
-    const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/checkout/${booking.id}`;
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: "PAYMENT_REQUEST_SENT",
+        entityType: "Booking",
+        entityId: String(booking.id),
+        details: {
+          paymentId: payment.id,
+          method,
+          paymentDeadline,
+          invoiceId: invoice.id,
+          invoiceNo: invoice.invoiceNo,
+        },
+      },
+    });
 
-    await createCustomerNotification({
+    const customerPaymentUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/customer/checkout/${booking.id}`;
+
+    await notifyCustomerByBooking({
       booking: updatedBooking,
-      title: "Payment required",
-      message: `Please complete payment for booking ${booking.bookingCode || booking.id} before the deadline.`,
-      type: "PAYMENT_REQUIRED",
-      emailSubject: `Payment Required - ${booking.bookingCode || booking.id}`,
-      emailHtml: paymentRequestTemplate({
+      title: "Invoice issued",
+      message: `Invoice ${invoice.invoiceNo} has been issued. Please complete payment before the deadline.`,
+      type: "INVOICE_SENT",
+      emailSubject: `Invoice ${invoice.invoiceNo} - ${
+        updatedBooking.bookingCode || updatedBooking.id
+      }`,
+      emailHtml: invoiceSentTemplate({
+        invoice,
         booking: updatedBooking,
-        customerUrl,
+        customerUrl: customerPaymentUrl,
       }),
     });
 
     res.json({
       booking: mapBooking(updatedBooking),
-      payment: mapPayment(payment),
+      payment: {
+        ...payment,
+        amount: toNumber(payment.amount),
+      },
+      invoice: {
+        ...invoice,
+        amount: toNumber(invoice.amount),
+      },
     });
   } catch (err) {
     next(err);

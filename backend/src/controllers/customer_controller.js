@@ -1,14 +1,16 @@
 import prisma from "../config/db.js";
-import { generateInvoiceId } from "../utils/generateInvoiceId.js";
+import { generateInvoiceForBooking } from "../services/invoice_service.js";
 import {
   notifyCustomerByBooking,
   notifyOperatorUsersByBooking,
 } from "../services/notification_email_service.js";
 import {
   bookingSubmittedTemplate,
+  bookingStatusTemplate,
   customerAlternativeResponseTemplate,
   invoiceSentTemplate,
-  paymentConfirmedTemplate,
+  merchantPaymentConfirmedTemplate,
+  paymentReceiptTemplate,
   receiptUploadedTemplate,
 } from "../services/email_templates.js";
 
@@ -120,6 +122,20 @@ async function generateBookingCode(tx) {
   return `BNPL-${String(count + 1).padStart(4, "0")}`;
 }
 
+async function calculatePaymentDeadline(operatorId) {
+  const config = await prisma.bNPLConfig.findFirst({
+    where: { operatorId },
+  });
+
+  const paymentDeadlineDays = config?.paymentDeadlineDays || 3;
+
+  const deadline = new Date();
+  deadline.setDate(deadline.getDate() + paymentDeadlineDays);
+  deadline.setHours(23, 59, 59, 999);
+
+  return deadline;
+}
+
 export async function createCustomerBooking(req, res, next) {
   try {
     const {
@@ -149,7 +165,8 @@ export async function createCustomerBooking(req, res, next) {
 
       if (!fallbackOperator) {
         return res.status(400).json({
-          message: "No active operator found. Please provide operatorId or create an operator first.",
+          message:
+            "No active operator found. Please provide operatorId or create an operator first.",
         });
       }
 
@@ -174,7 +191,14 @@ export async function createCustomerBooking(req, res, next) {
           status: "PENDING",
         },
         include: {
-          customer: { select: { id: true, userCode: true, name: true, email: true } },
+          customer: {
+            select: {
+              id: true,
+              userCode: true,
+              name: true,
+              email: true,
+            },
+          },
           operator: true,
           payment: true,
           receipt: true,
@@ -195,18 +219,19 @@ export async function createCustomerBooking(req, res, next) {
         },
       });
 
-      await createCustomerNotification(
-        tx,
-        req.user.id,
-        "Booking Submitted",
-        `Your booking request for ${serviceName} has been submitted.`,
-        "BOOKING_SUBMITTED"
-      );
-
       return created;
     });
 
-    const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/bookings/${booking.id}`;
+    await notifyCustomerByBooking({
+      booking,
+      title: "Booking submitted",
+      message: `Your booking request for ${serviceName} has been submitted.`,
+      type: "BOOKING_SUBMITTED",
+    });
+
+    const operatorUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/operator/bookings/${booking.id}`;
 
     await notifyOperatorUsersByBooking({
       booking,
@@ -270,7 +295,14 @@ export async function cancelCustomerBooking(req, res, next) {
         where: { id: booking.id },
         data: { status: "CANCELLED" },
         include: {
-          customer: { select: { id: true, name: true, email: true } },
+          customer: {
+            select: {
+              id: true,
+              userCode: true,
+              name: true,
+              email: true,
+            },
+          },
           operator: true,
           payment: true,
           receipt: true,
@@ -287,15 +319,23 @@ export async function cancelCustomerBooking(req, res, next) {
         },
       });
 
-      await createCustomerNotification(
-        tx,
-        req.user.id,
-        "Booking Cancelled",
-        `Your booking ${booking.id} has been cancelled.`,
-        "BOOKING"
-      );
-
       return cancelled;
+    });
+
+    await notifyCustomerByBooking({
+      booking: updated,
+      title: "Booking cancelled",
+      message: `Your booking ${updated.bookingCode || updated.id} has been cancelled.`,
+      type: "BOOKING_CANCELLED",
+    });
+
+    await notifyOperatorUsersByBooking({
+      booking: updated,
+      title: "Booking cancelled by customer",
+      message: `${updated.customer?.name || "Customer"} cancelled booking ${
+        updated.bookingCode || updated.id
+      }.`,
+      type: "CUSTOMER_BOOKING_CANCELLED",
     });
 
     res.json(mapBooking(updated));
@@ -316,13 +356,17 @@ export async function payCustomerBooking(req, res, next) {
       });
     }
 
-    if (normalizedMethod.includes("DUITNOW") || normalizedMethod.includes("SPAY")) {
+    if (
+      normalizedMethod.includes("DUITNOW") ||
+      normalizedMethod.includes("SPAY")
+    ) {
       return res.status(400).json({
-        message: "Please use the receipt upload endpoint for DuitNow/SPay manual payments.",
+        message:
+          "Please use the receipt upload endpoint for DuitNow/SPay manual payments.",
       });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const payment = await tx.payment.upsert({
         where: { bookingId: booking.id },
         create: {
@@ -334,6 +378,7 @@ export async function payCustomerBooking(req, res, next) {
           transactionId: transactionId || `${normalizedMethod}-${Date.now()}`,
         },
         update: {
+          amount: booking.totalAmount,
           method: normalizedMethod,
           status: "PAID",
           paidAt: new Date(),
@@ -341,29 +386,29 @@ export async function payCustomerBooking(req, res, next) {
         },
       });
 
+      const invoice = await generateInvoiceForBooking(
+        booking.id,
+        booking.totalAmount,
+        tx,
+        { status: "PAID" }
+      );
+
       const paidBooking = await tx.booking.update({
         where: { id: booking.id },
         data: { status: "PAID" },
         include: {
-          customer: { select: { id: true, name: true, email: true } },
+          customer: {
+            select: {
+              id: true,
+              userCode: true,
+              name: true,
+              email: true,
+            },
+          },
           operator: true,
           payment: true,
           receipt: true,
           invoice: true,
-        },
-      });
-
-      await tx.invoice.upsert({
-        where: { bookingId: booking.id },
-        create: {
-          bookingId: booking.id,
-          invoiceNo: generateInvoiceId(),
-          amount: booking.totalAmount,
-          status: "PAID",
-        },
-        update: {
-          amount: booking.totalAmount,
-          status: "PAID",
         },
       });
 
@@ -373,54 +418,65 @@ export async function payCustomerBooking(req, res, next) {
           action: "CUSTOMER_PAYMENT_COMPLETED",
           entityType: "Payment",
           entityId: String(payment.id),
-          details: { method: normalizedMethod },
+          details: {
+            method: normalizedMethod,
+            invoiceId: invoice.id,
+            invoiceNo: invoice.invoiceNo,
+          },
         },
       });
 
-      await createCustomerNotification(
-        tx,
-        req.user.id,
-        "Payment Confirmed",
-        `Your payment for booking ${booking.id} has been completed.`,
-        "PAYMENT"
-      );
-
-      return paidBooking;
+      return {
+        payment,
+        invoice,
+        booking: paidBooking,
+      };
     });
 
-    const refreshed = await assertCustomerBooking(updated.id, req.user.id);
-    const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${refreshed.id}`;
+    const refreshed = await assertCustomerBooking(result.booking.id, req.user.id);
+
+    const customerBookingUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/customer/bookings/${refreshed.id}`;
 
     await notifyCustomerByBooking({
       booking: refreshed,
-      title: "Payment confirmed",
-      message: `Your payment for booking ${refreshed.bookingCode || refreshed.id} has been completed.`,
-      type: "PAYMENT_CONFIRMED",
-      emailSubject: `Payment Confirmed - ${refreshed.bookingCode || refreshed.id}`,
-      emailHtml: paymentConfirmedTemplate({
+      title: "E-receipt issued",
+      message: `Your official payment receipt for booking ${
+        refreshed.bookingCode || refreshed.id
+      } has been issued.`,
+      type: "PAYMENT_RECEIPT_ISSUED",
+      emailSubject: `Official Receipt - ${
+        refreshed.bookingCode || refreshed.id
+      }`,
+      emailHtml: paymentReceiptTemplate({
         booking: refreshed,
-        customerUrl,
+        payment: result.payment,
+        customerUrl: customerBookingUrl,
       }),
     });
 
-    if (refreshed.invoice) {
-      const invoiceUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/invoices`;
+    const operatorPaymentUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/operator/payment-verification`;
 
-      await notifyCustomerByBooking({
+    await notifyOperatorUsersByBooking({
+      booking: refreshed,
+      title: "Payment confirmed",
+      message: `Payment for booking ${
+        refreshed.bookingCode || refreshed.id
+      } has been confirmed.`,
+      type: "PAYMENT_CONFIRMED",
+      emailSubject: `Payment Confirmed - ${
+        refreshed.bookingCode || refreshed.id
+      }`,
+      emailHtml: merchantPaymentConfirmedTemplate({
         booking: refreshed,
-        title: "Invoice generated",
-        message: `Invoice ${refreshed.invoice.invoiceNo} has been generated for booking ${
-          refreshed.bookingCode || refreshed.id
-        }.`,
-        type: "INVOICE_GENERATED",
-        emailSubject: `Invoice ${refreshed.invoice.invoiceNo} - ${refreshed.bookingCode || refreshed.id}`,
-        emailHtml: invoiceSentTemplate({
-          invoice: refreshed.invoice,
-          booking: refreshed,
-          customerUrl: invoiceUrl,
-        }),
-      });
-    }
+        payment: result.payment,
+        operatorUrl: operatorPaymentUrl,
+      }),
+    });
+
     res.json(mapBooking(refreshed));
   } catch (err) {
     next(err);
@@ -438,7 +494,8 @@ export async function uploadCustomerReceipt(req, res, next) {
 
     if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
       return res.status(400).json({
-        message: "Receipt upload is only available after the booking is accepted.",
+        message:
+          "Receipt upload is only available after the booking is accepted.",
       });
     }
 
@@ -481,25 +538,30 @@ export async function uploadCustomerReceipt(req, res, next) {
       },
     });
 
-    await prisma.notification.create({
-      data: {
-        userId: req.user.id,
-        title: "Receipt Uploaded",
-        message: "Your payment receipt has been submitted for verification.",
-        type: "PAYMENT",
-      },
-    });
-
     const updated = await prisma.booking.update({
       where: { id: booking.id },
       data: { status: "PENDING_PAYMENT" },
       include: {
-        customer: { select: { id: true, userCode: true, name: true, email: true } },
+        customer: {
+          select: {
+            id: true,
+            userCode: true,
+            name: true,
+            email: true,
+          },
+        },
         operator: true,
         payment: true,
         receipt: true,
         invoice: true,
       },
+    });
+
+    await notifyCustomerByBooking({
+      booking: updated,
+      title: "Receipt uploaded",
+      message: "Your payment receipt has been submitted for verification.",
+      type: "RECEIPT_UPLOADED",
     });
 
     const operatorUrl = `${
@@ -723,7 +785,14 @@ export async function acceptAlternativeBooking(req, res, next) {
           status: "ACCEPTED",
         },
         include: {
-          customer: { select: { id: true, userCode: true, name: true, email: true } },
+          customer: {
+            select: {
+              id: true,
+              userCode: true,
+              name: true,
+              email: true,
+            },
+          },
           operator: true,
           payment: true,
           receipt: true,
@@ -744,17 +813,21 @@ export async function acceptAlternativeBooking(req, res, next) {
         },
       });
 
-      await createCustomerNotification(
-        tx,
-        req.user.id,
-        "Alternative Accepted",
-        `You accepted the alternative option for booking ${booking.bookingCode || booking.id}.`,
-        "ALTERNATIVE_ACCEPTED"
-      );
-
       return accepted;
     });
-    const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/bookings/${updated.id}`;
+
+    await notifyCustomerByBooking({
+      booking: updated,
+      title: "Alternative accepted",
+      message: `You accepted the alternative option for booking ${
+        updated.bookingCode || updated.id
+      }.`,
+      type: "ALTERNATIVE_ACCEPTED",
+    });
+
+    const operatorUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/operator/bookings/${updated.id}`;
 
     await notifyOperatorUsersByBooking({
       booking: updated,
@@ -763,13 +836,16 @@ export async function acceptAlternativeBooking(req, res, next) {
         updated.bookingCode || updated.id
       }.`,
       type: "CUSTOMER_ACCEPTED_ALTERNATIVE",
-      emailSubject: `Customer Accepted Alternative - ${updated.bookingCode || updated.id}`,
+      emailSubject: `Customer Accepted Alternative - ${
+        updated.bookingCode || updated.id
+      }`,
       emailHtml: customerAlternativeResponseTemplate({
         booking: updated,
         accepted: true,
         operatorUrl,
       }),
     });
+
     res.json(mapBooking(updated));
   } catch (err) {
     next(err);
@@ -793,7 +869,14 @@ export async function rejectAlternativeBooking(req, res, next) {
           status: "REJECTED",
         },
         include: {
-          customer: { select: { id: true, userCode: true, name: true, email: true } },
+          customer: {
+            select: {
+              id: true,
+              userCode: true,
+              name: true,
+              email: true,
+            },
+          },
           operator: true,
           payment: true,
           receipt: true,
@@ -810,18 +893,21 @@ export async function rejectAlternativeBooking(req, res, next) {
         },
       });
 
-      await createCustomerNotification(
-        tx,
-        req.user.id,
-        "Alternative Rejected",
-        `You rejected the alternative option for booking ${booking.bookingCode || booking.id}.`,
-        "ALTERNATIVE_REJECTED"
-      );
-
       return rejected;
     });
 
-    const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/bookings/${updated.id}`;
+    await notifyCustomerByBooking({
+      booking: updated,
+      title: "Alternative rejected",
+      message: `You rejected the alternative option for booking ${
+        updated.bookingCode || updated.id
+      }.`,
+      type: "ALTERNATIVE_REJECTED",
+    });
+
+    const operatorUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/operator/bookings/${updated.id}`;
 
     await notifyOperatorUsersByBooking({
       booking: updated,
@@ -830,7 +916,9 @@ export async function rejectAlternativeBooking(req, res, next) {
         updated.bookingCode || updated.id
       }.`,
       type: "CUSTOMER_REJECTED_ALTERNATIVE",
-      emailSubject: `Customer Rejected Alternative - ${updated.bookingCode || updated.id}`,
+      emailSubject: `Customer Rejected Alternative - ${
+        updated.bookingCode || updated.id
+      }`,
       emailHtml: customerAlternativeResponseTemplate({
         booking: updated,
         accepted: false,
