@@ -22,7 +22,9 @@ function clearSession() {
 export default function OperatorLayout() {
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
+
   const [openNotifications, setOpenNotifications] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const user = getStoredUser();
   const displayName = user?.name || user?.fullName || "Operator";
@@ -38,6 +40,7 @@ export default function OperatorLayout() {
   } = useOperatorNotifications();
 
   const unreadCount = notifications.filter((item) => !item.isRead).length;
+
   const recentNotifications = useMemo(
     () => notifications.slice(0, 5),
     [notifications]
@@ -54,6 +57,14 @@ export default function OperatorLayout() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    document.body.classList.toggle("operator-menu-lock", mobileMenuOpen);
+
+    return () => {
+      document.body.classList.remove("operator-menu-lock");
+    };
+  }, [mobileMenuOpen]);
+
   const handleLogout = () => {
     clearSession();
     navigate("/login", { replace: true });
@@ -61,13 +72,37 @@ export default function OperatorLayout() {
 
   return (
     <div className="operator-shell">
-      <OperatorSidebar onLogout={handleLogout} />
+      {mobileMenuOpen && (
+        <button
+          type="button"
+          className="operator-mobile-backdrop"
+          aria-label="Close operator menu"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      <OperatorSidebar
+        onLogout={handleLogout}
+        isMobileOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
+      />
 
       <main className="operator-main">
         <header className="operator-topbar">
-          <div>
-            <p className="operator-eyebrow">Book Now Pay Later</p>
-            <h1>Operator Portal</h1>
+          <div className="operator-topbar-title">
+            <button
+              type="button"
+              className="operator-menu-toggle"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open operator menu"
+            >
+              ☰
+            </button>
+
+            <div>
+              <p className="operator-eyebrow">Book Now Pay Later</p>
+              <h1>Operator Portal</h1>
+            </div>
           </div>
 
           <div className="operator-topbar-actions" ref={dropdownRef}>

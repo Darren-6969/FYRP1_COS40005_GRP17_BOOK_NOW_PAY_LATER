@@ -11,21 +11,46 @@ const links = [
   { to: "/operator/settings", label: "Settings", icon: "⚙" },
 ];
 
-export default function OperatorSidebar({ onLogout }) {
+export default function OperatorSidebar({
+  onLogout,
+  isMobileOpen = false,
+  onCloseMobile,
+}) {
+  const handleNavClick = () => {
+    if (onCloseMobile) {
+      onCloseMobile();
+    }
+  };
+
   return (
-    <aside className="operator-sidebar">
+    <aside className={`operator-sidebar ${isMobileOpen ? "mobile-open" : ""}`}>
       <div>
         <div className="operator-brand">
           <div className="operator-brand-icon">BN</div>
+
           <div>
             <strong>BNPL</strong>
             <span>Normal Seller</span>
           </div>
+
+          <button
+            type="button"
+            className="operator-sidebar-close"
+            onClick={onCloseMobile}
+            aria-label="Close operator menu"
+          >
+            ×
+          </button>
         </div>
 
         <nav className="operator-nav-list">
           {links.map((link) => (
-            <NavLink key={link.to} to={link.to} className="operator-nav-link">
+            <NavLink
+              key={link.to}
+              to={link.to}
+              className="operator-nav-link"
+              onClick={handleNavClick}
+            >
               <span>{link.icon}</span>
               {link.label}
             </NavLink>
@@ -37,7 +62,12 @@ export default function OperatorSidebar({ onLogout }) {
         <button type="button" className="operator-help-btn">
           Help & Support
         </button>
-        <button type="button" className="operator-logout-btn" onClick={onLogout}>
+
+        <button
+          type="button"
+          className="operator-logout-btn"
+          onClick={onLogout}
+        >
           ↩ Logout
         </button>
       </div>
