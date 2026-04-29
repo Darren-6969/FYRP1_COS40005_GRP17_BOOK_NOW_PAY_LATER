@@ -29,6 +29,7 @@ import CustomerPayments from "./pages/customer/CustomerPayments";
 import CustomerInvoices from "./pages/customer/CustomerInvoices";
 import CustomerNotifications from "./pages/customer/CustomerNotifications";
 import CustomerProfile from "./pages/customer/CustomerProfile";
+import CustomerInvoiceDetail from "./pages/customer/CustomerInvoiceDetail";
 
 // Operator Pages
 import OperatorLayout from "./pages/operator/layout/OperatorLayout";
@@ -96,6 +97,7 @@ export default function App() {
               <Route path="upload-receipt/:id" element={<UploadReceipt />} />
               <Route path="payments" element={<CustomerPayments />} />
               <Route path="invoices" element={<CustomerInvoices />} />
+              <Route path="invoices/:id" element={<CustomerInvoiceDetail />} />
               <Route path="notifications" element={<CustomerNotifications />} />
               <Route path="profile" element={<CustomerProfile />} />
             </Route>
