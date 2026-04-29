@@ -176,3 +176,12 @@ export function useOperatorNotifications() {
     markAllReadApi: () => operatorService.markAllNotificationsRead(),
   });
 }
+
+export function useMasterNotifications() {
+  return useRealtimeNotifications({
+    role: "MASTER_SELLER",
+    fetchNotifications: () => operatorService.getNotifications(),
+    markReadApi: (id) => operatorService.markNotificationRead(id),
+    markAllReadApi: () => operatorService.markAllNotificationsRead(),
+  });
+}

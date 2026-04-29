@@ -21,7 +21,7 @@ export default function CustomerNavbar({ onLogout }) {
       <aside className="customer-sidebar">
         <div>
           <div className="customer-brand">
-            <div className="customer-brand-icon">BN</div>
+            <div className="customer-brand-icon">BNPL</div>
             <div>
               <strong>BNPL</strong>
               <span>Customer Portal</span>

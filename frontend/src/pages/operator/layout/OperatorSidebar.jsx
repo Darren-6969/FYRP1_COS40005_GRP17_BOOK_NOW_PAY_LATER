@@ -26,7 +26,7 @@ export default function OperatorSidebar({
     <aside className={`operator-sidebar ${isMobileOpen ? "mobile-open" : ""}`}>
       <div>
         <div className="operator-brand">
-          <div className="operator-brand-icon">BN</div>
+          <div className="operator-brand-icon">BNPL</div>
 
           <div>
             <strong>BNPL</strong>
