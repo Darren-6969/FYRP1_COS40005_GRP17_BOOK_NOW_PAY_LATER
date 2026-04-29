@@ -32,6 +32,7 @@ export default function OperatorLayout() {
     notifications,
     loading,
     error,
+    socketConnected,
     markRead,
     markAllRead,
   } = useOperatorNotifications();
@@ -87,7 +88,11 @@ export default function OperatorLayout() {
                 <div className="portal-dropdown-head">
                   <div>
                     <strong>Notifications</strong>
-                    <p>{unreadCount} unread update{unreadCount === 1 ? "" : "s"}</p>
+                    <p>
+                      {unreadCount} unread update{unreadCount === 1 ? "" : "s"}
+                      {" · "}
+                      {socketConnected ? "Live" : "Syncing"}
+                    </p>
                   </div>
 
                   <button

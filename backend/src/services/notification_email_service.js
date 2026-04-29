@@ -1,5 +1,16 @@
 import prisma from "../config/db.js";
 import { sendEmail } from "./email_service.js";
+import { emitToUser } from "../utils/socket.js";
+
+function mapNotification(notification) {
+  if (!notification) return null;
+
+  return {
+    ...notification,
+    createdAt: notification.createdAt,
+    updatedAt: notification.updatedAt,
+  };
+}
 
 export async function createInAppNotification({
   userId,
@@ -9,7 +20,7 @@ export async function createInAppNotification({
 }) {
   if (!userId) return null;
 
-  return prisma.notification.create({
+  const notification = await prisma.notification.create({
     data: {
       userId,
       title,
@@ -17,6 +28,15 @@ export async function createInAppNotification({
       type,
     },
   });
+
+  emitToUser(userId, "notification:new", mapNotification(notification));
+
+  emitToUser(userId, "notification:refresh", {
+    userId,
+    reason: "new_notification",
+  });
+
+  return notification;
 }
 
 export async function notifyCustomerByBooking({

@@ -35,6 +35,7 @@ export default function CustomerLayout() {
     notifications,
     loading,
     error,
+    socketConnected,
     markRead,
     markAllRead,
   } = useCustomerNotifications();
@@ -84,7 +85,11 @@ export default function CustomerLayout() {
                 <div className="portal-dropdown-head">
                   <div>
                     <strong>Notifications</strong>
-                    <p>{unreadCount} unread update{unreadCount === 1 ? "" : "s"}</p>
+                    <p>
+                      {unreadCount} unread update{unreadCount === 1 ? "" : "s"}
+                      {" · "}
+                      {socketConnected ? "Live" : "Syncing"}
+                    </p>
                   </div>
                   <button
                     type="button"

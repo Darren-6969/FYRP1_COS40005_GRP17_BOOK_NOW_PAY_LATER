@@ -269,3 +269,9 @@
   font-weight: 900;
   font-size: 13px;
 }
+
+.portal-dropdown-head p {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

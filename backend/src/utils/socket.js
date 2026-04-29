@@ -2,25 +2,51 @@ import { Server } from "socket.io";
 
 let io;
 
+function getAllowedOrigins() {
+  return [
+    process.env.FRONTEND_URL,
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://newfrontbnplplatform.vercel.app",
+  ].filter(Boolean);
+}
+
 export function initSocket(httpServer) {
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL || "http://localhost:5173",
+      origin: getAllowedOrigins(),
       methods: ["GET", "POST"],
+      credentials: true,
     },
   });
 
   io.on("connection", (socket) => {
-    console.log(`🔌 Client connected: ${socket.id}`);
+    console.log(`Socket connected: ${socket.id}`);
 
-    // Customer/operator joins their personal room for targeted notifications
     socket.on("join_user_room", (userId) => {
-      socket.join(userId);
-      console.log(`User ${userId} joined personal room`);
+      if (!userId) return;
+
+      const roomName = `user:${userId}`;
+      socket.join(roomName);
+
+      console.log(`Socket ${socket.id} joined ${roomName}`);
+
+      socket.emit("socket:joined", {
+        room: roomName,
+      });
+    });
+
+    socket.on("leave_user_room", (userId) => {
+      if (!userId) return;
+
+      const roomName = `user:${userId}`;
+      socket.leave(roomName);
+
+      console.log(`Socket ${socket.id} left ${roomName}`);
     });
 
     socket.on("disconnect", () => {
-      console.log(`❌ Client disconnected: ${socket.id}`);
+      console.log(`Socket disconnected: ${socket.id}`);
     });
   });
 
@@ -28,6 +54,16 @@ export function initSocket(httpServer) {
 }
 
 export function getIO() {
-  if (!io) throw new Error("Socket.io not initialised");
+  if (!io) {
+    return null;
+  }
+
   return io;
+}
+
+export function emitToUser(userId, eventName, payload) {
+  if (!io || !userId) return false;
+
+  io.to(`user:${userId}`).emit(eventName, payload);
+  return true;
 }
