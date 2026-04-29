@@ -1,26 +1,57 @@
 import express from "express";
 import Stripe from "stripe";
 import prisma from "../config/db.js";
-import { sendPaymentConfirmedEmail } from "../services/email_service.js";
 import { generateInvoiceForBooking } from "../services/invoice_service.js";
-import { createAuditLog } from "../services/log_service.js";
+import { notifyCustomerByBooking } from "../services/notification_email_service.js";
+import {
+  invoiceSentTemplate,
+  paymentConfirmedTemplate,
+} from "../services/email_templates.js";
 
 const router = express.Router();
 
-// ── Stripe webhook needs raw body, NOT parsed JSON ────────────────────────────
+function parseBookingId(value) {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function includeBookingRelations() {
+  return {
+    customer: {
+      select: {
+        id: true,
+        userCode: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+    },
+    operator: true,
+    payment: true,
+    receipt: true,
+    invoice: true,
+  };
+}
+
 router.post(
   "/webhook",
   express.raw({ type: "application/json" }),
   async (req, res) => {
-    const sig    = req.headers["stripe-signature"];
+    const sig = req.headers["stripe-signature"];
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
     if (!secret) {
-      console.warn("[Stripe] STRIPE_WEBHOOK_SECRET not set — skipping webhook");
-      return res.sendStatus(200);
+      console.warn("[Stripe] STRIPE_WEBHOOK_SECRET not set. Webhook skipped.");
+      return res.json({ received: true, skipped: true });
     }
 
     let event;
+
     try {
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
       event = stripe.webhooks.constructEvent(req.body, sig, secret);
@@ -30,73 +61,120 @@ router.post(
     }
 
     if (event.type === "checkout.session.completed") {
-      const session   = event.data.object;
-      const bookingId = session.metadata?.bookingId;
+      const session = event.data.object;
+      const bookingId = parseBookingId(session.metadata?.bookingId);
 
-      if (bookingId) {
-        try {
-          const booking = await prisma.booking.findUnique({
-            where: { id: bookingId },
-            include: {
-              customer: { select: { id: true, name: true, email: true } },
-              payment: true,
-            },
-          });
+      if (!bookingId) {
+        console.error("[Stripe] Invalid bookingId metadata:", session.metadata?.bookingId);
+        return res.json({ received: true });
+      }
 
-          if (booking) {
-            await prisma.$transaction(async (tx) => {
-              await tx.booking.update({
-                where: { id: bookingId },
-                data: { status: "PAID" },
-              });
+      try {
+        const booking = await prisma.booking.findUnique({
+          where: { id: bookingId },
+          include: includeBookingRelations(),
+        });
 
-              await tx.payment.upsert({
-                where: { bookingId },
-                create: {
-                  bookingId,
-                  amount: booking.totalAmount,
-                  method: "STRIPE",
-                  status: "PAID",
-                  paidAt: new Date(),
-                  transactionId: session.payment_intent,
-                },
-                update: {
-                  status: "PAID",
-                  paidAt: new Date(),
-                  transactionId: session.payment_intent,
-                },
-              });
-
-              await generateInvoiceForBooking(bookingId, booking.totalAmount, tx);
-
-              await createAuditLog({
-                action: "STRIPE_PAYMENT_COMPLETED",
-                entityType: "Booking",
-                entityId: bookingId,
-                details: { sessionId: session.id, paymentIntent: session.payment_intent },
-              }, tx);
-
-              await tx.notification.create({
-                data: {
-                  userId: booking.customer.id,
-                  title: "Payment Confirmed",
-                  message: `Your payment for booking ${bookingId} has been confirmed via Stripe.`,
-                  type: "SUCCESS",
-                },
-              });
-            });
-
-            await sendPaymentConfirmedEmail(
-              booking.customer.email,
-              booking.customer.name,
-              bookingId
-            );
-
-            console.log(`[Stripe] Booking ${bookingId} marked as PAID`);
-          }
-        } catch (err) {
-          console.error("[Stripe] Webhook processing error:", err.message);
+        if (!booking) {
+          console.error(`[Stripe] Booking not found: ${bookingId}`);
+          return res.json({ received: true });
         }
+
+        const payment = await prisma.payment.upsert({
+          where: {
+            bookingId,
+          },
+          create: {
+            bookingId,
+            amount: booking.totalAmount,
+            method: "STRIPE",
+            status: "PAID",
+            paidAt: new Date(),
+            transactionId: session.payment_intent,
+          },
+          update: {
+            method: "STRIPE",
+            status: "PAID",
+            paidAt: new Date(),
+            transactionId: session.payment_intent,
+          },
+        });
+
+        const invoice = await generateInvoiceForBooking(
+          bookingId,
+          booking.totalAmount,
+          prisma,
+          { status: "SENT" }
+        );
+
+        const updatedBooking = await prisma.booking.update({
+          where: { id: bookingId },
+          data: {
+            status: "PAID",
+          },
+          include: includeBookingRelations(),
+        });
+
+        await prisma.auditLog.create({
+          data: {
+            userId: null,
+            action: "STRIPE_PAYMENT_COMPLETED",
+            entityType: "Booking",
+            entityId: String(bookingId),
+            details: {
+              sessionId: session.id,
+              paymentIntent: session.payment_intent,
+              paymentId: payment.id,
+              invoiceId: invoice.id,
+              invoiceNo: invoice.invoiceNo,
+            },
+          },
+        });
+
+        const customerBookingUrl = `${
+          process.env.FRONTEND_URL || "http://localhost:5173"
+        }/customer/bookings/${updatedBooking.id}`;
+
+        await notifyCustomerByBooking({
+          booking: updatedBooking,
+          title: "Payment confirmed",
+          message: `Your Stripe payment for booking ${
+            updatedBooking.bookingCode || updatedBooking.id
+          } has been confirmed.`,
+          type: "PAYMENT_CONFIRMED",
+          emailSubject: `Payment Confirmed - ${
+            updatedBooking.bookingCode || updatedBooking.id
+          }`,
+          emailHtml: paymentConfirmedTemplate({
+            booking: updatedBooking,
+            customerUrl: customerBookingUrl,
+          }),
+        });
+
+        const customerInvoiceUrl = `${
+          process.env.FRONTEND_URL || "http://localhost:5173"
+        }/customer/invoices`;
+
+        await notifyCustomerByBooking({
+          booking: updatedBooking,
+          title: "Invoice generated",
+          message: `Invoice ${invoice.invoiceNo} has been generated for booking ${
+            updatedBooking.bookingCode || updatedBooking.id
+          }.`,
+          type: "INVOICE_SENT",
+          emailSubject: `Invoice ${invoice.invoiceNo} - ${
+            updatedBooking.bookingCode || updatedBooking.id
+          }`,
+          emailHtml: invoiceSentTemplate({
+            invoice,
+            booking: updatedBooking,
+            customerUrl: customerInvoiceUrl,
+          }),
+        });
+
+        console.log(`[Stripe] Booking ${bookingId} marked as PAID.`);
+      } catch (err) {
+        console.error("[Stripe] Webhook processing error:", err.message);
       }
     }
 
@@ -104,45 +182,72 @@ router.post(
   }
 );
 
-// ── POST /api/stripe/checkout — create a Stripe Checkout session ──────────────
 router.post("/checkout", express.json(), async (req, res, next) => {
   try {
-    const { bookingId } = req.body;
-    if (!bookingId) return res.status(400).json({ message: "bookingId required" });
+    const bookingId = parseBookingId(req.body.bookingId);
+
+    if (!bookingId) {
+      return res.status(400).json({ message: "Valid bookingId is required" });
+    }
+
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.status(500).json({
+        message: "STRIPE_SECRET_KEY is not configured",
+      });
+    }
 
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { customer: true, operator: true },
+      include: {
+        customer: true,
+        operator: true,
+      },
     });
 
-    if (!booking) return res.status(404).json({ message: "Booking not found" });
-    if (booking.status === "PAID") return res.status(400).json({ message: "Already paid" });
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
 
-    const stripe  = new Stripe(process.env.STRIPE_SECRET_KEY);
+    if (booking.status === "PAID") {
+      return res.status(400).json({ message: "This booking is already paid" });
+    }
+
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      mode:                 "payment",
-      customer_email:       booking.customer.email,
-      line_items: [{
-        quantity: 1,
-        price_data: {
-          currency:     "myr",
-          unit_amount:  Math.round(Number(booking.totalAmount) * 100),
-          product_data: {
-            name:        booking.serviceName,
-            description: `Booking via ${booking.operator.companyName}`,
+      mode: "payment",
+      customer_email: booking.customer.email,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "myr",
+            unit_amount: Math.round(Number(booking.totalAmount) * 100),
+            product_data: {
+              name: booking.serviceName,
+              description: `Booking via ${booking.operator.companyName}`,
+            },
           },
         },
-      }],
-      metadata: { bookingId: booking.id },
-      success_url: `${process.env.FRONTEND_URL}/customer/bookings/${bookingId}?payment=success`,
-      cancel_url:  `${process.env.FRONTEND_URL}/customer/bookings/${bookingId}?payment=cancelled`,
+      ],
+      metadata: {
+        bookingId: String(booking.id),
+      },
+      success_url: `${
+        process.env.FRONTEND_URL || "http://localhost:5173"
+      }/customer/payment-status/${booking.id}?payment=success`,
+      cancel_url: `${
+        process.env.FRONTEND_URL || "http://localhost:5173"
+      }/customer/checkout/${booking.id}?payment=cancelled`,
     });
 
-    res.json({ url: session.url });
+    res.json({
+      url: session.url,
+    });
   } catch (err) {
     next(err);
   }
 });
 
-export default router;
+export default router; 

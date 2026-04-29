@@ -1,5 +1,5 @@
 import prisma from "../config/db.js";
-import { generateInvoiceId } from "../utils/generateInvoiceId.js";
+import { generateInvoiceForBooking } from "../services/invoice_service.js";
 import {
   notifyCustomerByBooking,
 } from "../services/notification_email_service.js";
@@ -717,23 +717,12 @@ export async function approvePayment(req, res, next) {
       });
     }
 
-    const invoice = await prisma.invoice.upsert({
-      where: {
-        bookingId: payment.bookingId,
-      },
-      create: {
-        bookingId: payment.bookingId,
-        invoiceNo: generateInvoiceId(),
-        amount: payment.amount,
-        status: "SENT",
-        sentAt: new Date(),
-      },
-      update: {
-        amount: payment.amount,
-        status: "SENT",
-        sentAt: new Date(),
-      },
-    });
+    const invoice = await generateInvoiceForBooking(
+      payment.bookingId,
+      payment.amount,
+      prisma,
+      { status: "SENT" }
+    );
 
     const updatedBooking = await prisma.booking.update({
       where: { id: payment.bookingId },
@@ -1037,23 +1026,12 @@ export async function resendInvoiceByPayment(req, res, next) {
       });
     }
 
-    const invoice = await prisma.invoice.upsert({
-      where: {
-        bookingId: payment.bookingId,
-      },
-      create: {
-        bookingId: payment.bookingId,
-        invoiceNo: generateInvoiceId(),
-        amount: payment.amount,
-        status: "SENT",
-        sentAt: new Date(),
-      },
-      update: {
-        amount: payment.amount,
-        status: "SENT",
-        sentAt: new Date(),
-      },
-    });
+    const invoice = await generateInvoiceForBooking(
+      payment.bookingId,
+      payment.amount,
+      prisma,
+      { status: "SENT" }
+    );
 
     const booking = await prisma.booking.findUnique({
       where: {
