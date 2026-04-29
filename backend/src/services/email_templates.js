@@ -256,20 +256,128 @@ export function invoiceSentTemplate({ invoice, booking, customerUrl }) {
   });
 }
 
+function receiptNo(payment) {
+  const paidDate = payment.paidAt || payment.updatedAt || payment.createdAt || new Date();
+  const year = new Date(paidDate).getFullYear();
+  return `RCP-${year}${String(payment.id || 0).padStart(4, "0")}`;
+}
+
+function paymentType(booking, payment) {
+  const total = Number(booking.totalAmount || 0);
+  const paid = Number(payment.amount || 0);
+  return paid < total ? "Deposit" : "Full Payment";
+}
+
+function balanceRemaining(booking, payment) {
+  return Math.max(Number(booking.totalAmount || 0) - Number(payment.amount || 0), 0);
+}
+
 export function paymentReceiptTemplate({ booking, payment, customerUrl }) {
+  const balance = balanceRemaining(booking, payment);
+  const operator = booking.operator || {};
+
   return baseTemplate({
-    title: "Payment Receipt",
+    title: "Official Payment Receipt",
     buttonText: "View Booking",
     buttonUrl: customerUrl,
     body: `
-      <p>Dear ${booking.customer?.name || "Customer"},</p>
-      <p>This is your payment receipt confirmation for booking <strong>${
+      <div style="border:1px solid #e5e7eb;border-radius:18px;padding:20px;background:#ffffff;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td>
+              <p style="margin:0 0 6px;color:#2563eb;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;">
+                Book Now Pay Later
+              </p>
+              <h2 style="margin:0;color:#111827;">Official Receipt</h2>
+              <p style="margin:6px 0 0;color:#64748b;">${operator.companyName || "Merchant"}</p>
+              <p style="margin:3px 0 0;color:#64748b;">${operator.email || ""} ${operator.phone ? `· ${operator.phone}` : ""}</p>
+            </td>
+            <td style="text-align:right;vertical-align:top;">
+              <strong style="font-size:18px;color:#111827;">${receiptNo(payment)}</strong>
+              <p style="margin:8px 0 0;color:#64748b;">Payment Date</p>
+              <p style="margin:2px 0 0;color:#111827;font-weight:700;">${formatDate(payment.paidAt)}</p>
+            </td>
+          </tr>
+        </table>
+
+        <hr style="border:0;border-top:1px solid #e5e7eb;margin:20px 0;" />
+
+        <h3 style="margin:0 0 10px;color:#111827;">Received From</h3>
+        <p style="margin:0;color:#334155;"><strong>${booking.customer?.name || "Customer"}</strong></p>
+        <p style="margin:4px 0 0;color:#64748b;">${booking.customer?.email || ""}</p>
+
+        <h3 style="margin:22px 0 10px;color:#111827;">Payment Detail</h3>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="padding:9px 0;color:#64748b;">Booking Reference</td>
+            <td style="padding:9px 0;text-align:right;"><strong>${booking.bookingCode || booking.id}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;color:#64748b;">Service</td>
+            <td style="padding:9px 0;text-align:right;"><strong>${booking.serviceName || "-"}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;color:#64748b;">Amount Paid This Transaction</td>
+            <td style="padding:9px 0;text-align:right;"><strong>${formatMoney(payment.amount)}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;color:#64748b;">Payment Method</td>
+            <td style="padding:9px 0;text-align:right;"><strong>${payment.method || "-"}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;color:#64748b;">Transaction ID</td>
+            <td style="padding:9px 0;text-align:right;"><strong>${payment.transactionId || "-"}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;color:#64748b;">Payment Type</td>
+            <td style="padding:9px 0;text-align:right;"><strong>${paymentType(booking, payment)}</strong></td>
+          </tr>
+        </table>
+
+        <h3 style="margin:22px 0 10px;color:#111827;">Summary</h3>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="padding:9px 0;color:#64748b;">Total Booking Value</td>
+            <td style="padding:9px 0;text-align:right;"><strong>${formatMoney(booking.totalAmount)}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;color:#64748b;">Amount Paid To Date</td>
+            <td style="padding:9px 0;text-align:right;"><strong>${formatMoney(payment.amount)}</strong></td>
+          </tr>
+          <tr>
+            <td style="padding:9px 0;color:#64748b;">Balance Remaining</td>
+            <td style="padding:9px 0;text-align:right;"><strong>${formatMoney(balance)}</strong></td>
+          </tr>
+        </table>
+
+        <div style="margin-top:20px;padding:14px;border-radius:14px;background:#eff6ff;color:#1d4ed8;text-align:center;font-weight:700;">
+          This receipt is computer-generated and is valid without signature.
+        </div>
+      </div>
+    `,
+  });
+}
+
+export function merchantPaymentConfirmedTemplate({ booking, payment, operatorUrl }) {
+  return baseTemplate({
+    title: "Payment Confirmed",
+    buttonText: "View Payment",
+    buttonUrl: operatorUrl,
+    body: `
+      <p>Dear Merchant,</p>
+      <p>A customer payment has been confirmed for booking <strong>${
         booking.bookingCode || booking.id
       }</strong>.</p>
 
       <table style="width:100%;border-collapse:collapse;margin-top:16px;">
         <tr>
-          <td style="padding:9px 0;color:#64748b;">Booking ID</td>
+          <td style="padding:9px 0;color:#64748b;">Customer</td>
+          <td style="padding:9px 0;text-align:right;"><strong>${
+            booking.customer?.name || "-"
+          }</strong></td>
+        </tr>
+        <tr>
+          <td style="padding:9px 0;color:#64748b;">Booking Reference</td>
           <td style="padding:9px 0;text-align:right;"><strong>${
             booking.bookingCode || booking.id
           }</strong></td>
@@ -287,12 +395,6 @@ export function paymentReceiptTemplate({ booking, payment, customerUrl }) {
           }</strong></td>
         </tr>
         <tr>
-          <td style="padding:9px 0;color:#64748b;">Payment Status</td>
-          <td style="padding:9px 0;text-align:right;"><strong>${
-            payment.status || "-"
-          }</strong></td>
-        </tr>
-        <tr>
           <td style="padding:9px 0;color:#64748b;">Amount Paid</td>
           <td style="padding:9px 0;text-align:right;"><strong>${formatMoney(
             payment.amount || booking.totalAmount
@@ -307,7 +409,7 @@ export function paymentReceiptTemplate({ booking, payment, customerUrl }) {
       </table>
 
       <p style="margin-top:18px;">
-        Your payment has been verified by the operator.
+        The customer has been issued an official e-receipt.
       </p>
     `,
   });

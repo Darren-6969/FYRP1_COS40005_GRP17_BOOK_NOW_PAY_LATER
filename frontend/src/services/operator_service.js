@@ -67,11 +67,15 @@ export const operatorService = {
   },
 
   getInvoices(params = {}) {
-    return api.get("/operators/invoices", { params });
+    return api.get("/invoices", { params });
   },
 
   sendInvoice(id) {
-    return api.patch(`/operators/invoices/${id}/send`);
+    return api.post(`/invoices/${id}/send`);
+  },
+
+  voidInvoice(id) {
+    return api.patch(`/invoices/${id}/void`);
   },
 
   getNotifications() {

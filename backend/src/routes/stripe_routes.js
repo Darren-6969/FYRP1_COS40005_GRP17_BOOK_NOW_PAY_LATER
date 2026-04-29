@@ -2,9 +2,13 @@ import express from "express";
 import Stripe from "stripe";
 import prisma from "../config/db.js";
 import { generateInvoiceForBooking } from "../services/invoice_service.js";
-import { notifyCustomerByBooking } from "../services/notification_email_service.js";
+import { 
+  notifyCustomerByBooking,
+  notifyOperatorUsersByBooking,
+ } from "../services/notification_email_service.js";
 import {
   invoiceSentTemplate,
+  merchantPaymentConfirmedTemplate,
   paymentConfirmedTemplate,
 } from "../services/email_templates.js";
 
@@ -137,38 +141,39 @@ router.post(
 
         await notifyCustomerByBooking({
           booking: updatedBooking,
+          title: "E-receipt issued",
+          message: `Your official payment receipt for booking ${
+            updatedBooking.bookingCode || updatedBooking.id
+          } has been issued.`,
+          type: "PAYMENT_RECEIPT_ISSUED",
+          emailSubject: `Official Receipt - ${
+            updatedBooking.bookingCode || updatedBooking.id
+          }`,
+          emailHtml: paymentReceiptTemplate({
+            booking: updatedBooking,
+            payment,
+            customerUrl: customerBookingUrl,
+          }),
+        });
+
+        const operatorPaymentUrl = `${
+          process.env.FRONTEND_URL || "http://localhost:5173"
+        }/operator/payment-verification`;
+
+        await notifyOperatorUsersByBooking({
+          booking: updatedBooking,
           title: "Payment confirmed",
-          message: `Your Stripe payment for booking ${
+          message: `Stripe payment for booking ${
             updatedBooking.bookingCode || updatedBooking.id
           } has been confirmed.`,
           type: "PAYMENT_CONFIRMED",
           emailSubject: `Payment Confirmed - ${
             updatedBooking.bookingCode || updatedBooking.id
           }`,
-          emailHtml: paymentConfirmedTemplate({
+          emailHtml: merchantPaymentConfirmedTemplate({
             booking: updatedBooking,
-            customerUrl: customerBookingUrl,
-          }),
-        });
-
-        const customerInvoiceUrl = `${
-          process.env.FRONTEND_URL || "http://localhost:5173"
-        }/customer/invoices`;
-
-        await notifyCustomerByBooking({
-          booking: updatedBooking,
-          title: "Invoice generated",
-          message: `Invoice ${invoice.invoiceNo} has been generated for booking ${
-            updatedBooking.bookingCode || updatedBooking.id
-          }.`,
-          type: "INVOICE_SENT",
-          emailSubject: `Invoice ${invoice.invoiceNo} - ${
-            updatedBooking.bookingCode || updatedBooking.id
-          }`,
-          emailHtml: invoiceSentTemplate({
-            invoice,
-            booking: updatedBooking,
-            customerUrl: customerInvoiceUrl,
+            payment,
+            operatorUrl: operatorPaymentUrl,
           }),
         });
 

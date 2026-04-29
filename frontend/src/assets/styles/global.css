@@ -57,3 +57,16 @@ img {
   border-radius: 8px;
   min-width: 260px;
 } 
+
+.pdf-document {
+  background: white;
+  color: #0f172a;
+  padding: 6px;
+}
+
+.pdf-document .document-header,
+.pdf-document .document-grid,
+.pdf-document .document-section,
+.pdf-document .document-footer {
+  break-inside: avoid;
+}

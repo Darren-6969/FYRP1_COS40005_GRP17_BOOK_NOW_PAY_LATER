@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { getInvoices, sendInvoice, voidInvoice } from "../../services/invoice_service";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  getInvoices,
+  sendInvoice,
+  voidInvoice,
+} from "../../services/invoice_service";
+import { downloadElementAsPdf } from "../../utils/pdfUtils";
 
 function money(value) {
   return `RM ${Number(value || 0).toFixed(2)}`;
@@ -24,6 +29,8 @@ function statusClass(status) {
 }
 
 export default function Invoices() {
+  const documentRef = useRef(null);
+
   const [invoices, setInvoices] = useState([]);
   const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState("");
@@ -70,15 +77,31 @@ export default function Invoices() {
   };
 
   const handleVoid = async (id) => {
-    if (!window.confirm("Void this invoice? This is an admin override.")) return;
+    if (!window.confirm("Void this invoice? This is an admin override.")) {
+      return;
+    }
 
     await voidInvoice(id);
     await load();
     setSelected(null);
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handleDownloadSelected = async () => {
+    await downloadElementAsPdf(
+      documentRef.current,
+      `${selected?.invoiceNo || "invoice"}.pdf`
+    );
+  };
+
+  const handleDownloadFromRow = async (invoice) => {
+    setSelected(invoice);
+
+    setTimeout(async () => {
+      await downloadElementAsPdf(
+        documentRef.current,
+        `${invoice.invoiceNo || "invoice"}.pdf`
+      );
+    }, 150);
   };
 
   return (
@@ -98,7 +121,10 @@ export default function Invoices() {
             onChange={(event) => setQuery(event.target.value)}
           />
 
-          <select value={status} onChange={(event) => setStatus(event.target.value)}>
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+          >
             <option value="ALL">All Status</option>
             <option value="PAID">Paid</option>
             <option value="PARTIAL">Partial</option>
@@ -140,19 +166,32 @@ export default function Invoices() {
                     <td>{date(invoice.dueDate)}</td>
                     <td>{money(invoice.amount)}</td>
                     <td>
-                      <span className={`invoice-status ${statusClass(invoiceStatus)}`}>
+                      <span
+                        className={`invoice-status ${statusClass(invoiceStatus)}`}
+                      >
                         {String(invoiceStatus).replaceAll("_", " ")}
                       </span>
                     </td>
                     <td>
                       <div className="actions">
-                        <button className="btn" onClick={() => setSelected(invoice)}>
+                        <button
+                          className="btn"
+                          onClick={() => setSelected(invoice)}
+                        >
                           View
                         </button>
-                        <button className="btn" onClick={handlePrint}>
+
+                        <button
+                          className="btn"
+                          onClick={() => handleDownloadFromRow(invoice)}
+                        >
                           Download PDF
                         </button>
-                        <button className="btn primary" onClick={() => handleSend(invoice.id)}>
+
+                        <button
+                          className="btn primary"
+                          onClick={() => handleSend(invoice.id)}
+                        >
                           Resend Email
                         </button>
                       </div>
@@ -172,104 +211,137 @@ export default function Invoices() {
       </section>
 
       {selected && (
-        <div className="admin-modal-backdrop" onClick={() => setSelected(null)}>
-          <div className="admin-document-modal printable-document" onClick={(event) => event.stopPropagation()}>
-            <div className="document-header">
-              <div>
-                {selected.operatorLogoUrl ? (
-                  <img className="document-logo" src={selected.operatorLogoUrl} alt="Merchant logo" />
-                ) : (
-                  <div className="document-logo-placeholder">BNPL</div>
-                )}
-                <h2>Invoice</h2>
-                <p>{selected.operatorName}</p>
-                <p>{selected.operatorEmail} {selected.operatorPhone ? `· ${selected.operatorPhone}` : ""}</p>
-              </div>
-
-              <div className="document-meta">
-                <strong>{selected.invoiceNo}</strong>
-                <span>Issue Date: {date(selected.issuedAt)}</span>
-                <span>Due Date: {date(selected.dueDate)}</span>
-              </div>
-            </div>
-
-            <div className="document-grid">
-              <section>
-                <h4>Bill To</h4>
-                <p>{selected.customerName}</p>
-                <p>{selected.customerEmail}</p>
-              </section>
-
-              <section>
-                <h4>Booking Summary</h4>
-                <p>Booking Ref: {selected.bookingCode}</p>
-                <p>{selected.booking?.serviceName}</p>
-                <p>
-                  Pickup: {dateTime(selected.booking?.pickupDate)}<br />
-                  Return: {dateTime(selected.booking?.returnDate)}
-                </p>
-              </section>
-            </div>
-
-            <section className="document-section">
-              <h4>Payment Breakdown</h4>
-              <table className="table document-table">
-                <tbody>
-                  <tr>
-                    <td>Subtotal</td>
-                    <td>{money(selected.subtotal)}</td>
-                  </tr>
-                  <tr>
-                    <td>Deposit Required / Paid</td>
-                    <td>{money(selected.depositRequired || selected.amountPaid)}</td>
-                  </tr>
-                  <tr>
-                    <td>Balance Remaining</td>
-                    <td>{money(selected.balanceRemaining)}</td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Total Amount Due</strong>
-                    </td>
-                    <td>
-                      <strong>{money(selected.totalAmountDue)}</strong>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
-
-            <section className="document-section">
-              <h4>Payment Status</h4>
-              <span className={`invoice-status ${statusClass(selected.displayStatus || selected.status)}`}>
-                {selected.displayStatus || selected.status}
-              </span>
-
-              <div className="document-timeline">
+        <div
+          className="admin-modal-backdrop"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="admin-document-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div ref={documentRef} className="pdf-document">
+              <div className="document-header">
                 <div>
-                  <strong>Invoice Issued</strong>
-                  <span>{dateTime(selected.issuedAt)}</span>
+                  {selected.operatorLogoUrl ? (
+                    <img
+                      className="document-logo"
+                      src={selected.operatorLogoUrl}
+                      alt="Merchant logo"
+                    />
+                  ) : (
+                    <div className="document-logo-placeholder">BNPL</div>
+                  )}
+
+                  <h2>Invoice</h2>
+                  <p>{selected.operatorName}</p>
+                  <p>
+                    {selected.operatorEmail}{" "}
+                    {selected.operatorPhone ? `· ${selected.operatorPhone}` : ""}
+                  </p>
                 </div>
-                {selected.booking?.payment?.paidAt && (
-                  <div>
-                    <strong>Payment Received</strong>
-                    <span>{dateTime(selected.booking.payment.paidAt)}</span>
-                  </div>
-                )}
+
+                <div className="document-meta">
+                  <strong>{selected.invoiceNo}</strong>
+                  <span>Issue Date: {date(selected.issuedAt)}</span>
+                  <span>Due Date: {date(selected.dueDate)}</span>
+                </div>
               </div>
-            </section>
+
+              <div className="document-grid">
+                <section>
+                  <h4>Bill To</h4>
+                  <p>{selected.customerName}</p>
+                  <p>{selected.customerEmail}</p>
+                </section>
+
+                <section>
+                  <h4>Booking Summary</h4>
+                  <p>Booking Ref: {selected.bookingCode}</p>
+                  <p>{selected.booking?.serviceName}</p>
+                  <p>
+                    Pickup: {dateTime(selected.booking?.pickupDate)}
+                    <br />
+                    Return: {dateTime(selected.booking?.returnDate)}
+                  </p>
+                </section>
+              </div>
+
+              <section className="document-section">
+                <h4>Payment Breakdown</h4>
+                <table className="table document-table">
+                  <tbody>
+                    <tr>
+                      <td>Subtotal</td>
+                      <td>{money(selected.subtotal)}</td>
+                    </tr>
+                    <tr>
+                      <td>Deposit Required / Paid</td>
+                      <td>
+                        {money(selected.depositRequired || selected.amountPaid)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Balance Remaining</td>
+                      <td>{money(selected.balanceRemaining)}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <strong>Total Amount Due</strong>
+                      </td>
+                      <td>
+                        <strong>{money(selected.totalAmountDue)}</strong>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </section>
+
+              <section className="document-section">
+                <h4>Payment Status</h4>
+                <span
+                  className={`invoice-status ${statusClass(
+                    selected.displayStatus || selected.status
+                  )}`}
+                >
+                  {selected.displayStatus || selected.status}
+                </span>
+
+                <div className="document-timeline">
+                  <div>
+                    <strong>Invoice Issued</strong>
+                    <span>{dateTime(selected.issuedAt)}</span>
+                  </div>
+
+                  {selected.booking?.payment?.paidAt && (
+                    <div>
+                      <strong>Payment Received</strong>
+                      <span>{dateTime(selected.booking.payment.paidAt)}</span>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
 
             <div className="document-actions">
               <button className="btn" onClick={() => setSelected(null)}>
                 Close
               </button>
-              <button className="btn" onClick={handlePrint}>
+
+              <button className="btn" onClick={handleDownloadSelected}>
                 Download as PDF
               </button>
-              <button className="btn primary" onClick={() => handleSend(selected.id)}>
+
+              <button
+                className="btn primary"
+                onClick={() => handleSend(selected.id)}
+              >
                 Resend Email
               </button>
-              <button className="btn danger" onClick={() => handleVoid(selected.id)}>
+
+              <button
+                className="btn danger"
+                onClick={() => handleVoid(selected.id)}
+              >
                 Mark as Void
               </button>
             </div>

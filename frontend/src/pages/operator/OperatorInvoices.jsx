@@ -1,160 +1,343 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   operatorService,
   formatOperatorMoney,
-  formatOperatorDate,
-  operatorStatusClass,
-  operatorStatusLabel,
+  formatOperatorDateTime,
 } from "../../services/operator_service";
+import { downloadElementAsPdf } from "../../utils/pdfUtils";
+
+function money(value) {
+  return formatOperatorMoney(value);
+}
+
+function date(value) {
+  return value ? new Date(value).toLocaleDateString("en-MY") : "-";
+}
+
+function dateTime(value) {
+  return value ? formatOperatorDateTime(value) : "-";
+}
+
+function statusClass(status) {
+  const s = String(status || "").toUpperCase();
+
+  if (s === "PAID") return "paid";
+  if (s === "PARTIAL") return "partial";
+  if (s === "OVERDUE") return "overdue";
+  if (s === "VOID" || s === "CANCELLED") return "void";
+  return "unpaid";
+}
 
 export default function OperatorInvoices() {
+  const documentRef = useRef(null);
+
   const [invoices, setInvoices] = useState([]);
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
-  const [error, setError] = useState("");
 
-  const loadInvoices = async () => {
-    try {
-      setLoading(true);
-      setError("");
+  const load = async () => {
+    setLoading(true);
 
-      const res = await operatorService.getInvoices();
-      const list = res.data.invoices || [];
+    const res = await operatorService.getInvoices();
+    const list = Array.isArray(res.data) ? res.data : res.data?.invoices || [];
 
-      setInvoices(list);
-      setSelectedInvoice(list[0] || null);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to load invoices");
-    } finally {
-      setLoading(false);
-    }
+    setInvoices(list);
+    setLoading(false);
   };
 
   useEffect(() => {
-    loadInvoices();
+    load();
   }, []);
 
-  const handleSendInvoice = async (id) => {
+  const filtered = useMemo(() => {
+    return invoices.filter((invoice) => {
+      const invoiceStatus = invoice.displayStatus || invoice.status;
+      const matchesStatus = status === "ALL" || invoiceStatus === status;
+
+      const text = [
+        invoice.invoiceNo,
+        invoice.customerName,
+        invoice.customerEmail,
+        invoice.bookingCode,
+        invoice.operatorName,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      const matchesQuery = !query || text.includes(query.toLowerCase());
+
+      return matchesStatus && matchesQuery;
+    });
+  }, [invoices, query, status]);
+
+  const handleSend = async (id) => {
     try {
-      setActionLoading(id);
+      setActionLoading(`send-${id}`);
       await operatorService.sendInvoice(id);
-      await loadInvoices();
+      await load();
+      alert("Invoice email resent successfully.");
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to send invoice");
+      alert(err.response?.data?.message || "Failed to resend invoice.");
     } finally {
       setActionLoading("");
     }
+  };
+
+  const handleDownload = async (invoice) => {
+    setSelected(invoice);
+
+    setTimeout(async () => {
+      await downloadElementAsPdf(
+        documentRef.current,
+        `${invoice.invoiceNo || "invoice"}.pdf`
+      );
+    }, 100);
   };
 
   return (
     <div className="operator-page">
       <section className="operator-page-head">
         <div>
-          <h1>Invoice Management</h1>
-          <p>View, download, and send invoices to customers.</p>
+          <h1>Invoice List</h1>
+          <p>View, download, and resend invoices for your bookings.</p>
         </div>
       </section>
 
-      {error && (
-        <div className="operator-alert danger">
-          {error}
-          <button type="button" onClick={loadInvoices}>Retry</button>
+      <section className="operator-card">
+        <div className="admin-filter-row invoice-filter-row">
+          <input
+            placeholder="Search customer, booking ref, invoice no..."
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+          >
+            <option value="ALL">All Status</option>
+            <option value="PAID">Paid</option>
+            <option value="PARTIAL">Partial</option>
+            <option value="OVERDUE">Overdue</option>
+            <option value="GENERATED">Unpaid / Generated</option>
+            <option value="VOID">Void</option>
+          </select>
         </div>
-      )}
 
-      <section className="operator-invoice-grid">
-        <div className="operator-card">
-          {loading ? (
-            <div className="operator-empty-state">Loading invoices...</div>
-          ) : (
-            <div className="operator-table-wrap">
-              <table className="operator-table">
-                <thead>
-                  <tr>
-                    <th>Invoice ID</th>
-                    <th>Booking ID</th>
-                    <th>Customer</th>
-                    <th>Issue Date</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
+        {loading ? (
+          <div className="operator-empty-state">Loading invoices...</div>
+        ) : (
+          <div className="operator-table-wrap">
+            <table className="operator-table">
+              <thead>
+                <tr>
+                  <th>Invoice No.</th>
+                  <th>Customer Name</th>
+                  <th>Booking Ref</th>
+                  <th>Issue Date</th>
+                  <th>Due Date</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Quick Actions</th>
+                </tr>
+              </thead>
 
-                <tbody>
-                  {invoices.map((invoice) => (
+              <tbody>
+                {filtered.map((invoice) => {
+                  const invoiceStatus = invoice.displayStatus || invoice.status;
+
+                  return (
                     <tr key={invoice.id}>
-                      <td>{invoice.invoiceNo}</td>
-                      <td>{invoice.bookingId}</td>
-                      <td>{invoice.booking?.customer?.name || "-"}</td>
-                      <td>{formatOperatorDate(invoice.issuedAt)}</td>
-                      <td>{formatOperatorMoney(invoice.amount)}</td>
                       <td>
-                        <span className={`operator-status ${operatorStatusClass(invoice.status)}`}>
-                          {operatorStatusLabel(invoice.status)}
+                        <strong>{invoice.invoiceNo}</strong>
+                      </td>
+                      <td>{invoice.customerName}</td>
+                      <td>{invoice.bookingCode}</td>
+                      <td>{date(invoice.issuedAt)}</td>
+                      <td>{date(invoice.dueDate)}</td>
+                      <td>{money(invoice.amount)}</td>
+                      <td>
+                        <span className={`invoice-status ${statusClass(invoiceStatus)}`}>
+                          {String(invoiceStatus).replaceAll("_", " ")}
                         </span>
                       </td>
                       <td>
-                        <div className="operator-table-actions">
-                          <button type="button" onClick={() => setSelectedInvoice(invoice)}>
+                        <div className="operator-paid-actions">
+                          <button
+                            type="button"
+                            className="operator-mini-action secondary"
+                            onClick={() => setSelected(invoice)}
+                          >
                             View
                           </button>
 
                           <button
                             type="button"
-                            disabled={!!actionLoading}
-                            onClick={() => handleSendInvoice(invoice.id)}
+                            className="operator-mini-action secondary"
+                            onClick={() => handleDownload(invoice)}
                           >
-                            Send
+                            Download PDF
+                          </button>
+
+                          <button
+                            type="button"
+                            className="operator-mini-action primary"
+                            disabled={!!actionLoading}
+                            onClick={() => handleSend(invoice.id)}
+                          >
+                            Resend Email
                           </button>
                         </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  );
+                })}
 
-              {!invoices.length && (
-                <div className="operator-empty-state">
-                  No invoices found from backend.
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <aside className="operator-card operator-invoice-preview">
-          <h2>Invoice Preview</h2>
-
-          {selectedInvoice ? (
-            <>
-              <Info label="Invoice No" value={selectedInvoice.invoiceNo} />
-              <Info label="Booking ID" value={selectedInvoice.bookingId} />
-              <Info label="Customer" value={selectedInvoice.booking?.customer?.name || "-"} />
-              <Info label="Status" value={operatorStatusLabel(selectedInvoice.status)} />
-              <Info label="Total" value={formatOperatorMoney(selectedInvoice.amount)} strong />
-
-              {selectedInvoice.pdfUrl && (
-                <a className="operator-secondary-btn" href={selectedInvoice.pdfUrl} target="_blank" rel="noreferrer">
-                  Download PDF
-                </a>
-              )}
-            </>
-          ) : (
-            <div className="operator-empty-state">Select an invoice to preview.</div>
-          )}
-        </aside>
+                {!filtered.length && (
+                  <tr>
+                    <td colSpan="8">No invoices found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
-    </div>
-  );
-}
 
-function Info({ label, value, strong }) {
-  return (
-    <div className="operator-info-row">
-      <span>{label}</span>
-      <strong className={strong ? "strong" : ""}>{value}</strong>
+      {selected && (
+        <div className="admin-modal-backdrop" onClick={() => setSelected(null)}>
+          <div
+            className="admin-document-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div ref={documentRef} className="pdf-document">
+              <div className="document-header">
+                <div>
+                  {selected.operatorLogoUrl ? (
+                    <img
+                      className="document-logo"
+                      src={selected.operatorLogoUrl}
+                      alt="Merchant logo"
+                    />
+                  ) : (
+                    <div className="document-logo-placeholder">BNPL</div>
+                  )}
+
+                  <h2>Invoice</h2>
+                  <p>{selected.operatorName}</p>
+                  <p>
+                    {selected.operatorEmail}
+                    {selected.operatorPhone ? ` · ${selected.operatorPhone}` : ""}
+                  </p>
+                </div>
+
+                <div className="document-meta">
+                  <strong>{selected.invoiceNo}</strong>
+                  <span>Issue Date: {date(selected.issuedAt)}</span>
+                  <span>Due Date: {date(selected.dueDate)}</span>
+                </div>
+              </div>
+
+              <div className="document-grid">
+                <section>
+                  <h4>Bill To</h4>
+                  <p>{selected.customerName}</p>
+                  <p>{selected.customerEmail}</p>
+                </section>
+
+                <section>
+                  <h4>Booking Summary</h4>
+                  <p>Booking Ref: {selected.bookingCode}</p>
+                  <p>{selected.booking?.serviceName}</p>
+                  <p>
+                    Pickup: {dateTime(selected.booking?.pickupDate)}
+                    <br />
+                    Return: {dateTime(selected.booking?.returnDate)}
+                  </p>
+                </section>
+              </div>
+
+              <section className="document-section">
+                <h4>Payment Breakdown</h4>
+                <table className="table document-table">
+                  <tbody>
+                    <tr>
+                      <td>Subtotal</td>
+                      <td>{money(selected.subtotal)}</td>
+                    </tr>
+                    <tr>
+                      <td>Deposit Required / Paid</td>
+                      <td>{money(selected.depositRequired || selected.amountPaid)}</td>
+                    </tr>
+                    <tr>
+                      <td>Balance Remaining</td>
+                      <td>{money(selected.balanceRemaining)}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <strong>Total Amount Due</strong>
+                      </td>
+                      <td>
+                        <strong>{money(selected.totalAmountDue)}</strong>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </section>
+
+              <section className="document-section">
+                <h4>Payment Status</h4>
+                <span className={`invoice-status ${statusClass(selected.displayStatus || selected.status)}`}>
+                  {selected.displayStatus || selected.status}
+                </span>
+
+                <div className="document-timeline">
+                  <div>
+                    <strong>Invoice Issued</strong>
+                    <span>{dateTime(selected.issuedAt)}</span>
+                  </div>
+
+                  {selected.booking?.payment?.paidAt && (
+                    <div>
+                      <strong>Payment Received</strong>
+                      <span>{dateTime(selected.booking.payment.paidAt)}</span>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
+
+            <div className="document-actions">
+              <button className="btn" onClick={() => setSelected(null)}>
+                Close
+              </button>
+
+              <button
+                className="btn"
+                onClick={() =>
+                  downloadElementAsPdf(
+                    documentRef.current,
+                    `${selected.invoiceNo || "invoice"}.pdf`
+                  )
+                }
+              >
+                Download PDF
+              </button>
+
+              <button
+                className="btn primary"
+                onClick={() => handleSend(selected.id)}
+              >
+                Resend Email
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

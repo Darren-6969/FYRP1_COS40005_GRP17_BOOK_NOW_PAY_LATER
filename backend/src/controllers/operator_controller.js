@@ -4,12 +4,13 @@ import { sendEmail } from "../services/email_service.js";
 import { generateInvoiceForBooking } from "../services/invoice_service.js";
 import {
   notifyCustomerByBooking,
+  notifyOperatorUsersByBooking,
 } from "../services/notification_email_service.js";
 import {
   alternativeSuggestionTemplate,
   bookingStatusTemplate,
   invoiceSentTemplate,
-  paymentConfirmedTemplate,
+  merchantPaymentConfirmedTemplate,
   paymentReceiptTemplate,
   paymentRequestTemplate,
 } from "../services/email_templates.js";
@@ -883,40 +884,41 @@ export async function approvePayment(req, res, next) {
       process.env.FRONTEND_URL || "http://localhost:5173"
     }/customer/bookings/${updatedBooking.id}`;
 
-    await createCustomerNotification({
+    await notifyCustomerByBooking({
       booking: updatedBooking,
-      title: "Payment confirmed",
-      message: `Your payment for booking ${
+      title: "E-receipt issued",
+      message: `Your official payment receipt for booking ${
         updatedBooking.bookingCode || updatedBooking.id
-      } has been confirmed.`,
-      type: "PAYMENT_APPROVED",
-      emailSubject: `Payment Confirmed - ${
+      } has been issued.`,
+      type: "PAYMENT_RECEIPT_ISSUED",
+      emailSubject: `Official Receipt - ${
         updatedBooking.bookingCode || updatedBooking.id
       }`,
-      emailHtml: paymentConfirmedTemplate({
+      emailHtml: paymentReceiptTemplate({
         booking: updatedBooking,
+        payment: updatedPayment,
         customerUrl: customerBookingUrl,
       }),
     });
 
-    const customerInvoiceUrl = `${
+    const operatorPaymentUrl = `${
       process.env.FRONTEND_URL || "http://localhost:5173"
-    }/customer/invoices`;
+    }/operator/payment-verification`;
 
-    await createCustomerNotification({
+    await notifyOperatorUsersByBooking({
       booking: updatedBooking,
-      title: "Invoice generated",
-      message: `Invoice ${invoice.invoiceNo} has been generated for booking ${
+      title: "Payment confirmed",
+      message: `Payment for booking ${
         updatedBooking.bookingCode || updatedBooking.id
-      }.`,
-      type: "INVOICE_SENT",
-      emailSubject: `Invoice ${invoice.invoiceNo} - ${
+      } has been confirmed.`,
+      type: "PAYMENT_CONFIRMED",
+      emailSubject: `Payment Confirmed - ${
         updatedBooking.bookingCode || updatedBooking.id
       }`,
-      emailHtml: invoiceSentTemplate({
-        invoice,
+      emailHtml: merchantPaymentConfirmedTemplate({
         booking: updatedBooking,
-        customerUrl: customerInvoiceUrl,
+        payment: updatedPayment,
+        operatorUrl: operatorPaymentUrl,
       }),
     });
 
