@@ -9,6 +9,7 @@ import {
   Receipt,
   CreditCard,
   Settings,
+  Mail,
 } from "lucide-react";
 
 const links = [
@@ -21,6 +22,7 @@ const links = [
     { to: "/master/sales-report", label: "Sales Report", icon: BarChart2 },
     { to: "/master/cron-jobs", label: "Cron Jobs", icon: Clock },
     { to: "/master/system-settings", label: "System Settings", icon: Settings },
+    { to: "/master/email-logs", label: "Email Logs", icon: Mail },
     { to: "/master/system-logs", label: "System Logs", icon: FileText }
 ];
 

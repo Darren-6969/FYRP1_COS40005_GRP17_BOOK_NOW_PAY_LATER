@@ -1,91 +1,179 @@
 import { useEffect, useState } from "react";
 import {
-  getBNPLConfig,
+  getBNPLConfigs,
   updateBNPLConfig,
-} from "../../services/system_service";
+} from "../../services/admin_service";
 
 export default function SystemSettings() {
-  const [config, setConfig] = useState({
-    paymentDeadlineDays: 3,
-    allowReceiptUpload: true,
-    autoCancelOverdue: true,
-  });
+  const [configs, setConfigs] = useState([]);
+  const [selectedOperatorId, setSelectedOperatorId] = useState("");
+  const [form, setForm] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
 
-  const [loading, setLoading] = useState(false);
+  const load = async () => {
+    setLoading(true);
+    const res = await getBNPLConfigs();
+    const items = res.data?.configs || [];
+
+    setConfigs(items);
+
+    if (items.length) {
+      setSelectedOperatorId(String(items[0].operatorId));
+      setForm(items[0]);
+    }
+
+    setLoading(false);
+  };
 
   useEffect(() => {
-    getBNPLConfig().then((res) => {
-      if (res.data) setConfig(res.data);
-    });
+    load();
   }, []);
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+  const handleSelect = (event) => {
+    const operatorId = event.target.value;
+    const selected = configs.find((item) => String(item.operatorId) === operatorId);
 
-    setConfig((prev) => ({
+    setSelectedOperatorId(operatorId);
+    setForm(selected || null);
+    setMessage("");
+  };
+
+  const handleChange = (event) => {
+    const { name, value, type, checked } = event.target;
+
+    setForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : Number(value),
+      [name]: type === "checkbox" ? checked : value,
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-    await updateBNPLConfig(config);
+    if (!form?.operatorId) return;
 
-    setLoading(false);
-    alert("Settings updated successfully");
+    setSaving(true);
+    setMessage("");
+
+    try {
+      const payload = {
+        paymentDeadlineDays: Number(form.paymentDeadlineDays),
+        allowReceiptUpload: Boolean(form.allowReceiptUpload),
+        autoCancelOverdue: Boolean(form.autoCancelOverdue),
+        invoiceLogoUrl: form.invoiceLogoUrl || "",
+        invoiceFooterText: form.invoiceFooterText || "",
+        manualPaymentNote: form.manualPaymentNote || "",
+      };
+
+      await updateBNPLConfig(form.operatorId, payload);
+
+      setMessage("BNPL settings updated successfully.");
+      await load();
+    } catch (err) {
+      setMessage(err.response?.data?.message || "Failed to update settings.");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return <section className="card">Loading settings...</section>;
+  }
 
   return (
     <section className="card">
-      <h3>BNPL System Settings</h3>
-
-      <form onSubmit={handleSubmit} className="settings-form">
-        {/* Deadline */}
-        <div className="form-group">
-          <label>Payment Deadline (Days)</label>
-          <input
-            type="number"
-            name="paymentDeadlineDays"
-            value={config.paymentDeadlineDays}
-            onChange={handleChange}
-            className="input"
-            min={1}
-          />
+      <div className="section-header">
+        <div>
+          <h3>System Settings</h3>
+          <p>Configure BNPL behaviour for each operator/host.</p>
         </div>
+      </div>
 
-        {/* Allow receipt upload */}
-        <div className="form-group">
+      {message && <div className="alert">{message}</div>}
+
+      <label className="admin-field">
+        <span>Operator / Host</span>
+        <select value={selectedOperatorId} onChange={handleSelect}>
+          {configs.map((config) => (
+            <option key={config.operatorId} value={config.operatorId}>
+              {config.operator?.companyName || `Operator ${config.operatorId}`}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {form && (
+        <form className="admin-form-grid" onSubmit={handleSubmit}>
           <label>
+            <span>Payment Deadline Days</span>
+            <input
+              type="number"
+              min="1"
+              name="paymentDeadlineDays"
+              value={form.paymentDeadlineDays || 3}
+              onChange={handleChange}
+            />
+          </label>
+
+          <label>
+            <span>Invoice Logo URL</span>
+            <input
+              name="invoiceLogoUrl"
+              value={form.invoiceLogoUrl || ""}
+              onChange={handleChange}
+              placeholder="https://..."
+            />
+          </label>
+
+          <label className="wide">
+            <span>Invoice Footer Text</span>
+            <textarea
+              name="invoiceFooterText"
+              value={form.invoiceFooterText || ""}
+              onChange={handleChange}
+              placeholder="Thank you for your booking."
+            />
+          </label>
+
+          <label className="wide">
+            <span>Manual Payment Note</span>
+            <textarea
+              name="manualPaymentNote"
+              value={form.manualPaymentNote || ""}
+              onChange={handleChange}
+              placeholder="DuitNow/SPay payment instructions"
+            />
+          </label>
+
+          <label className="admin-checkbox">
             <input
               type="checkbox"
               name="allowReceiptUpload"
-              checked={config.allowReceiptUpload}
+              checked={Boolean(form.allowReceiptUpload)}
               onChange={handleChange}
             />
-            Allow Receipt Upload
+            <span>Allow manual receipt upload</span>
           </label>
-        </div>
 
-        {/* Auto cancel */}
-        <div className="form-group">
-          <label>
+          <label className="admin-checkbox">
             <input
               type="checkbox"
               name="autoCancelOverdue"
-              checked={config.autoCancelOverdue}
+              checked={Boolean(form.autoCancelOverdue)}
               onChange={handleChange}
             />
-            Auto Cancel Overdue Bookings
+            <span>Auto-mark unpaid bookings as overdue</span>
           </label>
-        </div>
 
-        <button className="btn primary" disabled={loading}>
-          {loading ? "Saving..." : "Save Settings"}
-        </button>
-      </form>
+          <div className="admin-form-actions">
+            <button className="btn primary" disabled={saving}>
+              {saving ? "Saving..." : "Save Settings"}
+            </button>
+          </div>
+        </form>
+      )}
     </section>
   );
 }

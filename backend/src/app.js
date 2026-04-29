@@ -14,6 +14,7 @@ import logRoutes        from "./routes/log_routes.js";
 import customerRoutes   from "./routes/customer_routes.js";
 import stripeRoutes     from "./routes/stripe_routes.js";
 import emailRoutes from "./routes/email_routes.js";
+import cronRoutes from "./routes/cron_routes.js";
 
 import { errorHandler }    from "./middlewares/errorHandler.js";
 import { requestLogger }   from "./middlewares/logger_middleware.js";
@@ -74,6 +75,7 @@ app.use("/api/config",    configRoutes);
 app.use("/api/logs",      logRoutes);
 app.use("/api/customer",  customerRoutes);
 app.use("/api/emails", emailRoutes);
+app.use("/api/cron", cronRoutes);
 
 
 // ── Error handler ────────────────────────────────────────────────────────────

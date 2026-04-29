@@ -15,6 +15,8 @@ import SalesReport from "./pages/master/SalesReport";
 import CronJobs from "./pages/master/CronJobs";
 import SystemLogs from "./pages/master/SystemLogs";
 import SystemSettings from "./pages/master/SystemSettings";
+import ProtectedRoute from "./components/ProtectedRoute";
+import EmailLogs from "./pages/master/EmailLogs";
 
 // Customer Pages
 import CustomerLayout from "./pages/customer/layout/CustomerLayout";
@@ -48,49 +50,56 @@ export default function App() {
 
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        // Protected Routes
+          // Master Routes
+          <Route element={<ProtectedRoute allowedRoles={["MASTER_SELLER"]} />}>
+            <Route path="/master" element={<MasterLayout />}>
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="bookings" element={<Bookings />} />
+              <Route path="payments" element={<Payments />} />
+              <Route path="receipts" element={<Receipts />} />
+              <Route path="invoices" element={<Invoices />} />
+              <Route path="operators" element={<Operators />} />
+              <Route path="sales-report" element={<SalesReport />} />
+              <Route path="cron-jobs" element={<CronJobs />} />
+              <Route path="system-logs" element={<SystemLogs />} />
+              <Route path="system-settings" element={<SystemSettings />} />
+              <Route path="email-logs" element={<EmailLogs />} />
+            </Route>
+          </Route>
 
-        // Master Routes
-        <Route path="/master" element={<MasterLayout />}>
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="bookings" element={<Bookings />} />
-          <Route path="payments" element={<Payments />} />
-          <Route path="receipts" element={<Receipts />} />
-          <Route path="invoices" element={<Invoices />} />
-          <Route path="operators" element={<Operators />} />
-          <Route path="sales-report" element={<SalesReport />} />
-          <Route path="cron-jobs" element={<CronJobs />} />
-          <Route path="system-logs" element={<SystemLogs />} />
-          <Route path="system-settings" element={<SystemSettings />} />
-        </Route>
+          // Operator Routes
+          <Route element={<ProtectedRoute allowedRoles={["NORMAL_SELLER", "MASTER_SELLER"]} />}>
+            <Route path="/operator" element={<OperatorLayout />}>
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<OperatorDashboard />} />
+              <Route path="booking-requests" element={<OperatorBookingRequests />} />
+              <Route path="bookings/:id" element={<OperatorBookingDetail />} />
+              <Route path="payment-verification" element={<OperatorPaymentVerification />} />
+              <Route path="booking-log" element={<OperatorBookingLog />} />
+              <Route path="invoices" element={<OperatorInvoices />} />
+              <Route path="sales-report" element={<OperatorSalesReport />} />
+              <Route path="notifications" element={<OperatorNotifications />} />
+              <Route path="settings" element={<OperatorSettings />} />
+            </Route>
+          </Route>
 
-        // Operator Routes
-        <Route path="/operator" element={<OperatorLayout />}>
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<OperatorDashboard />} />
-          <Route path="booking-requests" element={<OperatorBookingRequests />} />
-          <Route path="bookings/:id" element={<OperatorBookingDetail />} />
-          <Route path="payment-verification" element={<OperatorPaymentVerification />} />
-          <Route path="booking-log" element={<OperatorBookingLog />} />
-          <Route path="invoices" element={<OperatorInvoices />} />
-          <Route path="sales-report" element={<OperatorSalesReport />} />
-          <Route path="notifications" element={<OperatorNotifications />} />
-          <Route path="settings" element={<OperatorSettings />} />
-        </Route>
-
-        // Customer Routes
-        <Route path="/customer" element={<CustomerLayout />}>
-          <Route index element={<Navigate to="bookings" replace />} />
-          <Route path="bookings" element={<MyBookings />} />
-          <Route path="bookings/:id" element={<BookingDetail />} />
-          <Route path="checkout/:id" element={<Checkout />} />
-          <Route path="payment-status/:id" element={<PaymentStatus />} />
-          <Route path="upload-receipt/:id" element={<UploadReceipt />} />
-          <Route path="payments" element={<CustomerPayments />} />
-          <Route path="invoices" element={<CustomerInvoices />} />
-          <Route path="notifications" element={<CustomerNotifications />} />
-          <Route path="profile" element={<CustomerProfile />} />
-        </Route>
+          // Customer Routes
+          <Route element={<ProtectedRoute allowedRoles={["CUSTOMER"]} />}>
+            <Route path="/customer" element={<CustomerLayout />}>
+              <Route index element={<Navigate to="bookings" replace />} />
+              <Route path="bookings" element={<MyBookings />} />
+              <Route path="bookings/:id" element={<BookingDetail />} />
+              <Route path="checkout/:id" element={<Checkout />} />
+              <Route path="payment-status/:id" element={<PaymentStatus />} />
+              <Route path="upload-receipt/:id" element={<UploadReceipt />} />
+              <Route path="payments" element={<CustomerPayments />} />
+              <Route path="invoices" element={<CustomerInvoices />} />
+              <Route path="notifications" element={<CustomerNotifications />} />
+              <Route path="profile" element={<CustomerProfile />} />
+            </Route>
+          </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

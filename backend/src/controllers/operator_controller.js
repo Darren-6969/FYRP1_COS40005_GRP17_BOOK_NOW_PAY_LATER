@@ -1,4 +1,6 @@
 import prisma from "../config/db.js";
+import bcrypt from "bcryptjs";
+import { sendEmail } from "../services/email_service.js";
 import { generateInvoiceForBooking } from "../services/invoice_service.js";
 import {
   notifyCustomerByBooking,
@@ -141,19 +143,46 @@ async function generateOperatorCode() {
   return `OPR${String(count + 1).padStart(4, "0")}`;
 }
 
+async function generateUserCode(role) {
+  const prefixMap = {
+    CUSTOMER: "CUS",
+    NORMAL_SELLER: "OPR",
+    MASTER_SELLER: "ADN",
+  };
+
+  const prefix = prefixMap[role] || "USR";
+
+  const count = await prisma.user.count({
+    where: { role },
+  });
+
+  return `${prefix}${String(count + 1).padStart(4, "0")}`;
+}
+
 /**
  * Existing Master Seller operator management
  */
 
 export async function createOperator(req, res, next) {
   try {
-    const { companyName, email, phone, logoUrl } = req.body;
+    const {
+      companyName,
+      email,
+      phone,
+      logoUrl,
+      operatorName,
+      password,
+      sendWelcomeEmail = true,
+    } = req.body;
 
     if (!companyName || !email) {
       return res.status(400).json({
         message: "Company name and email are required",
       });
     }
+
+    const loginPassword = password || "Password123!";
+    const loginName = operatorName || `${companyName} Operator`;
 
     const existingOperator = await prisma.operator.findUnique({
       where: { email },
@@ -165,32 +194,124 @@ export async function createOperator(req, res, next) {
       });
     }
 
-    const operatorCode = await generateOperatorCode();
-
-    const operator = await prisma.operator.create({
-      data: {
-        operatorCode,
-        companyName,
-        email,
-        phone: phone || null,
-        logoUrl: logoUrl || null,
-        status: "ACTIVE",
-      },
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
     });
 
-    await createAuditLog({
-      req,
-      action: "OPERATOR_CREATED",
-      entityType: "Operator",
-      entityId: String(operator.id),
-      details: {
-        operatorCode,
-        companyName,
-        email,
-      },
+    if (existingUser) {
+      return res.status(409).json({
+        message: "A user account with this email already exists",
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const operatorCode = await generateOperatorCode();
+      const userCode = await generateUserCode("NORMAL_SELLER");
+      const hashedPassword = await bcrypt.hash(loginPassword, 10);
+
+      const operator = await tx.operator.create({
+        data: {
+          operatorCode,
+          companyName,
+          email,
+          phone: phone || null,
+          logoUrl: logoUrl || null,
+          status: "ACTIVE",
+        },
+      });
+
+      const user = await tx.user.create({
+        data: {
+          userCode,
+          name: loginName,
+          email,
+          password: hashedPassword,
+          role: "NORMAL_SELLER",
+          operatorId: operator.id,
+        },
+        select: {
+          id: true,
+          userCode: true,
+          name: true,
+          email: true,
+          role: true,
+          operatorId: true,
+          createdAt: true,
+        },
+      });
+
+      await tx.bNPLConfig.create({
+        data: {
+          operatorId: operator.id,
+          paymentDeadlineDays: 3,
+          allowReceiptUpload: true,
+          autoCancelOverdue: true,
+          invoiceLogoUrl: logoUrl || null,
+          invoiceFooterText: `Thank you for using ${companyName}.`,
+          manualPaymentNote: "Please upload your DuitNow/SPay receipt after payment.",
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: req.user?.id || null,
+          action: "OPERATOR_CREATED",
+          entityType: "Operator",
+          entityId: String(operator.id),
+          details: {
+            operatorCode,
+            userCode,
+            companyName,
+            email,
+            loginCreated: true,
+          },
+        },
+      });
+
+      return {
+        operator,
+        user,
+      };
     });
 
-    res.status(201).json(operator);
+    if (sendWelcomeEmail) {
+      await sendEmail({
+        to: result.user.email,
+        subject: "Your BNPL Operator Account Has Been Created",
+        type: "OPERATOR_ACCOUNT_CREATED",
+        relatedEntityType: "Operator",
+        relatedEntityId: result.operator.id,
+        userId: result.user.id,
+        html: `
+          <div style="font-family:Arial,sans-serif;line-height:1.6;">
+            <h2>BNPL Operator Account Created</h2>
+            <p>Hello ${result.user.name},</p>
+            <p>Your operator account for <strong>${result.operator.companyName}</strong> has been created.</p>
+            <table style="border-collapse:collapse;width:100%;max-width:520px;">
+              <tr>
+                <td style="padding:8px;border:1px solid #ddd;"><strong>Email</strong></td>
+                <td style="padding:8px;border:1px solid #ddd;">${result.user.email}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px;border:1px solid #ddd;"><strong>Temporary Password</strong></td>
+                <td style="padding:8px;border:1px solid #ddd;">${loginPassword}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px;border:1px solid #ddd;"><strong>Role</strong></td>
+                <td style="padding:8px;border:1px solid #ddd;">Normal Seller / Operator</td>
+              </tr>
+            </table>
+            <p>Please login and change your password if password-changing is enabled.</p>
+          </div>
+        `,
+      });
+    }
+
+    res.status(201).json({
+      message: "Operator and login account created successfully",
+      operator: result.operator,
+      user: result.user,
+    });
   } catch (err) {
     next(err);
   }
