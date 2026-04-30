@@ -13,26 +13,40 @@ import configRoutes     from "./routes/config_routes.js";
 import logRoutes        from "./routes/log_routes.js";
 import customerRoutes   from "./routes/customer_routes.js";
 import stripeRoutes     from "./routes/stripe_routes.js";
-import emailRoutes from "./routes/email_routes.js";
-import cronRoutes from "./routes/cron_routes.js";
+import emailRoutes      from "./routes/email_routes.js";
+import cronRoutes       from "./routes/cron_routes.js";
+import hostRoutes       from "./routes/host_routes.js";
 
-import hostRoutes from "./routes/host_routes.js";
-
-import { errorHandler }    from "./middlewares/errorHandler.js";
-import { requestLogger }   from "./middlewares/logger_middleware.js";
+import { errorHandler }  from "./middlewares/errorHandler.js";
+import { requestLogger } from "./middlewares/logger_middleware.js";
 
 dotenv.config();
 
 const app = express();
 
+function requiredEnvStatus() {
+  const required = ["DATABASE_URL", "JWT_SECRET", "FRONTEND_URL"];
+  const missing = required.filter((key) => !process.env[key]);
+
+  if (missing.length > 0) {
+    console.warn(`[CONFIG] Missing required environment variables: ${missing.join(", ")}`);
+  }
+
+  return {
+    ok: missing.length === 0,
+    missing,
+  };
+}
+
+requiredEnvStatus();
+
 // ── CORS ────────────────────────────────────────────────────────────────────
-// Support multiple frontend origins (local dev + Vercel preview + production)
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
   "http://localhost:3000",
   "https://bnpl-frontend-brown.vercel.app",
-  "https://newfrontbnplplatform.vercel.app"
+  "https://newfrontbnplplatform.vercel.app",
 ].filter(Boolean);
 
 function isAllowedOrigin(origin) {
@@ -40,8 +54,9 @@ function isAllowedOrigin(origin) {
 
   if (allowedOrigins.includes(origin)) return true;
 
-  // Allow your own Vercel frontend preview deployments
+  // Allow your own Vercel frontend preview deployments.
   if (
+    process.env.NODE_ENV !== "production" &&
     origin.endsWith(".vercel.app") &&
     origin.includes("darren-6969s-projects")
   ) {
@@ -54,9 +69,7 @@ function isAllowedOrigin(origin) {
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, Postman)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (isAllowedOrigin(origin)) return callback(null, true);
       callback(new Error(`CORS: origin ${origin} not allowed`));
     },
     credentials: true,
@@ -71,13 +84,14 @@ app.options("*", cors());
 app.use("/api/stripe", stripeRoutes);
 
 // ── Body parsing ─────────────────────────────────────────────────────────────
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 // ── Request logger ───────────────────────────────────────────────────────────
 app.use(requestLogger);
 
-// ── Static file serving for uploaded receipts ─────────────────────────────
+// ── Static file serving for uploaded receipts ────────────────────────────────
+// For production, use object storage and store a public/private URL instead.
 app.use("/uploads", express.static("uploads"));
 
 // ── Root / Health check ──────────────────────────────────────────────────────
@@ -90,9 +104,12 @@ app.get("/", (_req, res) => {
 });
 
 app.get("/health", (_req, res) => {
-  res.json({
-    status: "ok",
-    message: "BNPL API is running",
+  const config = requiredEnvStatus();
+
+  res.status(config.ok ? 200 : 503).json({
+    status: config.ok ? "ok" : "degraded",
+    message: "BNPL API health check",
+    config,
     timestamp: new Date().toISOString(),
   });
 });
@@ -108,9 +125,9 @@ app.use("/api/operators", operatorRoutes);
 app.use("/api/config",    configRoutes);
 app.use("/api/logs",      logRoutes);
 app.use("/api/customer",  customerRoutes);
-app.use("/api/emails", emailRoutes);
-app.use("/api/cron", cronRoutes);
-app.use("/api/host", hostRoutes);
+app.use("/api/emails",    emailRoutes);
+app.use("/api/cron",      cronRoutes);
+app.use("/api/host",      hostRoutes);
 
 // ── Error handler ────────────────────────────────────────────────────────────
 app.use(errorHandler);
