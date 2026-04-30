@@ -114,8 +114,9 @@ model Operator {
 
 model Booking {
   id          Int    @id @default(autoincrement())
+  hostBookingRef String?
   bookingCode String @unique
-
+  
   customerId Int
   customer   User @relation(fields: [customerId], references: [id])
 
