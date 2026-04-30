@@ -25,9 +25,25 @@ async function generateCustomerCode(tx) {
   return `CUS${String(count + 1).padStart(4, "0")}`;
 }
 
+function validateAmount(totalAmount) {
+  const amount = Number(totalAmount);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    const error = new Error("totalAmount must be a positive number");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return amount;
+}
+
 export async function createHostBooking(req, res, next) {
   try {
     const apiKey = req.headers["x-bnpl-api-key"];
+
+    if (!process.env.HOST_API_KEY) {
+      return res.status(500).json({ message: "Host API key is not configured" });
+    }
 
     if (!apiKey || apiKey !== process.env.HOST_API_KEY) {
       return res.status(401).json({
@@ -40,7 +56,6 @@ export async function createHostBooking(req, res, next) {
       hostBookingRef,
       customerName,
       customerEmail,
-      customerPhone,
       serviceName,
       serviceType,
       bookingDate,
@@ -63,6 +78,8 @@ export async function createHostBooking(req, res, next) {
           "operatorCode, hostBookingRef, customerName, customerEmail, serviceName and totalAmount are required",
       });
     }
+
+    const amount = validateAmount(totalAmount);
 
     const operator = await prisma.operator.findUnique({
       where: { operatorCode },
@@ -116,12 +133,13 @@ export async function createHostBooking(req, res, next) {
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
         const userCode = await generateCustomerCode(tx);
 
+        // Current Prisma User model does not include phone.
+        // Keep customer phone in host system or add a User.phone migration before storing it here.
         customer = await tx.user.create({
           data: {
             userCode,
             name: customerName,
             email: customerEmail,
-            phone: customerPhone || null,
             password: hashedPassword,
             role: "CUSTOMER",
           },
@@ -144,7 +162,7 @@ export async function createHostBooking(req, res, next) {
           pickupDate: pickupDate ? new Date(pickupDate) : null,
           returnDate: returnDate ? new Date(returnDate) : null,
           location: location || null,
-          totalAmount,
+          totalAmount: amount,
           status: "PENDING",
         },
         include: {
