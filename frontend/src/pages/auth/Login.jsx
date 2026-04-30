@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { claimHostBookingIntent } from "../../services/host_service";
 import { login } from "../../services/auth_service";
 import "../../assets/styles/global.css";
 
@@ -61,11 +62,20 @@ function extractUser(data) {
   return data?.user || data?.data?.user || data?.account || null;
 }
 
+function isSafeRedirectPath(path) {
+  return typeof path === "string" && path.startsWith("/") && !path.startsWith("//");
+}
+
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const hostToken = searchParams.get("hostToken");
+
+  const redirectParam = searchParams.get("redirect");
+  const emailParam = searchParams.get("email");
 
   const [form, setForm] = useState({
-    email: "",
+    email: emailParam || "",
     password: "",
   });
 
@@ -73,6 +83,15 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (emailParam) {
+      setForm((prev) => ({
+        ...prev,
+        email: emailParam,
+      }));
+    }
+  }, [emailParam]);
 
   const clearSession = () => {
     localStorage.removeItem("bnpl_token");
@@ -104,6 +123,15 @@ export default function Login() {
     }));
 
     if (error) setError("");
+  };
+
+  const handleGoRegister = () => {
+    const params = new URLSearchParams();
+
+    if (hostToken) params.set("hostToken", hostToken);
+    if (form.email.trim()) params.set("email", form.email.trim());
+
+    navigate(`/register?${params.toString()}`);
   };
 
   const handleSubmit = async (e) => {
@@ -146,9 +174,9 @@ export default function Login() {
         return;
       }
 
-      const redirectPath = getDashboardPathByRole(normalizedRole);
+      const defaultRedirectPath = getDashboardPathByRole(normalizedRole);
 
-      if (!redirectPath) {
+      if (!defaultRedirectPath) {
         setError(`Unknown role "${normalizedRole}". Please contact admin.`);
         return;
       }
@@ -166,7 +194,41 @@ export default function Login() {
         role: roleForStorage,
       });
 
-      navigate(redirectPath, { replace: true });
+      if (hostToken && roleForStorage === "CUSTOMER") {
+        try {
+          const claimResponse = await claimHostBookingIntent(hostToken);
+          const checkoutUrl = claimResponse.data?.checkoutUrl;
+
+          if (checkoutUrl) {
+            window.location.href = checkoutUrl;
+            return;
+          }
+
+          if (claimResponse.data?.bookingId) {
+            navigate(`/customer/checkout/${claimResponse.data.bookingId}`, {
+              replace: true,
+            });
+            return;
+          }
+        } catch (claimErr) {
+          setError(
+            claimErr.response?.data?.message ||
+              "Login successful, but BNPL booking could not be created."
+          );
+          return;
+        }
+      }
+
+      if (
+        redirectParam &&
+        isSafeRedirectPath(redirectParam) &&
+        roleForStorage === "CUSTOMER"
+      ) {
+        navigate(redirectParam, { replace: true });
+        return;
+      }
+
+      navigate(defaultRedirectPath, { replace: true });
     } catch (err) {
       console.error("Login error:", err);
 
@@ -185,8 +247,20 @@ export default function Login() {
       <section className="bnpl-auth-shell">
         <div className="bnpl-auth-panel">
           <form onSubmit={handleSubmit} className="bnpl-auth-form">
-            <h1>Book Now<br />Pay Later</h1>
-            <p className="bnpl-auth-subtitle">Welcome back! Please sign in to continue.</p>
+            <h1>
+              Book Now
+              <br />
+              Pay Later
+            </h1>
+            <p className="bnpl-auth-subtitle">
+              Welcome back! Please sign in to continue.
+            </p>
+
+            {redirectParam && (
+              <p className="bnpl-auth-subtitle">
+                Please login to continue your BNPL payment.
+              </p>
+            )}
 
             {error && <p className="bnpl-auth-error">{error}</p>}
 
@@ -247,7 +321,9 @@ export default function Login() {
 
             <p className="bnpl-auth-switch">
               Don&apos;t have an account?{" "}
-              <button type="button" onClick={() => navigate("/register")}>Register</button>
+              <button type="button" onClick={handleGoRegister}>
+                Register
+              </button>
             </p>
           </form>
         </div>

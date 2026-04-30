@@ -291,3 +291,38 @@ model EmailLog {
   @@index([relatedEntityId])
   @@index([userId])
 }
+
+model HostBookingIntent {
+  id Int @id @default(autoincrement())
+
+  token          String  @unique
+  operatorId     Int
+  operatorCode   String
+  hostBookingRef String
+  customerName   String
+  customerEmail  String
+
+  serviceName String
+  serviceType String?
+  bookingDate DateTime
+  pickupDate  DateTime?
+  returnDate  DateTime?
+  location    String?
+  totalAmount Decimal  @db.Decimal(10, 2)
+
+  payload Json?
+
+  status           String   @default("PENDING")
+  claimedByUserId  Int?
+  claimedBookingId Int?
+  expiresAt        DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([token])
+  @@index([hostBookingRef])
+  @@index([customerEmail])
+  @@index([status])
+  @@index([expiresAt])
+}

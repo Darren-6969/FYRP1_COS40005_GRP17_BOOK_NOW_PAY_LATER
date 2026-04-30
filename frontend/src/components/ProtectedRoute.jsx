@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 
 function getStoredUser() {
   try {
@@ -26,11 +26,18 @@ function defaultPathForRole(role) {
 }
 
 export default function ProtectedRoute({ allowedRoles = [] }) {
+  const location = useLocation();
   const user = getStoredUser();
   const token = getStoredToken();
 
   if (!token || !user) {
-    return <Navigate to="/login" replace />;
+    const redirectPath = `${location.pathname}${location.search || ""}`;
+    return (
+      <Navigate
+        to={`/login?redirect=${encodeURIComponent(redirectPath)}`}
+        replace
+      />
+    );
   }
 
   if (allowedRoles.length && !allowedRoles.includes(user.role)) {

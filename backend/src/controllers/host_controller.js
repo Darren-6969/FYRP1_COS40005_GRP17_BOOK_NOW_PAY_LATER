@@ -1,10 +1,13 @@
-import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import prisma from "../config/db.js";
-import { notifyCustomerByBooking, notifyOperatorUsersByBooking } from "../services/notification_email_service.js";
+import {
+  notifyCustomerByBooking,
+  notifyOperatorUsersByBooking,
+} from "../services/notification_email_service.js";
 import { bookingSubmittedTemplate } from "../services/email_templates.js";
 
-function generateTempPassword() {
-  return `Bnpl${Math.floor(100000 + Math.random() * 900000)}!`;
+function generateIntentToken() {
+  return crypto.randomBytes(32).toString("hex");
 }
 
 async function generateBookingCode(tx) {
@@ -15,14 +18,6 @@ async function generateBookingCode(tx) {
 
   const nextNumber = (latest?.id || 0) + 1;
   return `BNPL-${String(nextNumber).padStart(4, "0")}`;
-}
-
-async function generateCustomerCode(tx) {
-  const count = await tx.user.count({
-    where: { role: "CUSTOMER" },
-  });
-
-  return `CUS${String(count + 1).padStart(4, "0")}`;
 }
 
 function validateAmount(totalAmount) {
@@ -37,12 +32,43 @@ function validateAmount(totalAmount) {
   return amount;
 }
 
-export async function createHostBooking(req, res, next) {
+function frontendUrl(path) {
+  const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+  return `${baseUrl}${path}`;
+}
+
+function buildIntentUrls(intent) {
+  const registerPath =
+    `/register?hostToken=${encodeURIComponent(intent.token)}` +
+    `&email=${encodeURIComponent(intent.customerEmail)}` +
+    `&name=${encodeURIComponent(intent.customerName)}`;
+
+  const loginPath =
+    `/login?hostToken=${encodeURIComponent(intent.token)}` +
+    `&email=${encodeURIComponent(intent.customerEmail)}`;
+
+  return {
+    registerUrl: frontendUrl(registerPath),
+    loginUrl: frontendUrl(loginPath),
+  };
+}
+
+/**
+ * Host entry point.
+ * GoCar calls this endpoint after customer submits vehicle booking form.
+ *
+ * Important:
+ * This does NOT create a customer account.
+ * It only creates a temporary booking intent.
+ */
+export async function createHostBookingIntent(req, res, next) {
   try {
     const apiKey = req.headers["x-bnpl-api-key"];
 
     if (!process.env.HOST_API_KEY) {
-      return res.status(500).json({ message: "Host API key is not configured" });
+      return res.status(500).json({
+        message: "Host API key is not configured",
+      });
     }
 
     if (!apiKey || apiKey !== process.env.HOST_API_KEY) {
@@ -104,69 +130,182 @@ export async function createHostBooking(req, res, next) {
       },
       include: {
         customer: true,
-        operator: true,
-        payment: true,
-        receipt: true,
-        invoice: true,
       },
     });
 
     if (existingBooking) {
+      const checkoutPath = `/customer/checkout/${existingBooking.id}`;
       return res.status(200).json({
         message: "Booking already exists",
         bookingId: existingBooking.id,
         bookingCode: existingBooking.bookingCode,
-        redirectUrl: `${process.env.FRONTEND_URL}/customer/bookings/${existingBooking.id}`,
+        checkoutUrl: frontendUrl(checkoutPath),
+        loginUrl: frontendUrl(
+          `/login?redirect=${encodeURIComponent(checkoutPath)}&email=${encodeURIComponent(
+            existingBooking.customer.email
+          )}`
+        ),
       });
     }
 
-    const tempPassword = generateTempPassword();
+    const existingIntent = await prisma.hostBookingIntent.findFirst({
+      where: {
+        hostBookingRef,
+        operatorId: operator.id,
+        status: "PENDING",
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
 
-    const result = await prisma.$transaction(async (tx) => {
-      let customer = await tx.user.findUnique({
-        where: { email: customerEmail },
+    if (existingIntent) {
+      const urls = buildIntentUrls(existingIntent);
+
+      return res.status(200).json({
+        message: "Booking intent already exists",
+        intentToken: existingIntent.token,
+        customerEmail: existingIntent.customerEmail,
+        ...urls,
+        redirectUrl: urls.registerUrl,
+      });
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    const intent = await prisma.hostBookingIntent.create({
+      data: {
+        token: generateIntentToken(),
+        operatorId: operator.id,
+        operatorCode,
+        hostBookingRef,
+        customerName,
+        customerEmail,
+        serviceName,
+        serviceType: serviceType || null,
+        bookingDate: bookingDate ? new Date(bookingDate) : new Date(),
+        pickupDate: pickupDate ? new Date(pickupDate) : null,
+        returnDate: returnDate ? new Date(returnDate) : null,
+        location: location || null,
+        totalAmount: amount,
+        payload: req.body,
+        status: "PENDING",
+        expiresAt,
+      },
+    });
+
+    const urls = buildIntentUrls(intent);
+
+    return res.status(201).json({
+      message: "BNPL booking intent created",
+      intentToken: intent.token,
+      customerEmail: intent.customerEmail,
+      expiresAt: intent.expiresAt,
+      ...urls,
+      redirectUrl: urls.registerUrl,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Customer calls this after login.
+ * This converts the host booking intent into a real BNPL booking.
+ */
+export async function claimHostBookingIntent(req, res, next) {
+  try {
+    const { token } = req.params;
+
+    const intent = await prisma.hostBookingIntent.findUnique({
+      where: { token },
+    });
+
+    if (!intent) {
+      return res.status(404).json({
+        message: "Booking intent not found",
+      });
+    }
+
+    if (intent.status === "CLAIMED" && intent.claimedBookingId) {
+      const booking = await prisma.booking.findFirst({
+        where: {
+          id: intent.claimedBookingId,
+          customerId: req.user.id,
+        },
       });
 
-      let isNewCustomer = false;
-
-      if (!customer) {
-        const hashedPassword = await bcrypt.hash(tempPassword, 10);
-        const userCode = await generateCustomerCode(tx);
-
-        // Current Prisma User model does not include phone.
-        // Keep customer phone in host system or add a User.phone migration before storing it here.
-        customer = await tx.user.create({
-          data: {
-            userCode,
-            name: customerName,
-            email: customerEmail,
-            password: hashedPassword,
-            role: "CUSTOMER",
-          },
+      if (!booking) {
+        return res.status(403).json({
+          message: "This booking intent has already been claimed",
         });
-
-        isNewCustomer = true;
       }
 
+      return res.json({
+        message: "Booking intent already claimed",
+        bookingId: booking.id,
+        bookingCode: booking.bookingCode,
+        checkoutUrl: frontendUrl(`/customer/checkout/${booking.id}`),
+      });
+    }
+
+    if (intent.status !== "PENDING") {
+      return res.status(400).json({
+        message: `Booking intent is ${intent.status}`,
+      });
+    }
+
+    if (intent.expiresAt < new Date()) {
+      await prisma.hostBookingIntent.update({
+        where: { id: intent.id },
+        data: { status: "EXPIRED" },
+      });
+
+      return res.status(400).json({
+        message: "Booking intent has expired. Please submit the GoCar booking again.",
+      });
+    }
+
+    if (
+      intent.customerEmail.toLowerCase() !== String(req.user.email).toLowerCase()
+    ) {
+      return res.status(403).json({
+        message:
+          "This booking was created for a different email address. Please login using the same email used in GoCar booking.",
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
       const bookingCode = await generateBookingCode(tx);
 
       const booking = await tx.booking.create({
         data: {
           bookingCode,
-          hostBookingRef,
-          customerId: customer.id,
-          operatorId: operator.id,
-          serviceName,
-          serviceType: serviceType || null,
-          bookingDate: bookingDate ? new Date(bookingDate) : new Date(),
-          pickupDate: pickupDate ? new Date(pickupDate) : null,
-          returnDate: returnDate ? new Date(returnDate) : null,
-          location: location || null,
-          totalAmount: amount,
+          hostBookingRef: intent.hostBookingRef,
+          customerId: req.user.id,
+          operatorId: intent.operatorId,
+          serviceName: intent.serviceName,
+          serviceType: intent.serviceType,
+          bookingDate: intent.bookingDate,
+          pickupDate: intent.pickupDate,
+          returnDate: intent.returnDate,
+          location: intent.location,
+          totalAmount: intent.totalAmount,
           status: "PENDING",
         },
         include: {
-          customer: true,
+          customer: {
+            select: {
+              id: true,
+              userCode: true,
+              name: true,
+              email: true,
+            },
+          },
           operator: true,
           payment: true,
           receipt: true,
@@ -174,57 +313,59 @@ export async function createHostBooking(req, res, next) {
         },
       });
 
+      await tx.hostBookingIntent.update({
+        where: { id: intent.id },
+        data: {
+          status: "CLAIMED",
+          claimedByUserId: req.user.id,
+          claimedBookingId: booking.id,
+        },
+      });
+
       await tx.auditLog.create({
         data: {
-          userId: customer.id,
-          action: "HOST_BOOKING_CREATED",
+          userId: req.user.id,
+          action: "HOST_BOOKING_CLAIMED",
           entityType: "Booking",
           entityId: String(booking.id),
           details: {
-            operatorCode,
-            hostBookingRef,
-            source: "GoCar cPanel website",
-            isNewCustomer,
+            hostBookingRef: intent.hostBookingRef,
+            operatorCode: intent.operatorCode,
+            intentToken: intent.token,
+            source: "GoCar vehicle details page",
           },
         },
       });
 
-      return {
-        customer,
-        booking,
-        isNewCustomer,
-      };
+      return booking;
     });
 
-    const customerUrl = `${process.env.FRONTEND_URL}/customer/bookings/${result.booking.id}`;
-    const operatorUrl = `${process.env.FRONTEND_URL}/operator/bookings/${result.booking.id}`;
+    const operatorUrl = frontendUrl(`/operator/bookings/${result.id}`);
 
     await notifyCustomerByBooking({
-      booking: result.booking,
+      booking: result,
       title: "Booking submitted",
-      message: `Your BNPL booking ${result.booking.bookingCode} has been submitted.`,
+      message: `Your BNPL booking ${result.bookingCode} has been submitted.`,
       type: "BOOKING_SUBMITTED",
     });
 
     await notifyOperatorUsersByBooking({
-      booking: result.booking,
+      booking: result,
       title: "New booking request",
-      message: `${result.booking.bookingCode} requires review.`,
+      message: `${result.bookingCode} requires review.`,
       type: "BOOKING_SUBMITTED",
-      emailSubject: `New BNPL Booking Request - ${result.booking.bookingCode}`,
+      emailSubject: `New BNPL Booking Request - ${result.bookingCode}`,
       emailHtml: bookingSubmittedTemplate({
-        booking: result.booking,
+        booking: result,
         operatorUrl,
       }),
     });
 
     return res.status(201).json({
       message: "BNPL booking created successfully",
-      bookingId: result.booking.id,
-      bookingCode: result.booking.bookingCode,
-      customerEmail: result.customer.email,
-      isNewCustomer: result.isNewCustomer,
-      redirectUrl: customerUrl,
+      bookingId: result.id,
+      bookingCode: result.bookingCode,
+      checkoutUrl: frontendUrl(`/customer/checkout/${result.id}`),
     });
   } catch (err) {
     next(err);
