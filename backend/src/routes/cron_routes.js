@@ -8,6 +8,18 @@ import { allowRoles } from "../middlewares/rbac_middleware.js";
 
 const router = express.Router();
 
+function verifyCronSecret(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    return res.status(401).json({ message: "Unauthorized cron request" });
+  }
+
+  req.user = null;
+  next();
+}
+
 router.get(
   "/status",
   verifyToken,
@@ -21,5 +33,8 @@ router.post(
   allowRoles("MASTER_SELLER"),
   runOverdueCheck
 );
+
+// Vercel Cron sends Authorization: Bearer $CRON_SECRET.
+router.get("/vercel-overdue-check", verifyCronSecret, runOverdueCheck);
 
 export default router;
