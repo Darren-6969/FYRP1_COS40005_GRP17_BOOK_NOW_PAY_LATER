@@ -62,7 +62,7 @@ app.use(requestLogger);
 app.use("/uploads", express.static("uploads"));
 
 // ── Health check ─────────────────────────────────────────────────────────────
-app.get("/", (_req, res) => res.json({ message: "BNPL API is running", version: "1.0.0" }));
+app.get("/health", (_req, res) => res.json({ message: "BNPL API is running", version: "1.0.0" }));
 app.get("/health", (_req, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
 
 // ── API routes ───────────────────────────────────────────────────────────────
