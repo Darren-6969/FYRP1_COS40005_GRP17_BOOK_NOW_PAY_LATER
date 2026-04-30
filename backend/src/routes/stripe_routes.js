@@ -2,14 +2,13 @@ import express from "express";
 import Stripe from "stripe";
 import prisma from "../config/db.js";
 import { generateInvoiceForBooking } from "../services/invoice_service.js";
-import { 
+import {
   notifyCustomerByBooking,
   notifyOperatorUsersByBooking,
- } from "../services/notification_email_service.js";
+} from "../services/notification_email_service.js";
 import {
-  invoiceSentTemplate,
   merchantPaymentConfirmedTemplate,
-  paymentConfirmedTemplate,
+  paymentReceiptTemplate,
 } from "../services/email_templates.js";
 
 const router = express.Router();
@@ -69,7 +68,10 @@ router.post(
       const bookingId = parseBookingId(session.metadata?.bookingId);
 
       if (!bookingId) {
-        console.error("[Stripe] Invalid bookingId metadata:", session.metadata?.bookingId);
+        console.error(
+          "[Stripe] Invalid bookingId metadata:",
+          session.metadata?.bookingId
+        );
         return res.json({ received: true });
       }
 
@@ -84,6 +86,11 @@ router.post(
           return res.json({ received: true });
         }
 
+        if (booking.status === "PAID" && booking.payment?.status === "PAID") {
+          console.log(`[Stripe] Booking ${bookingId} already paid. Skipped.`);
+          return res.json({ received: true, alreadyPaid: true });
+        }
+
         const payment = await prisma.payment.upsert({
           where: {
             bookingId,
@@ -94,13 +101,16 @@ router.post(
             method: "STRIPE",
             status: "PAID",
             paidAt: new Date(),
-            transactionId: session.payment_intent,
+            transactionId:
+              session.payment_intent || session.id || `STRIPE-${Date.now()}`,
           },
           update: {
+            amount: booking.totalAmount,
             method: "STRIPE",
             status: "PAID",
             paidAt: new Date(),
-            transactionId: session.payment_intent,
+            transactionId:
+              session.payment_intent || session.id || `STRIPE-${Date.now()}`,
           },
         });
 
@@ -108,7 +118,7 @@ router.post(
           bookingId,
           booking.totalAmount,
           prisma,
-          { status: "SENT" }
+          { status: "PAID" }
         );
 
         const updatedBooking = await prisma.booking.update({
@@ -179,7 +189,7 @@ router.post(
 
         console.log(`[Stripe] Booking ${bookingId} marked as PAID.`);
       } catch (err) {
-        console.error("[Stripe] Webhook processing error:", err.message);
+        console.error("[Stripe] Webhook processing error:", err);
       }
     }
 
@@ -206,6 +216,7 @@ router.post("/checkout", express.json(), async (req, res, next) => {
       include: {
         customer: true,
         operator: true,
+        payment: true,
       },
     });
 
@@ -213,8 +224,14 @@ router.post("/checkout", express.json(), async (req, res, next) => {
       return res.status(404).json({ message: "Booking not found" });
     }
 
-    if (booking.status === "PAID") {
+    if (booking.status === "PAID" || booking.payment?.status === "PAID") {
       return res.status(400).json({ message: "This booking is already paid" });
+    }
+
+    if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
+      return res.status(400).json({
+        message: "Payment is only available after the booking is accepted.",
+      });
     }
 
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -255,4 +272,4 @@ router.post("/checkout", express.json(), async (req, res, next) => {
   }
 });
 
-export default router; 
+export default router;

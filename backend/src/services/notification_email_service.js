@@ -69,6 +69,13 @@ export async function notifyCustomerByBooking({
   }
 }
 
+/**
+ * Notify:
+ * - Normal seller users under this booking's operator
+ * - All master seller/admin users
+ *
+ * This is what makes the admin notification bell actually receive updates.
+ */
 export async function notifyOperatorUsersByBooking({
   booking,
   title,
@@ -77,21 +84,37 @@ export async function notifyOperatorUsersByBooking({
   emailSubject,
   emailHtml,
   emailText,
+  notifyMaster = true,
 }) {
   const operatorUsers = await prisma.user.findMany({
     where: {
-      operatorId: booking.operatorId,
-      role: {
-        in: ["NORMAL_SELLER", "MASTER_SELLER"],
-      },
+      OR: [
+        {
+          operatorId: booking.operatorId,
+          role: "NORMAL_SELLER",
+        },
+        ...(notifyMaster
+          ? [
+              {
+                role: "MASTER_SELLER",
+              },
+            ]
+          : []),
+      ],
     },
     select: {
       id: true,
       email: true,
+      role: true,
     },
   });
 
+  const notifiedUserIds = new Set();
+
   for (const user of operatorUsers) {
+    if (notifiedUserIds.has(user.id)) continue;
+    notifiedUserIds.add(user.id);
+
     await createInAppNotification({
       userId: user.id,
       title,
@@ -113,16 +136,75 @@ export async function notifyOperatorUsersByBooking({
     }
   }
 
+  /**
+   * Send to merchant/operator email only if it is different from existing user emails.
+   * This prevents duplicate emails when the operator user email and operator company email are the same.
+   */
   if (booking.operator?.email && emailSubject && emailHtml) {
-    await sendEmail({
-      to: booking.operator.email,
-      subject: emailSubject,
-      html: emailHtml,
-      text: emailText || message,
+    const alreadySentToOperatorEmail = operatorUsers.some(
+      (user) =>
+        user.email?.toLowerCase() === booking.operator.email.toLowerCase()
+    );
+
+    if (!alreadySentToOperatorEmail) {
+      await sendEmail({
+        to: booking.operator.email,
+        subject: emailSubject,
+        html: emailHtml,
+        text: emailText || message,
+        type,
+        relatedEntityType: "Booking",
+        relatedEntityId: booking.id,
+        userId: null,
+      });
+    }
+  }
+}
+
+/**
+ * General master/admin system notification.
+ * Use this for events not tied to one booking, such as operator creation,
+ * email failure, cron result, system setting update, etc.
+ */
+export async function notifyMasterUsers({
+  title,
+  message,
+  type = "SYSTEM",
+  emailSubject,
+  emailHtml,
+  emailText,
+  relatedEntityType = "System",
+  relatedEntityId = null,
+}) {
+  const masterUsers = await prisma.user.findMany({
+    where: {
+      role: "MASTER_SELLER",
+    },
+    select: {
+      id: true,
+      email: true,
+    },
+  });
+
+  for (const user of masterUsers) {
+    await createInAppNotification({
+      userId: user.id,
+      title,
+      message,
       type,
-      relatedEntityType: "Booking",
-      relatedEntityId: booking.id,
-      userId: null,
     });
+
+    if (user.email && emailSubject && emailHtml) {
+      await sendEmail({
+        to: user.email,
+        subject: emailSubject,
+        html: emailHtml,
+        text: emailText || message,
+        type,
+        relatedEntityType,
+        relatedEntityId,
+        userId: user.id,
+      });
+    }
   }
 }

@@ -5,6 +5,7 @@ import { generateInvoiceForBooking } from "../services/invoice_service.js";
 import {
   notifyCustomerByBooking,
   notifyOperatorUsersByBooking,
+  notifyMasterUsers,
 } from "../services/notification_email_service.js";
 import {
   alternativeSuggestionTemplate,
@@ -140,8 +141,17 @@ async function createCustomerNotification({
 }
 
 async function generateOperatorCode() {
-  const count = await prisma.operator.count();
-  return `OPR${String(count + 1).padStart(4, "0")}`;
+  const latest = await prisma.operator.findFirst({
+    orderBy: {
+      id: "desc",
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  const nextNumber = (latest?.id || 0) + 1;
+  return `OPR${String(nextNumber).padStart(4, "0")}`;
 }
 
 async function generateUserCode(role) {
@@ -153,11 +163,18 @@ async function generateUserCode(role) {
 
   const prefix = prefixMap[role] || "USR";
 
-  const count = await prisma.user.count({
+  const latest = await prisma.user.findFirst({
     where: { role },
+    orderBy: {
+      id: "desc",
+    },
+    select: {
+      id: true,
+    },
   });
 
-  return `${prefix}${String(count + 1).padStart(4, "0")}`;
+  const nextNumber = (latest?.id || 0) + 1;
+  return `${prefix}${String(nextNumber).padStart(4, "0")}`;
 }
 
 /**
@@ -205,74 +222,89 @@ export async function createOperator(req, res, next) {
       });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const operatorCode = await generateOperatorCode();
-      const userCode = await generateUserCode("NORMAL_SELLER");
-      const hashedPassword = await bcrypt.hash(loginPassword, 10);
+    /**
+     * Important:
+     * Do these BEFORE the transaction.
+     * bcrypt.hash() can take time and may cause Prisma transaction timeout.
+     */
+    const operatorCode = await generateOperatorCode();
+    const userCode = await generateUserCode("NORMAL_SELLER");
+    const hashedPassword = await bcrypt.hash(loginPassword, 10);
 
-      const operator = await tx.operator.create({
-        data: {
-          operatorCode,
-          companyName,
-          email,
-          phone: phone || null,
-          logoUrl: logoUrl || null,
-          status: "ACTIVE",
-        },
-      });
-
-      const user = await tx.user.create({
-        data: {
-          userCode,
-          name: loginName,
-          email,
-          password: hashedPassword,
-          role: "NORMAL_SELLER",
-          operatorId: operator.id,
-        },
-        select: {
-          id: true,
-          userCode: true,
-          name: true,
-          email: true,
-          role: true,
-          operatorId: true,
-          createdAt: true,
-        },
-      });
-
-      await tx.bNPLConfig.create({
-        data: {
-          operatorId: operator.id,
-          paymentDeadlineDays: 3,
-          allowReceiptUpload: true,
-          autoCancelOverdue: true,
-          invoiceLogoUrl: logoUrl || null,
-          invoiceFooterText: `Thank you for using ${companyName}.`,
-          manualPaymentNote: "Please upload your DuitNow/SPay receipt after payment.",
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: req.user?.id || null,
-          action: "OPERATOR_CREATED",
-          entityType: "Operator",
-          entityId: String(operator.id),
-          details: {
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const operator = await tx.operator.create({
+          data: {
             operatorCode,
-            userCode,
             companyName,
             email,
-            loginCreated: true,
+            phone: phone || null,
+            logoUrl: logoUrl || null,
+            status: "ACTIVE",
           },
-        },
-      });
+        });
 
-      return {
-        operator,
-        user,
-      };
+        const user = await tx.user.create({
+          data: {
+            userCode,
+            name: loginName,
+            email,
+            password: hashedPassword,
+            role: "NORMAL_SELLER",
+            operatorId: operator.id,
+          },
+          select: {
+            id: true,
+            userCode: true,
+            name: true,
+            email: true,
+            role: true,
+            operatorId: true,
+            createdAt: true,
+          },
+        });
+
+        await tx.bNPLConfig.create({
+          data: {
+            operatorId: operator.id,
+            paymentDeadlineDays: 3,
+            allowReceiptUpload: true,
+            autoCancelOverdue: true,
+            invoiceLogoUrl: logoUrl || null,
+            invoiceFooterText: `Thank you for using ${companyName}.`,
+            manualPaymentNote:
+              "Please upload your DuitNow/SPay receipt after payment.",
+          },
+        });
+
+        return {
+          operator,
+          user,
+        };
+      },
+      {
+        timeout: 10000,
+      }
+    );
+
+    /**
+     * Audit log should be outside the transaction.
+     * If audit logging fails, operator creation should not be rolled back.
+     */
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user?.id || null,
+        action: "OPERATOR_CREATED",
+        entityType: "Operator",
+        entityId: String(result.operator.id),
+        details: {
+          operatorCode,
+          userCode,
+          companyName,
+          email,
+          loginCreated: true,
+        },
+      },
     });
 
     if (sendWelcomeEmail) {
@@ -288,6 +320,7 @@ export async function createOperator(req, res, next) {
             <h2>BNPL Operator Account Created</h2>
             <p>Hello ${result.user.name},</p>
             <p>Your operator account for <strong>${result.operator.companyName}</strong> has been created.</p>
+
             <table style="border-collapse:collapse;width:100%;max-width:520px;">
               <tr>
                 <td style="padding:8px;border:1px solid #ddd;"><strong>Email</strong></td>
@@ -302,9 +335,20 @@ export async function createOperator(req, res, next) {
                 <td style="padding:8px;border:1px solid #ddd;">Normal Seller / Operator</td>
               </tr>
             </table>
-            <p>Please login and change your password if password-changing is enabled.</p>
+
+            <p>Please login using the temporary password above.</p>
           </div>
         `,
+      });
+    }
+
+    if (typeof notifyMasterUsers === "function") {
+      await notifyMasterUsers({
+        title: "Operator created",
+        message: `${result.operator.companyName} has been created as a BNPL operator.`,
+        type: "OPERATOR_CREATED",
+        relatedEntityType: "Operator",
+        relatedEntityId: result.operator.id,
       });
     }
 
@@ -314,6 +358,14 @@ export async function createOperator(req, res, next) {
       user: result.user,
     });
   } catch (err) {
+    if (err.code === "P2002") {
+      return res.status(409).json({
+        message:
+          "Duplicate operator/user value detected. Please use another email or try again.",
+        target: err.meta?.target,
+      });
+    }
+
     next(err);
   }
 }
@@ -884,7 +936,7 @@ export async function approvePayment(req, res, next) {
       payment.bookingId,
       payment.amount,
       prisma,
-      { status: "SENT" }
+      { status: "PAID" }
     );
 
     const updatedBooking = await prisma.booking.update({
