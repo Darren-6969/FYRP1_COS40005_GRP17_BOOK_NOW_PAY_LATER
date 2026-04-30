@@ -31,7 +31,6 @@ const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
   "http://localhost:3000",
-  "https://bnpl-backend-nu.vercel.app",
   "https://bnpl-frontend-brown.vercel.app",
   "https://newfrontbnplplatform.vercel.app"
 ].filter(Boolean);
