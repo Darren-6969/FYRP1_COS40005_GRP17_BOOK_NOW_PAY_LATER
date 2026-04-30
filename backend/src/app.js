@@ -36,6 +36,22 @@ const allowedOrigins = [
   "https://bnpl-frontend-brown.vercel.app"
 ].filter(Boolean);
 
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+
+  if (allowedOrigins.includes(origin)) return true;
+
+  // Allow your own Vercel frontend preview deployments
+  if (
+    origin.endsWith(".vercel.app") &&
+    origin.includes("darren-6969s-projects")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -49,6 +65,8 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization", "x-bnpl-api-key"],
   })
 );
+
+app.options("*", cors());
 
 // ── Stripe webhook — must come BEFORE express.json() ────────────────────────
 app.use("/api/stripe", stripeRoutes);
