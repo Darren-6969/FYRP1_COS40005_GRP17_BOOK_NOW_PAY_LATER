@@ -32,6 +32,8 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   "https://newfrontbnplplatform.vercel.app",
+  "https://bnpl-backend-nu.vercel.app",
+  "https://bnpl-frontend-brown.vercel.app"
 ].filter(Boolean);
 
 app.use(
@@ -44,7 +46,7 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-bnpl-api-key"],
   })
 );
 
@@ -61,9 +63,22 @@ app.use(requestLogger);
 // ── Static file serving for uploaded receipts ─────────────────────────────
 app.use("/uploads", express.static("uploads"));
 
-// ── Health check ─────────────────────────────────────────────────────────────
-app.get("/health", (_req, res) => res.json({ message: "BNPL API is running", version: "1.0.0" }));
-app.get("/health", (_req, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
+// ── Root / Health check ──────────────────────────────────────────────────────
+app.get("/", (_req, res) => {
+  res.json({
+    message: "BNPL API is running",
+    version: "1.0.0",
+    status: "ok",
+  });
+});
+
+app.get("/health", (_req, res) => {
+  res.json({
+    status: "ok",
+    message: "BNPL API is running",
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // ── API routes ───────────────────────────────────────────────────────────────
 app.use("/api/auth",      authRoutes);
