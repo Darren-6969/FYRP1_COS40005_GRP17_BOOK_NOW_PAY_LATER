@@ -10,6 +10,8 @@ import {
   merchantPaymentConfirmedTemplate,
   paymentReceiptTemplate,
 } from "../services/email_templates.js";
+import { verifyToken } from "../middlewares/auth_middleware.js";
+import { allowRoles } from "../middlewares/rbac_middleware.js";
 
 const router = express.Router();
 
@@ -51,6 +53,11 @@ router.post(
     if (!secret) {
       console.warn("[Stripe] STRIPE_WEBHOOK_SECRET not set. Webhook skipped.");
       return res.json({ received: true, skipped: true });
+    }
+
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error("[Stripe] STRIPE_SECRET_KEY not set. Webhook cannot be verified.");
+      return res.status(500).json({ message: "Stripe is not configured" });
     }
 
     let event;
@@ -197,79 +204,86 @@ router.post(
   }
 );
 
-router.post("/checkout", express.json(), async (req, res, next) => {
-  try {
-    const bookingId = parseBookingId(req.body.bookingId);
+router.post(
+  "/checkout",
+  express.json(),
+  verifyToken,
+  allowRoles("CUSTOMER"),
+  async (req, res, next) => {
+    try {
+      const bookingId = parseBookingId(req.body.bookingId);
 
-    if (!bookingId) {
-      return res.status(400).json({ message: "Valid bookingId is required" });
-    }
+      if (!bookingId) {
+        return res.status(400).json({ message: "Valid bookingId is required" });
+      }
 
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return res.status(500).json({
-        message: "STRIPE_SECRET_KEY is not configured",
+      if (!process.env.STRIPE_SECRET_KEY) {
+        return res.status(500).json({
+          message: "STRIPE_SECRET_KEY is not configured",
+        });
+      }
+
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          customer: true,
+          operator: true,
+          payment: true,
+        },
       });
-    }
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: {
-        customer: true,
-        operator: true,
-        payment: true,
-      },
-    });
+      if (!booking || booking.customerId !== req.user.id) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
 
-    if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
-    }
+      if (booking.status === "PAID" || booking.payment?.status === "PAID") {
+        return res.status(400).json({ message: "This booking is already paid" });
+      }
 
-    if (booking.status === "PAID" || booking.payment?.status === "PAID") {
-      return res.status(400).json({ message: "This booking is already paid" });
-    }
+      if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
+        return res.status(400).json({
+          message: "Payment is only available after the booking is accepted.",
+        });
+      }
 
-    if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
-      return res.status(400).json({
-        message: "Payment is only available after the booking is accepted.",
-      });
-    }
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "payment",
-      customer_email: booking.customer.email,
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "myr",
-            unit_amount: Math.round(Number(booking.totalAmount) * 100),
-            product_data: {
-              name: booking.serviceName,
-              description: `Booking via ${booking.operator.companyName}`,
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        mode: "payment",
+        customer_email: booking.customer.email,
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: "myr",
+              unit_amount: Math.round(Number(booking.totalAmount) * 100),
+              product_data: {
+                name: booking.serviceName,
+                description: `Booking via ${booking.operator.companyName}`,
+              },
             },
           },
+        ],
+        metadata: {
+          bookingId: String(booking.id),
+          customerId: String(req.user.id),
         },
-      ],
-      metadata: {
-        bookingId: String(booking.id),
-      },
-      success_url: `${
-        process.env.FRONTEND_URL || "http://localhost:5173"
-      }/customer/payment-status/${booking.id}?payment=success`,
-      cancel_url: `${
-        process.env.FRONTEND_URL || "http://localhost:5173"
-      }/customer/checkout/${booking.id}?payment=cancelled`,
-    });
+        success_url: `${
+          process.env.FRONTEND_URL || "http://localhost:5173"
+        }/customer/payment-status/${booking.id}?payment=success`,
+        cancel_url: `${
+          process.env.FRONTEND_URL || "http://localhost:5173"
+        }/customer/checkout/${booking.id}?payment=cancelled`,
+      });
 
-    res.json({
-      url: session.url,
-    });
-  } catch (err) {
-    next(err);
+      res.json({
+        url: session.url,
+      });
+    } catch (err) {
+      next(err);
+    }
   }
-});
+);
 
 export default router;
