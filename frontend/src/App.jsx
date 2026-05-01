@@ -51,8 +51,8 @@ export default function App() {
 
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        // Protected Routes
-          // Master Routes
+        {/* Protected Routes */}
+          {/* Master Routes */}
           <Route element={<ProtectedRoute allowedRoles={["MASTER_SELLER"]} />}>
             <Route path="/master" element={<MasterLayout />}>
               <Route index element={<Navigate to="dashboard" replace />} />
@@ -70,7 +70,7 @@ export default function App() {
             </Route>
           </Route>
 
-          // Operator Routes
+          {/* Operator Routes */}
           <Route element={<ProtectedRoute allowedRoles={["NORMAL_SELLER", "MASTER_SELLER"]} />}>
             <Route path="/operator" element={<OperatorLayout />}>
               <Route index element={<Navigate to="dashboard" replace />} />
@@ -86,7 +86,7 @@ export default function App() {
             </Route>
           </Route>
 
-          // Customer Routes
+          {/* Customer Routes */}
           <Route element={<ProtectedRoute allowedRoles={["CUSTOMER"]} />}>
             <Route path="/customer" element={<CustomerLayout />}>
               <Route index element={<Navigate to="bookings" replace />} />

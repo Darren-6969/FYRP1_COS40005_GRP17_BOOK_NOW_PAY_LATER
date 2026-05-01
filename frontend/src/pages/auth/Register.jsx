@@ -63,6 +63,7 @@ export default function Register() {
 
       const params = new URLSearchParams();
 
+      if (hostToken) params.set("hostToken", hostToken);
       if (redirectParam) params.set("redirect", redirectParam);
       params.set("email", form.email.trim());
 
