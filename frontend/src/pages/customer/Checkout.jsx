@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useCustomerBooking } from "../../hooks/useBookings";
 import { submitCustomerPayment } from "../../hooks/usePayments";
+import { createStripeCheckoutSession } from "../../services/customer_service";
 import { formatCustomerDate, formatMoney } from "../../utils/customerUtils";
 
 export default function Checkout() {
@@ -14,8 +15,21 @@ export default function Checkout() {
 
   const handlePay = async () => {
     setSubmitError("");
+
     if (method === "DUITNOW_SPAY") {
       navigate(`/customer/upload-receipt/${id}`);
+      return;
+    }
+
+    if (method === "STRIPE") {
+      setSubmitting(true);
+      try {
+        const res = await createStripeCheckoutSession(id);
+        window.location.href = res.data.url;
+      } catch (err) {
+        setSubmitError(err.response?.data?.message || "Failed to start Stripe checkout");
+        setSubmitting(false);
+      }
       return;
     }
 
@@ -75,14 +89,9 @@ export default function Checkout() {
           </div>
 
           {method === "STRIPE" && (
-            <div className="customer-card-form">
-              <input placeholder="Card number" defaultValue="4242 4242 4242 4242" />
-              <div>
-                <input placeholder="MM / YY" defaultValue="12 / 30" />
-                <input placeholder="CVC" defaultValue="123" />
-              </div>
-              <input placeholder="Name on card" defaultValue="Demo Customer" />
-            </div>
+            <p className="customer-payment-note">
+              You will be redirected to Stripe's secure checkout. Use card <strong>4242 4242 4242 4242</strong>, any future expiry, and any CVC in the sandbox.
+            </p>
           )}
 
           {submitError && <div className="customer-alert customer-alert-danger">{submitError}</div>}
