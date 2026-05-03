@@ -98,6 +98,16 @@ export default function PaymentStatus() {
           </div>
         )}
 
+        {paymentResult === "success" && !sessionId && (
+          <div className="customer-alert customer-alert-danger">
+            Stripe returned success, but no session ID was found in the URL. Please go back to checkout and create a new payment session.
+          </div>
+        )}
+
+        <button type="button" onClick={() => reload()}>
+          Refresh Payment Status
+        </button>
+
         <div className="customer-info-list detail">
           <div>
             <span>Booking ID</span>
