@@ -2,7 +2,7 @@ import { io } from "socket.io-client";
 
 let socket = null;
 
-function isRealtimeEnabled() {
+export function isRealtimeEnabled() {
   return import.meta.env.VITE_ENABLE_SOCKET === "true";
 }
 
@@ -32,10 +32,11 @@ export function getSocket() {
 }
 
 export function connectUserSocket(userId) {
-  if (!isRealtimeEnabled() || !userId) return null;
+  if (!isRealtimeEnabled() || !userId) {
+    return null;
+  }
 
   const activeSocket = getSocket();
-
   if (!activeSocket) return null;
 
   if (!activeSocket.connected) {
@@ -43,7 +44,6 @@ export function connectUserSocket(userId) {
   }
 
   activeSocket.emit("join_user_room", userId);
-
   return activeSocket;
 }
 

@@ -8,12 +8,19 @@ import { operatorService } from "../services/operator_service";
 import {
   connectUserSocket,
   disconnectUserSocket,
-  getSocket,
+  isRealtimeEnabled,
 } from "../services/socket_service";
+
+const POLLING_INTERVAL_MS = 15000;
+
+function normalizeNotifications(payload) {
+  return Array.isArray(payload) ? payload : [];
+}
 
 function getStoredUser() {
   try {
-    const rawUser = localStorage.getItem("user") || sessionStorage.getItem("user");
+    const rawUser =
+      localStorage.getItem("user") || sessionStorage.getItem("user");
     return rawUser ? JSON.parse(rawUser) : null;
   } catch {
     return null;
@@ -36,39 +43,46 @@ function mergeNotification(currentNotifications, incomingNotification) {
   return [incomingNotification, ...currentNotifications];
 }
 
-function useRealtimeNotifications({ role, fetchNotifications, markReadApi, markAllReadApi }) {
+function useNotificationsWithFallback({
+  role,
+  fetchNotifications,
+  markReadApi,
+  markAllReadApi,
+}) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [pollingEnabled, setPollingEnabled] = useState(!isRealtimeEnabled());
   const [error, setError] = useState("");
 
-  const loadNotifications = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const loadNotifications = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!silent) setLoading(true);
+      setError("");
 
-    try {
-      const res = await fetchNotifications();
-
-      const payload = res.data?.notifications || res.data || [];
-      setNotifications(Array.isArray(payload) ? payload : []);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to load notifications");
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchNotifications]);
+      try {
+        const res = await fetchNotifications();
+        const payload = res.data?.notifications || res.data || [];
+        setNotifications(normalizeNotifications(payload));
+      } catch (err) {
+        if (!silent) {
+          setError(
+            err.response?.data?.message || "Failed to load notifications"
+          );
+        }
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [fetchNotifications]
+  );
 
   const markRead = async (id) => {
     await markReadApi(id);
 
     setNotifications((current) =>
       current.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              isRead: true,
-            }
-          : item
+        item.id === id ? { ...item, isRead: true } : item
       )
     );
   };
@@ -88,24 +102,55 @@ function useRealtimeNotifications({ role, fetchNotifications, markReadApi, markA
     loadNotifications();
   }, [loadNotifications]);
 
+  // Polling fallback for Vercel backend
   useEffect(() => {
-    const user = getStoredUser();
+    if (isRealtimeEnabled()) return;
 
+    setSocketConnected(false);
+    setPollingEnabled(true);
+
+    const intervalId = window.setInterval(() => {
+      loadNotifications({ silent: true });
+    }, POLLING_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [loadNotifications]);
+
+  // Socket.IO mode only when explicitly enabled
+  useEffect(() => {
+    if (!isRealtimeEnabled()) {
+      setSocketConnected(false);
+      return;
+    }
+
+    const user = getStoredUser();
     if (!user?.id) return;
 
     const socket = connectUserSocket(user.id);
 
+    // Important: prevent null socket crash
+    if (!socket) {
+      setSocketConnected(false);
+      setPollingEnabled(true);
+      return;
+    }
+
     const handleConnect = () => {
       setSocketConnected(true);
+      setPollingEnabled(false);
       socket.emit("join_user_room", user.id);
     };
 
     const handleDisconnect = () => {
       setSocketConnected(false);
+      setPollingEnabled(true);
     };
 
     const handleJoined = () => {
       setSocketConnected(true);
+      setPollingEnabled(false);
     };
 
     const handleNewNotification = (notification) => {
@@ -124,7 +169,7 @@ function useRealtimeNotifications({ role, fetchNotifications, markReadApi, markA
     };
 
     const handleRefresh = () => {
-      loadNotifications();
+      loadNotifications({ silent: true });
     };
 
     socket.on("connect", handleConnect);
@@ -136,6 +181,7 @@ function useRealtimeNotifications({ role, fetchNotifications, markReadApi, markA
     if (socket.connected) {
       socket.emit("join_user_room", user.id);
       setSocketConnected(true);
+      setPollingEnabled(false);
     }
 
     return () => {
@@ -153,6 +199,7 @@ function useRealtimeNotifications({ role, fetchNotifications, markReadApi, markA
     loading,
     error,
     socketConnected,
+    pollingEnabled,
     reload: loadNotifications,
     markRead,
     markAllRead,
@@ -160,7 +207,7 @@ function useRealtimeNotifications({ role, fetchNotifications, markReadApi, markA
 }
 
 export function useCustomerNotifications() {
-  return useRealtimeNotifications({
+  return useNotificationsWithFallback({
     role: "CUSTOMER",
     fetchNotifications: getCustomerNotifications,
     markReadApi: markCustomerNotificationRead,
@@ -169,7 +216,7 @@ export function useCustomerNotifications() {
 }
 
 export function useOperatorNotifications() {
-  return useRealtimeNotifications({
+  return useNotificationsWithFallback({
     role: "OPERATOR",
     fetchNotifications: () => operatorService.getNotifications(),
     markReadApi: (id) => operatorService.markNotificationRead(id),
@@ -178,7 +225,7 @@ export function useOperatorNotifications() {
 }
 
 export function useMasterNotifications() {
-  return useRealtimeNotifications({
+  return useNotificationsWithFallback({
     role: "MASTER_SELLER",
     fetchNotifications: () => operatorService.getNotifications(),
     markReadApi: (id) => operatorService.markNotificationRead(id),
