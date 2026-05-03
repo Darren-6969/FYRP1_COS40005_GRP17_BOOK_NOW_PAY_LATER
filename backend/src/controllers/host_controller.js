@@ -389,6 +389,7 @@ export async function claimHostBookingIntent(req, res, next) {
       message: "BNPL booking created successfully",
       bookingId: result.id,
       bookingCode: result.bookingCode,
+      bookingDetailUrl: frontendUrl(`/customer/bookings/${result.id}`),
       checkoutUrl: frontendUrl(`/customer/checkout/${result.id}`),
     });
   } catch (err) {
