@@ -84,7 +84,7 @@ export default function OperatorBookingDetail() {
         <div className="operator-card operator-booking-summary">
           <div className="operator-card-head">
             <div>
-              <h2>{booking.id}</h2>
+              <h2>BNPL-{String(booking.id).padStart(5, "0")}</h2>
               <p>Requested on {formatOperatorDateTime(booking.createdAt)}</p>
             </div>
 
@@ -109,7 +109,7 @@ export default function OperatorBookingDetail() {
           <InfoRow label="Payment Deadline" value={formatOperatorDateTime(booking.paymentDeadline)} />
         </div>
 
-        <div className="operator-card">
+        <div className="operator-card operator-card-secondary">
           <h2>Customer Information</h2>
 
           <div className="operator-customer-box">
@@ -129,7 +129,7 @@ export default function OperatorBookingDetail() {
           <InfoRow label="Updated At" value={formatOperatorDateTime(booking.updatedAt)} />
         </div>
 
-        <div className="operator-card">
+        <div className="operator-card operator-card-secondary">
           <h2>Booking Timeline</h2>
 
           <div className="operator-timeline">
@@ -149,7 +149,7 @@ export default function OperatorBookingDetail() {
           </div>
         </div>
 
-        <div className="operator-card">
+        <div className="operator-card operator-card-secondary">
           <h2>Payment Status</h2>
 
           <InfoRow label="Amount" value={formatOperatorMoney(booking.payment?.amount || booking.totalAmount)} strong />

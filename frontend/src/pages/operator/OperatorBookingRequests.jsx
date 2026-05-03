@@ -11,6 +11,7 @@ import {
 const tabs = [
   { label: "All", value: "ALL" },
   { label: "Pending", value: "PENDING" },
+  { label: "Rejected", value: "REJECTED" },
   { label: "Accepted", value: "ACCEPTED" },
   { label: "Payment Required", value: "PENDING_PAYMENT" },
   { label: "Paid", value: "PAID" },
@@ -133,7 +134,7 @@ export default function OperatorBookingRequests() {
                   <tr key={booking.id}>
                     <td>
                       <Link to={`/operator/bookings/${booking.id}`}>
-                        {booking.id}
+                        {booking.bookingCode || `BNPL-${String(booking.id).padStart(4, "0")}`}
                       </Link>
                     </td>
 

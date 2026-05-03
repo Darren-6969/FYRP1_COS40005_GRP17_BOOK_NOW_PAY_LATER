@@ -337,6 +337,11 @@
 
 .operator-card {
   padding: 20px;
+   
+}
+
+.operator-card-secondary {
+  background: #f6f0ff; 
 }
 
 .operator-card h2 {
@@ -485,9 +490,8 @@
   font-size: 12px;
 }
 
-.operator-table-wrap {
-  width: 100%;
-  overflow-x: auto;
+.operator-table td a {
+  white-space: nowrap;
 }
 
 .operator-table {
