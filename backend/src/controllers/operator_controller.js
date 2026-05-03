@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { sendEmail } from "../services/email_service.js";
 import { generateForecast } from "../services/sarima_service.js";
 import { generateInvoiceForBooking } from "../services/invoice_service.js";
+import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
 import {
   notifyCustomerByBooking,
   notifyOperatorUsersByBooking,
@@ -649,6 +650,78 @@ export function rejectBooking(req, res, next) {
   return updateBookingStatus(req, res, next, "REJECTED", "BOOKING_REJECTED");
 }
 
+export async function cancelOperatorBooking(req, res, next) {
+  try {
+    const booking = await findOperatorBooking(req, req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
+      return res.status(400).json({
+        message:
+          "Merchant cancellation is only allowed after the booking is accepted and before payment is completed.",
+      });
+    }
+
+    if (booking.payment?.status === "PAID" || booking.status === "PAID") {
+      return res.status(400).json({
+        message:
+          "Paid bookings cannot be cancelled here. Refund process is not implemented.",
+      });
+    }
+
+    const { reason } = req.body || {};
+
+    const updatedBooking = await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        status: "CANCELLED",
+      },
+      include: includeBookingRelations(),
+    });
+
+    await createAuditLog({
+      req,
+      action: "OPERATOR_BOOKING_CANCELLED",
+      entityType: "Booking",
+      entityId: booking.id,
+      details: {
+        previousStatus: booking.status,
+        reason: reason || null,
+      },
+    });
+
+    const customerUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/customer/bookings/${booking.id}`;
+
+    await createCustomerNotification({
+      booking: updatedBooking,
+      title: "Booking cancelled by merchant",
+      message: `Your booking ${
+        booking.bookingCode || booking.id
+      } has been cancelled by the merchant.${
+        reason ? ` Reason: ${reason}` : ""
+      }`,
+      type: "OPERATOR_BOOKING_CANCELLED",
+      emailSubject: `Booking Cancelled - ${booking.bookingCode || booking.id}`,
+      emailHtml: bookingStatusTemplate({
+        booking: updatedBooking,
+        status: "CANCELLED",
+        customerUrl,
+      }),
+    });
+
+    res.json({
+      booking: mapBooking(updatedBooking),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export function confirmBooking(req, res, next) {
   return updateBookingStatus(req, res, next, "COMPLETED", "BOOKING_CONFIRMED");
 }
@@ -752,7 +825,10 @@ export async function sendPaymentRequest(req, res, next) {
     }
 
     const method = req.body?.method || "PENDING";
-    const paymentDeadline = await calculatePaymentDeadline(booking.operatorId);
+    const paymentDeadline = await calculatePaymentDeadline(
+      booking.operatorId,
+      req.body?.paymentDeadline || null
+    );
 
     const payment = await prisma.payment.upsert({
       where: {
@@ -810,6 +886,7 @@ export async function sendPaymentRequest(req, res, next) {
           paymentId: payment.id,
           method,
           paymentDeadline,
+          deadlineSource: req.body?.paymentDeadline ? "MANUAL" : "DEFAULT_CONFIG",
           invoiceId: invoice.id,
           invoiceNo: invoice.invoiceNo,
         },

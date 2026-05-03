@@ -9,6 +9,7 @@ import {
   getOperatorBookingById,
   acceptBooking,
   rejectBooking,
+  cancelOperatorBooking,
   confirmBooking,
   suggestAlternative,
   sendPaymentRequest,
@@ -49,6 +50,7 @@ router.get("/bookings", ...operatorAccess, getOperatorBookings);
 router.get("/bookings/:id", ...operatorAccess, getOperatorBookingById);
 router.patch("/bookings/:id/accept", ...operatorAccess, acceptBooking);
 router.patch("/bookings/:id/reject", ...operatorAccess, rejectBooking);
+router.patch("/bookings/:id/cancel", ...operatorAccess, cancelOperatorBooking);
 router.patch("/bookings/:id/confirm", ...operatorAccess, confirmBooking);
 router.patch("/bookings/:id/suggest-alternative", ...operatorAccess, suggestAlternative);
 router.patch("/bookings/:id/send-payment-request", ...operatorAccess, sendPaymentRequest);

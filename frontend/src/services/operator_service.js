@@ -34,6 +34,10 @@ export const operatorService = {
     return api.patch(`/operators/bookings/${id}/reject`);
   },
 
+  cancelBooking(id, payload = {}) {
+    return api.patch(`/operators/bookings/${id}/cancel`, payload);
+  },
+  
   confirmBooking(id) {
     return api.patch(`/operators/bookings/${id}/confirm`);
   },

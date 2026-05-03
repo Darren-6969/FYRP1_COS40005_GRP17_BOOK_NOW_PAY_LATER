@@ -2,7 +2,9 @@ import {
   getCronStatus,
   runBookingMaintenanceChecks,
   runCompletedBookingCheck,
+  runNoMerchantResponseCheck,
   runOverdueBookingCheck,
+  runPaymentReminderCheck,
 } from "../services/cron_service.js";
 
 export async function getCronJobStatus(req, res, next) {
@@ -36,6 +38,36 @@ export async function runCompletionCheck(req, res, next) {
 
     res.json({
       message: "Completed booking check completed",
+      result,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function runPaymentReminderCron(req, res, next) {
+  try {
+    const result = await runPaymentReminderCheck({
+      triggeredByUserId: req.user?.id || null,
+    });
+
+    res.json({
+      message: "Payment reminder check completed",
+      result,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function runNoResponseCron(req, res, next) {
+  try {
+    const result = await runNoMerchantResponseCheck({
+      triggeredByUserId: req.user?.id || null,
+    });
+
+    res.json({
+      message: "No merchant response check completed",
       result,
     });
   } catch (err) {

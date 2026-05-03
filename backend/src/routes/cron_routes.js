@@ -3,7 +3,9 @@ import {
   getCronJobStatus,
   runCompletionCheck,
   runMaintenanceChecks,
+  runNoResponseCron,
   runOverdueCheck,
+  runPaymentReminderCron,
 } from "../controllers/cron_controller.js";
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import { allowRoles } from "../middlewares/rbac_middleware.js";
@@ -44,6 +46,20 @@ router.post(
 );
 
 router.post(
+  "/run-payment-reminders",
+  verifyToken,
+  allowRoles("MASTER_SELLER"),
+  runPaymentReminderCron
+);
+
+router.post(
+  "/run-no-response-check",
+  verifyToken,
+  allowRoles("MASTER_SELLER"),
+  runNoResponseCron
+);
+
+router.post(
   "/run-maintenance-checks",
   verifyToken,
   allowRoles("MASTER_SELLER"),
@@ -51,7 +67,7 @@ router.post(
 );
 
 // Vercel Cron sends Authorization: Bearer $CRON_SECRET.
-// This should run both overdue and completed checks.
+// This runs no-response, payment reminder, overdue, and completion checks.
 router.get("/vercel-maintenance-check", verifyCronSecret, runMaintenanceChecks);
 
 // Keep old endpoint for backward compatibility.
