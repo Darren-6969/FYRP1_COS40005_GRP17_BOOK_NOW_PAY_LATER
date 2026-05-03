@@ -2,6 +2,10 @@ import { io } from "socket.io-client";
 
 let socket = null;
 
+function isRealtimeEnabled() {
+  return import.meta.env.VITE_ENABLE_SOCKET === "true";
+}
+
 function getApiBaseUrl() {
   const rawBaseUrl =
     import.meta.env.VITE_API_BASE_URL ||
@@ -12,6 +16,10 @@ function getApiBaseUrl() {
 }
 
 export function getSocket() {
+  if (!isRealtimeEnabled()) {
+    return null;
+  }
+
   if (!socket) {
     socket = io(getApiBaseUrl(), {
       transports: ["websocket", "polling"],
@@ -24,9 +32,11 @@ export function getSocket() {
 }
 
 export function connectUserSocket(userId) {
-  if (!userId) return null;
+  if (!isRealtimeEnabled() || !userId) return null;
 
   const activeSocket = getSocket();
+
+  if (!activeSocket) return null;
 
   if (!activeSocket.connected) {
     activeSocket.connect();
@@ -49,6 +59,11 @@ export function disconnectUserSocket(userId) {
 
 export function onSocketEvent(eventName, handler) {
   const activeSocket = getSocket();
+
+  if (!activeSocket) {
+    return () => {};
+  }
+
   activeSocket.on(eventName, handler);
 
   return () => {
