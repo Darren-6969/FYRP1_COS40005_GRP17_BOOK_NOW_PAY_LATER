@@ -409,6 +409,52 @@
 .legend-orange { background: #f59e0b; }
 .legend-red { background: #ef4444; }
 
+/* ── Forecast / SARIMA ─────────────────────────────────────── */
+.operator-metric-grid.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.operator-metric.info small {
+  color: #2563eb;
+}
+
+.operator-forecast-card {
+  margin-bottom: 0;
+}
+
+.operator-model-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.operator-forecast-tooltip {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.1);
+}
+
+.forecast-tooltip-label {
+  color: #64748b;
+  margin: 0 0 6px;
+  font-weight: 800;
+}
+
+/* ── end Forecast ──────────────────────────────────────────── */
+
 .operator-activity-list,
 .operator-pending-list,
 .operator-notification-list,
@@ -663,6 +709,7 @@
 
 @media (max-width: 1200px) {
   .operator-metric-grid,
+  .operator-metric-grid.four,
   .operator-metric-grid.five {
     grid-template-columns: repeat(3, 1fr);
   }

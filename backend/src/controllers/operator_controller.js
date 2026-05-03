@@ -1,6 +1,7 @@
 import prisma from "../config/db.js";
 import bcrypt from "bcryptjs";
 import { sendEmail } from "../services/email_service.js";
+import { generateForecast } from "../services/sarima_service.js";
 import { generateInvoiceForBooking } from "../services/invoice_service.js";
 import {
   notifyCustomerByBooking,
@@ -1433,15 +1434,21 @@ export async function markAllNotificationsRead(req, res, next) {
  */
 export async function getOperatorReports(req, res, next) {
   try {
-    const bookings = await prisma.booking.findMany({
-      where: bookingWhere(req),
-      include: {
-        payment: true,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-    });
+    const operatorId =
+      req.user.role === "MASTER_SELLER" ? null : req.user.operatorId;
+
+    const [bookings, forecast] = await Promise.all([
+      prisma.booking.findMany({
+        where: bookingWhere(req),
+        include: { payment: true },
+        orderBy: { createdAt: "asc" },
+      }),
+      generateForecast(operatorId).catch(() => ({
+        historical: [],
+        forecast: [],
+        summary: null,
+      })),
+    ]);
 
     const paidBookings = bookings.filter(
       (booking) => booking.payment?.status === "PAID" || booking.status === "PAID"
@@ -1479,12 +1486,13 @@ export async function getOperatorReports(req, res, next) {
           ? Math.round((paidBookings.length / bookings.length) * 100)
           : 0,
       },
-      revenueTrend: [],
+      revenueTrend: forecast.historical,
       paymentMethodBreakdown: Object.entries(paymentMethods).map(([method, amount]) => ({
         method,
         amount,
       })),
-      demandForecast: [],
+      demandForecast: forecast.forecast,
+      forecastSummary: forecast.summary,
     });
   } catch (err) {
     next(err);
