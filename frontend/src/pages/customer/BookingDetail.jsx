@@ -130,8 +130,11 @@ export default function BookingDetail() {
               </button>
             )}
 
-            {booking.invoice && (
-              <Link className="customer-secondary-btn" to="/customer/invoices">
+            {booking.invoice?.id && (
+              <Link
+                className="customer-secondary-btn"
+                to={`/customer/invoices/${booking.invoice.id}`}
+              >
                 View Invoice
               </Link>
             )}

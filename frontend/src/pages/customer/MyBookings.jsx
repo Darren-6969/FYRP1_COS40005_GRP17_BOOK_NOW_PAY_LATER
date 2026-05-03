@@ -72,13 +72,6 @@ function getPrimaryAction(booking) {
     };
   }
 
-  if (isPaymentRequired(booking)) {
-    return {
-      label: "Pay Now",
-      to: `/customer/checkout/${booking.id}`,
-    };
-  }
-
   if (isPendingVerification(booking)) {
     return {
       label: "View Status",

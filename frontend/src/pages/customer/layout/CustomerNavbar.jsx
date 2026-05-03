@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 const sidebarLinks = [
   { to: "/customer/bookings", label: "My Bookings", icon: "⌂" },
   { to: "/customer/payments", label: "Payments", icon: "◉" },
+  { to: "/customer/invoices", label: "Invoices", icon: "▧" },
   { to: "/customer/notifications", label: "Notifications", icon: "◇" },
   { to: "/customer/profile", label: "Profile", icon: "○" },
 ];
@@ -10,6 +11,7 @@ const sidebarLinks = [
 const bottomLinks = [
   { to: "/customer/bookings", label: "Bookings", icon: "⌂" },
   { to: "/customer/payments", label: "Payments", icon: "◉" },
+  { to: "/customer/invoices", label: "Invoices", icon: "▧" },
   { to: "/customer/notifications", label: "Alerts", icon: "◇" },
   { to: "/customer/profile", label: "Profile", icon: "○" },
 ];

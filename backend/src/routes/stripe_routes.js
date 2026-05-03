@@ -496,15 +496,85 @@ router.post(
           bookingId: String(booking.id),
           customerId: String(req.user.id),
         },
-        success_url: `${
-          process.env.FRONTEND_URL || "http://localhost:5173"
-        }/customer/payment-status/${booking.id}?payment=success`,
+      success_url: `${
+        process.env.FRONTEND_URL || "http://localhost:5173"
+      }/customer/payment-status/${booking.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${
           process.env.FRONTEND_URL || "http://localhost:5173"
         }/customer/checkout/${booking.id}?payment=cancelled`,
       });
 
       res.json({ url: session.url });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.post(
+  "/confirm-session",
+  express.json(),
+  verifyToken,
+  allowRoles("CUSTOMER"),
+  async (req, res, next) => {
+    try {
+      const { sessionId } = req.body;
+
+      if (!sessionId) {
+        return res.status(400).json({ message: "sessionId is required" });
+      }
+
+      if (!process.env.STRIPE_SECRET_KEY) {
+        return res.status(500).json({
+          message: "STRIPE_SECRET_KEY is not configured",
+        });
+      }
+
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      const bookingId = parseBookingId(session.metadata?.bookingId);
+
+      if (!bookingId) {
+        return res.status(400).json({
+          message: "Invalid Stripe session booking metadata",
+        });
+      }
+
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          customer: true,
+          operator: true,
+          payment: true,
+        },
+      });
+
+      if (!booking || booking.customerId !== req.user.id) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+
+      if (session.payment_status !== "paid") {
+        return res.status(400).json({
+          message: `Stripe payment is ${session.payment_status}`,
+        });
+      }
+
+      const transactionId =
+        session.payment_intent || session.id || `STRIPE-${Date.now()}`;
+
+      const result = await applyPaidState(bookingId, transactionId, session.id);
+
+      const refreshed = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: includeBookingRelations(),
+      });
+
+      res.json({
+        message: "Stripe payment confirmed",
+        booking: refreshed,
+        alreadyPaid: result?.alreadyPaid || false,
+      });
     } catch (err) {
       next(err);
     }

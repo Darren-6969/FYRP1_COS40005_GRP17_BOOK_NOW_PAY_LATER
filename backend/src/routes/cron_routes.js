@@ -1,6 +1,8 @@
 import express from "express";
 import {
   getCronJobStatus,
+  runCompletionCheck,
+  runMaintenanceChecks,
   runOverdueCheck,
 } from "../controllers/cron_controller.js";
 import { verifyToken } from "../middlewares/auth_middleware.js";
@@ -34,7 +36,25 @@ router.post(
   runOverdueCheck
 );
 
+router.post(
+  "/run-completion-check",
+  verifyToken,
+  allowRoles("MASTER_SELLER"),
+  runCompletionCheck
+);
+
+router.post(
+  "/run-maintenance-checks",
+  verifyToken,
+  allowRoles("MASTER_SELLER"),
+  runMaintenanceChecks
+);
+
 // Vercel Cron sends Authorization: Bearer $CRON_SECRET.
-router.get("/vercel-overdue-check", verifyCronSecret, runOverdueCheck);
+// This should run both overdue and completed checks.
+router.get("/vercel-maintenance-check", verifyCronSecret, runMaintenanceChecks);
+
+// Keep old endpoint for backward compatibility.
+router.get("/vercel-overdue-check", verifyCronSecret, runMaintenanceChecks);
 
 export default router;
