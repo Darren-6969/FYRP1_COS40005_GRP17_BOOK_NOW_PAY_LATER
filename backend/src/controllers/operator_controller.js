@@ -642,8 +642,124 @@ async function updateBookingStatus(req, res, next, status, action) {
   }
 }
 
-export function acceptBooking(req, res, next) {
-  return updateBookingStatus(req, res, next, "ACCEPTED", "BOOKING_ACCEPTED");
+export async function acceptBooking(req, res, next) {
+  try {
+    const booking = await findOperatorBooking(req, req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    if (!["PENDING", "ALTERNATIVE_SUGGESTED"].includes(booking.status)) {
+      return res.status(400).json({
+        message: `Booking cannot be accepted when status is ${booking.status}`,
+      });
+    }
+
+    const paymentDeadline =
+      booking.paymentDeadline ||
+      (await calculatePaymentDeadline(booking.operatorId));
+
+    const payment = await prisma.payment.upsert({
+      where: {
+        bookingId: booking.id,
+      },
+      update: {
+        amount: booking.totalAmount,
+        method: booking.payment?.method || "PENDING",
+        status: "UNPAID",
+      },
+      create: {
+        bookingId: booking.id,
+        amount: booking.totalAmount,
+        method: "PENDING",
+        status: "UNPAID",
+      },
+    });
+
+    const invoice = await generateInvoiceForBooking(
+      booking.id,
+      booking.totalAmount,
+      prisma,
+      { status: "SENT" }
+    );
+
+    const updatedBooking = await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        status: "PENDING_PAYMENT",
+        paymentDeadline,
+      },
+      include: includeBookingRelations(),
+    });
+
+    await createAuditLog({
+      req,
+      action: "BOOKING_ACCEPTED",
+      entityType: "Booking",
+      entityId: booking.id,
+      details: {
+        previousStatus: booking.status,
+        status: "PENDING_PAYMENT",
+        paymentId: payment.id,
+        paymentDeadline,
+        deadlineSource: booking.paymentDeadline
+          ? "EXISTING"
+          : "DEFAULT_CONFIG",
+        invoiceId: invoice.id,
+        invoiceNo: invoice.invoiceNo,
+      },
+    });
+
+    await createAuditLog({
+      req,
+      action: "PAYMENT_REQUEST_AUTO_SENT",
+      entityType: "Booking",
+      entityId: booking.id,
+      details: {
+        paymentId: payment.id,
+        paymentDeadline,
+        invoiceId: invoice.id,
+        invoiceNo: invoice.invoiceNo,
+        source: "BOOKING_ACCEPTED",
+      },
+    });
+
+    const customerPaymentUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/customer/checkout/${booking.id}`;
+
+    await notifyCustomerByBooking({
+      booking: updatedBooking,
+      title: "Booking accepted - payment available",
+      message: `Your booking ${
+        updatedBooking.bookingCode || updatedBooking.id
+      } has been accepted. Please complete payment before the deadline.`,
+      type: "BOOKING_ACCEPTED_PAYMENT_AVAILABLE",
+      emailSubject: `Booking Accepted - ${
+        updatedBooking.bookingCode || updatedBooking.id
+      }`,
+      emailHtml: invoiceSentTemplate({
+        invoice,
+        booking: updatedBooking,
+        customerUrl: customerPaymentUrl,
+      }),
+    });
+
+    res.json({
+      booking: mapBooking(updatedBooking),
+      payment: {
+        ...payment,
+        amount: toNumber(payment.amount),
+      },
+      invoice: {
+        ...invoice,
+        amount: toNumber(invoice.amount),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
 }
 
 export function rejectBooking(req, res, next) {
@@ -824,7 +940,21 @@ export async function sendPaymentRequest(req, res, next) {
       return res.status(404).json({ message: "Booking not found" });
     }
 
-    const method = req.body?.method || "PENDING";
+    if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
+      return res.status(400).json({
+        message:
+          "Payment deadline can only be updated after the booking is accepted.",
+      });
+    }
+
+    if (booking.payment?.status === "PAID" || booking.status === "PAID") {
+      return res.status(400).json({
+        message: "Paid bookings cannot have their payment deadline updated.",
+      });
+    }
+
+    const method = req.body?.method || booking.payment?.method || "PENDING";
+
     const paymentDeadline = await calculatePaymentDeadline(
       booking.operatorId,
       req.body?.paymentDeadline || null
@@ -847,39 +977,19 @@ export async function sendPaymentRequest(req, res, next) {
       },
     });
 
-    const invoice = await generateInvoiceForBooking(
-      booking.id,
-      booking.totalAmount,
-      prisma,
-      { status: "SENT" }
-    );
-
     const updatedBooking = await prisma.booking.update({
       where: { id: booking.id },
       data: {
         status: "PENDING_PAYMENT",
         paymentDeadline,
       },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            userCode: true,
-            name: true,
-            email: true,
-          },
-        },
-        operator: true,
-        payment: true,
-        receipt: true,
-        invoice: true,
-      },
+      include: includeBookingRelations(),
     });
 
     await prisma.auditLog.create({
       data: {
         userId: req.user.id,
-        action: "PAYMENT_REQUEST_SENT",
+        action: "PAYMENT_DEADLINE_UPDATED",
         entityType: "Booking",
         entityId: String(booking.id),
         details: {
@@ -887,8 +997,6 @@ export async function sendPaymentRequest(req, res, next) {
           method,
           paymentDeadline,
           deadlineSource: req.body?.paymentDeadline ? "MANUAL" : "DEFAULT_CONFIG",
-          invoiceId: invoice.id,
-          invoiceNo: invoice.invoiceNo,
         },
       },
     });
@@ -899,15 +1007,17 @@ export async function sendPaymentRequest(req, res, next) {
 
     await notifyCustomerByBooking({
       booking: updatedBooking,
-      title: "Invoice issued",
-      message: `Invoice ${invoice.invoiceNo} has been issued. Please complete payment before the deadline.`,
-      type: "INVOICE_SENT",
-      emailSubject: `Invoice ${invoice.invoiceNo} - ${
+      title: "Payment deadline updated",
+      message: `The payment deadline for booking ${
+        updatedBooking.bookingCode || updatedBooking.id
+      } has been updated.`,
+      type: "PAYMENT_DEADLINE_UPDATED",
+      emailSubject: `Payment Deadline Updated - ${
         updatedBooking.bookingCode || updatedBooking.id
       }`,
-      emailHtml: invoiceSentTemplate({
-        invoice,
+      emailHtml: paymentRequestTemplate({
         booking: updatedBooking,
+        payment,
         customerUrl: customerPaymentUrl,
       }),
     });
@@ -917,10 +1027,6 @@ export async function sendPaymentRequest(req, res, next) {
       payment: {
         ...payment,
         amount: toNumber(payment.amount),
-      },
-      invoice: {
-        ...invoice,
-        amount: toNumber(invoice.amount),
       },
     });
   } catch (err) {

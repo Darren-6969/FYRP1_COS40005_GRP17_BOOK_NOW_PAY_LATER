@@ -47,7 +47,6 @@ export default function OperatorBookingDetail() {
       if (action === "accept") await operatorService.acceptBooking(id);
       if (action === "reject") await operatorService.rejectBooking(id);
       if (action === "confirm") await operatorService.confirmBooking(id);
-      if (action === "payment") await operatorService.sendPaymentRequest(id);
       if (action === "cancel") await operatorService.cancelBooking(id);
 
       await loadBooking();
@@ -187,24 +186,19 @@ export default function OperatorBookingDetail() {
               Suggest Alternative
             </button>
 
-            <button
-              className="operator-secondary-btn"
-              disabled={!!actionLoading}
-              onClick={() => runAction("payment")}
-            >
-              Send Payment Request Default Deadline
-            </button>
+            {["ACCEPTED", "PENDING_PAYMENT"].includes(String(booking.status).toUpperCase()) && booking.payment?.status !== "PAID" && 
+            (
+              <button
+                className="operator-secondary-btn"
+                disabled={!!actionLoading}
+                onClick={() => setShowPaymentDeadline(true)}
+              >
+                Edit Payment Deadline
+              </button>
+            )}
 
-            <button
-              className="operator-secondary-btn"
-              disabled={!!actionLoading}
-              onClick={() => setShowPaymentDeadline(true)}
-            >
-              Edit Deadline & Send Payment Request
-            </button>
-
-            {["ACCEPTED", "PENDING_PAYMENT"].includes(String(booking.status).toUpperCase()) &&
-            booking.payment?.status !== "PAID" && (
+            {["ACCEPTED", "PENDING_PAYMENT"].includes(String(booking.status).toUpperCase()) && booking.payment?.status !== "PAID" && 
+            (
               <button
                 className="operator-danger-btn"
                 disabled={!!actionLoading}
@@ -411,7 +405,7 @@ function PaymentDeadlineModal({ booking, onClose, onDone }) {
       await onDone();
       onClose();
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to send payment request");
+      alert(err.response?.data?.message || "Failed to update payment deadline");
     } finally {
       setLoading(false);
     }
@@ -468,7 +462,7 @@ function PaymentDeadlineModal({ booking, onClose, onDone }) {
             onClick={handleSubmit}
             disabled={loading}
           >
-            {loading ? "Sending..." : "Send Payment Request"}
+            {loading ? "Saving..." : "Save Payment Deadline"}
           </button>
         </div>
       </div>
