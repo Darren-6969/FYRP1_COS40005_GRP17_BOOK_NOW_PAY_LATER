@@ -6,7 +6,7 @@ import {
   updateNotificationPreferences,
   updateProfile,
 } from "../../services/auth_service";
-import "../../assets/styles/customer-profile.css";
+import "../../assets/styles/customer.css";
 
 function getStoredUser() {
   try {
