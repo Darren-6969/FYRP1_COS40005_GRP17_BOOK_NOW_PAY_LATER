@@ -156,26 +156,45 @@ async function generateOperatorCode() {
   return `OPR${String(nextNumber).padStart(4, "0")}`;
 }
 
-async function generateUserCode(role) {
+function getRolePrefix(role) {
   const prefixMap = {
     CUSTOMER: "CUS",
     NORMAL_SELLER: "OPR",
     MASTER_SELLER: "ADN",
   };
 
-  const prefix = prefixMap[role] || "USR";
+  return prefixMap[role] || "USR";
+}
 
-  const latest = await prisma.user.findFirst({
-    where: { role },
+async function generateUserCode(role) {
+  const prefix = getRolePrefix(role);
+
+  const latestUser = await prisma.user.findFirst({
+    where: {
+      role,
+      userCode: {
+        startsWith: prefix,
+      },
+    },
     orderBy: {
-      id: "desc",
+      userCode: "desc",
     },
     select: {
-      id: true,
+      userCode: true,
     },
   });
 
-  const nextNumber = (latest?.id || 0) + 1;
+  let nextNumber = 1;
+
+  if (latestUser?.userCode) {
+    const numericPart = latestUser.userCode.replace(prefix, "");
+    const parsed = Number(numericPart);
+
+    if (Number.isInteger(parsed) && parsed > 0) {
+      nextNumber = parsed + 1;
+    }
+  }
+
   return `${prefix}${String(nextNumber).padStart(4, "0")}`;
 }
 

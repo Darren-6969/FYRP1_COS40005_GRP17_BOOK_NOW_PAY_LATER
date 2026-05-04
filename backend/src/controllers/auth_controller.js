@@ -23,11 +23,10 @@ async function generateUserCode(role) {
       },
     },
     orderBy: {
-      id: "desc",
+      userCode: "desc",
     },
     select: {
       userCode: true,
-      id: true,
     },
   });
 
@@ -39,12 +38,43 @@ async function generateUserCode(role) {
 
     if (Number.isInteger(parsed) && parsed > 0) {
       nextNumber = parsed + 1;
-    } else {
-      nextNumber = latestUser.id + 1;
     }
   }
 
   return `${prefix}${String(nextNumber).padStart(4, "0")}`;
+}
+
+function sanitizeUser(user) {
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    userCode: user.userCode,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    phone: user.phone || "",
+    profileImageUrl: user.profileImageUrl || "",
+    notifyBookingUpdates: Boolean(user.notifyBookingUpdates),
+    notifyPaymentReminders: Boolean(user.notifyPaymentReminders),
+    notifyInvoices: Boolean(user.notifyInvoices),
+    notifyPromotions: Boolean(user.notifyPromotions),
+    operatorId: user.operatorId || null,
+    operator: user.operator || null,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
+
+function isValidProfileImage(value) {
+  if (!value) return true;
+
+  if (typeof value !== "string") return false;
+
+  const isDataImage = value.startsWith("data:image/");
+  const isHttpUrl = value.startsWith("http://") || value.startsWith("https://");
+
+  return isDataImage || isHttpUrl;
 }
 
 async function createCustomerWithRetry({ name, email, password }) {
@@ -65,20 +95,10 @@ async function createCustomerWithRetry({ name, email, password }) {
           password: hashedPassword,
           role: safeRole,
         },
-        select: {
-          id: true,
-          userCode: true,
-          name: true,
-          email: true,
-          role: true,
-          createdAt: true,
-        },
       });
     } catch (err) {
       lastError = err;
 
-      // P2002 = unique constraint failed.
-      // Retry only if the conflict is probably userCode.
       if (err.code !== "P2002") {
         throw err;
       }
@@ -141,15 +161,12 @@ export async function register(req, res, next) {
       },
     });
 
-    res.status(201).json(user);
+    res.status(201).json(sanitizeUser(user));
   } catch (err) {
     if (err.code === "P2002") {
-      const target = Array.isArray(err.meta?.target)
-        ? err.meta.target.join(", ")
-        : String(err.meta?.target || "unique field");
-
       return res.status(409).json({
-        message: `Duplicate value detected for ${target}. Please try again.`,
+        message: "Duplicate value detected. Please try again.",
+        target: err.meta?.target,
       });
     }
 
@@ -213,27 +230,194 @@ export async function login(req, res, next) {
 
     res.json({
       token,
-      user: {
-        id: user.id,
-        userCode: user.userCode,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        operator: user.operator,
-      },
+      user: sanitizeUser(user),
     });
   } catch (err) {
     next(err);
   }
 }
 
-export async function me(req, res) {
-  res.json({
-    id: req.user.id,
-    userCode: req.user.userCode,
-    name: req.user.name,
-    email: req.user.email,
-    role: req.user.role,
-    operator: req.user.operator,
-  });
+export async function me(req, res, next) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.user.id,
+      },
+      include: {
+        operator: true,
+      },
+    });
+
+    res.json(sanitizeUser(user));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateProfile(req, res, next) {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const phone = String(req.body?.phone || "").trim();
+    const profileImageUrl = req.body?.profileImageUrl || "";
+
+    if (!name) {
+      return res.status(400).json({
+        message: "Name is required",
+      });
+    }
+
+    if (!isValidProfileImage(profileImageUrl)) {
+      return res.status(400).json({
+        message: "Invalid profile image format",
+      });
+    }
+
+    if (profileImageUrl && profileImageUrl.length > 1_500_000) {
+      return res.status(400).json({
+        message: "Profile image is too large. Please upload an image below 1MB.",
+      });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: {
+        id: req.user.id,
+      },
+      data: {
+        name,
+        phone: phone || null,
+        profileImageUrl: profileImageUrl || null,
+      },
+      include: {
+        operator: true,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: "PROFILE_UPDATED",
+        entityType: "User",
+        entityId: String(req.user.id),
+        details: {
+          nameUpdated: true,
+          phoneUpdated: true,
+          profileImageUpdated: Boolean(profileImageUrl),
+        },
+      },
+    });
+
+    res.json({
+      message: "Profile updated successfully",
+      user: sanitizeUser(updatedUser),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function changePassword(req, res, next) {
+  try {
+    const currentPassword = String(req.body?.currentPassword || "");
+    const newPassword = String(req.body?.newPassword || "");
+    const confirmPassword = String(req.body?.confirmPassword || "");
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        message: "Current password, new password and confirm password are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        message: "New password must be at least 6 characters long",
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        message: "New password and confirm password do not match",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.user.id,
+      },
+    });
+
+    const valid = await bcrypt.compare(currentPassword, user.password);
+
+    if (!valid) {
+      return res.status(401).json({
+        message: "Current password is incorrect",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: {
+        id: req.user.id,
+      },
+      data: {
+        password: hashedPassword,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: "PASSWORD_CHANGED",
+        entityType: "User",
+        entityId: String(req.user.id),
+      },
+    });
+
+    res.json({
+      message: "Password changed successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateNotificationPreferences(req, res, next) {
+  try {
+    const updatedUser = await prisma.user.update({
+      where: {
+        id: req.user.id,
+      },
+      data: {
+        notifyBookingUpdates: Boolean(req.body?.notifyBookingUpdates),
+        notifyPaymentReminders: Boolean(req.body?.notifyPaymentReminders),
+        notifyInvoices: Boolean(req.body?.notifyInvoices),
+        notifyPromotions: Boolean(req.body?.notifyPromotions),
+      },
+      include: {
+        operator: true,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: "NOTIFICATION_PREFERENCES_UPDATED",
+        entityType: "User",
+        entityId: String(req.user.id),
+        details: {
+          notifyBookingUpdates: updatedUser.notifyBookingUpdates,
+          notifyPaymentReminders: updatedUser.notifyPaymentReminders,
+          notifyInvoices: updatedUser.notifyInvoices,
+          notifyPromotions: updatedUser.notifyPromotions,
+        },
+      },
+    });
+
+    res.json({
+      message: "Notification preferences updated",
+      user: sanitizeUser(updatedUser),
+    });
+  } catch (err) {
+    next(err);
+  }
 }

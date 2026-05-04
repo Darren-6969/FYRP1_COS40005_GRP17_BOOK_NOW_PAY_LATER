@@ -1,6 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getMe } from "../../services/auth_service";
+import {
+  changePassword,
+  getMe,
+  updateNotificationPreferences,
+  updateProfile,
+} from "../../services/auth_service";
+import "../../assets/styles/customer.css";
 
 function getStoredUser() {
   try {
@@ -11,119 +17,642 @@ function getStoredUser() {
   }
 }
 
+function updateStoredUser(user) {
+  const storedInLocal = Boolean(localStorage.getItem("user"));
+  const storage = storedInLocal ? localStorage : sessionStorage;
+
+  storage.setItem("user", JSON.stringify(user));
+  storage.setItem("role", user.role);
+}
+
 function clearSession() {
   localStorage.removeItem("bnpl_token");
   localStorage.removeItem("token");
   localStorage.removeItem("user");
   localStorage.removeItem("role");
+
   sessionStorage.removeItem("bnpl_token");
   sessionStorage.removeItem("token");
   sessionStorage.removeItem("user");
   sessionStorage.removeItem("role");
 }
 
+function formatDate(value) {
+  if (!value) return "-";
+
+  return new Intl.DateTimeFormat("en-MY", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Kuala_Lumpur",
+  }).format(new Date(value));
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Failed to read image"));
+
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function CustomerProfile() {
   const navigate = useNavigate();
+
   const [user, setUser] = useState(getStoredUser());
+  const [activeTab, setActiveTab] = useState("personal");
+
+  const [profileForm, setProfileForm] = useState({
+    name: "",
+    phone: "",
+    profileImageUrl: "",
+  });
+
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
+  const [notificationForm, setNotificationForm] = useState({
+    notifyBookingUpdates: true,
+    notifyPaymentReminders: true,
+    notifyInvoices: true,
+    notifyPromotions: false,
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  useEffect(() => {
-    getMe()
-      .then((res) => setUser(res.data?.user || res.data))
-      .catch((err) => {
-        if (!user) {
-          setError(err.response?.data?.message || "Failed to load profile");
-        }
-      });
-  }, []);
-
-  const displayName = user?.name || user?.fullName || "Customer";
-  const displayEmail = user?.email || "customer@example.com";
+  const displayName = user?.name || "Customer";
+  const displayEmail = user?.email || "-";
   const avatarInitial = displayName?.[0]?.toUpperCase() || "C";
 
-  const menuItems = [
-    { label: "Personal Information", icon: "♙" },
-    { label: "Change Password", icon: "▣" },
-    { label: "Payment Methods", icon: "▤" },
-    { label: "Notification Preferences", icon: "♢" },
-    { label: "Help & Support", icon: "?" },
-  ];
+  const tabs = useMemo(
+    () => [
+      {
+        id: "personal",
+        label: "Personal Information",
+        icon: "♙",
+      },
+      {
+        id: "password",
+        label: "Change Password",
+        icon: "▣",
+      },
+      {
+        id: "notifications",
+        label: "Notification Preferences",
+        icon: "♢",
+      },
+      {
+        id: "help",
+        label: "Help & Support",
+        icon: "?",
+      },
+    ],
+    []
+  );
+
+  const syncUserToForms = (nextUser) => {
+    if (!nextUser) return;
+
+    setProfileForm({
+      name: nextUser.name || "",
+      phone: nextUser.phone || "",
+      profileImageUrl: nextUser.profileImageUrl || "",
+    });
+
+    setNotificationForm({
+      notifyBookingUpdates: Boolean(nextUser.notifyBookingUpdates),
+      notifyPaymentReminders: Boolean(nextUser.notifyPaymentReminders),
+      notifyInvoices: Boolean(nextUser.notifyInvoices),
+      notifyPromotions: Boolean(nextUser.notifyPromotions),
+    });
+  };
+
+  const loadProfile = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await getMe();
+      const nextUser = res.data?.user || res.data;
+
+      setUser(nextUser);
+      updateStoredUser(nextUser);
+      syncUserToForms(nextUser);
+    } catch (err) {
+      if (user) {
+        syncUserToForms(user);
+      } else {
+        setError(err.response?.data?.message || "Failed to load profile");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
   const handleLogout = () => {
     clearSession();
     navigate("/login", { replace: true });
   };
 
-  return (
-    <div className="customer-page">
-      <section
-        className="customer-glass-card"
-        style={{
-          maxWidth: 980,
-          width: "100%",
-          margin: "0 auto",
-          padding: 0,
-          overflow: "hidden",
-          display: "grid",
-          gridTemplateColumns: "320px 1fr",
-          minHeight: 430,
-        }}
-      >
-        <div
-          style={{
-            padding: "34px 32px",
-            borderRight: "1px solid rgba(226, 232, 240, 0.8)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            textAlign: "center",
-          }}
-        >
-          <p style={{ alignSelf: "flex-start", margin: "0 0 52px", fontWeight: 800 }}>
-            Profile
-          </p>
+  const showSuccess = (message) => {
+    setSuccess(message);
+    setError("");
 
-          <div
-            className="customer-profile-avatar"
-            style={{ width: 108, height: 108, margin: "0 auto 18px" }}
-          >
-            {avatarInitial}
+    window.setTimeout(() => {
+      setSuccess("");
+    }, 2500);
+  };
+
+  const handleProfileChange = (e) => {
+    const { name, value } = e.target;
+
+    setProfileForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleProfileImageChange = async (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload an image file.");
+      return;
+    }
+
+    if (file.size > 1_000_000) {
+      setError("Profile picture must be below 1MB.");
+      return;
+    }
+
+    try {
+      const dataUrl = await fileToDataUrl(file);
+
+      setProfileForm((prev) => ({
+        ...prev,
+        profileImageUrl: dataUrl,
+      }));
+
+      setError("");
+    } catch {
+      setError("Failed to load selected profile picture.");
+    }
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+
+    if (!profileForm.name.trim()) {
+      setError("Name is required.");
+      return;
+    }
+
+    setSavingProfile(true);
+    setError("");
+
+    try {
+      const res = await updateProfile({
+        name: profileForm.name.trim(),
+        phone: profileForm.phone.trim(),
+        profileImageUrl: profileForm.profileImageUrl,
+      });
+
+      const nextUser = res.data?.user;
+
+      setUser(nextUser);
+      updateStoredUser(nextUser);
+      syncUserToForms(nextUser);
+
+      showSuccess("Profile updated successfully.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to update profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handlePasswordChange = (e) => {
+    const { name, value } = e.target;
+
+    setPasswordForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSavePassword = async (e) => {
+    e.preventDefault();
+
+    if (
+      !passwordForm.currentPassword ||
+      !passwordForm.newPassword ||
+      !passwordForm.confirmPassword
+    ) {
+      setError("Please complete all password fields.");
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setError("New password and confirm password do not match.");
+      return;
+    }
+
+    setSavingPassword(true);
+    setError("");
+
+    try {
+      await changePassword(passwordForm);
+
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+
+      showSuccess("Password changed successfully.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to change password");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleNotificationToggle = (name) => {
+    setNotificationForm((prev) => ({
+      ...prev,
+      [name]: !prev[name],
+    }));
+  };
+
+  const handleSaveNotifications = async (e) => {
+    e.preventDefault();
+
+    setSavingNotifications(true);
+    setError("");
+
+    try {
+      const res = await updateNotificationPreferences(notificationForm);
+      const nextUser = res.data?.user;
+
+      setUser(nextUser);
+      updateStoredUser(nextUser);
+      syncUserToForms(nextUser);
+
+      showSuccess("Notification preferences updated.");
+    } catch (err) {
+      setError(
+        err.response?.data?.message || "Failed to update notification preferences"
+      );
+    } finally {
+      setSavingNotifications(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="customer-page">
+        <div className="customer-glass-card">Loading profile...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="customer-page customer-profile-page">
+      <section className="customer-profile-shell">
+        <aside className="customer-profile-sidebar">
+          <p className="customer-profile-title">Profile</p>
+
+          <div className="customer-profile-avatar-wrap">
+            {profileForm.profileImageUrl ? (
+              <img
+                className="customer-profile-avatar-img"
+                src={profileForm.profileImageUrl}
+                alt="Profile"
+              />
+            ) : (
+              <div className="customer-profile-avatar-fallback">
+                {avatarInitial}
+              </div>
+            )}
+
+            <label className="customer-profile-upload-btn">
+              Upload Photo
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleProfileImageChange}
+              />
+            </label>
           </div>
 
-          <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>{displayName}</h1>
-          <p className="customer-muted" style={{ margin: 0 }}>{displayEmail}</p>
-          {error && <div className="customer-alert customer-alert-danger" style={{ marginTop: 16 }}>{error}</div>}
-        </div>
+          <h1>{displayName}</h1>
+          <p>{displayEmail}</p>
 
-        <div
-          style={{
-            padding: "32px",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          <div className="customer-profile-list" style={{ width: "100%", marginTop: 0 }}>
-            {menuItems.map((item) => (
-              <button key={item.label} type="button">
-                <span style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <span style={{ width: 20, textAlign: "center", color: "#64748b" }}>{item.icon}</span>
-                  <strong>{item.label}</strong>
-                </span>
-                <span>›</span>
+          <div className="customer-profile-meta">
+            <span>Customer Code</span>
+            <strong>{user?.userCode || "-"}</strong>
+          </div>
+
+          <div className="customer-profile-meta">
+            <span>Joined</span>
+            <strong>{formatDate(user?.createdAt)}</strong>
+          </div>
+
+          <button
+            type="button"
+            className="customer-profile-logout-mobile"
+            onClick={handleLogout}
+          >
+            Logout
+          </button>
+        </aside>
+
+        <main className="customer-profile-content">
+          <div className="customer-profile-tabs">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={activeTab === tab.id ? "active" : ""}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setError("");
+                  setSuccess("");
+                }}
+              >
+                <span>{tab.icon}</span>
+                <strong>{tab.label}</strong>
               </button>
             ))}
 
-            <button type="button" onClick={handleLogout} className="customer-logout-row">
-              <span style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <span style={{ width: 20, textAlign: "center", color: "#64748b" }}>↪</span>
-                <strong>Logout</strong>
-              </span>
-              <span>›</span>
+            <button
+              type="button"
+              className="customer-profile-logout"
+              onClick={handleLogout}
+            >
+              <span>↪</span>
+              <strong>Logout</strong>
             </button>
           </div>
-        </div>
+
+          <div className="customer-profile-panel">
+            {error && (
+              <div className="customer-alert customer-alert-danger">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="customer-alert customer-alert-success">
+                {success}
+              </div>
+            )}
+
+            {activeTab === "personal" && (
+              <form onSubmit={handleSaveProfile} className="customer-profile-form">
+                <div>
+                  <p className="customer-eyebrow">Personal Information</p>
+                  <h2>Manage your profile</h2>
+                  <p className="customer-muted">
+                    Update your personal details. Email is read-only because it is used to match host bookings from GoCar.
+                  </p>
+                </div>
+
+                <div className="customer-profile-grid">
+                  <label>
+                    Full Name
+                    <input
+                      name="name"
+                      value={profileForm.name}
+                      onChange={handleProfileChange}
+                      placeholder="Enter your full name"
+                    />
+                  </label>
+
+                  <label>
+                    Email Address
+                    <input value={displayEmail} disabled />
+                  </label>
+
+                  <label>
+                    Phone Number
+                    <input
+                      name="phone"
+                      value={profileForm.phone}
+                      onChange={handleProfileChange}
+                      placeholder="e.g. 0123456789"
+                    />
+                  </label>
+
+                  <label>
+                    Account Role
+                    <input value={user?.role || "CUSTOMER"} disabled />
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  className="customer-primary-btn"
+                  disabled={savingProfile}
+                >
+                  {savingProfile ? "Saving..." : "Save Profile"}
+                </button>
+              </form>
+            )}
+
+            {activeTab === "password" && (
+              <form onSubmit={handleSavePassword} className="customer-profile-form">
+                <div>
+                  <p className="customer-eyebrow">Security</p>
+                  <h2>Change Password</h2>
+                  <p className="customer-muted">
+                    Use a strong password with at least 6 characters.
+                  </p>
+                </div>
+
+                <div className="customer-profile-grid single">
+                  <label>
+                    Current Password
+                    <input
+                      type="password"
+                      name="currentPassword"
+                      value={passwordForm.currentPassword}
+                      onChange={handlePasswordChange}
+                      placeholder="Enter current password"
+                    />
+                  </label>
+
+                  <label>
+                    New Password
+                    <input
+                      type="password"
+                      name="newPassword"
+                      value={passwordForm.newPassword}
+                      onChange={handlePasswordChange}
+                      placeholder="Enter new password"
+                    />
+                  </label>
+
+                  <label>
+                    Confirm New Password
+                    <input
+                      type="password"
+                      name="confirmPassword"
+                      value={passwordForm.confirmPassword}
+                      onChange={handlePasswordChange}
+                      placeholder="Confirm new password"
+                    />
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  className="customer-primary-btn"
+                  disabled={savingPassword}
+                >
+                  {savingPassword ? "Updating..." : "Change Password"}
+                </button>
+              </form>
+            )}
+
+            {activeTab === "notifications" && (
+              <form
+                onSubmit={handleSaveNotifications}
+                className="customer-profile-form"
+              >
+                <div>
+                  <p className="customer-eyebrow">Notifications</p>
+                  <h2>Notification Preferences</h2>
+                  <p className="customer-muted">
+                    Choose which updates you want to receive from BNPL.
+                  </p>
+                </div>
+
+                <div className="customer-toggle-list">
+                  <PreferenceToggle
+                    title="Booking status updates"
+                    description="Acceptance, rejection, cancellation, and alternative suggestions."
+                    checked={notificationForm.notifyBookingUpdates}
+                    onChange={() =>
+                      handleNotificationToggle("notifyBookingUpdates")
+                    }
+                  />
+
+                  <PreferenceToggle
+                    title="Payment reminders"
+                    description="Reminders before payment deadline and overdue notices."
+                    checked={notificationForm.notifyPaymentReminders}
+                    onChange={() =>
+                      handleNotificationToggle("notifyPaymentReminders")
+                    }
+                  />
+
+                  <PreferenceToggle
+                    title="Invoice and receipt notifications"
+                    description="Invoice issued, receipt uploaded, and payment confirmed updates."
+                    checked={notificationForm.notifyInvoices}
+                    onChange={() => handleNotificationToggle("notifyInvoices")}
+                  />
+
+                  <PreferenceToggle
+                    title="Promotions and announcements"
+                    description="Optional updates from BNPL or supported merchants."
+                    checked={notificationForm.notifyPromotions}
+                    onChange={() => handleNotificationToggle("notifyPromotions")}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="customer-primary-btn"
+                  disabled={savingNotifications}
+                >
+                  {savingNotifications ? "Saving..." : "Save Preferences"}
+                </button>
+              </form>
+            )}
+
+            {activeTab === "help" && (
+              <div className="customer-profile-form">
+                <div>
+                  <p className="customer-eyebrow">Help & Support</p>
+                  <h2>Payment and account support</h2>
+                  <p className="customer-muted">
+                    Useful information for using BNPL and manual payment.
+                  </p>
+                </div>
+
+                <div className="customer-help-list">
+                  <HelpCard
+                    title="How DuitNow / SPay manual payment works"
+                    text="Select DuitNow / SPay during checkout, scan the DuitNow QR code, complete payment using your banking app or SPay, then upload your receipt for operator verification."
+                  />
+
+                  <HelpCard
+                    title="Why do I need to upload a receipt?"
+                    text="Manual payments are not automatically verified by Stripe. The receipt allows the operator to confirm that your payment was made correctly."
+                  />
+
+                  <HelpCard
+                    title="When can I pay?"
+                    text="Payment becomes available after the operator accepts your booking. The payment deadline is shown in your booking details and checkout page."
+                  />
+
+                  <HelpCard
+                    title="Need help?"
+                    text="Contact the merchant/operator shown in your booking details, or check your notifications for the latest booking and payment updates."
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </main>
       </section>
     </div>
   );
 }
+
+function PreferenceToggle({ title, description, checked, onChange }) {
+  return (
+    <button
+      type="button"
+      className={`customer-preference-toggle ${checked ? "enabled" : ""}`}
+      onClick={onChange}
+    >
+      <div>
+        <strong>{title}</strong>
+        <p>{description}</p>
+      </div>
+
+      <span>
+        <i />
+      </span>
+    </button>
+  );
+}
+
+function HelpCard({ title, text }) {
+  return (
+    <div className="customer-help-card">
+      <strong>{title}</strong>
+      <p>{text}</p>
+    </div>
+  );
+} 
