@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useCustomerBooking } from "../../hooks/useBookings";
 import {
   canCustomerCancel,
@@ -11,7 +11,7 @@ import {
 
 export default function BookingDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
+
   const {
     booking,
     activity,
@@ -21,6 +21,8 @@ export default function BookingDetail() {
     acceptAlternative,
     rejectAlternative,
   } = useCustomerBooking(id);
+
+  const gocarThankYouUrl = import.meta.env.VITE_GOCAR_THANK_YOU_URL;
 
   const handleCancel = async () => {
     if (!window.confirm("Cancel this booking?")) return;
@@ -56,24 +58,32 @@ export default function BookingDetail() {
   if (!booking) return null;
 
   const bookingCode = booking.bookingCode || `#${booking.id}`;
+  const isHostBooking = Boolean(booking.hostBookingRef);
 
   return (
     <div className="customer-page customer-booking-detail-page">
-      <button className="customer-text-btn" onClick={() => navigate(-1)}>
+      <Link className="customer-text-btn" to="/customer/bookings">
         ← Back to My Bookings
-      </button>
+      </Link>
 
       <section className="customer-booking-detail-grid with-alternative">
         <article className="customer-glass-card customer-booking-detail-card">
           <div className="customer-card-head">
-            <span className={`customer-status status-${customerStatusClass(booking.status)}`}>
+            <span
+              className={`customer-status status-${customerStatusClass(
+                booking.status
+              )}`}
+            >
               {statusLabel(booking.status)}
             </span>
+
             <span className="customer-booking-code">{bookingCode}</span>
           </div>
 
           <h1>{booking.serviceName}</h1>
-          <p className="customer-muted">{booking.operator?.companyName || "Host"}</p>
+          <p className="customer-muted">
+            {booking.operator?.companyName || "Host"}
+          </p>
 
           <div className="customer-info-list detail customer-booking-info-grid">
             <div>
@@ -119,107 +129,142 @@ export default function BookingDetail() {
 
           <div className="customer-card-actions">
             {canCustomerPay(booking) && (
-              <Link className="customer-primary-btn" to={`/customer/checkout/${booking.id}`}>
+              <Link
+                className="customer-primary-btn"
+                to={`/customer/checkout/${booking.id}`}
+              >
                 Proceed to Payment
               </Link>
             )}
 
             {canCustomerCancel(booking) && (
-              <button className="customer-secondary-btn" onClick={handleCancel}>
+              <button
+                className="customer-secondary-btn"
+                onClick={handleCancel}
+              >
                 Cancel Booking
               </button>
             )}
 
-            {booking.invoice && (
-              <Link className="customer-secondary-btn" to="/customer/invoices">
+            {booking.invoice?.id && (
+              <Link
+                className="customer-secondary-btn"
+                to={`/customer/invoices/${booking.invoice.id}`}
+              >
                 View Invoice
               </Link>
+            )}
+
+            {isHostBooking && gocarThankYouUrl && (
+              <a
+                className="customer-secondary-btn"
+                href={gocarThankYouUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Return to GoCar
+              </a>
             )}
           </div>
         </article>
 
-      {booking.status === "ALTERNATIVE_SUGGESTED" && (
-        <article className="customer-glass-card customer-alternative-card">
-          <div className="customer-alternative-head">
-            <div>
-              <p className="customer-eyebrow">Alternative Booking Suggested</p>
-              <h2>Review the operator’s suggested option</h2>
-            </div>
-            <span className="customer-status status-warning">Action Required</span>
-          </div>
-
-          <div className="customer-alternative-compare">
-            <div className="customer-alt-box original">
-              <p>Original Booking</p>
-              <h3>{booking.serviceName}</h3>
-
+        {booking.status === "ALTERNATIVE_SUGGESTED" && (
+          <article className="customer-glass-card customer-alternative-card">
+            <div className="customer-alternative-head">
               <div>
-                <span>Pick-up / Check-in</span>
-                <strong>{formatCustomerDate(booking.pickupDate)}</strong>
+                <p className="customer-eyebrow">
+                  Alternative Booking Suggested
+                </p>
+                <h2>Review the operator’s suggested option</h2>
               </div>
 
-              <div>
-                <span>Return / Check-out</span>
-                <strong>{formatCustomerDate(booking.returnDate)}</strong>
-              </div>
-
-              <div>
-                <span>Total Amount</span>
-                <strong>{formatMoney(booking.totalAmount)}</strong>
-              </div>
+              <span className="customer-status status-warning">
+                Action Required
+              </span>
             </div>
 
-            <div className="customer-alt-arrow">→</div>
+            <div className="customer-alternative-compare">
+              <div className="customer-alt-box original">
+                <p>Original Booking</p>
+                <h3>{booking.serviceName}</h3>
 
-            <div className="customer-alt-box suggested">
-              <p>Suggested Alternative</p>
-              <h3>{booking.alternativeServiceName || "Alternative option"}</h3>
+                <div>
+                  <span>Pick-up / Check-in</span>
+                  <strong>{formatCustomerDate(booking.pickupDate)}</strong>
+                </div>
 
-              <div>
-                <span>Pick-up / Check-in</span>
-                <strong>
-                  {formatCustomerDate(booking.alternativePickupDate || booking.pickupDate)}
-                </strong>
+                <div>
+                  <span>Return / Check-out</span>
+                  <strong>{formatCustomerDate(booking.returnDate)}</strong>
+                </div>
+
+                <div>
+                  <span>Total Amount</span>
+                  <strong>{formatMoney(booking.totalAmount)}</strong>
+                </div>
               </div>
 
-              <div>
-                <span>Return / Check-out</span>
-                <strong>
-                  {formatCustomerDate(booking.alternativeReturnDate || booking.returnDate)}
-                </strong>
-              </div>
+              <div className="customer-alt-arrow">→</div>
 
-              <div>
-                <span>Total Amount</span>
-                <strong>
-                  {formatMoney(booking.alternativePrice || booking.totalAmount)}
-                </strong>
+              <div className="customer-alt-box suggested">
+                <p>Suggested Alternative</p>
+                <h3>{booking.alternativeServiceName || "Alternative option"}</h3>
+
+                <div>
+                  <span>Pick-up / Check-in</span>
+                  <strong>
+                    {formatCustomerDate(
+                      booking.alternativePickupDate || booking.pickupDate
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Return / Check-out</span>
+                  <strong>
+                    {formatCustomerDate(
+                      booking.alternativeReturnDate || booking.returnDate
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Total Amount</span>
+                  <strong>
+                    {formatMoney(booking.alternativePrice || booking.totalAmount)}
+                  </strong>
+                </div>
               </div>
             </div>
-          </div>
 
-          {booking.alternativeReason && (
-            <div className="customer-alternative-reason">
-              <strong>Reason from operator</strong>
-              <p>{booking.alternativeReason}</p>
+            {booking.alternativeReason && (
+              <div className="customer-alternative-reason">
+                <strong>Reason from operator</strong>
+                <p>{booking.alternativeReason}</p>
+              </div>
+            )}
+
+            <div className="customer-card-actions">
+              <button
+                className="customer-secondary-btn"
+                onClick={handleRejectAlternative}
+              >
+                Reject Alternative
+              </button>
+
+              <button
+                className="customer-primary-btn"
+                onClick={handleAcceptAlternative}
+              >
+                Accept Alternative
+              </button>
             </div>
-          )}
 
-          <div className="customer-card-actions">
-            <button className="customer-secondary-btn" onClick={handleRejectAlternative}>
-              Reject Alternative
-            </button>
-
-            <button className="customer-primary-btn" onClick={handleAcceptAlternative}>
-              Accept Alternative
-            </button>
-          </div>
-
-          <p className="customer-alt-note">
-            You can only receive one alternative suggestion for this booking.
-          </p>
-        </article>
-      )}
+            <p className="customer-alt-note">
+              You can only receive one alternative suggestion for this booking.
+            </p>
+          </article>
+        )}
 
         <article className="customer-glass-card customer-timeline-card">
           <h2>Booking Timeline</h2>

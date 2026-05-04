@@ -14,6 +14,8 @@ export default function OperatorBookingDetail() {
   const [booking, setBooking] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [showAlternative, setShowAlternative] = useState(false);
+  const [showPaymentDeadline, setShowPaymentDeadline] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
   const [error, setError] = useState("");
@@ -45,7 +47,7 @@ export default function OperatorBookingDetail() {
       if (action === "accept") await operatorService.acceptBooking(id);
       if (action === "reject") await operatorService.rejectBooking(id);
       if (action === "confirm") await operatorService.confirmBooking(id);
-      if (action === "payment") await operatorService.sendPaymentRequest(id);
+      if (action === "cancel") await operatorService.cancelBooking(id);
 
       await loadBooking();
     } catch (err) {
@@ -184,13 +186,27 @@ export default function OperatorBookingDetail() {
               Suggest Alternative
             </button>
 
-            <button
-              className="operator-secondary-btn"
-              disabled={!!actionLoading}
-              onClick={() => runAction("payment")}
-            >
-              Send Payment Request
-            </button>
+            {["ACCEPTED", "PENDING_PAYMENT"].includes(String(booking.status).toUpperCase()) && booking.payment?.status !== "PAID" && 
+            (
+              <button
+                className="operator-secondary-btn"
+                disabled={!!actionLoading}
+                onClick={() => setShowPaymentDeadline(true)}
+              >
+                Edit Payment Deadline
+              </button>
+            )}
+
+            {["ACCEPTED", "PENDING_PAYMENT"].includes(String(booking.status).toUpperCase()) && booking.payment?.status !== "PAID" && 
+            (
+              <button
+                className="operator-danger-btn"
+                disabled={!!actionLoading}
+                onClick={() => setShowCancel(true)}
+              >
+                Cancel Booking
+              </button>
+            )}
 
             <button
               className="operator-muted-btn"
@@ -207,6 +223,22 @@ export default function OperatorBookingDetail() {
         <AlternativeModal
           booking={booking}
           onClose={() => setShowAlternative(false)}
+          onDone={loadBooking}
+        />
+      )}
+
+      {showPaymentDeadline && (
+        <PaymentDeadlineModal
+          booking={booking}
+          onClose={() => setShowPaymentDeadline(false)}
+          onDone={loadBooking}
+        />
+      )}
+
+      {showCancel && (
+        <CancelBookingModal
+          booking={booking}
+          onClose={() => setShowCancel(false)}
           onDone={loadBooking}
         />
       )}
@@ -328,6 +360,214 @@ function AlternativeModal({ booking, onClose, onDone }) {
             disabled={loading}
           >
             {loading ? "Sending..." : "Send Suggestion"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function toDatetimeLocalValue(value) {
+  if (!value) {
+    const defaultDate = new Date();
+    defaultDate.setDate(defaultDate.getDate() + 3);
+    defaultDate.setHours(23, 59, 0, 0);
+
+    return formatDatetimeLocal(defaultDate);
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return formatDatetimeLocal(date);
+}
+
+function formatDatetimeLocal(date) {
+  const pad = (number) => String(number).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate()
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function datetimeLocalToIso(value) {
+  if (!value) return null;
+
+  const localDate = new Date(value);
+
+  if (Number.isNaN(localDate.getTime())) {
+    return null;
+  }
+
+  return localDate.toISOString();
+}
+
+function PaymentDeadlineModal({ booking, onClose, onDone }) {
+  const [paymentDeadline, setPaymentDeadline] = useState(
+    toDatetimeLocalValue(booking.paymentDeadline)
+  );
+  const [method, setMethod] = useState("PENDING");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!paymentDeadline) {
+      alert("Please select a payment deadline.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const paymentDeadlineIso = datetimeLocalToIso(paymentDeadline);
+
+      if (!paymentDeadlineIso) {
+        alert("Invalid payment deadline.");
+        return;
+      }
+
+      await operatorService.sendPaymentRequest(booking.id, {
+        method,
+        paymentDeadline: paymentDeadlineIso,
+      });
+
+      await onDone();
+      onClose();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to update payment deadline");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="operator-modal-backdrop">
+      <div className="operator-modal">
+        <div className="operator-card-head">
+          <div>
+            <h2>Edit Payment Deadline</h2>
+            <p>
+              Set a custom deadline or keep the default suggested deadline.
+            </p>
+          </div>
+
+          <button type="button" onClick={onClose}>
+            ×
+          </button>
+        </div>
+
+        <label className="operator-field">
+          Payment Method
+          <select value={method} onChange={(e) => setMethod(e.target.value)}>
+            <option value="PENDING">Any Supported Method</option>
+            <option value="STRIPE">Stripe</option>
+            <option value="DUITNOW">DuitNow</option>
+            <option value="SPAY">SPay</option>
+            <option value="BANK_TRANSFER">Bank Transfer</option>
+          </select>
+        </label>
+
+        <label className="operator-field">
+          Payment Deadline
+          <input
+            type="datetime-local"
+            value={paymentDeadline}
+            onChange={(e) => setPaymentDeadline(e.target.value)}
+          />
+        </label>
+
+        <div className="operator-modal-actions">
+          <button
+            type="button"
+            className="operator-secondary-btn"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            className="operator-primary-btn"
+            onClick={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? "Saving..." : "Save Payment Deadline"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CancelBookingModal({ booking, onClose, onDone }) {
+  const [reason, setReason] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleCancelBooking = async () => {
+    if (
+      !window.confirm(
+        "Cancel this booking? This will notify the customer."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await operatorService.cancelBooking(booking.id, {
+        reason,
+      });
+
+      await onDone();
+      onClose();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to cancel booking");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="operator-modal-backdrop">
+      <div className="operator-modal">
+        <div className="operator-card-head">
+          <div>
+            <h2>Cancel Booking</h2>
+            <p>
+              Merchant cancellation is only allowed after acceptance and before payment is completed.
+            </p>
+          </div>
+
+          <button type="button" onClick={onClose}>
+            ×
+          </button>
+        </div>
+
+        <label className="operator-field">
+          Reason Optional
+          <textarea
+            placeholder="Explain why this booking is cancelled..."
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </label>
+
+        <div className="operator-modal-actions">
+          <button
+            type="button"
+            className="operator-secondary-btn"
+            onClick={onClose}
+          >
+            Close
+          </button>
+
+          <button
+            type="button"
+            className="operator-danger-btn"
+            onClick={handleCancelBooking}
+            disabled={loading}
+          >
+            {loading ? "Cancelling..." : "Cancel Booking"}
           </button>
         </div>
       </div>

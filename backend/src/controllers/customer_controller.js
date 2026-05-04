@@ -1,5 +1,6 @@
 import prisma from "../config/db.js";
 import { generateInvoiceForBooking } from "../services/invoice_service.js";
+import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
 import {
   notifyCustomerByBooking,
   notifyOperatorUsersByBooking,
@@ -120,20 +121,6 @@ async function assertCustomerBooking(bookingId, customerId) {
 async function generateBookingCode(tx) {
   const count = await tx.booking.count();
   return `BNPL-${String(count + 1).padStart(4, "0")}`;
-}
-
-async function calculatePaymentDeadline(operatorId) {
-  const config = await prisma.bNPLConfig.findFirst({
-    where: { operatorId },
-  });
-
-  const paymentDeadlineDays = config?.paymentDeadlineDays || 3;
-
-  const deadline = new Date();
-  deadline.setDate(deadline.getDate() + paymentDeadlineDays);
-  deadline.setHours(23, 59, 59, 999);
-
-  return deadline;
 }
 
 export async function createCustomerBooking(req, res, next) {
@@ -284,9 +271,29 @@ export async function cancelCustomerBooking(req, res, next) {
   try {
     const booking = await assertCustomerBooking(req.params.id, req.user.id);
 
-    if (["PAID", "COMPLETED", "CANCELLED"].includes(booking.status)) {
+    if (
+      [
+        "PAID",
+        "COMPLETED",
+        "CANCELLED",
+        "REJECTED",
+        "OVERDUE",
+      ].includes(booking.status)
+    ) {
       return res.status(400).json({
         message: `Booking cannot be cancelled when status is ${booking.status}`,
+      });
+    }
+
+    if (booking.payment?.status === "PAID") {
+      return res.status(400).json({
+        message: "Paid bookings cannot be cancelled.",
+      });
+    }
+
+    if (booking.paymentDeadline && new Date(booking.paymentDeadline) <= new Date()) {
+      return res.status(400).json({
+        message: "Booking cannot be cancelled after the payment deadline.",
       });
     }
 

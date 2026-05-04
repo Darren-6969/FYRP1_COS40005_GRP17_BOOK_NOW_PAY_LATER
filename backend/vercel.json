@@ -14,8 +14,8 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/vercel-overdue-check",
-      "schedule": "*/30 * * * *"
+      "path": "/api/cron/vercel-maintenance-check",
+      "schedule": "0 0 * * *"
     }
   ]
 }

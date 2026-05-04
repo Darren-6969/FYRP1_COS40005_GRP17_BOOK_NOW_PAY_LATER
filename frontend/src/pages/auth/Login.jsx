@@ -197,19 +197,24 @@ export default function Login() {
       if (hostToken && roleForStorage === "CUSTOMER") {
         try {
           const claimResponse = await claimHostBookingIntent(hostToken);
-          const checkoutUrl = claimResponse.data?.checkoutUrl;
+          const bookingId = claimResponse.data?.bookingId;
 
-          if (checkoutUrl) {
-            window.location.href = checkoutUrl;
-            return;
-          }
-
-          if (claimResponse.data?.bookingId) {
-            navigate(`/customer/checkout/${claimResponse.data.bookingId}`, {
+          if (bookingId) {
+            navigate(`/customer/bookings/${bookingId}`, {
               replace: true,
             });
             return;
           }
+
+          const bookingDetailUrl = claimResponse.data?.bookingDetailUrl;
+
+          if (bookingDetailUrl) {
+            window.location.href = bookingDetailUrl;
+            return;
+          }
+
+          navigate("/customer/bookings", { replace: true });
+          return;
         } catch (claimErr) {
           setError(
             claimErr.response?.data?.message ||

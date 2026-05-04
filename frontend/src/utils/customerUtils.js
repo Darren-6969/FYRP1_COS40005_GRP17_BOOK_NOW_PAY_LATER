@@ -8,9 +8,11 @@ export function formatMoney(value) {
 
 export function formatCustomerDate(value) {
   if (!value) return "-";
+
   return new Intl.DateTimeFormat("en-MY", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "Asia/Kuala_Lumpur",
   }).format(new Date(value));
 }
 

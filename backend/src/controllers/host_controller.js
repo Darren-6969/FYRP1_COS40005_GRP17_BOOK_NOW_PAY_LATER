@@ -53,6 +53,33 @@ function buildIntentUrls(intent) {
   };
 }
 
+async function buildIntentResponse(intent) {
+  const urls = buildIntentUrls(intent);
+
+  const existingCustomer = await prisma.user.findUnique({
+    where: {
+      email: intent.customerEmail,
+    },
+    select: {
+      id: true,
+      role: true,
+    },
+  });
+
+  const shouldLogin =
+    existingCustomer && existingCustomer.role === "CUSTOMER";
+
+  return {
+    intentToken: intent.token,
+    customerEmail: intent.customerEmail,
+    expiresAt: intent.expiresAt,
+    registerUrl: urls.registerUrl,
+    loginUrl: urls.loginUrl,
+    redirectUrl: shouldLogin ? urls.loginUrl : urls.registerUrl,
+    suggestedAction: shouldLogin ? "LOGIN" : "REGISTER",
+  };
+}
+
 /**
  * Host entry point.
  * GoCar calls this endpoint after customer submits vehicle booking form.
@@ -135,16 +162,20 @@ export async function createHostBookingIntent(req, res, next) {
 
     if (existingBooking) {
       const checkoutPath = `/customer/checkout/${existingBooking.id}`;
+      const loginUrl = frontendUrl(
+        `/login?redirect=${encodeURIComponent(checkoutPath)}&email=${encodeURIComponent(
+          existingBooking.customer.email
+        )}`
+      );
+
       return res.status(200).json({
         message: "Booking already exists",
         bookingId: existingBooking.id,
         bookingCode: existingBooking.bookingCode,
         checkoutUrl: frontendUrl(checkoutPath),
-        loginUrl: frontendUrl(
-          `/login?redirect=${encodeURIComponent(checkoutPath)}&email=${encodeURIComponent(
-            existingBooking.customer.email
-          )}`
-        ),
+        loginUrl,
+        redirectUrl: loginUrl,
+        suggestedAction: "LOGIN",
       });
     }
 
@@ -163,14 +194,11 @@ export async function createHostBookingIntent(req, res, next) {
     });
 
     if (existingIntent) {
-      const urls = buildIntentUrls(existingIntent);
+      const intentResponse = await buildIntentResponse(existingIntent);
 
       return res.status(200).json({
         message: "Booking intent already exists",
-        intentToken: existingIntent.token,
-        customerEmail: existingIntent.customerEmail,
-        ...urls,
-        redirectUrl: urls.registerUrl,
+        ...intentResponse,
       });
     }
 
@@ -198,15 +226,11 @@ export async function createHostBookingIntent(req, res, next) {
       },
     });
 
-    const urls = buildIntentUrls(intent);
+    const intentResponse = await buildIntentResponse(intent);
 
     return res.status(201).json({
       message: "BNPL booking intent created",
-      intentToken: intent.token,
-      customerEmail: intent.customerEmail,
-      expiresAt: intent.expiresAt,
-      ...urls,
-      redirectUrl: urls.registerUrl,
+      ...intentResponse,
     });
   } catch (err) {
     next(err);
@@ -365,6 +389,7 @@ export async function claimHostBookingIntent(req, res, next) {
       message: "BNPL booking created successfully",
       bookingId: result.id,
       bookingCode: result.bookingCode,
+      bookingDetailUrl: frontendUrl(`/customer/bookings/${result.id}`),
       checkoutUrl: frontendUrl(`/customer/checkout/${result.id}`),
     });
   } catch (err) {
