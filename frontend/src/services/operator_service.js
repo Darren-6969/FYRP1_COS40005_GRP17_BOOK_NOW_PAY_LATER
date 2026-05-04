@@ -129,6 +129,7 @@ export function formatOperatorDateTime(value) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Kuala_Lumpur",
   }).format(new Date(value));
 }
 

@@ -372,13 +372,34 @@ function toDatetimeLocalValue(value) {
     const defaultDate = new Date();
     defaultDate.setDate(defaultDate.getDate() + 3);
     defaultDate.setHours(23, 59, 0, 0);
-    return defaultDate.toISOString().slice(0, 16);
+
+    return formatDatetimeLocal(defaultDate);
   }
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
 
-  return date.toISOString().slice(0, 16);
+  return formatDatetimeLocal(date);
+}
+
+function formatDatetimeLocal(date) {
+  const pad = (number) => String(number).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate()
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function datetimeLocalToIso(value) {
+  if (!value) return null;
+
+  const localDate = new Date(value);
+
+  if (Number.isNaN(localDate.getTime())) {
+    return null;
+  }
+
+  return localDate.toISOString();
 }
 
 function PaymentDeadlineModal({ booking, onClose, onDone }) {
@@ -397,9 +418,16 @@ function PaymentDeadlineModal({ booking, onClose, onDone }) {
     try {
       setLoading(true);
 
+      const paymentDeadlineIso = datetimeLocalToIso(paymentDeadline);
+
+      if (!paymentDeadlineIso) {
+        alert("Invalid payment deadline.");
+        return;
+      }
+
       await operatorService.sendPaymentRequest(booking.id, {
         method,
-        paymentDeadline,
+        paymentDeadline: paymentDeadlineIso,
       });
 
       await onDone();
