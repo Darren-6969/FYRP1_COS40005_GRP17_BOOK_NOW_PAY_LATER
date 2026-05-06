@@ -342,7 +342,7 @@ export default function CustomerProfile() {
 
   return (
     <div className="customer-page customer-profile-page">
-      <section className="customer-profile-shell">
+      <section className={`customer-profile-shell ${!activeTab ? "no-panel" : ""}`}>
         <aside className="customer-profile-sidebar">
           <p className="customer-profile-title">Profile</p>
 
@@ -391,7 +391,7 @@ export default function CustomerProfile() {
           </button>
         </aside>
 
-        <main className="customer-profile-content">
+        <main className={`customer-profile-content ${!activeTab ? "no-panel" : ""}`}>
           <div className="customer-profile-tabs">
             {tabs.map((tab) => (
               <button
@@ -399,7 +399,9 @@ export default function CustomerProfile() {
                 type="button"
                 className={activeTab === tab.id ? "active" : ""}
                 onClick={() => {
-                  setActiveTab(tab.id);
+                 setActiveTab((currentTab) =>
+                 currentTab === tab.id ? "" : tab.id
+                 );
                   setError("");
                   setSuccess("");
                 }}

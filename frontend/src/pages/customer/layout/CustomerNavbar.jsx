@@ -10,11 +10,12 @@ import {
 } from "lucide-react";
 
 const sidebarLinks = [
-  { to: "/customer/bookings", label: "My Bookings", icon: "⌂" },
-  { to: "/customer/payments", label: "Payments", icon: "◉" },
-  { to: "/customer/invoices", label: "Invoices", icon: "▧" },
-  { to: "/customer/notifications", label: "Notifications", icon: "◇" },
-  { to: "/customer/profile", label: "Profile", icon: "○" },
+  { to: "/customer/bookings", label: "My Bookings", icon: <CalendarCheck size={20} /> },
+  { to: "/customer/payments", label: "Payments", icon: <CreditCard size={20} /> },
+  { to: "/customer/invoices", label: "Invoices", icon: <FileText size={20} /> },
+  { to: "/customer/notifications", label: "Notifications", icon: <Bell size={20} /> },
+  { to: "/customer/profile", label: "Profile", icon: <UserCircle size={20} /> },
+   { to: "/customer/help", label: "Help & Support", icon: <HelpCircle size={20} /> },
 ];
 
 const bottomLinks = [
@@ -54,13 +55,6 @@ export default function CustomerNavbar({ onLogout }) {
             ))}
           </nav>
         </div>
-
-        <NavLink to="/customer/help" className="customer-nav-link">
-          <span className="customer-nav-icon">
-          <HelpCircle size={20} />
-          </span>
-          <span>Help & Support</span>
-        </NavLink>
         
         <button
           type="button"

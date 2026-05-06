@@ -44,6 +44,7 @@ import OperatorInvoices from "./pages/operator/OperatorInvoices";
 import OperatorSalesReport from "./pages/operator/OperatorSalesReport";
 import OperatorNotifications from "./pages/operator/OperatorNotifications";
 import OperatorSettings from "./pages/operator/OperatorSettings";
+import OperatorHelp from "./pages/operator/OperatorHelp";
 
 export default function App() {
   return (
@@ -79,12 +80,14 @@ export default function App() {
               <Route path="dashboard" element={<OperatorDashboard />} />
               <Route path="booking-requests" element={<OperatorBookingRequests />} />
               <Route path="bookings/:id" element={<OperatorBookingDetail />} />
-              <Route path="payment-verification" element={<OperatorPaymentVerification />} />
+              <Route path="payments" element={<OperatorPaymentVerification />} />
               <Route path="booking-log" element={<OperatorBookingLog />} />
               <Route path="invoices" element={<OperatorInvoices />} />
-              <Route path="sales-report" element={<OperatorSalesReport />} />
+              <Route path="reports" element={<OperatorSalesReport />} />
               <Route path="notifications" element={<OperatorNotifications />} />
               <Route path="settings" element={<OperatorSettings />} />
+              <Route path="help" element={<OperatorHelp />} />
+
             </Route>
           </Route>
 
