@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import logo from "../../../assets/logo.png";
 import {
   CalendarCheck,
   CreditCard,
@@ -32,12 +33,14 @@ export default function CustomerNavbar({ onLogout }) {
       <aside className="customer-sidebar">
         <div>
           <div className="customer-brand">
-            <div className="customer-brand-icon">BNPL</div>
-            <div>
-              <strong>BNPL</strong>
-              <span>Customer Portal</span>
-            </div>
+            <img src={logo} alt="BNPL Logo" className="customer-brand-logo" />
+
+            <div className="customer-brand-text">
+            <strong>BNPL</strong>
+            <span>Customer Portal</span>
           </div>
+        </div>
+          
 
           <nav
             className="customer-nav-list"

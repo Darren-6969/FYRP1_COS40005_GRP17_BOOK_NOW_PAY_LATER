@@ -360,9 +360,9 @@ export default function CustomerProfile() {
             )}
 
             <label className="customer-profile-upload-btn">
-              Upload Photo
+            Upload Photo
               <input
-                type="file"
+               type="file"
                 accept="image/png,image/jpeg,image/webp"
                 onChange={handleProfileImageChange}
               />

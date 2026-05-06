@@ -77,9 +77,9 @@ model User {
   password String
   role     UserRole @default(CUSTOMER)
 
-  phone String?
+  phone           String?
   profileImageUrl String? @db.Text
-  
+
   notifyBookingUpdates Boolean @default(true)
   notifyPaymentReminders Boolean @default(true)
   notifyInvoices Boolean @default(true)

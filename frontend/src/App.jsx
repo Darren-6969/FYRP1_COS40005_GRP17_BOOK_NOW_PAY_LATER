@@ -18,6 +18,7 @@ import SystemLogs from "./pages/master/SystemLogs";
 import SystemSettings from "./pages/master/SystemSettings";
 import ProtectedRoute from "./components/ProtectedRoute";
 import EmailLogs from "./pages/master/EmailLogs";
+import MasterHelp from "./pages/master/MasterHelp";
 
 // Customer Pages
 import CustomerLayout from "./pages/customer/layout/CustomerLayout";
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="system-logs" element={<SystemLogs />} />
               <Route path="system-settings" element={<SystemSettings />} />
               <Route path="email-logs" element={<EmailLogs />} />
+              <Route path="help" element={<MasterHelp />} />
             </Route>
           </Route>
 

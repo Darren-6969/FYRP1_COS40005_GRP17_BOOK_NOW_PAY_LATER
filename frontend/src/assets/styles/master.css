@@ -1,3 +1,55 @@
+/*Master Logo*/
+.master-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/*Master Top Bar Notification Drop-down Menu*/
+.master-notification-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.master-avatar-img {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.master-brand-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+
+  border-radius: 18px;
+  background: white;
+  padding: 6px;
+
+  flex-shrink: 0;
+}
+
+.master-brand-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.master-brand-text strong {
+  display: block;
+  line-height: 1.1;
+  color: #0f172a;
+}
+
+.master-brand-text span {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
 .app-shell {
   display: flex;
   min-height: 100vh;
@@ -413,14 +465,28 @@
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow-y: auto;
   padding: 24px 18px;
   background: rgba(248, 251, 255, 0.82);
   border-right: 1px solid rgba(226, 232, 240, 0.72);
   backdrop-filter: blur(22px);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   z-index: 50;
+}
+
+.master-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.master-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
+  border-radius: 999px;
+}
+
+.master-sidebar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .master-brand {
@@ -461,55 +527,111 @@
 
 .master-nav-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
-.master-nav-link {
-  min-height: 48px;
+.master-nav-link,
+.master-help-btn,
+.master-logout-btn {
+  margin-top: 4px;
+  width: 100%;
+  border: 0;
+  outline: none;
+  text-decoration: none;
+  font-family: inherit;
+
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 14px;
+
+  padding: 13px 15px;
   border-radius: 18px;
+
+  background: transparent;
   color: #475569;
-  text-decoration: none;
+
+  font-size: 14px;
   font-weight: 800;
-  transition: 0.18s ease;
+
+  cursor: pointer;
+  transition: all 0.25s ease;
 }
 
-.master-nav-link:hover {
-  background: rgba(239, 246, 255, 0.9);
-  color: #2563eb;
+.master-nav-link span:last-child,
+.master-help-btn span:last-child,
+.master-logout-btn span:last-child {
+  flex: 1;
+}
+
+.master-nav-link:hover,
+.master-help-btn:hover {
+  transform: translateX(6px);
+  background: #2563eb;
+  color: #fff;
 }
 
 .master-nav-link.active {
   background: #2563eb;
-  color: white;
-  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.28);
+  color: #fff;
+  box-shadow: 0 14px 35px rgba(37, 99, 235, 0.22);
+}
+
+.master-nav-icon {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+
+  border-radius: 14px;
+  background: rgba(37, 99, 235, 0.1);
+
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+}
+
+.master-nav-link:hover .master-nav-icon,
+.master-help-btn:hover .master-nav-icon {
+  transform: scale(1.15) rotate(8deg);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.master-nav-link.active .master-nav-icon {
+  transform: scale(1.08);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .master-sidebar-bottom {
-  display: grid;
-  gap: 10px;
-}
-
-.master-help-btn,
-.master-logout-btn {
-  min-height: 48px;
-  border: 0;
-  border-radius: 18px;
-  padding: 0 14px;
-  background: rgba(255, 255, 255, 0.82);
-  color: #475569;
-  font-weight: 900;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
-  justify-content: flex-start;
+  margin-top: 0;
+  padding-top: 6px;
+}
+
+.master-help-btn {
+  margin-top: 0;
+}
+
+.master-help-btn .master-nav-icon {
+  background: rgba(37, 99, 235, 0.1);
 }
 
 .master-logout-btn {
-  color: #dc2626;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fbe4e6;
+  color: #be123c;
+}
+
+.master-logout-btn:hover {
+  background: #fca5a5;
+  color: #7f1d1d;
+}
+
+.master-logout-btn .master-nav-icon {
+  background: transparent;
+  width: auto;
+  height: auto;
 }
 
 .master-main {
