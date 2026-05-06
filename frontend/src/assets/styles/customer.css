@@ -74,53 +74,44 @@
   color: #475569;
   font-weight: 700;
   font-size: 14px;
-  text-decoration: none;
-  transition: all 0.25s ease;
+  transition: 0.2s ease;
 }
 
-.customer-nav-icon {
-  display: inline-grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 12px;
-  background: rgba(37, 99, 235, 0.1);
-  flex-shrink: 0;
-  transition: all 0.25s ease;
-}
-
-/* Hover effect (MOVE + ICON ANIMATION) */
-.customer-nav-link:hover {
-  transform: translateX(6px);
-  background: #2563eb;
-  color: #fff;
-}
-
-.customer-nav-link:hover .customer-nav-icon {
-  transform: scale(1.15) rotate(8deg);
-  background: rgba(255, 255, 255, 0.2);
-}
-
-/* Active (selected page) */
+.customer-nav-link:hover,
 .customer-nav-link.active {
   background: #2563eb;
   color: #fff;
   box-shadow: 0 14px 35px rgba(37, 99, 235, 0.22);
 }
 
-.customer-nav-link.active .customer-nav-icon {
-  transform: scale(1.08);
-  background: rgba(255, 255, 255, 0.25);
+.customer-nav-icon {
+  display: inline-grid;
+  width: 20px;
+  place-items: center;
+  font-weight: 900;
+}
+
+.customer-sidebar-logout {
+  width: 100%;
+  border: 0;
+  border-radius: 18px;
+  padding: 13px 15px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #475569;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .customer-sidebar-logout {
   width: 100%;
   border: none;
   outline: none;
-  border-radius: 999px; /* pill shape */
+  border-radius: 999px;
   padding: 14px 16px;
-  background: #fbe4e6; /* soft red background */
-  color: #be123c;      /* red text */
+  background: #fbe4e6;
+  color: #be123c;
   font-weight: 900;
   display: flex;
   align-items: center;
@@ -130,15 +121,16 @@
   transition: all 0.25s ease;
 }
 
+/* icon box */
 .customer-sidebar-logout .customer-nav-icon {
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  background: #f1d5d8;  /* soft pink box */
+  background: #f1d5d8;
   color: #be123c;
 }
 
-/* hover effect (optional but nice) */
+/* hover */
 .customer-sidebar-logout:hover {
   background: #fca5a5;
   color: #7f1d1d;

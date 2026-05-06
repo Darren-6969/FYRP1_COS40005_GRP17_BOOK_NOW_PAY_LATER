@@ -10,11 +10,11 @@ import {
 } from "lucide-react";
 
 const sidebarLinks = [
-  { to: "/customer/bookings", label: "My Bookings", icon: <CalendarCheck size={20} /> },
-  { to: "/customer/payments", label: "Payments", icon: <CreditCard size={20} /> },
-  { to: "/customer/invoices", label: "Invoices", icon: <FileText size={20} /> },
-  { to: "/customer/notifications", label: "Notifications", icon: <Bell size={20} /> },
-  { to: "/customer/profile", label: "Profile", icon: <UserCircle size={20} /> },
+  { to: "/customer/bookings", label: "My Bookings", icon: "⌂" },
+  { to: "/customer/payments", label: "Payments", icon: "◉" },
+  { to: "/customer/invoices", label: "Invoices", icon: "▧" },
+  { to: "/customer/notifications", label: "Notifications", icon: "◇" },
+  { to: "/customer/profile", label: "Profile", icon: "○" },
 ];
 
 const bottomLinks = [

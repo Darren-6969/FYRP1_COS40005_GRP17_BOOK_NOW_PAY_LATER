@@ -63,48 +63,31 @@
 .operator-nav-link {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 13px 15px;
-  border-radius: 18px;
-  color: #475569;
-  font-weight: 700;
-  font-size: 14px;
+  gap: 11px;
+  padding: 12px 14px;
+  border-radius: 16px;
   text-decoration: none;
-  transition: all 0.25s ease;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+  transition: 0.18s ease;
 }
 
-.operator-nav-icon {
-  display: inline-grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 12px;
-  background: rgba(37, 99, 235, 0.1);
-  flex-shrink: 0;
-  transition: all 0.25s ease;
+.operator-nav-link span {
+  width: 18px;
+  text-align: center;
 }
 
-/* Hover effect (SAME AS CUSTOMER) */
-.operator-nav-link:hover {
-  transform: translateX(6px);
-  background: #2563eb;
-  color: #fff;
-}
-
-.operator-nav-link:hover .operator-nav-icon {
-  transform: scale(1.15) rotate(8deg);
-  background: rgba(255, 255, 255, 0.22);
-}
-
+.operator-nav-link:hover,
 .operator-nav-link.active {
   background: #2563eb;
   color: #fff;
-  box-shadow: 0 14px 35px rgba(37, 99, 235, 0.22);
+  box-shadow: 0 14px 35px rgba(37, 99, 235, 0.2);
 }
 
-.operator-nav-link.active .operator-nav-icon {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
+.operator-sidebar-bottom {
+  display: grid;
+  gap: 8px;
 }
 
 .operator-help-btn,
@@ -200,16 +183,13 @@
   z-index: 9999;
 }
 
-
-.operator-nav-icon {
-  display: inline-grid !important;
-  width: 34px !important;
-  height: 34px !important;
-  place-items: center;
-  border-radius: 12px;
-  background: rgba(37, 99, 235, 0.1);
-  flex-shrink: 0;
-  transition: all 0.25s ease;
+.operator-icon-btn {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .operator-dot {

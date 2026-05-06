@@ -1,25 +1,14 @@
 import { NavLink } from "react-router-dom";
-import {
-  LayoutDashboard,
-  ClipboardList,
-  ListChecks,
-  CreditCard,
-  FileText,
-  BarChart3,
-  Bell,
-  Settings,
-  LogOut
-} from "lucide-react";
 
 const links = [
-  { to: "/operator/dashboard", label: "Dashboard", icon: <LayoutDashboard size={20} /> },
-  { to: "/operator/booking-requests", label: "Booking Requests", icon: <ClipboardList size={20} /> },
-  { to: "/operator/booking-log", label: "Booking Log", icon: <ListChecks size={20} /> },
-  { to: "/operator/payments", label: "Payments", icon: <CreditCard size={20} /> },
-  { to: "/operator/invoices", label: "Invoices", icon: <FileText size={20} /> },
-  { to: "/operator/reports", label: "Reports", icon: <BarChart3 size={20} /> },
-  { to: "/operator/notifications", label: "Notifications", icon: <Bell size={20} /> },
-  { to: "/operator/settings", label: "Settings", icon: <Settings size={20} /> },
+  { to: "/operator/dashboard", label: "Dashboard", icon: "⌂" },
+  { to: "/operator/booking-requests", label: "Booking Requests", icon: "▦" },
+  { to: "/operator/booking-log", label: "Booking Log", icon: "☷" },
+  { to: "/operator/payment-verification", label: "Payments", icon: "◉" },
+  { to: "/operator/invoices", label: "Invoices", icon: "▧" },
+  { to: "/operator/sales-report", label: "Reports", icon: "◌" },
+  { to: "/operator/notifications", label: "Notifications", icon: "◇" },
+  { to: "/operator/settings", label: "Settings", icon: "⚙" },
 ];
 
 export default function OperatorSidebar({
@@ -57,16 +46,13 @@ export default function OperatorSidebar({
         <nav className="operator-nav-list">
           {links.map((link) => (
             <NavLink
-                key={link.to}
-                to={link.to}
-                end
-                className={({ isActive }) =>
-                isActive ? "operator-nav-link active" : "operator-nav-link"
-              }
-               onClick={handleNavClick}
-              >
-              <span className="operator-nav-icon">{link.icon}</span>
-              <span className="operator-nav-label">{link.label}</span>
+              key={link.to}
+              to={link.to}
+              className="operator-nav-link"
+              onClick={handleNavClick}
+            >
+              <span>{link.icon}</span>
+              {link.label}
             </NavLink>
           ))}
         </nav>
