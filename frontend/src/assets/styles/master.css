@@ -492,9 +492,16 @@
 .master-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 28px;
+  gap: 14px;
 }
+
+.master-brand > div:last-child {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+
 
 .master-brand-icon {
   width: 48px;
@@ -508,21 +515,17 @@
   box-shadow: 0 14px 34px rgba(37, 99, 235, 0.25);
 }
 
-.master-brand strong,
-.master-brand span {
-  display: block;
-}
-
 .master-brand strong {
+  display: block;
+  font-size: 1.7rem;
+  line-height: 1.1;
   color: #0f172a;
-  font-size: 16px;
 }
 
 .master-brand span {
-  margin-top: 2px;
+  font-size: 14px;
   color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
+  margin-top: 2px;
 }
 
 .master-nav-list {

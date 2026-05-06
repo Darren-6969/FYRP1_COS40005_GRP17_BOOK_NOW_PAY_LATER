@@ -5,6 +5,7 @@ import {
   notifyOperatorUsersByBooking,
 } from "../services/notification_email_service.js";
 import { bookingSubmittedTemplate } from "../services/email_templates.js";
+import { emitToUser } from "../utils/socket.js";
 
 function generateIntentToken() {
   return crypto.randomBytes(32).toString("hex");
@@ -225,6 +226,72 @@ export async function createHostBookingIntent(req, res, next) {
         expiresAt,
       },
     });
+
+   if (existingIntent) {
+  const operatorUsers = await prisma.user.findMany({
+    where: {
+      OR: [
+        {
+          operatorId: operator.id,
+          role: "NORMAL_SELLER",
+        },
+        {
+          role: "MASTER_SELLER",
+        },
+      ],
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  for (const user of operatorUsers) {
+    const notification = await prisma.notification.create({
+      data: {
+        userId: user.id,
+        title: "Booking intent already exists",
+        message: `${hostBookingRef} from ${customerName} is still waiting for BNPL confirmation.`,
+        type: "HOST_BOOKING_INTENT",
+      },
+    });
+
+    console.log("Creating existing host intent notification for user:", user.id);
+    console.log("Emitting realtime existing host intent notification to user:", user.id);
+
+    emitToUser(user.id, "notification:new", notification);
+    emitToUser(user.id, "notification:refresh", {
+      userId: user.id,
+      reason: "existing_host_booking_intent",
+    });
+  }
+
+  const intentResponse = await buildIntentResponse(existingIntent);
+
+  return res.status(200).json({
+    message: "Booking intent already exists",
+    ...intentResponse,
+  });
+}
+
+for (const user of operatorUsers) {
+  const notification = await prisma.notification.create({
+    data: {
+      userId: user.id,
+      title: "New booking request",
+      message: `${hostBookingRef} from ${customerName} is waiting for BNPL confirmation.`,
+      type: "HOST_BOOKING_INTENT",
+    },
+  });
+
+  console.log("Creating host intent notification for user:", user.id);
+  console.log("Emitting realtime host intent notification to user:", user.id);
+
+  emitToUser(user.id, "notification:new", notification);
+  emitToUser(user.id, "notification:refresh", {
+    userId: user.id,
+    reason: "new_host_booking_intent",
+  });
+}
 
     const intentResponse = await buildIntentResponse(intent);
 
