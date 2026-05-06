@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { LogOut } from "lucide-react";
 
 const links = [
   { to: "/operator/dashboard", label: "Dashboard", icon: "⌂" },
