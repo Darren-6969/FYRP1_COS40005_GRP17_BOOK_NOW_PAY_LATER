@@ -12,6 +12,7 @@ import Receipts from "./pages/master/Receipts";
 import Invoices from "./pages/master/Invoices";
 import Operators from "./pages/master/Operators";
 import SalesReport from "./pages/master/SalesReport";
+import MasterAnalytics from "./pages/master/MasterAnalytics";
 import CronJobs from "./pages/master/CronJobs";
 import SystemLogs from "./pages/master/SystemLogs";
 import SystemSettings from "./pages/master/SystemSettings";
@@ -42,6 +43,7 @@ import OperatorPaymentVerification from "./pages/operator/OperatorPaymentVerific
 import OperatorBookingLog from "./pages/operator/OperatorBookingLog";
 import OperatorInvoices from "./pages/operator/OperatorInvoices";
 import OperatorSalesReport from "./pages/operator/OperatorSalesReport";
+import OperatorAnalytics from "./pages/operator/OperatorAnalytics";
 import OperatorNotifications from "./pages/operator/OperatorNotifications";
 import OperatorSettings from "./pages/operator/OperatorSettings";
 import OperatorHelp from "./pages/operator/OperatorHelp";
@@ -66,6 +68,7 @@ export default function App() {
               <Route path="invoices" element={<Invoices />} />
               <Route path="operators" element={<Operators />} />
               <Route path="sales-report" element={<SalesReport />} />
+              <Route path="analytics" element={<MasterAnalytics />} />
               <Route path="cron-jobs" element={<CronJobs />} />
               <Route path="system-logs" element={<SystemLogs />} />
               <Route path="system-settings" element={<SystemSettings />} />
@@ -84,6 +87,7 @@ export default function App() {
               <Route path="booking-log" element={<OperatorBookingLog />} />
               <Route path="invoices" element={<OperatorInvoices />} />
               <Route path="reports" element={<OperatorSalesReport />} />
+              <Route path="analytics" element={<OperatorAnalytics />} />
               <Route path="notifications" element={<OperatorNotifications />} />
               <Route path="settings" element={<OperatorSettings />} />
               <Route path="help" element={<OperatorHelp />} />

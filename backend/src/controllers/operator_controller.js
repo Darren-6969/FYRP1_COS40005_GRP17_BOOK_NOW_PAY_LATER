@@ -1,7 +1,7 @@
 import prisma from "../config/db.js";
 import bcrypt from "bcryptjs";
 import { sendEmail } from "../services/email_service.js";
-import { generateForecast } from "../services/sarima_service.js";
+import { generateForecast, generateAnalytics } from "../services/sarima_service.js";
 import { generateInvoiceForBooking } from "../services/invoice_service.js";
 import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
 import {
@@ -1696,6 +1696,33 @@ export async function getOperatorReports(req, res, next) {
       demandForecast: forecast.forecast,
       forecastSummary: forecast.summary,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Analytics & Demand Forecast
+ */
+export async function getOperatorAnalytics(req, res, next) {
+  try {
+    let operatorId;
+    if (req.user.role === "MASTER_SELLER") {
+      const qId = req.query.operatorId;
+      operatorId = qId ? Number(qId) : null;
+    } else {
+      operatorId = req.user.operatorId;
+    }
+
+    const year = req.query.year ? Number(req.query.year) : null;
+    const month = req.query.month ? Number(req.query.month) : null;
+
+    const analytics = await generateAnalytics(
+      operatorId,
+      year && month ? { year, month } : {}
+    );
+
+    res.json(analytics);
   } catch (err) {
     next(err);
   }

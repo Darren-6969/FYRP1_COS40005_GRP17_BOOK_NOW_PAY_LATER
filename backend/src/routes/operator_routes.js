@@ -28,6 +28,7 @@ import {
   markAllNotificationsRead,
 
   getOperatorReports,
+  getOperatorAnalytics,
   getOperatorSettings,
 } from "../controllers/operator_controller.js";
 
@@ -69,6 +70,7 @@ router.patch("/notifications/:id/read", ...operatorAccess, markNotificationRead)
 router.patch("/notifications/read-all", ...operatorAccess, markAllNotificationsRead);
 
 router.get("/reports", ...operatorAccess, getOperatorReports);
+router.get("/analytics", ...operatorAccess, getOperatorAnalytics);
 router.get("/settings", ...operatorAccess, getOperatorSettings);
 
 export default router;

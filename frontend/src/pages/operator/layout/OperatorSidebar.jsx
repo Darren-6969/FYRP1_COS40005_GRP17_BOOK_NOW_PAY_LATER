@@ -6,10 +6,11 @@ import {
   CreditCard,
   FileText,
   BarChart3,
+  TrendingUp,
   Bell,
   Settings,
   CircleHelp,
-  LogOut
+  LogOut,
 } from "lucide-react";
 
 const links = [
@@ -19,6 +20,7 @@ const links = [
   { to: "/operator/payments", label: "Payments", icon: <CreditCard size={20} /> },
   { to: "/operator/invoices", label: "Invoices", icon: <FileText size={20} /> },
   { to: "/operator/reports", label: "Reports", icon: <BarChart3 size={20} /> },
+  { to: "/operator/analytics", label: "Analytics & Demand Forecast", icon: <TrendingUp size={20} /> },
   { to: "/operator/notifications", label: "Notifications", icon: <Bell size={20} /> },
   { to: "/operator/settings", label: "Settings", icon: <Settings size={20} /> },
   { to: "/operator/help", label: "Help & Support", icon: <CircleHelp size={20} /> },

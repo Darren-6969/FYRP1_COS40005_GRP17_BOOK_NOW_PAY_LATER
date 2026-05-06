@@ -96,7 +96,11 @@ export const operatorService = {
 
   getReports(params = {}) {
     return api.get("/operators/reports", { params });
-  }, 
+  },
+
+  getAnalytics(params = {}) {
+    return api.get("/operators/analytics", { params });
+  },
 
   getSettings() {
     return api.get("/operators/settings");
