@@ -30,6 +30,8 @@ import CustomerInvoices from "./pages/customer/CustomerInvoices";
 import CustomerNotifications from "./pages/customer/CustomerNotifications";
 import CustomerProfile from "./pages/customer/CustomerProfile";
 import CustomerInvoiceDetail from "./pages/customer/CustomerInvoiceDetail";
+import CustomerHelp from "./pages/customer/CustomerHelp";
+
 
 // Operator Pages
 import OperatorLayout from "./pages/operator/layout/OperatorLayout";
@@ -100,6 +102,7 @@ export default function App() {
               <Route path="invoices/:id" element={<CustomerInvoiceDetail />} />
               <Route path="notifications" element={<CustomerNotifications />} />
               <Route path="profile" element={<CustomerProfile />} />
+              <Route path="help" element={<CustomerHelp />} />
             </Route>
           </Route>
 

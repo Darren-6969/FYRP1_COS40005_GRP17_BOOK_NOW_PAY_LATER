@@ -82,7 +82,9 @@ export default function OperatorSidebar({
           className="operator-logout-btn"
           onClick={onLogout}
         >
-          ↩ Logout
+          <span className="operator-nav-icon">
+          <LogOut size={20} />
+          </span>
         </button>
       </div>
     </aside>

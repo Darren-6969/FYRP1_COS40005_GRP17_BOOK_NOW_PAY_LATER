@@ -113,11 +113,36 @@
   background: rgba(255, 255, 255, 0.25);
 }
 
-.customer-sidebar-logout:hover {
-  background: #ffe4e6;
-  color: #be123c;
-  border: none;            /* ❌ remove border */
+.customer-sidebar-logout {
+  width: 100%;
+  border: none;
   outline: none;
+  border-radius: 999px; /* pill shape */
+  padding: 14px 16px;
+  background: #fbe4e6; /* soft red background */
+  color: #be123c;      /* red text */
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  justify-content: center;
+  transition: all 0.25s ease;
+}
+
+.customer-sidebar-logout .customer-nav-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: #f1d5d8;  /* soft pink box */
+  color: #be123c;
+}
+
+/* hover effect (optional but nice) */
+.customer-sidebar-logout:hover {
+  background: #fca5a5;
+  color: #7f1d1d;
+  transform: translateY(-1px);
 }
 
 .customer-main {
@@ -1440,34 +1465,35 @@
 
 .customer-profile-shell {
   width: 100%;
-  max-width: 1120px;
+  max-width: 1180px;
   margin: 0 auto;
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   border-radius: 34px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.76);
-  border: 1px solid rgba(226, 232, 240, 0.82);
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(18px);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(22px);
 }
 
 .customer-profile-sidebar {
-  padding: 34px 30px;
+  padding: 36px 30px;
   border-right: 1px solid rgba(226, 232, 240, 0.86);
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.94), rgba(239, 246, 255, 0.7));
+  background: linear-gradient(180deg, #f8fbff 0%, #eff6ff 100%);
 }
 
 .customer-profile-title {
   width: 100%;
-  margin: 0 0 34px;
+  margin: 0 0 32px;
   font-weight: 900;
   color: #0f172a;
   text-align: left;
+  font-size: 1.05rem;
 }
 
 .customer-profile-avatar-wrap {
@@ -1475,17 +1501,17 @@
   flex-direction: column;
   align-items: center;
   gap: 14px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .customer-profile-avatar-img,
 .customer-profile-avatar-fallback {
-  width: 112px;
-  height: 112px;
+  width: 118px;
+  height: 118px;
   border-radius: 999px;
   object-fit: cover;
-  border: 4px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 16px 36px rgba(37, 99, 235, 0.16);
+  border: 5px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 20px 45px rgba(37, 99, 235, 0.18);
 }
 
 .customer-profile-avatar-fallback {
@@ -1494,7 +1520,7 @@
   justify-content: center;
   background: linear-gradient(135deg, #2563eb, #60a5fa);
   color: #ffffff;
-  font-size: 44px;
+  font-size: 46px;
   font-weight: 900;
 }
 
@@ -1503,14 +1529,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 9px 14px;
+  padding: 9px 16px;
   border-radius: 999px;
   background: #eff6ff;
   color: #2563eb;
   font-size: 0.86rem;
-  font-weight: 800;
+  font-weight: 900;
   cursor: pointer;
   border: 1px solid rgba(37, 99, 235, 0.18);
+  transition: all 0.25s ease;
+}
+
+.customer-profile-upload-btn:hover {
+  background: #dbeafe;
+  transform: translateY(-1px);
 }
 
 .customer-profile-upload-btn input {
@@ -1523,11 +1555,12 @@
 .customer-profile-sidebar h1 {
   margin: 0 0 8px;
   color: #0f172a;
-  font-size: 1.45rem;
+  font-size: 1.55rem;
+  letter-spacing: -0.03em;
 }
 
 .customer-profile-sidebar > p:not(.customer-profile-title) {
-  margin: 0 0 18px;
+  margin: 0 0 20px;
   color: #64748b;
   word-break: break-word;
 }
@@ -1535,13 +1568,14 @@
 .customer-profile-meta {
   width: 100%;
   margin-top: 12px;
-  padding: 12px 14px;
+  padding: 13px 15px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.74);
+  background: rgba(255, 255, 255, 0.82);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
 }
 
 .customer-profile-meta span {
@@ -1557,116 +1591,162 @@
 .customer-profile-content {
   min-width: 0;
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr);
 }
 
 .customer-profile-tabs {
-  padding: 28px 20px;
+  padding: 30px 22px;
   border-right: 1px solid rgba(226, 232, 240, 0.72);
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  background: rgba(248, 250, 252, 0.44);
+  gap: 12px;
+  background: rgba(248, 250, 252, 0.58);
 }
 
 .customer-profile-tabs button,
 .customer-profile-logout,
 .customer-profile-logout-mobile {
   border: 0;
+  outline: none;
   cursor: pointer;
   font-family: inherit;
 }
 
 .customer-profile-tabs button {
-  min-height: 54px;
-  padding: 12px 14px;
-  border-radius: 18px;
+  min-height: 58px;
+  padding: 12px 15px;
+  border-radius: 20px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   color: #475569;
   background: transparent;
   text-align: left;
+  font-weight: 800;
+  transition: all 0.25s ease;
 }
 
-.customer-profile-tabs button span {
-  width: 22px;
-  color: #64748b;
-  text-align: center;
+.customer-profile-tabs button span,
+.customer-profile-logout span {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: #eaf1ff;
+  color: #475569;
+  flex-shrink: 0;
+  transition: all 0.25s ease;
 }
 
 .customer-profile-tabs button strong {
-  font-size: 0.92rem;
+  font-size: 0.93rem;
+  line-height: 1.25;
+}
+
+.customer-profile-tabs button:hover {
+  background: #eff6ff;
+  transform: translateX(5px);
+}
+
+.customer-profile-tabs button:hover span {
+  background: #dbeafe;
+  color: #2563eb;
+  transform: scale(1.08) rotate(6deg);
 }
 
 .customer-profile-tabs button.active {
-  background: #ffffff;
-  color: #2563eb;
-  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.1);
+  background: linear-gradient(180deg, #3b82f6, #2563eb);
+  color: white;
+  box-shadow: 0 16px 38px rgba(37, 99, 235, 0.24);
+}
+
+.customer-profile-tabs button.active span {
+  background: rgba(255, 255, 255, 0.22);
+  color: white;
 }
 
 .customer-profile-logout {
   margin-top: auto;
-  color: #dc2626 !important;
+  color: #be123c !important;
+}
+
+.customer-profile-logout span {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
+.customer-profile-logout:hover {
+  background: #ffe4e6 !important;
+  color: #be123c !important;
+  transform: translateX(5px);
+}
+
+.customer-profile-logout:hover span {
+  background: #fecdd3;
+  transform: scale(1.08) rotate(-6deg);
 }
 
 .customer-profile-logout-mobile {
   display: none;
   margin-top: 18px;
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: #fef2f2;
-  color: #dc2626;
+  padding: 13px 14px;
+  border-radius: 999px;
+  background: #ffe4e6;
+  color: #be123c;
   font-weight: 900;
 }
 
 .customer-profile-panel {
+  overflow: hidden;
   min-width: 0;
-  padding: 32px;
+  padding: 36px;
 }
 
 .customer-profile-form {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 24px;
 }
 
 .customer-profile-form h2 {
-  margin: 4px 0 6px;
+  margin: 4px 0 8px;
   color: #0f172a;
-  font-size: 1.5rem;
+  font-size: 1.75rem;
+  letter-spacing: -0.035em;
 }
 
 .customer-profile-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 18px;
 }
 
 .customer-profile-grid.single {
   grid-template-columns: minmax(0, 1fr);
-  max-width: 560px;
+  max-width: 580px;
 }
 
 .customer-profile-grid label {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
   color: #64748b;
   font-size: 0.88rem;
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .customer-profile-grid input {
   width: 100%;
-  min-height: 48px;
+  min-height: 52px;
   border: 1px solid rgba(148, 163, 184, 0.34);
-  border-radius: 16px;
-  padding: 0 14px;
+  border-radius: 18px;
+  padding: 0 15px;
   color: #0f172a;
   outline: none;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.9);
+  transition: all 0.2s ease;
 }
 
 .customer-profile-grid input:focus {
@@ -1847,5 +1927,22 @@
   .customer-profile-meta {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+.customer-profile-form,
+.customer-profile-empty {
+  animation: profilePanelIn 0.28s ease;
+}
+
+@keyframes profilePanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }

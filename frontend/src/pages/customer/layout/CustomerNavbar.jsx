@@ -5,6 +5,7 @@ import {
   FileText,
   Bell,
   UserCircle,
+  HelpCircle,
   LogOut
 } from "lucide-react";
 
@@ -54,13 +55,20 @@ export default function CustomerNavbar({ onLogout }) {
           </nav>
         </div>
 
+        <NavLink to="/customer/help" className="customer-nav-link">
+          <span className="customer-nav-icon">
+          <HelpCircle size={20} />
+          </span>
+          <span>Help & Support</span>
+        </NavLink>
+        
         <button
           type="button"
           className="customer-sidebar-logout"
           onClick={onLogout}
-        >
-          <span className="customer-nav-icon">↩</span>
-          Logout
+          >
+          <LogOut size={20} />
+          <span>LOGOUT</span>
         </button>
       </aside>
 

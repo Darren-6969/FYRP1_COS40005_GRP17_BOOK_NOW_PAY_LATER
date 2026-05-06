@@ -7,6 +7,13 @@ import {
   updateProfile,
 } from "../../services/auth_service";
 import "../../assets/styles/customer.css";
+import {
+  UserRound,
+  LockKeyhole,
+  Bell,
+  CircleHelp,
+  LogOut
+} from "lucide-react";
 
 function getStoredUser() {
   try {
@@ -62,7 +69,7 @@ export default function CustomerProfile() {
   const navigate = useNavigate();
 
   const [user, setUser] = useState(getStoredUser());
-  const [activeTab, setActiveTab] = useState("personal");
+  const [activeTab, setActiveTab] = useState("");
 
   const [profileForm, setProfileForm] = useState({
     name: "",
@@ -96,30 +103,30 @@ export default function CustomerProfile() {
   const avatarInitial = displayName?.[0]?.toUpperCase() || "C";
 
   const tabs = useMemo(
-    () => [
-      {
-        id: "personal",
-        label: "Personal Information",
-        icon: "♙",
-      },
-      {
-        id: "password",
-        label: "Change Password",
-        icon: "▣",
-      },
-      {
-        id: "notifications",
-        label: "Notification Preferences",
-        icon: "♢",
-      },
-      {
-        id: "help",
-        label: "Help & Support",
-        icon: "?",
-      },
-    ],
-    []
-  );
+  () => [
+    {
+      id: "personal",
+      label: "Personal Information",
+      icon: <UserRound size={18} />,
+    },
+    {
+      id: "password",
+      label: "Change Password",
+      icon: <LockKeyhole size={18} />,
+    },
+    {
+      id: "notifications",
+      label: "Notification Preferences",
+      icon: <Bell size={18} />,
+    },
+    {
+      id: "help",
+      label: "Help & Support",
+      icon: <CircleHelp size={18} />,
+    },
+  ],
+  []
+);
 
   const syncUserToForms = (nextUser) => {
     if (!nextUser) return;
@@ -407,8 +414,10 @@ export default function CustomerProfile() {
               className="customer-profile-logout"
               onClick={handleLogout}
             >
-              <span>↪</span>
-              <strong>Logout</strong>
+              <span>
+                <LogOut size={18} />
+              </span>
+              <strong>LOGOUT</strong>
             </button>
           </div>
 
