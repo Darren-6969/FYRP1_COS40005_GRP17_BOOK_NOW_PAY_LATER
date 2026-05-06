@@ -74,50 +74,39 @@
   color: #475569;
   font-weight: 700;
   font-size: 14px;
-  text-decoration: none;
-  transition: all 0.25s ease;
+  transition: 0.2s ease;
 }
 
-.customer-nav-icon {
-  display: inline-grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 12px;
-  background: rgba(37, 99, 235, 0.1);
-  flex-shrink: 0;
-  transition: all 0.25s ease;
-}
-
-/* Hover effect (MOVE + ICON ANIMATION) */
-.customer-nav-link:hover {
-  transform: translateX(6px);
-  background: #2563eb;
-  color: #fff;
-}
-
-.customer-nav-link:hover .customer-nav-icon {
-  transform: scale(1.15) rotate(8deg);
-  background: rgba(255, 255, 255, 0.2);
-}
-
-/* Active (selected page) */
+.customer-nav-link:hover,
 .customer-nav-link.active {
   background: #2563eb;
   color: #fff;
   box-shadow: 0 14px 35px rgba(37, 99, 235, 0.22);
 }
 
-.customer-nav-link.active .customer-nav-icon {
-  transform: scale(1.08);
-  background: rgba(255, 255, 255, 0.25);
+.customer-nav-icon {
+  display: inline-grid;
+  width: 20px;
+  place-items: center;
+  font-weight: 900;
+}
+
+.customer-sidebar-logout {
+  width: 100%;
+  border: 0;
+  border-radius: 18px;
+  padding: 13px 15px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #475569;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .customer-sidebar-logout:hover {
   background: #ffe4e6;
   color: #be123c;
-  border: none;            /* ❌ remove border */
-  outline: none;
 }
 
 .customer-main {
