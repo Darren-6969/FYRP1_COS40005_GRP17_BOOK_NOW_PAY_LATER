@@ -500,6 +500,119 @@ router.post(
   }
 );
 
+// ── Stripe Connect: account status ───────────────────────────────────────────
+// Returns live Stripe account details for the operator's connected account so
+// the frontend can show whether charges/payouts are enabled or still restricted.
+router.get(
+  "/account-status",
+  verifyToken,
+  allowRoles("NORMAL_SELLER", "MASTER_SELLER"),
+  async (req, res, next) => {
+    try {
+      if (!process.env.STRIPE_SECRET_KEY) {
+        return res.status(500).json({ message: "Stripe is not configured" });
+      }
+
+      const operator = req.user.operatorId
+        ? await prisma.operator.findUnique({
+            where: { id: req.user.operatorId },
+            select: { stripeAccountId: true },
+          })
+        : null;
+
+      const accountId =
+        operator?.stripeAccountId || process.env.STRIPE_CONNECTED_ACCOUNT_ID;
+
+      if (!accountId) {
+        return res.json({ configured: false });
+      }
+
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+      const account = await stripe.accounts.retrieve(accountId);
+
+      res.json({
+        configured: true,
+        accountId,
+        chargesEnabled: account.charges_enabled,
+        payoutsEnabled: account.payouts_enabled,
+        detailsSubmitted: account.details_submitted,
+        requirements: {
+          currentlyDue: account.requirements?.currently_due ?? [],
+          pastDue: account.requirements?.past_due ?? [],
+          errors: account.requirements?.errors ?? [],
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// ── Stripe Connect: Express onboarding link ───────────────────────────────────
+//
+// SANDBOX BYPASS / SHORTCUT
+// --------------------------
+// This endpoint generates a Stripe Express Account Link so the merchant can
+// complete the identity verification form on Stripe's hosted onboarding page.
+//
+// In TEST MODE this is effectively a bypass: Stripe accepts fake data
+// (e.g. SSN "000-00-0000", any address, any DOB) and immediately lifts the
+// "RESTRICTED" status on the connected account — no real KYC documents needed.
+//
+// In LIVE MODE this would be a genuine onboarding step that collects real
+// identity documents; remove or gate this route behind admin access before
+// going to production.
+//
+router.post(
+  "/onboarding-link",
+  express.json(),
+  verifyToken,
+  allowRoles("NORMAL_SELLER", "MASTER_SELLER"),
+  async (req, res, next) => {
+    try {
+      if (!process.env.STRIPE_SECRET_KEY) {
+        return res.status(500).json({ message: "Stripe is not configured" });
+      }
+
+      const operator = req.user.operatorId
+        ? await prisma.operator.findUnique({
+            where: { id: req.user.operatorId },
+            select: { stripeAccountId: true },
+          })
+        : null;
+
+      const accountId =
+        operator?.stripeAccountId || process.env.STRIPE_CONNECTED_ACCOUNT_ID;
+
+      if (!accountId) {
+        return res.status(400).json({
+          message: "No Stripe connected account configured for this operator.",
+        });
+      }
+
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+      const frontendBase = process.env.FRONTEND_URL || "http://localhost:5173";
+
+      // SANDBOX BYPASS: account_onboarding link lets the merchant submit test
+      // data on Stripe's hosted form to lift the RESTRICTED status without
+      // going through real identity verification.
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        // Called when the link expires before the merchant finishes; sends them
+        // back to Settings so they can request a fresh link.
+        refresh_url: `${frontendBase}/operator/settings?stripe=refresh`,
+        // Called after the merchant completes (or skips past) the onboarding form.
+        return_url: `${frontendBase}/operator/settings?stripe=connected`,
+        type: "account_onboarding",
+      });
+
+      res.json({ url: accountLink.url });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // ── Create checkout session ───────────────────────────────────────────────────
 router.post(
   "/checkout",

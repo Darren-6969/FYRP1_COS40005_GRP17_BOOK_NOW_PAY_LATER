@@ -105,6 +105,19 @@ export const operatorService = {
   getSettings() {
     return api.get("/operators/settings");
   },
+
+  // Fetch live Stripe Connect account status (charges enabled, restrictions, etc.)
+  getStripeAccountStatus() {
+    return api.get("/stripe/account-status");
+  },
+
+  // Generate a Stripe Express onboarding link.
+  // SANDBOX BYPASS: the link leads to a Stripe-hosted form that accepts fake
+  // test data (SSN 000-00-0000, any address) to lift the RESTRICTED status
+  // without real KYC — for sandbox testing only.
+  createStripeOnboardingLink() {
+    return api.post("/stripe/onboarding-link");
+  },
 };
 
 export function formatOperatorMoney(value) {
