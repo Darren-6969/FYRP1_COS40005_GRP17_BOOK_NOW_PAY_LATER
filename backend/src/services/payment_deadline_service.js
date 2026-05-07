@@ -1,6 +1,12 @@
 import prisma from "../config/db.js";
+import {
+  minDate,
+  parseUtcDate,
+  subtractMinutes,
+} from "../utils/datetime.js";
 
 const MALAYSIA_TIMEZONE_OFFSET_HOURS = 8;
+const DEFAULT_PICKUP_BUFFER_MINUTES = 60;
 
 function malaysiaDateTimeToUtcDate({
   year,
@@ -43,7 +49,9 @@ function getMalaysiaDateParts(date = new Date()) {
 
 function addDaysToMalaysiaDate({ year, month, day }, daysToAdd) {
   const baseUtcDate = Date.UTC(year, month - 1, day);
-  const targetUtcDate = new Date(baseUtcDate + daysToAdd * 24 * 60 * 60 * 1000);
+  const targetUtcDate = new Date(
+    baseUtcDate + daysToAdd * 24 * 60 * 60 * 1000
+  );
 
   return {
     year: targetUtcDate.getUTCFullYear(),
@@ -69,33 +77,75 @@ function calculateDefaultDeadlineInMalaysia(paymentDeadlineDays) {
   });
 }
 
+function getLatestDeadlineBeforePickup(pickupDate, bufferMinutes) {
+  const parsedPickup = parseUtcDate(pickupDate);
+
+  if (!parsedPickup) return null;
+
+  return subtractMinutes(parsedPickup, bufferMinutes);
+}
+
+/**
+ * Calculates payment deadline.
+ *
+ * Rule:
+ * 1. If manual deadline is provided, use it.
+ * 2. Otherwise use operator BNPL config, default 3 days.
+ * 3. If pickup/check-in date is earlier than default deadline,
+ *    payment deadline must be before pickup/check-in time.
+ */
 export async function calculatePaymentDeadline(
   operatorId,
-  manualDeadline = null
+  manualDeadline = null,
+  pickupDate = null,
+  options = {}
 ) {
-  if (manualDeadline) {
-    const parsedDeadline = new Date(manualDeadline);
+  const bufferMinutes =
+    options.bufferMinutes ?? DEFAULT_PICKUP_BUFFER_MINUTES;
 
-    if (Number.isNaN(parsedDeadline.getTime())) {
+  const latestBeforePickup = getLatestDeadlineBeforePickup(
+    pickupDate,
+    bufferMinutes
+  );
+
+  let selectedDeadline;
+
+  if (manualDeadline) {
+    const parsedManualDeadline = parseUtcDate(manualDeadline);
+
+    if (!parsedManualDeadline) {
       const error = new Error("Invalid payment deadline");
       error.statusCode = 400;
       throw error;
     }
 
-    if (parsedDeadline <= new Date()) {
-      const error = new Error("Payment deadline must be in the future");
-      error.statusCode = 400;
-      throw error;
-    }
+    selectedDeadline = parsedManualDeadline;
+  } else {
+    const config = await prisma.bNPLConfig.findFirst({
+      where: { operatorId },
+    });
 
-    return parsedDeadline;
+    const paymentDeadlineDays = config?.paymentDeadlineDays || 3;
+    selectedDeadline = calculateDefaultDeadlineInMalaysia(paymentDeadlineDays);
   }
 
-  const config = await prisma.bNPLConfig.findFirst({
-    where: { operatorId },
-  });
+  const finalDeadline = latestBeforePickup
+    ? minDate(selectedDeadline, latestBeforePickup)
+    : selectedDeadline;
 
-  const paymentDeadlineDays = config?.paymentDeadlineDays || 3;
+  if (!finalDeadline) {
+    const error = new Error("Unable to calculate payment deadline");
+    error.statusCode = 400;
+    throw error;
+  }
 
-  return calculateDefaultDeadlineInMalaysia(paymentDeadlineDays);
+  if (finalDeadline <= new Date()) {
+    const error = new Error(
+      "Payment deadline would already be expired. Please choose a later pickup time or manually set a valid deadline."
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return finalDeadline;
 }

@@ -17,6 +17,7 @@ import {
   paymentReceiptTemplate,
   paymentRequestTemplate,
 } from "../services/email_templates.js";
+import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 
 function toNumber(value) {
   return value == null ? 0 : Number(value);
@@ -675,9 +676,11 @@ export async function acceptBooking(req, res, next) {
       });
     }
 
-    const paymentDeadline =
-      booking.paymentDeadline ||
-      (await calculatePaymentDeadline(booking.operatorId));
+    const paymentDeadline = await calculatePaymentDeadline(
+      booking.operatorId,
+      booking.paymentDeadline || null,
+      booking.pickupDate
+    );
 
     const payment = await prisma.payment.upsert({
       where: {
@@ -857,8 +860,68 @@ export async function cancelOperatorBooking(req, res, next) {
   }
 }
 
-export function confirmBooking(req, res, next) {
-  return updateBookingStatus(req, res, next, "COMPLETED", "BOOKING_CONFIRMED");
+export async function confirmBooking(req, res, next) {
+  try {
+    const booking = await findOperatorBooking(req, req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    if (booking.status !== "PAID" && booking.payment?.status !== "PAID") {
+      return res.status(400).json({
+        message: "Only paid bookings can be confirmed/completed.",
+      });
+    }
+
+    if (booking.status === "COMPLETED") {
+      return res.status(400).json({
+        message: "This booking is already completed.",
+      });
+    }
+
+    const updatedBooking = await prisma.booking.update({
+      where: { id: booking.id },
+      data: { status: "COMPLETED" },
+      include: includeBookingRelations(),
+    });
+
+    await createAuditLog({
+      req,
+      action: "BOOKING_CONFIRMED",
+      entityType: "Booking",
+      entityId: booking.id,
+      details: {
+        previousStatus: booking.status,
+        status: "COMPLETED",
+      },
+    });
+
+    const customerUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/customer/bookings/${booking.id}`;
+
+    await createCustomerNotification({
+      booking: updatedBooking,
+      title: "Booking completed",
+      message: `Your booking ${
+        booking.bookingCode || booking.id
+      } has been completed.`,
+      type: "BOOKING_CONFIRMED",
+      emailSubject: `Booking Completed - ${booking.bookingCode || booking.id}`,
+      emailHtml: bookingStatusTemplate({
+        booking: updatedBooking,
+        status: "COMPLETED",
+        customerUrl,
+      }),
+    });
+
+    res.json({
+      booking: mapBooking(updatedBooking),
+    });
+  } catch (err) {
+    next(err);
+  }
 }
 
 export async function suggestAlternative(req, res, next) {
@@ -876,6 +939,23 @@ export async function suggestAlternative(req, res, next) {
         action: "ALTERNATIVE_SUGGESTED",
       },
     });
+
+    if (
+      ["PAID", "COMPLETED", "REJECTED", "CANCELLED", "OVERDUE"].includes(
+        booking.status
+      ) ||
+      booking.payment?.status === "PAID"
+    ) {
+      return res.status(400).json({
+        message: `Alternative cannot be suggested when booking status is ${booking.status}.`,
+      });
+    }
+
+    if (!["PENDING", "ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
+      return res.status(400).json({
+        message: `Alternative cannot be suggested when booking status is ${booking.status}.`,
+      });
+    }    
 
     if (existingAlternative) {
       return res.status(400).json({
@@ -897,11 +977,19 @@ export async function suggestAlternative(req, res, next) {
       });
     }
 
+    const parsedAlternativePickupDate = alternativePickupDate
+      ? parseMalaysiaLocalDateTime(alternativePickupDate)
+      : null;
+
+    const parsedAlternativeReturnDate = alternativeReturnDate
+      ? parseMalaysiaLocalDateTime(alternativeReturnDate)
+      : null;
+
     const details = {
       alternativeServiceName,
       alternativePrice: alternativePrice ? Number(alternativePrice) : null,
-      alternativePickupDate: alternativePickupDate || null,
-      alternativeReturnDate: alternativeReturnDate || null,
+      alternativePickupDate: parsedAlternativePickupDate,
+      alternativeReturnDate: parsedAlternativeReturnDate,
       reason,
     };
 
@@ -911,8 +999,12 @@ export async function suggestAlternative(req, res, next) {
         status: "ALTERNATIVE_SUGGESTED",
         alternativeServiceName,
         alternativePrice: alternativePrice ? Number(alternativePrice) : null,
-        alternativePickupDate: alternativePickupDate ? new Date(alternativePickupDate) : null,
-        alternativeReturnDate: alternativeReturnDate ? new Date(alternativeReturnDate) : null,
+        alternativePickupDate: alternativePickupDate
+          ? parseMalaysiaLocalDateTime(alternativePickupDate)
+          : null,
+        alternativeReturnDate: alternativeReturnDate
+          ? parseMalaysiaLocalDateTime(alternativeReturnDate)
+          : null,
         alternativeReason: reason,
         alternativeSuggestedAt: new Date(),
         alternativeUsed: true,
@@ -976,7 +1068,8 @@ export async function sendPaymentRequest(req, res, next) {
 
     const paymentDeadline = await calculatePaymentDeadline(
       booking.operatorId,
-      req.body?.paymentDeadline || null
+      req.body?.paymentDeadline || null,
+      booking.pickupDate
     );
 
     const payment = await prisma.payment.upsert({

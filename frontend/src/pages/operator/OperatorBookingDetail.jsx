@@ -76,6 +76,52 @@ export default function OperatorBookingDetail() {
     );
   }
 
+  const bookingStatus = String(booking.status || "").toUpperCase();
+  const paymentStatus = String(booking.payment?.status || "").toUpperCase();
+
+  const isPaid =
+    bookingStatus === "PAID" ||
+    bookingStatus === "COMPLETED" ||
+    paymentStatus === "PAID";
+
+  const isClosed = [
+    "COMPLETED",
+    "REJECTED",
+    "CANCELLED",
+    "OVERDUE",
+  ].includes(bookingStatus);
+
+  const canAcceptReject = bookingStatus === "PENDING";
+
+  const canSuggestAlternative =
+    ["PENDING", "ACCEPTED", "PENDING_PAYMENT"].includes(bookingStatus) &&
+    !isPaid &&
+    !isClosed &&
+    !booking.alternativeUsed;
+
+  const canEditDeadline =
+    ["ACCEPTED", "PENDING_PAYMENT"].includes(bookingStatus) &&
+    !isPaid &&
+    !isClosed;
+
+  const canCancel =
+    ["ACCEPTED", "PENDING_PAYMENT"].includes(bookingStatus) &&
+    !isPaid &&
+    !isClosed;
+
+  const canConfirm = bookingStatus === "PAID" || paymentStatus === "PAID";
+
+  const shouldShowPaymentVerificationLink =
+    paymentStatus === "PENDING_VERIFICATION";
+
+  const hasAnyAction =
+    canAcceptReject ||
+    canSuggestAlternative ||
+    canEditDeadline ||
+    canCancel ||
+    canConfirm ||
+    shouldShowPaymentVerificationLink;
+
   return (
     <div className="operator-page">
       <div className="operator-detail-top">
@@ -162,32 +208,37 @@ export default function OperatorBookingDetail() {
           <h2 className="operator-section-title">Actions</h2>
 
           <div className="operator-action-stack">
-            <button
-              className="operator-primary-btn"
-              disabled={!!actionLoading}
-              onClick={() => runAction("accept")}
-            >
-              Accept Booking
-            </button>
+            {canAcceptReject && (
+              <>
+                <button
+                  className="operator-primary-btn"
+                  disabled={!!actionLoading}
+                  onClick={() => runAction("accept")}
+                >
+                  Accept Booking
+                </button>
 
-            <button
-              className="operator-danger-btn"
-              disabled={!!actionLoading}
-              onClick={() => runAction("reject")}
-            >
-              Reject Booking
-            </button>
+                <button
+                  className="operator-danger-btn"
+                  disabled={!!actionLoading}
+                  onClick={() => runAction("reject")}
+                >
+                  Reject Booking
+                </button>
+              </>
+            )}
 
-            <button
-              className="operator-secondary-btn"
-              disabled={!!actionLoading}
-              onClick={() => setShowAlternative(true)}
-            >
-              Suggest Alternative
-            </button>
+            {canSuggestAlternative && (
+              <button
+                className="operator-secondary-btn"
+                disabled={!!actionLoading}
+                onClick={() => setShowAlternative(true)}
+              >
+                Suggest Alternative
+              </button>
+            )}
 
-            {["ACCEPTED", "PENDING_PAYMENT"].includes(String(booking.status).toUpperCase()) && booking.payment?.status !== "PAID" && 
-            (
+            {canEditDeadline && (
               <button
                 className="operator-secondary-btn"
                 disabled={!!actionLoading}
@@ -197,8 +248,7 @@ export default function OperatorBookingDetail() {
               </button>
             )}
 
-            {["ACCEPTED", "PENDING_PAYMENT"].includes(String(booking.status).toUpperCase()) && booking.payment?.status !== "PAID" && 
-            (
+            {canCancel && (
               <button
                 className="operator-danger-btn"
                 disabled={!!actionLoading}
@@ -208,13 +258,30 @@ export default function OperatorBookingDetail() {
               </button>
             )}
 
-            <button
-              className="operator-muted-btn"
-              disabled={!!actionLoading}
-              onClick={() => runAction("confirm")}
-            >
-              Confirm Booking
-            </button>
+            {shouldShowPaymentVerificationLink && (
+              <Link
+                className="operator-primary-btn"
+                to={`/operator/payments?bookingId=${booking.id}`}
+              >
+                View Payment Verification
+              </Link>
+            )}
+
+            {canConfirm && bookingStatus !== "COMPLETED" && (
+              <button
+                className="operator-muted-btn"
+                disabled={!!actionLoading}
+                onClick={() => runAction("confirm")}
+              >
+                Confirm Booking
+              </button>
+            )}
+
+            {!hasAnyAction && (
+              <div className="operator-empty-state compact">
+                No further action is available for this booking.
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -390,16 +457,12 @@ function formatDatetimeLocal(date) {
   )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function datetimeLocalToIso(value) {
+function datetimeLocalToMalaysiaLocalString(value) {
   if (!value) return null;
 
-  const localDate = new Date(value);
-
-  if (Number.isNaN(localDate.getTime())) {
-    return null;
-  }
-
-  return localDate.toISOString();
+  // Keep the datetime-local value as Malaysia local time.
+  // Backend will parse it using parseMalaysiaLocalDateTime().
+  return value;
 }
 
 function PaymentDeadlineModal({ booking, onClose, onDone }) {
@@ -418,16 +481,17 @@ function PaymentDeadlineModal({ booking, onClose, onDone }) {
     try {
       setLoading(true);
 
-      const paymentDeadlineIso = datetimeLocalToIso(paymentDeadline);
+      const paymentDeadlineValue =
+        datetimeLocalToMalaysiaLocalString(paymentDeadline);
 
-      if (!paymentDeadlineIso) {
+      if (!paymentDeadlineValue) {
         alert("Invalid payment deadline.");
         return;
       }
 
       await operatorService.sendPaymentRequest(booking.id, {
         method,
-        paymentDeadline: paymentDeadlineIso,
+        paymentDeadline: paymentDeadlineValue,
       });
 
       await onDone();

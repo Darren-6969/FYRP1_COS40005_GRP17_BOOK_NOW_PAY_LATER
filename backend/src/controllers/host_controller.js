@@ -5,6 +5,8 @@ import {
   notifyOperatorUsersByBooking,
 } from "../services/notification_email_service.js";
 import { bookingSubmittedTemplate } from "../services/email_templates.js";
+import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
+import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
 
 function generateIntentToken() {
   return crypto.randomBytes(32).toString("hex");
@@ -232,9 +234,15 @@ export async function createHostBookingIntent(req, res, next) {
         customerEmail: safeCustomerEmail,
         serviceName,
         serviceType: serviceType || null,
-        bookingDate: bookingDate ? new Date(bookingDate) : new Date(),
-        pickupDate: pickupDate ? new Date(pickupDate) : null,
-        returnDate: returnDate ? new Date(returnDate) : null,
+        bookingDate: bookingDate
+          ? parseMalaysiaLocalDateTime(bookingDate)
+          : new Date(),
+        pickupDate: pickupDate
+          ? parseMalaysiaLocalDateTime(pickupDate)
+          : null,
+        returnDate: returnDate
+          ? parseMalaysiaLocalDateTime(returnDate)
+          : null,
         location: location || null,
         totalAmount: amount,
         payload: req.body,
@@ -324,6 +332,12 @@ export async function claimHostBookingIntent(req, res, next) {
       });
     }
 
+    const defaultPaymentDeadline = await calculatePaymentDeadline(
+      intent.operatorId,
+      null,
+      intent.pickupDate
+    );
+    
     const result = await prisma.$transaction(async (tx) => {
       const bookingCode = await generateBookingCode(tx);
 
@@ -341,6 +355,7 @@ export async function claimHostBookingIntent(req, res, next) {
           location: intent.location,
           totalAmount: intent.totalAmount,
           status: "PENDING",
+          paymentDeadline: defaultPaymentDeadline,
         },
         include: {
           customer: {

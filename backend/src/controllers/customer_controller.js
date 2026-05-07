@@ -14,6 +14,7 @@ import {
   paymentReceiptTemplate,
   receiptUploadedTemplate,
 } from "../services/email_templates.js";
+import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -124,6 +125,20 @@ async function generateBookingCode(tx) {
 }
 
 export async function createCustomerBooking(req, res, next) {
+  const parsedBookingDate = parseMalaysiaLocalDateTime(bookingDate);
+  const parsedPickupDate = pickupDate
+    ? parseMalaysiaLocalDateTime(pickupDate)
+    : null;
+  const parsedReturnDate = returnDate
+    ? parseMalaysiaLocalDateTime(returnDate)
+    : null;
+
+  const defaultPaymentDeadline = await calculatePaymentDeadline(
+    resolvedOperatorId,
+    null,
+    parsedPickupDate
+  );
+
   try {
     const {
       operatorId,
@@ -170,9 +185,10 @@ export async function createCustomerBooking(req, res, next) {
           operatorId: resolvedOperatorId,
           serviceName,
           serviceType: serviceType || null,
-          bookingDate: new Date(bookingDate),
-          pickupDate: pickupDate ? new Date(pickupDate) : null,
-          returnDate: returnDate ? new Date(returnDate) : null,
+          bookingDate: parsedBookingDate,
+          pickupDate: parsedPickupDate,
+          returnDate: parsedReturnDate,
+          paymentDeadline: defaultPaymentDeadline,
           location: location || null,
           totalAmount,
           status: "PENDING",
