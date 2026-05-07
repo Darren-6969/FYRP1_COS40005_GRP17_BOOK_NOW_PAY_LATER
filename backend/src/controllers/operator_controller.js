@@ -397,7 +397,11 @@ export async function getOperators(req, res, next) {
     const operators = await prisma.operator.findMany({
       orderBy: { createdAt: "desc" },
       include: {
-        bookings: true,
+        bookings: {
+          include: {
+            payment: true,
+          },
+        },
         users: {
           select: {
             id: true,
@@ -1948,3 +1952,138 @@ export async function getOperatorSettings(req, res, next) {
     next(err);
   }
 } 
+
+export async function deleteOperator(req, res, next) {
+  try {
+    const id = parseId(req.params.id, "operator id");
+
+    const operator = await prisma.operator.findUnique({
+      where: { id },
+      include: {
+        users: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+          },
+        },
+        bookings: {
+          select: {
+            id: true,
+            bookingCode: true,
+            status: true,
+          },
+        },
+        configs: true,
+      },
+    });
+
+    if (!operator) {
+      return res.status(404).json({
+        message: "Operator not found",
+      });
+    }
+
+    if (operator.bookings.length > 0) {
+      return res.status(409).json({
+        message:
+          "This operator already has bookings and cannot be hard deleted. Suspend the operator instead to preserve booking, payment, invoice, and audit history.",
+        bookingCount: operator.bookings.length,
+        bookings: operator.bookings.slice(0, 10),
+      });
+    }
+
+    const userIds = operator.users.map((user) => user.id);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.auditLog.create({
+        data: {
+          userId: req.user?.id || null,
+          action: "OPERATOR_DELETED",
+          entityType: "Operator",
+          entityId: String(operator.id),
+          details: {
+            operatorCode: operator.operatorCode,
+            companyName: operator.companyName,
+            email: operator.email,
+            deletedUsers: operator.users.map((user) => ({
+              id: user.id,
+              email: user.email,
+              role: user.role,
+            })),
+            reason:
+              "Admin deleted operator because it was created for the wrong company.",
+          },
+        },
+      });
+
+      if (userIds.length > 0) {
+        await tx.refreshToken.deleteMany({
+          where: {
+            userId: {
+              in: userIds,
+            },
+          },
+        });
+
+        await tx.notification.deleteMany({
+          where: {
+            userId: {
+              in: userIds,
+            },
+          },
+        });
+
+        await tx.auditLog.updateMany({
+          where: {
+            userId: {
+              in: userIds,
+            },
+          },
+          data: {
+            userId: null,
+          },
+        });
+
+        await tx.user.deleteMany({
+          where: {
+            id: {
+              in: userIds,
+            },
+          },
+        });
+      }
+
+      await tx.bNPLConfig.deleteMany({
+        where: {
+          operatorId: operator.id,
+        },
+      });
+
+      await tx.hostBookingIntent.deleteMany({
+        where: {
+          operatorId: operator.id,
+          status: {
+            in: ["PENDING", "EXPIRED"],
+          },
+        },
+      });
+
+      await tx.operator.delete({
+        where: {
+          id: operator.id,
+        },
+      });
+    });
+
+    res.json({
+      message: "Operator deleted successfully",
+      operatorId: id,
+      operatorCode: operator.operatorCode,
+      companyName: operator.companyName,
+    });
+  } catch (err) {
+    next(err);
+  }
+}

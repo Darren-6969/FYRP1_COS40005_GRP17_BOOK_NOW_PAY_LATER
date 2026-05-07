@@ -348,3 +348,27 @@ model HostBookingIntent {
   @@index([status])
   @@index([expiresAt])
 }
+
+model CronJobRun {
+  id Int @id @default(autoincrement())
+
+  jobType String
+  status  String @default("SUCCESS")
+
+  triggeredByUserId Int?
+  triggerSource      String?
+
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+
+  affectedCount Int @default(0)
+  result        Json?
+  error         String?
+
+  createdAt DateTime @default(now())
+
+  @@index([jobType])
+  @@index([status])
+  @@index([startedAt])
+  @@index([triggeredByUserId])
+}

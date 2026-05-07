@@ -21,6 +21,63 @@ let lastNoResponseResult = null;
 
 let cronStarted = false;
 
+async function createCronRun({ jobType, triggeredByUserId = null, triggerSource = "MANUAL" }) {
+  return prisma.cronJobRun.create({
+    data: {
+      jobType,
+      status: "RUNNING",
+      triggeredByUserId,
+      triggerSource,
+      startedAt: new Date(),
+    },
+  });
+}
+
+async function finishCronRunSuccess(cronRunId, { affectedCount = 0, result = null } = {}) {
+  if (!cronRunId) return null;
+
+  return prisma.cronJobRun.update({
+    where: { id: cronRunId },
+    data: {
+      status: "SUCCESS",
+      finishedAt: new Date(),
+      affectedCount,
+      result,
+    },
+  });
+}
+
+async function finishCronRunFailed(cronRunId, err) {
+  if (!cronRunId) return null;
+
+  return prisma.cronJobRun.update({
+    where: { id: cronRunId },
+    data: {
+      status: "FAILED",
+      finishedAt: new Date(),
+      error: err?.message || "Cron job failed",
+    },
+  });
+}
+
+export async function getCronRunHistory({ jobType, status, limit = 30 } = {}) {
+  const where = {};
+
+  if (jobType && jobType !== "ALL") {
+    where.jobType = jobType;
+  }
+
+  if (status && status !== "ALL") {
+    where.status = status;
+  }
+
+  return prisma.cronJobRun.findMany({
+    where,
+    orderBy: { startedAt: "desc" },
+    take: Math.min(Number(limit) || 30, 100),
+  });
+}
+
 function includeBookingRelations() {
   return {
     customer: {
@@ -72,113 +129,138 @@ async function hasAuditLog(bookingId, action) {
  * ACCEPTED/PENDING_PAYMENT + deadline passed + unpaid/unverified payment
  * → OVERDUE
  */
-export async function runOverdueBookingCheck({ triggeredByUserId = null } = {}) {
-  const now = new Date();
+export async function runOverdueBookingCheck({
+  triggeredByUserId = null,
+  triggerSource = "MANUAL",
+  saveHistory = true,
+} = {}) {
+  let cronRun = null;
 
-  const overdueCandidates = await prisma.booking.findMany({
-    where: {
-      paymentDeadline: {
-        lt: now,
-      },
-      status: {
-        in: ["ACCEPTED", "PENDING_PAYMENT"],
-      },
-      OR: [
-        {
-          payment: null,
+  try {
+    if (saveHistory) {
+      cronRun = await createCronRun({
+        jobType: "OVERDUE_CHECK",
+        triggeredByUserId,
+        triggerSource,
+      });
+    }
+
+    const now = new Date();
+
+    const overdueCandidates = await prisma.booking.findMany({
+      where: {
+        paymentDeadline: {
+          lt: now,
         },
-        {
-          payment: {
-            is: {
-              status: {
-                in: ["UNPAID", "PENDING_VERIFICATION", "OVERDUE"],
+        status: {
+          in: ["ACCEPTED", "PENDING_PAYMENT"],
+        },
+        OR: [
+          {
+            payment: null,
+          },
+          {
+            payment: {
+              is: {
+                status: {
+                  in: ["UNPAID", "PENDING_VERIFICATION", "OVERDUE"],
+                },
               },
             },
           },
-        },
-      ],
-      operator: {
-        configs: {
-          some: {
-            autoCancelOverdue: true,
+        ],
+        operator: {
+          configs: {
+            some: {
+              autoCancelOverdue: true,
+            },
           },
         },
-      },
-    },
-    include: includeBookingRelations(),
-  });
-
-  const expired = [];
-
-  for (const booking of overdueCandidates) {
-    const updatedBooking = await prisma.booking.update({
-      where: {
-        id: booking.id,
-      },
-      data: {
-        status: "OVERDUE",
       },
       include: includeBookingRelations(),
     });
 
-    if (booking.payment) {
-      await prisma.payment.update({
+    const expired = [];
+
+    for (const booking of overdueCandidates) {
+      const updatedBooking = await prisma.booking.update({
         where: {
-          bookingId: booking.id,
+          id: booking.id,
         },
         data: {
           status: "OVERDUE",
         },
+        include: includeBookingRelations(),
       });
+
+      if (booking.payment) {
+        await prisma.payment.update({
+          where: {
+            bookingId: booking.id,
+          },
+          data: {
+            status: "OVERDUE",
+          },
+        });
+      }
+
+      await prisma.auditLog.create({
+        data: {
+          userId: triggeredByUserId,
+          action: "BOOKING_MARKED_OVERDUE",
+          entityType: "Booking",
+          entityId: String(booking.id),
+          details: {
+            bookingCode: booking.bookingCode,
+            paymentDeadline: booking.paymentDeadline,
+            cronRunId: cronRun?.id || null,
+          },
+        },
+      });
+
+      await notifyCustomerByBooking({
+        booking: updatedBooking,
+        title: "Booking overdue",
+        message: `Booking ${
+          updatedBooking.bookingCode || updatedBooking.id
+        } has been marked overdue because payment was not completed before the deadline.`,
+        type: "BOOKING_OVERDUE",
+        emailSubject: `Booking Overdue - ${
+          updatedBooking.bookingCode || updatedBooking.id
+        }`,
+        emailHtml: bookingStatusTemplate({
+          booking: updatedBooking,
+          status: "OVERDUE",
+          customerUrl: frontendBookingUrl(booking.id),
+        }),
+      });
+
+      expired.push(updatedBooking);
     }
 
-    await prisma.auditLog.create({
-      data: {
-        userId: triggeredByUserId,
-        action: "BOOKING_MARKED_OVERDUE",
-        entityType: "Booking",
-        entityId: String(booking.id),
-        details: {
-          bookingCode: booking.bookingCode,
-          paymentDeadline: booking.paymentDeadline,
-        },
-      },
+    lastOverdueRun = new Date();
+    lastOverdueResult = {
+      checkedAt: lastOverdueRun,
+      expiredCount: expired.length,
+      expiredBookings: expired.map((booking) => ({
+        id: booking.id,
+        bookingCode: booking.bookingCode,
+        customerName: booking.customer?.name,
+        operatorName: booking.operator?.companyName,
+        paymentDeadline: booking.paymentDeadline,
+      })),
+    };
+
+    await finishCronRunSuccess(cronRun?.id, {
+      affectedCount: expired.length,
+      result: lastOverdueResult,
     });
 
-    await notifyCustomerByBooking({
-      booking: updatedBooking,
-      title: "Booking overdue",
-      message: `Booking ${
-        updatedBooking.bookingCode || updatedBooking.id
-      } has been marked overdue because payment was not completed before the deadline.`,
-      type: "BOOKING_OVERDUE",
-      emailSubject: `Booking Overdue - ${
-        updatedBooking.bookingCode || updatedBooking.id
-      }`,
-      emailHtml: bookingStatusTemplate({
-        booking: updatedBooking,
-        status: "OVERDUE",
-        customerUrl: frontendBookingUrl(booking.id),
-      }),
-    });
-
-    expired.push(updatedBooking);
+    return lastOverdueResult;
+  } catch (err) {
+    await finishCronRunFailed(cronRun?.id, err);
+    throw err;
   }
-
-  lastOverdueRun = new Date();
-  lastOverdueResult = {
-    checkedAt: lastOverdueRun,
-    expiredCount: expired.length,
-    expiredBookings: expired.map((booking) => ({
-      id: booking.id,
-      bookingCode: booking.bookingCode,
-      customerName: booking.customer?.name,
-      operatorName: booking.operator?.companyName,
-      paymentDeadline: booking.paymentDeadline,
-    })),
-  };
-
-  return lastOverdueResult;
 }
 
 /**
@@ -188,132 +270,155 @@ export async function runOverdueBookingCheck({ triggeredByUserId = null } = {}) 
  */
 export async function runCompletedBookingCheck({
   triggeredByUserId = null,
+  triggerSource = "MANUAL",
+  saveHistory = true,
 } = {}) {
-  const now = new Date();
+  let cronRun = null;
 
-  const completionCandidates = await prisma.booking.findMany({
-    where: {
-      status: "PAID",
-      payment: {
-        is: {
-          status: "PAID",
-        },
-      },
-      OR: [
-        {
-          returnDate: {
-            lt: now,
-          },
-        },
-        {
-          AND: [
-            {
-              returnDate: null,
-            },
-            {
-              pickupDate: {
-                lt: now,
-              },
-            },
-          ],
-        },
-        {
-          AND: [
-            {
-              returnDate: null,
-            },
-            {
-              pickupDate: null,
-            },
-            {
-              bookingDate: {
-                lt: now,
-              },
-            },
-          ],
-        },
-      ],
-    },
-    include: includeBookingRelations(),
-  });
-
-  const completed = [];
-
-  for (const booking of completionCandidates) {
-    const serviceEndDate = getServiceEndDate(booking);
-
-    if (!serviceEndDate || serviceEndDate > now) {
-      continue;
+  try {
+    if (saveHistory) {
+      cronRun = await createCronRun({
+        jobType: "COMPLETION_CHECK",
+        triggeredByUserId,
+        triggerSource,
+      });
     }
 
-    const updatedBooking = await prisma.booking.update({
+    const now = new Date();
+
+    const completionCandidates = await prisma.booking.findMany({
       where: {
-        id: booking.id,
-      },
-      data: {
-        status: "COMPLETED",
+        status: "PAID",
+        payment: {
+          is: {
+            status: "PAID",
+          },
+        },
+        OR: [
+          {
+            returnDate: {
+              lt: now,
+            },
+          },
+          {
+            AND: [
+              {
+                returnDate: null,
+              },
+              {
+                pickupDate: {
+                  lt: now,
+                },
+              },
+            ],
+          },
+          {
+            AND: [
+              {
+                returnDate: null,
+              },
+              {
+                pickupDate: null,
+              },
+              {
+                bookingDate: {
+                  lt: now,
+                },
+              },
+            ],
+          },
+        ],
       },
       include: includeBookingRelations(),
     });
 
-    await prisma.auditLog.create({
-      data: {
-        userId: triggeredByUserId,
-        action: "BOOKING_MARKED_COMPLETED",
-        entityType: "Booking",
-        entityId: String(booking.id),
-        details: {
-          bookingCode: booking.bookingCode,
-          serviceEndDate,
-          previousStatus: booking.status,
-          paymentStatus: booking.payment?.status,
+    const completed = [];
+
+    for (const booking of completionCandidates) {
+      const serviceEndDate = getServiceEndDate(booking);
+
+      if (!serviceEndDate || serviceEndDate > now) {
+        continue;
+      }
+
+      const updatedBooking = await prisma.booking.update({
+        where: {
+          id: booking.id,
         },
-      },
-    });
+        data: {
+          status: "COMPLETED",
+        },
+        include: includeBookingRelations(),
+      });
 
-    await notifyCustomerByBooking({
-      booking: updatedBooking,
-      title: "Booking completed",
-      message: `Booking ${
-        updatedBooking.bookingCode || updatedBooking.id
-      } has been marked as completed because the service period has ended.`,
-      type: "BOOKING_COMPLETED",
-      emailSubject: `Booking Completed - ${
-        updatedBooking.bookingCode || updatedBooking.id
-      }`,
-      emailHtml: bookingStatusTemplate({
+      await prisma.auditLog.create({
+        data: {
+          userId: triggeredByUserId,
+          action: "BOOKING_MARKED_COMPLETED",
+          entityType: "Booking",
+          entityId: String(booking.id),
+          details: {
+            bookingCode: booking.bookingCode,
+            serviceEndDate,
+            previousStatus: booking.status,
+            paymentStatus: booking.payment?.status,
+            cronRunId: cronRun?.id || null,
+          },
+        },
+      });
+
+      await notifyCustomerByBooking({
         booking: updatedBooking,
-        status: "COMPLETED",
-        customerUrl: frontendBookingUrl(booking.id),
-      }),
+        title: "Booking completed",
+        message: `Booking ${
+          updatedBooking.bookingCode || updatedBooking.id
+        } has been marked as completed because the service period has ended.`,
+        type: "BOOKING_COMPLETED",
+        emailSubject: `Booking Completed - ${
+          updatedBooking.bookingCode || updatedBooking.id
+        }`,
+        emailHtml: bookingStatusTemplate({
+          booking: updatedBooking,
+          status: "COMPLETED",
+          customerUrl: frontendBookingUrl(booking.id),
+        }),
+      });
+
+      await notifyOperatorUsersByBooking({
+        booking: updatedBooking,
+        title: "Booking completed",
+        message: `Booking ${
+          updatedBooking.bookingCode || updatedBooking.id
+        } has been automatically marked as completed.`,
+        type: "BOOKING_COMPLETED",
+      });
+
+      completed.push(updatedBooking);
+    }
+
+    lastCompletionRun = new Date();
+    lastCompletionResult = {
+      checkedAt: lastCompletionRun,
+      completedCount: completed.length,
+      completedBookings: completed.map((booking) => ({
+        id: booking.id,
+        bookingCode: booking.bookingCode,
+        customerName: booking.customer?.name,
+        operatorName: booking.operator?.companyName,
+        serviceEndDate: getServiceEndDate(booking),
+      })),
+    };
+
+    await finishCronRunSuccess(cronRun?.id, {
+      affectedCount: completed.length,
+      result: lastCompletionResult,
     });
 
-    await notifyOperatorUsersByBooking({
-      booking: updatedBooking,
-      title: "Booking completed",
-      message: `Booking ${
-        updatedBooking.bookingCode || updatedBooking.id
-      } has been automatically marked as completed.`,
-      type: "BOOKING_COMPLETED",
-    });
-
-    completed.push(updatedBooking);
+    return lastCompletionResult;
+  } catch (err) {
+    await finishCronRunFailed(cronRun?.id, err);
+    throw err;
   }
-
-  lastCompletionRun = new Date();
-  lastCompletionResult = {
-    checkedAt: lastCompletionRun,
-    completedCount: completed.length,
-    completedBookings: completed.map((booking) => ({
-      id: booking.id,
-      bookingCode: booking.bookingCode,
-      customerName: booking.customer?.name,
-      operatorName: booking.operator?.companyName,
-      serviceEndDate: getServiceEndDate(booking),
-    })),
-  };
-
-  return lastCompletionResult;
 }
 
 /**
@@ -326,119 +431,142 @@ export async function runCompletedBookingCheck({
  */
 export async function runPaymentReminderCheck({
   triggeredByUserId = null,
+  triggerSource = "MANUAL",
+  saveHistory = true,
 } = {}) {
-  const now = new Date();
-  const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  let cronRun = null;
 
-  const reminderCandidates = await prisma.booking.findMany({
-    where: {
-      paymentDeadline: {
-        gt: now,
-        lte: next24Hours,
-      },
-      status: {
-        in: ["ACCEPTED", "PENDING_PAYMENT"],
-      },
-      OR: [
-        {
-          payment: null,
+  try {
+    if (saveHistory) {
+      cronRun = await createCronRun({
+        jobType: "PAYMENT_REMINDER_CHECK",
+        triggeredByUserId,
+        triggerSource,
+      });
+    }
+
+    const now = new Date();
+    const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    const reminderCandidates = await prisma.booking.findMany({
+      where: {
+        paymentDeadline: {
+          gt: now,
+          lte: next24Hours,
         },
-        {
-          payment: {
-            is: {
-              status: {
-                in: ["UNPAID", "PENDING_VERIFICATION"],
+        status: {
+          in: ["ACCEPTED", "PENDING_PAYMENT"],
+        },
+        OR: [
+          {
+            payment: null,
+          },
+          {
+            payment: {
+              is: {
+                status: {
+                  in: ["UNPAID", "PENDING_VERIFICATION"],
+                },
               },
             },
           },
+        ],
+      },
+      include: includeBookingRelations(),
+    });
+
+    const reminded = [];
+
+    for (const booking of reminderCandidates) {
+      const remainingHours = hoursUntil(booking.paymentDeadline, now);
+
+      const isFinalReminder = remainingHours <= 6;
+      const action = isFinalReminder
+        ? "FINAL_PAYMENT_REMINDER_SENT"
+        : "PAYMENT_REMINDER_SENT";
+
+      const alreadySent = await hasAuditLog(booking.id, action);
+
+      if (alreadySent) {
+        continue;
+      }
+
+      const checkoutUrl = frontendCheckoutUrl(booking.id);
+      const roundedHours = Math.max(Math.ceil(remainingHours), 1);
+
+      await prisma.auditLog.create({
+        data: {
+          userId: triggeredByUserId,
+          action,
+          entityType: "Booking",
+          entityId: String(booking.id),
+          details: {
+            bookingCode: booking.bookingCode,
+            paymentDeadline: booking.paymentDeadline,
+            remainingHours: roundedHours,
+            cronRunId: cronRun?.id || null,
+          },
         },
-      ],
-    },
-    include: includeBookingRelations(),
-  });
+      });
 
-  const reminded = [];
+      await notifyCustomerByBooking({
+        booking,
+        title: isFinalReminder
+          ? "Final payment reminder"
+          : "Payment reminder",
+        message: `Please complete payment for booking ${
+          booking.bookingCode || booking.id
+        }. Payment deadline is in about ${roundedHours} hour(s).`,
+        type: isFinalReminder
+          ? "FINAL_PAYMENT_REMINDER"
+          : "PAYMENT_REMINDER",
+        emailSubject: isFinalReminder
+          ? `Final Payment Reminder - ${booking.bookingCode || booking.id}`
+          : `Payment Reminder - ${booking.bookingCode || booking.id}`,
+        emailHtml: `
+          <div style="font-family:Arial,sans-serif;line-height:1.6;">
+            <h2>${isFinalReminder ? "Final Payment Reminder" : "Payment Reminder"}</h2>
+            <p>Hello ${booking.customer?.name || "Customer"},</p>
+            <p>Please complete payment for booking <strong>${
+              booking.bookingCode || booking.id
+            }</strong>.</p>
+            <p><strong>Payment deadline:</strong> ${new Date(
+              booking.paymentDeadline
+            ).toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" })}</p>
+            <p>
+              <a href="${checkoutUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">
+                Pay Now
+              </a>
+            </p>
+          </div>
+        `,
+      });
 
-  for (const booking of reminderCandidates) {
-    const remainingHours = hoursUntil(booking.paymentDeadline, now);
-
-    const isFinalReminder = remainingHours <= 6;
-    const action = isFinalReminder
-      ? "FINAL_PAYMENT_REMINDER_SENT"
-      : "PAYMENT_REMINDER_SENT";
-
-    const alreadySent = await hasAuditLog(booking.id, action);
-
-    if (alreadySent) {
-      continue;
+      reminded.push({
+        id: booking.id,
+        bookingCode: booking.bookingCode,
+        remainingHours: roundedHours,
+        reminderType: action,
+      });
     }
 
-    const checkoutUrl = frontendCheckoutUrl(booking.id);
-    const roundedHours = Math.max(Math.ceil(remainingHours), 1);
+    lastReminderRun = new Date();
+    lastReminderResult = {
+      checkedAt: lastReminderRun,
+      remindedCount: reminded.length,
+      remindedBookings: reminded,
+    };
 
-    await prisma.auditLog.create({
-      data: {
-        userId: triggeredByUserId,
-        action,
-        entityType: "Booking",
-        entityId: String(booking.id),
-        details: {
-          bookingCode: booking.bookingCode,
-          paymentDeadline: booking.paymentDeadline,
-          remainingHours: roundedHours,
-        },
-      },
+    await finishCronRunSuccess(cronRun?.id, {
+      affectedCount: reminded.length,
+      result: lastReminderResult,
     });
 
-    await notifyCustomerByBooking({
-      booking,
-      title: isFinalReminder
-        ? "Final payment reminder"
-        : "Payment reminder",
-      message: `Please complete payment for booking ${
-        booking.bookingCode || booking.id
-      }. Payment deadline is in about ${roundedHours} hour(s).`,
-      type: isFinalReminder
-        ? "FINAL_PAYMENT_REMINDER"
-        : "PAYMENT_REMINDER",
-      emailSubject: isFinalReminder
-        ? `Final Payment Reminder - ${booking.bookingCode || booking.id}`
-        : `Payment Reminder - ${booking.bookingCode || booking.id}`,
-      emailHtml: `
-        <div style="font-family:Arial,sans-serif;line-height:1.6;">
-          <h2>${isFinalReminder ? "Final Payment Reminder" : "Payment Reminder"}</h2>
-          <p>Hello ${booking.customer?.name || "Customer"},</p>
-          <p>Please complete payment for booking <strong>${
-            booking.bookingCode || booking.id
-          }</strong>.</p>
-          <p><strong>Payment deadline:</strong> ${new Date(
-            booking.paymentDeadline
-          ).toLocaleString("en-MY")}</p>
-          <p>
-            <a href="${checkoutUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">
-              Pay Now
-            </a>
-          </p>
-        </div>
-      `,
-    });
-
-    reminded.push({
-      id: booking.id,
-      bookingCode: booking.bookingCode,
-      remainingHours: roundedHours,
-      reminderType: action,
-    });
+    return lastReminderResult;
+  } catch (err) {
+    await finishCronRunFailed(cronRun?.id, err);
+    throw err;
   }
-
-  lastReminderRun = new Date();
-  lastReminderResult = {
-    checkedAt: lastReminderRun,
-    remindedCount: reminded.length,
-    remindedBookings: reminded,
-  };
-
-  return lastReminderResult;
 }
 
 /**
@@ -450,138 +578,196 @@ export async function runPaymentReminderCheck({
  */
 export async function runNoMerchantResponseCheck({
   triggeredByUserId = null,
+  triggerSource = "MANUAL",
+  saveHistory = true,
 } = {}) {
-  const now = new Date();
-  const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+  let cronRun = null;
 
-  const noResponseCandidates = await prisma.booking.findMany({
-    where: {
-      status: "PENDING",
-      createdAt: {
-        lt: twoDaysAgo,
-      },
-    },
-    include: includeBookingRelations(),
-  });
-
-  const rejected = [];
-
-  for (const booking of noResponseCandidates) {
-    const alreadyRejected = await hasAuditLog(
-      booking.id,
-      "BOOKING_AUTO_REJECTED_NO_MERCHANT_RESPONSE"
-    );
-
-    if (alreadyRejected) {
-      continue;
+  try {
+    if (saveHistory) {
+      cronRun = await createCronRun({
+        jobType: "NO_RESPONSE_CHECK",
+        triggeredByUserId,
+        triggerSource,
+      });
     }
 
-    const updatedBooking = await prisma.booking.update({
+    const now = new Date();
+    const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+
+    const noResponseCandidates = await prisma.booking.findMany({
       where: {
-        id: booking.id,
-      },
-      data: {
-        status: "REJECTED",
+        status: "PENDING",
+        createdAt: {
+          lt: twoDaysAgo,
+        },
       },
       include: includeBookingRelations(),
     });
 
-    await prisma.auditLog.create({
-      data: {
-        userId: triggeredByUserId,
-        action: "BOOKING_AUTO_REJECTED_NO_MERCHANT_RESPONSE",
-        entityType: "Booking",
-        entityId: String(booking.id),
-        details: {
-          bookingCode: booking.bookingCode,
-          createdAt: booking.createdAt,
-          reason:
-            "Merchant/operator did not respond within 2 days after booking submission.",
+    const rejected = [];
+
+    for (const booking of noResponseCandidates) {
+      const alreadyRejected = await hasAuditLog(
+        booking.id,
+        "BOOKING_AUTO_REJECTED_NO_MERCHANT_RESPONSE"
+      );
+
+      if (alreadyRejected) {
+        continue;
+      }
+
+      const updatedBooking = await prisma.booking.update({
+        where: {
+          id: booking.id,
         },
-      },
-    });
+        data: {
+          status: "REJECTED",
+        },
+        include: includeBookingRelations(),
+      });
 
-    await notifyCustomerByBooking({
-      booking: updatedBooking,
-      title: "Booking rejected",
-      message: `Booking ${
-        updatedBooking.bookingCode || updatedBooking.id
-      } was automatically rejected because the merchant did not respond within 2 days.`,
-      type: "BOOKING_AUTO_REJECTED_NO_RESPONSE",
-      emailSubject: `Booking Rejected - ${
-        updatedBooking.bookingCode || updatedBooking.id
-      }`,
-      emailHtml: bookingStatusTemplate({
+      await prisma.auditLog.create({
+        data: {
+          userId: triggeredByUserId,
+          action: "BOOKING_AUTO_REJECTED_NO_MERCHANT_RESPONSE",
+          entityType: "Booking",
+          entityId: String(booking.id),
+          details: {
+            bookingCode: booking.bookingCode,
+            createdAt: booking.createdAt,
+            reason:
+              "Merchant/operator did not respond within 2 days after booking submission.",
+            cronRunId: cronRun?.id || null,
+          },
+        },
+      });
+
+      await notifyCustomerByBooking({
         booking: updatedBooking,
-        status: "REJECTED",
-        customerUrl: frontendBookingUrl(booking.id),
-      }),
+        title: "Booking rejected",
+        message: `Booking ${
+          updatedBooking.bookingCode || updatedBooking.id
+        } was automatically rejected because the merchant did not respond within 2 days.`,
+        type: "BOOKING_AUTO_REJECTED_NO_RESPONSE",
+        emailSubject: `Booking Rejected - ${
+          updatedBooking.bookingCode || updatedBooking.id
+        }`,
+        emailHtml: bookingStatusTemplate({
+          booking: updatedBooking,
+          status: "REJECTED",
+          customerUrl: frontendBookingUrl(booking.id),
+        }),
+      });
+
+      await notifyOperatorUsersByBooking({
+        booking: updatedBooking,
+        title: "Booking auto-rejected",
+        message: `Booking ${
+          updatedBooking.bookingCode || updatedBooking.id
+        } was automatically rejected because there was no merchant response within 2 days.`,
+        type: "BOOKING_AUTO_REJECTED_NO_RESPONSE",
+      });
+
+      await notifyMasterUsers({
+        title: "Booking auto-rejected",
+        message: `Booking ${
+          updatedBooking.bookingCode || updatedBooking.id
+        } was rejected due to no merchant response within 2 days.`,
+        type: "BOOKING_AUTO_REJECTED_NO_RESPONSE",
+        relatedEntityType: "Booking",
+        relatedEntityId: updatedBooking.id,
+      });
+
+      rejected.push(updatedBooking);
+    }
+
+    lastNoResponseRun = new Date();
+    lastNoResponseResult = {
+      checkedAt: lastNoResponseRun,
+      rejectedCount: rejected.length,
+      rejectedBookings: rejected.map((booking) => ({
+        id: booking.id,
+        bookingCode: booking.bookingCode,
+        customerName: booking.customer?.name,
+        operatorName: booking.operator?.companyName,
+        createdAt: booking.createdAt,
+      })),
+    };
+
+    await finishCronRunSuccess(cronRun?.id, {
+      affectedCount: rejected.length,
+      result: lastNoResponseResult,
     });
 
-    await notifyOperatorUsersByBooking({
-      booking: updatedBooking,
-      title: "Booking auto-rejected",
-      message: `Booking ${
-        updatedBooking.bookingCode || updatedBooking.id
-      } was automatically rejected because there was no merchant response within 2 days.`,
-      type: "BOOKING_AUTO_REJECTED_NO_RESPONSE",
-    });
-
-    await notifyMasterUsers({
-      title: "Booking auto-rejected",
-      message: `Booking ${
-        updatedBooking.bookingCode || updatedBooking.id
-      } was rejected due to no merchant response within 2 days.`,
-      type: "BOOKING_AUTO_REJECTED_NO_RESPONSE",
-      relatedEntityType: "Booking",
-      relatedEntityId: updatedBooking.id,
-    });
-
-    rejected.push(updatedBooking);
+    return lastNoResponseResult;
+  } catch (err) {
+    await finishCronRunFailed(cronRun?.id, err);
+    throw err;
   }
-
-  lastNoResponseRun = new Date();
-  lastNoResponseResult = {
-    checkedAt: lastNoResponseRun,
-    rejectedCount: rejected.length,
-    rejectedBookings: rejected.map((booking) => ({
-      id: booking.id,
-      bookingCode: booking.bookingCode,
-      customerName: booking.customer?.name,
-      operatorName: booking.operator?.companyName,
-      createdAt: booking.createdAt,
-    })),
-  };
-
-  return lastNoResponseResult;
 }
 
 export async function runBookingMaintenanceChecks({
   triggeredByUserId = null,
+  triggerSource = "MANUAL",
 } = {}) {
-  const noResponseResult = await runNoMerchantResponseCheck({
-    triggeredByUserId,
-  });
+  let cronRun = null;
 
-  const reminderResult = await runPaymentReminderCheck({
-    triggeredByUserId,
-  });
+  try {
+    cronRun = await createCronRun({
+      jobType: "MAINTENANCE_CHECK",
+      triggeredByUserId,
+      triggerSource,
+    });
 
-  const overdueResult = await runOverdueBookingCheck({
-    triggeredByUserId,
-  });
+    const noResponseResult = await runNoMerchantResponseCheck({
+      triggeredByUserId,
+      triggerSource,
+      saveHistory: false,
+    });
 
-  const completionResult = await runCompletedBookingCheck({
-    triggeredByUserId,
-  });
+    const reminderResult = await runPaymentReminderCheck({
+      triggeredByUserId,
+      triggerSource,
+      saveHistory: false,
+    });
 
-  return {
-    checkedAt: new Date(),
-    noResponse: noResponseResult,
-    reminders: reminderResult,
-    overdue: overdueResult,
-    completed: completionResult,
-  };
+    const overdueResult = await runOverdueBookingCheck({
+      triggeredByUserId,
+      triggerSource,
+      saveHistory: false,
+    });
+
+    const completionResult = await runCompletedBookingCheck({
+      triggeredByUserId,
+      triggerSource,
+      saveHistory: false,
+    });
+
+    const result = {
+      checkedAt: new Date(),
+      noResponse: noResponseResult,
+      reminders: reminderResult,
+      overdue: overdueResult,
+      completed: completionResult,
+    };
+
+    const affectedCount =
+      Number(noResponseResult?.rejectedCount || 0) +
+      Number(reminderResult?.remindedCount || 0) +
+      Number(overdueResult?.expiredCount || 0) +
+      Number(completionResult?.completedCount || 0);
+
+    await finishCronRunSuccess(cronRun?.id, {
+      affectedCount,
+      result,
+    });
+
+    return result;
+  } catch (err) {
+    await finishCronRunFailed(cronRun?.id, err);
+    throw err;
+  }
 }
 
 export function getCronStatus() {
@@ -610,7 +796,9 @@ export function startOverdueBookingCron() {
   cron.schedule("*/30 * * * *", async () => {
     try {
       console.log("[CRON] Running booking maintenance checks...");
-      await runBookingMaintenanceChecks();
+      await runBookingMaintenanceChecks({
+        triggerSource: "LOCAL_CRON",
+});
     } catch (err) {
       console.error("[CRON] Booking maintenance check failed:", err.message);
     }

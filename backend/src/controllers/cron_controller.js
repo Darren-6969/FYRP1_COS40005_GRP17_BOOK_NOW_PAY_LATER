@@ -1,5 +1,6 @@
 import {
   getCronStatus,
+  getCronRunHistory,
   runBookingMaintenanceChecks,
   runCompletedBookingCheck,
   runNoMerchantResponseCheck,
@@ -15,10 +16,25 @@ export async function getCronJobStatus(req, res, next) {
   }
 }
 
+export async function getCronHistory(req, res, next) {
+  try {
+    const history = await getCronRunHistory({
+      jobType: req.query.jobType || "ALL",
+      status: req.query.status || "ALL",
+      limit: req.query.limit || 30,
+    });
+
+    res.json({ history });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function runOverdueCheck(req, res, next) {
   try {
     const result = await runOverdueBookingCheck({
       triggeredByUserId: req.user?.id || null,
+      triggerSource: "MANUAL",
     });
 
     res.json({
@@ -34,6 +50,7 @@ export async function runCompletionCheck(req, res, next) {
   try {
     const result = await runCompletedBookingCheck({
       triggeredByUserId: req.user?.id || null,
+      triggerSource: "MANUAL",
     });
 
     res.json({
@@ -49,6 +66,7 @@ export async function runPaymentReminderCron(req, res, next) {
   try {
     const result = await runPaymentReminderCheck({
       triggeredByUserId: req.user?.id || null,
+      triggerSource: "MANUAL",
     });
 
     res.json({
@@ -64,6 +82,7 @@ export async function runNoResponseCron(req, res, next) {
   try {
     const result = await runNoMerchantResponseCheck({
       triggeredByUserId: req.user?.id || null,
+      triggerSource: "MANUAL",
     });
 
     res.json({
@@ -79,6 +98,7 @@ export async function runMaintenanceChecks(req, res, next) {
   try {
     const result = await runBookingMaintenanceChecks({
       triggeredByUserId: req.user?.id || null,
+      triggerSource: req.user ? "MANUAL" : "VERCEL_CRON",
     });
 
     res.json({

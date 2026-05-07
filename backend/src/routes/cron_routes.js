@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getCronJobStatus,
+  getCronHistory,
   runCompletionCheck,
   runMaintenanceChecks,
   runNoResponseCron,
@@ -29,6 +30,13 @@ router.get(
   verifyToken,
   allowRoles("MASTER_SELLER"),
   getCronJobStatus
+);
+
+router.get(
+  "/history",
+  verifyToken,
+  allowRoles("MASTER_SELLER"),
+  getCronHistory
 );
 
 router.post(

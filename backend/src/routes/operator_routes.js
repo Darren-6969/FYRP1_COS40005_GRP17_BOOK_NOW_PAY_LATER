@@ -3,6 +3,7 @@ import {
   createOperator,
   getOperators,
   updateOperatorStatus,
+  deleteOperator,
 
   getOperatorDashboard,
   getOperatorBookings,
@@ -44,6 +45,7 @@ router.post("/", verifyToken, allowRoles("MASTER_SELLER"), createOperator);
 
 router.get("/", ...masterOnly, getOperators);
 router.patch("/:id/status", ...masterOnly, updateOperatorStatus);
+router.delete("/:id", ...masterOnly, deleteOperator);
 
 router.get("/dashboard", ...operatorAccess, getOperatorDashboard);
 
