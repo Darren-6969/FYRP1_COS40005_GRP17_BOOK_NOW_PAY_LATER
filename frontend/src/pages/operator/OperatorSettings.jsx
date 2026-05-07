@@ -162,12 +162,17 @@ function StripeConnectCard() {
     }
   };
 
+  const transfersActive = status?.capabilities?.transfers === "active";
+
   const isRestricted =
     status?.configured &&
-    (!status.chargesEnabled || !status.payoutsEnabled);
+    (!status.chargesEnabled || !status.payoutsEnabled || !transfersActive);
 
   const isReady =
-    status?.configured && status.chargesEnabled && status.payoutsEnabled;
+    status?.configured &&
+    status.chargesEnabled &&
+    status.payoutsEnabled &&
+    transfersActive;
 
   return (
     <div className="operator-card" style={{ marginTop: "1.5rem" }}>
@@ -208,18 +213,23 @@ function StripeConnectCard() {
             marginBottom: "1rem",
           }}
         >
+          <StatusPill label="Charges"          active={status.chargesEnabled} />
+          <StatusPill label="Payouts"          active={status.payoutsEnabled} />
+          <StatusPill label="Details Submitted" active={status.detailsSubmitted} />
           <StatusPill
-            label="Charges"
-            active={status.chargesEnabled}
+            label="Transfers capability"
+            active={status.capabilities?.transfers === "active"}
           />
-          <StatusPill
-            label="Payouts"
-            active={status.payoutsEnabled}
-          />
-          <StatusPill
-            label="Details Submitted"
-            active={status.detailsSubmitted}
-          />
+        </div>
+      )}
+
+      {/* Transfers capability is required for Destination Charges (the split payment model).
+          If inactive, the customer checkout will throw a Stripe error. */}
+      {status?.configured && status.capabilities?.transfers !== "active" && (
+        <div className="operator-alert danger" style={{ fontSize: "0.8rem", marginBottom: "1rem" }}>
+          <strong>Transfers capability inactive.</strong> Customers cannot pay until this is enabled.
+          Click <em>Complete Stripe Onboarding</em> below — it will request the capability automatically.
+          In sandbox mode it activates instantly.
         </div>
       )}
 

@@ -453,6 +453,11 @@ router.get(
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
         detailsSubmitted: account.details_submitted,
+        // Individual capabilities — 'transfers' must be 'active' for Destination Charges to work.
+        capabilities: {
+          cardPayments: account.capabilities?.card_payments ?? "inactive",
+          transfers: account.capabilities?.transfers ?? "inactive",
+        },
         requirements: {
           currentlyDue: account.requirements?.currently_due ?? [],
           pastDue: account.requirements?.past_due ?? [],
@@ -507,6 +512,17 @@ router.post(
 
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
       const frontendBase = process.env.FRONTEND_URL || "http://localhost:5173";
+
+      // Request the capabilities required for Destination Charges.
+      // 'transfers' is what allows this account to receive funds via transfer_data.destination.
+      // In test mode Stripe auto-approves these instantly; in live mode the
+      // account holder activates them by completing the onboarding form below.
+      await stripe.accounts.update(accountId, {
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+      });
 
       // SANDBOX BYPASS: account_onboarding type accepts test data on Stripe's
       // hosted form to lift the RESTRICTED status without real identity verification.
