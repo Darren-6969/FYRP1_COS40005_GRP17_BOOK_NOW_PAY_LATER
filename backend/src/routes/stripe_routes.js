@@ -16,7 +16,7 @@ import { paymentLimiter } from "../middlewares/rate_limit_middleware.js";
 
 const router = express.Router();
 
-// Platform takes this % of every transaction; merchant receives the rest minus Stripe's processing fee.
+// Platform fee percentage retained on every transaction (default 5).
 const PLATFORM_FEE_PERCENT = Number(process.env.STRIPE_PLATFORM_FEE_PERCENT ?? 5);
 
 function parseBookingId(value) {
@@ -37,76 +37,11 @@ function includeBookingRelations() {
   };
 }
 
-// ── Separate Charges and Transfers ──────────────────────────────────────────
-// Platform charges the customer on its own account.
-// After payment, it creates a Transfer to the connected merchant account for
-// (95% of gross) minus the actual Stripe processing fee, so the merchant bears
-// the Stripe cost.  The platform retains the remaining 5%.
-async function createMerchantTransfer(stripe, booking, paymentIntentId, bookingId) {
-  const operator = await prisma.operator.findUnique({
-    where: { id: booking.operatorId },
-    select: { stripeAccountId: true, companyName: true },
-  });
-
-  const destination =
-    operator?.stripeAccountId || process.env.STRIPE_CONNECTED_ACCOUNT_ID;
-
-  if (!destination) {
-    console.error(
-      `[Stripe Transfer] No connected account configured for operator ${booking.operatorId}. Transfer skipped.`
-    );
-    return null;
-  }
-
-  const totalCents = Math.round(Number(booking.totalAmount) * 100);
-
-  // Retrieve the actual Stripe processing fee from the balance transaction.
-  let stripeFee = 0;
-  if (paymentIntentId?.startsWith("pi_")) {
-    try {
-      const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
-        expand: ["latest_charge.balance_transaction"],
-      });
-      stripeFee = pi.latest_charge?.balance_transaction?.fee ?? 0;
-    } catch (err) {
-      console.warn(
-        "[Stripe Transfer] Could not retrieve balance transaction fee:",
-        err.message
-      );
-    }
-  }
-
-  // Merchant share = 95% of gross minus the Stripe fee (merchant bears processing cost).
-  const merchantShareCents = Math.round(totalCents * (1 - PLATFORM_FEE_PERCENT / 100));
-  const transferAmountCents = Math.max(0, merchantShareCents - stripeFee);
-
-  const transfer = await stripe.transfers.create({
-    amount: transferAmountCents,
-    currency: "myr",
-    destination,
-    transfer_group: `booking_${bookingId}`,
-    metadata: {
-      bookingId: String(bookingId),
-      grossAmountCents: String(totalCents),
-      platformFeePercent: String(PLATFORM_FEE_PERCENT),
-      stripeFeeCents: String(stripeFee),
-      merchantShareCents: String(merchantShareCents),
-      transferAmountCents: String(transferAmountCents),
-    },
-  });
-
-  console.log(
-    `[Stripe Transfer] booking ${bookingId}: gross=${totalCents} sen, ` +
-    `platformFee=${Math.round(totalCents * PLATFORM_FEE_PERCENT / 100)} sen, ` +
-    `stripeFee=${stripeFee} sen, transferred=${transferAmountCents} sen → ${destination}`
-  );
-
-  return transfer;
-}
-
-// ── Shared paid-state logic ──────────────────────────────────────────────────
-// Called from both the webhook handler and the /confirm-session fallback endpoint.
-async function applyPaidState(stripe, bookingId, transactionId, sessionId) {
+// ── Shared paid-state logic ───────────────────────────────────────────────────
+// Called from both the webhook handler and the /confirm-session fallback.
+// With Destination Charges the split is already settled by Stripe at charge time,
+// so this function only needs to update our DB, generate the invoice, and notify.
+async function applyPaidState(bookingId, transactionId, sessionId) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: includeBookingRelations(),
@@ -154,19 +89,6 @@ async function applyPaidState(stripe, bookingId, transactionId, sessionId) {
     include: includeBookingRelations(),
   });
 
-  // Create the merchant transfer (Separate Charges and Transfers model).
-  // Failures are logged but do not roll back the payment — the platform still
-  // received the money and the transfer can be retried manually in the dashboard.
-  let transfer = null;
-  try {
-    transfer = await createMerchantTransfer(stripe, booking, transactionId, bookingId);
-  } catch (err) {
-    console.error(
-      `[Stripe Transfer] Failed for booking ${bookingId}. Manual action required.`,
-      err.message
-    );
-  }
-
   await prisma.auditLog.create({
     data: {
       userId: null,
@@ -179,10 +101,6 @@ async function applyPaidState(stripe, bookingId, transactionId, sessionId) {
         paymentId: payment.id,
         invoiceId: invoice.id,
         invoiceNo: invoice.invoiceNo,
-        // Transfer details
-        transferId: transfer?.id ?? null,
-        transferAmountCents: transfer?.amount ?? null,
-        transferDestination: transfer?.destination ?? null,
         platformFeePercent: PLATFORM_FEE_PERCENT,
       },
     },
@@ -221,10 +139,10 @@ async function applyPaidState(stripe, bookingId, transactionId, sessionId) {
   });
 
   console.log(`[Stripe] Booking ${bookingId} marked as PAID.`);
-  return { payment, invoice, updatedBooking, transfer };
+  return { payment, invoice, updatedBooking };
 }
 
-// ── Webhook ──────────────────────────────────────────────────────────────────
+// ── Webhook ───────────────────────────────────────────────────────────────────
 router.post(
   "/webhook",
   express.raw({ type: "application/json" }),
@@ -254,7 +172,7 @@ router.post(
 
     try {
       switch (event.type) {
-        // ── Primary payment confirmation ──────────────────────────────────────
+        // ── Primary payment confirmation ────────────────────────────────────
         case "checkout.session.completed": {
           const session = event.data.object;
           const bookingId = parseBookingId(session.metadata?.bookingId);
@@ -265,11 +183,11 @@ router.post(
           }
 
           const transactionId = session.payment_intent || session.id || `STRIPE-${Date.now()}`;
-          await applyPaidState(stripe, bookingId, transactionId, session.id);
+          await applyPaidState(bookingId, transactionId, session.id);
           break;
         }
 
-        // ── Fallback: fires just before checkout.session.completed ────────────
+        // ── Fallback: fires just before checkout.session.completed ──────────
         case "payment_intent.succeeded": {
           const paymentIntent = event.data.object;
 
@@ -283,11 +201,12 @@ router.post(
               include: includeBookingRelations(),
             });
             if (booking && !(booking.status === "PAID" && booking.payment?.status === "PAID")) {
-              await applyPaidState(stripe, existingPayment.bookingId, paymentIntent.id, null);
+              await applyPaidState(existingPayment.bookingId, paymentIntent.id, null);
             }
             break;
           }
 
+          // Look up the checkout session to get bookingId from metadata.
           const sessions = await stripe.checkout.sessions.list({
             payment_intent: paymentIntent.id,
             limit: 1,
@@ -296,14 +215,14 @@ router.post(
           const bookingId = parseBookingId(linkedSession?.metadata?.bookingId);
 
           if (bookingId) {
-            await applyPaidState(stripe, bookingId, paymentIntent.id, linkedSession.id);
+            await applyPaidState(bookingId, paymentIntent.id, linkedSession.id);
           } else {
             console.log(`[Stripe] payment_intent.succeeded: no matching booking for PI ${paymentIntent.id}`);
           }
           break;
         }
 
-        // ── Payment failed — let customer retry ───────────────────────────────
+        // ── Payment failed — let customer retry ─────────────────────────────
         case "payment_intent.payment_failed": {
           const paymentIntent = event.data.object;
           const failureMessage = paymentIntent.last_payment_error?.message || "Payment declined";
@@ -370,7 +289,7 @@ router.post(
           break;
         }
 
-        // ── Refund issued ─────────────────────────────────────────────────────
+        // ── Refund issued ───────────────────────────────────────────────────
         case "charge.refunded": {
           const charge = event.data.object;
           const refundedPiId = charge.payment_intent;
@@ -465,7 +384,7 @@ router.post(
           break;
         }
 
-        // ── Payout to bank account (platform-level) ───────────────────────────
+        // ── Payout to bank account (platform-level) ─────────────────────────
         case "payout.created": {
           const payout = event.data.object;
 
@@ -501,8 +420,6 @@ router.post(
 );
 
 // ── Stripe Connect: account status ───────────────────────────────────────────
-// Returns live Stripe account details for the operator's connected account so
-// the frontend can show whether charges/payouts are enabled or still restricted.
 router.get(
   "/account-status",
   verifyToken,
@@ -552,16 +469,14 @@ router.get(
 //
 // SANDBOX BYPASS / SHORTCUT
 // --------------------------
-// This endpoint generates a Stripe Express Account Link so the merchant can
-// complete the identity verification form on Stripe's hosted onboarding page.
+// Generates a Stripe Express Account Link so the merchant can complete the
+// identity verification form on Stripe's hosted onboarding page.
 //
-// In TEST MODE this is effectively a bypass: Stripe accepts fake data
-// (e.g. SSN "000-00-0000", any address, any DOB) and immediately lifts the
-// "RESTRICTED" status on the connected account — no real KYC documents needed.
+// In TEST MODE this is a bypass: Stripe accepts fake data (SSN "000-00-0000",
+// any address/DOB) and immediately lifts the RESTRICTED status — no real KYC.
 //
-// In LIVE MODE this would be a genuine onboarding step that collects real
-// identity documents; remove or gate this route behind admin access before
-// going to production.
+// In LIVE MODE this collects real identity documents. Gate behind admin access
+// or remove this route before going to production.
 //
 router.post(
   "/onboarding-link",
@@ -593,15 +508,11 @@ router.post(
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
       const frontendBase = process.env.FRONTEND_URL || "http://localhost:5173";
 
-      // SANDBOX BYPASS: account_onboarding link lets the merchant submit test
-      // data on Stripe's hosted form to lift the RESTRICTED status without
-      // going through real identity verification.
+      // SANDBOX BYPASS: account_onboarding type accepts test data on Stripe's
+      // hosted form to lift the RESTRICTED status without real identity verification.
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
-        // Called when the link expires before the merchant finishes; sends them
-        // back to Settings so they can request a fresh link.
         refresh_url: `${frontendBase}/operator/settings?stripe=refresh`,
-        // Called after the merchant completes (or skips past) the onboarding form.
         return_url: `${frontendBase}/operator/settings?stripe=connected`,
         type: "account_onboarding",
       });
@@ -653,6 +564,32 @@ router.post(
 
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
+      const totalCents = Math.round(Number(booking.totalAmount) * 100);
+
+      // ── Destination Charges split ─────────────────────────────────────────
+      // Platform fee: 5% of gross, retained by the platform account.
+      // Merchant receives: 95% minus the Stripe processing fee.
+      // on_behalf_of routes the Stripe fee against the connected account so the
+      // merchant bears it, and the platform always keeps exactly 5%.
+      //
+      // This makes the split visible in the Stripe dashboard as:
+      //   Gross amount  MYR XX.XX
+      //   Stripe fee  − MYR  X.XX   (charged to merchant)
+      //   Platform fee − MYR  X.XX  (application_fee_amount)
+      //   Net to merchant MYR XX.XX
+      const destinationAccountId =
+        booking.operator?.stripeAccountId || process.env.STRIPE_CONNECTED_ACCOUNT_ID;
+
+      const platformFeeCents = Math.round(totalCents * PLATFORM_FEE_PERCENT / 100);
+
+      const paymentIntentData = destinationAccountId
+        ? {
+            application_fee_amount: platformFeeCents,
+            transfer_data: { destination: destinationAccountId },
+            on_behalf_of: destinationAccountId,
+          }
+        : {};
+
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         mode: "payment",
@@ -662,7 +599,7 @@ router.post(
             quantity: 1,
             price_data: {
               currency: "myr",
-              unit_amount: Math.round(Number(booking.totalAmount) * 100),
+              unit_amount: totalCents,
               product_data: {
                 name: booking.serviceName,
                 description: `Booking via ${booking.operator.companyName}`,
@@ -670,11 +607,7 @@ router.post(
             },
           },
         ],
-        // transfer_group links this charge to the Transfer created in the webhook,
-        // making reconciliation visible in the Stripe dashboard.
-        payment_intent_data: {
-          transfer_group: `booking_${booking.id}`,
-        },
+        payment_intent_data: paymentIntentData,
         metadata: {
           bookingId: String(booking.id),
           customerId: String(req.user.id),
@@ -736,7 +669,7 @@ router.post(
       }
 
       const transactionId = session.payment_intent || session.id || `STRIPE-${Date.now()}`;
-      const result = await applyPaidState(stripe, bookingId, transactionId, session.id);
+      const result = await applyPaidState(bookingId, transactionId, session.id);
 
       const refreshed = await prisma.booking.findUnique({
         where: { id: bookingId },
