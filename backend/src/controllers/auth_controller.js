@@ -149,6 +149,8 @@ export async function register(req, res, next) {
 // ── Login ─────────────────────────────────────────────────────────────────────
 export async function login(req, res, next) {
   try {
+    console.log("Prisma instance:", !!prisma);
+    console.log("Prisma user model:", !!prisma?.user);
     // Input already validated by Zod middleware
     const { email, password } = req.body;
 
@@ -254,6 +256,24 @@ export async function logout(req, res, next) {
     }
 
     res.json({ message: "Logged out successfully" });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ── Get Current User (Me) ────────────────────────────────────────────────────
+export async function getMe(req, res, next) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { operator: true },
+    });
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    res.json({ user: sanitizeUser(user) });
   } catch (err) {
     next(err);
   }

@@ -131,7 +131,11 @@ app.use(requestLogger);
 
 // ── Static uploads – only in non-production; use object storage in prod ─────
 if (process.env.NODE_ENV !== "production") {
-  app.use("/uploads", express.static("uploads"));
+  app.use("/uploads", (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  next();
+}, express.static("uploads"));
 }
 
 // ── Health check ─────────────────────────────────────────────────────────────

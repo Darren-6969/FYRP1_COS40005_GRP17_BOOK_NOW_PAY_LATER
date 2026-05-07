@@ -19,6 +19,7 @@ import {
   refreshTokenSchema,
   registerSchema,
 } from "../validators/auth_validator.js";
+import { getMe } from "../controllers/auth_controller.js";
 
 const router = express.Router();
 
@@ -28,6 +29,7 @@ router.post("/login",    authLimiter, validate(loginSchema),       login);
 router.post("/refresh",  refreshLimiter, validate(refreshTokenSchema), refreshAccessToken);
 
 // Protected
+router.get("/me", verifyToken, getMe);
 router.get("/me",               verifyToken, me);
 router.post("/logout",          verifyToken, logout);
 router.patch("/profile",        verifyToken, updateProfile);
