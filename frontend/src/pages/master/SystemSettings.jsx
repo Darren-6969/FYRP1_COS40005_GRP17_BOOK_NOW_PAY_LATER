@@ -1,43 +1,99 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   getBNPLConfigs,
   updateBNPLConfig,
 } from "../../services/admin_service";
 
+function dateTime(value) {
+  if (!value) return "-";
+
+  return new Intl.DateTimeFormat("en-MY", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Kuala_Lumpur",
+  }).format(new Date(value));
+}
+
+function validateUrl(value) {
+  if (!value) return true;
+
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
 export default function SystemSettings() {
   const [configs, setConfigs] = useState([]);
   const [selectedOperatorId, setSelectedOperatorId] = useState("");
   const [form, setForm] = useState(null);
+
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const load = async () => {
-    setLoading(true);
-    const res = await getBNPLConfigs();
-    const items = res.data?.configs || [];
+    try {
+      setLoading(true);
+      setError("");
+      const res = await getBNPLConfigs();
+      const items = res.data?.configs || [];
 
-    setConfigs(items);
+      setConfigs(items);
 
-    if (items.length) {
-      setSelectedOperatorId(String(items[0].operatorId));
-      setForm(items[0]);
+      if (items.length && !selectedOperatorId) {
+        setSelectedOperatorId(String(items[0].operatorId));
+        setForm(items[0]);
+      } else if (items.length && selectedOperatorId) {
+        const selected = items.find(
+          (item) => String(item.operatorId) === String(selectedOperatorId)
+        );
+        setForm(selected || items[0]);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to load settings.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSelect = (event) => {
-    const operatorId = event.target.value;
-    const selected = configs.find((item) => String(item.operatorId) === operatorId);
+  const filteredConfigs = useMemo(() => {
+    return configs.filter((config) => {
+      const text = [
+        config.operator?.companyName,
+        config.operator?.operatorCode,
+        config.operator?.email,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
 
-    setSelectedOperatorId(operatorId);
+      return !query || text.includes(query.toLowerCase());
+    });
+  }, [configs, query]);
+
+  const handleSelect = (operatorId) => {
+    const selected = configs.find(
+      (item) => String(item.operatorId) === String(operatorId)
+    );
+
+    setSelectedOperatorId(String(operatorId));
     setForm(selected || null);
     setMessage("");
+    setError("");
   };
 
   const handleChange = (event) => {
@@ -49,13 +105,39 @@ export default function SystemSettings() {
     }));
   };
 
+  const validateForm = () => {
+    const deadlineDays = Number(form.paymentDeadlineDays);
+
+    if (!Number.isInteger(deadlineDays) || deadlineDays < 1) {
+      return "Payment deadline days must be at least 1.";
+    }
+
+    if (form.allowReceiptUpload && !String(form.manualPaymentNote || "").trim()) {
+      return "Manual payment note is required when receipt upload is enabled.";
+    }
+
+    if (!validateUrl(form.invoiceLogoUrl || "")) {
+      return "Invoice logo URL must be a valid http/https URL.";
+    }
+
+    return "";
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (!form?.operatorId) return;
 
+    const validationError = validateForm();
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setSaving(true);
     setMessage("");
+    setError("");
 
     try {
       const payload = {
@@ -72,7 +154,7 @@ export default function SystemSettings() {
       setMessage("BNPL settings updated successfully.");
       await load();
     } catch (err) {
-      setMessage(err.response?.data?.message || "Failed to update settings.");
+      setError(err.response?.data?.message || "Failed to update settings.");
     } finally {
       setSaving(false);
     }
@@ -83,97 +165,187 @@ export default function SystemSettings() {
   }
 
   return (
-    <section className="card">
-      <div className="section-header">
-        <div>
-          <h3>System Settings</h3>
-          <p>Configure BNPL behaviour for each operator/host.</p>
-        </div>
-      </div>
-
-      {message && <div className="alert">{message}</div>}
-
-      <label className="admin-field">
-        <span>Operator / Host</span>
-        <select value={selectedOperatorId} onChange={handleSelect}>
-          {configs.map((config) => (
-            <option key={config.operatorId} value={config.operatorId}>
-              {config.operator?.companyName || `Operator ${config.operatorId}`}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      {form && (
-        <form className="admin-form-grid" onSubmit={handleSubmit}>
-          <label>
-            <span>Payment Deadline Days</span>
-            <input
-              type="number"
-              min="1"
-              name="paymentDeadlineDays"
-              value={form.paymentDeadlineDays || 3}
-              onChange={handleChange}
-            />
-          </label>
-
-          <label>
-            <span>Invoice Logo URL</span>
-            <input
-              name="invoiceLogoUrl"
-              value={form.invoiceLogoUrl || ""}
-              onChange={handleChange}
-              placeholder="https://..."
-            />
-          </label>
-
-          <label className="wide">
-            <span>Invoice Footer Text</span>
-            <textarea
-              name="invoiceFooterText"
-              value={form.invoiceFooterText || ""}
-              onChange={handleChange}
-              placeholder="Thank you for your booking."
-            />
-          </label>
-
-          <label className="wide">
-            <span>Manual Payment Note</span>
-            <textarea
-              name="manualPaymentNote"
-              value={form.manualPaymentNote || ""}
-              onChange={handleChange}
-              placeholder="DuitNow/SPay payment instructions"
-            />
-          </label>
-
-          <label className="admin-checkbox">
-            <input
-              type="checkbox"
-              name="allowReceiptUpload"
-              checked={Boolean(form.allowReceiptUpload)}
-              onChange={handleChange}
-            />
-            <span>Allow manual receipt upload</span>
-          </label>
-
-          <label className="admin-checkbox">
-            <input
-              type="checkbox"
-              name="autoCancelOverdue"
-              checked={Boolean(form.autoCancelOverdue)}
-              onChange={handleChange}
-            />
-            <span>Auto-mark unpaid bookings as overdue</span>
-          </label>
-
-          <div className="admin-form-actions">
-            <button className="btn primary" disabled={saving}>
-              {saving ? "Saving..." : "Save Settings"}
-            </button>
+    <div className="page-stack">
+      <section className="card">
+        <div className="section-header">
+          <div>
+            <h3>System Settings</h3>
+            <p>
+              Configure BNPL rules per operator, including payment deadline,
+              manual receipt upload, invoice branding, and overdue automation.
+            </p>
           </div>
-        </form>
-      )}
-    </section>
+
+          <button className="btn" onClick={load}>Refresh</button>
+        </div>
+
+        {message && <div className="alert">{message}</div>}
+        {error && <div className="alert danger">{error}</div>}
+
+        <div className="stats-grid">
+          <Stat title="Configured Operators" value={configs.length} />
+          <Stat title="Receipt Upload Enabled" value={configs.filter((c) => c.allowReceiptUpload).length} />
+          <Stat title="Auto Overdue Enabled" value={configs.filter((c) => c.autoCancelOverdue).length} />
+          <Stat title="Average Deadline Days" value={averageDeadline(configs)} />
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="admin-filter-row">
+          <input
+            placeholder="Search operator code, company, email..."
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+
+          <select
+            value={selectedOperatorId}
+            onChange={(event) => handleSelect(event.target.value)}
+          >
+            {filteredConfigs.map((config) => (
+              <option key={config.operatorId} value={config.operatorId}>
+                {config.operator?.companyName || `Operator ${config.operatorId}`}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {!form ? (
+          <div className="empty-state">No BNPL config found.</div>
+        ) : (
+          <form className="admin-form-grid" onSubmit={handleSubmit}>
+            <label>
+              <span>Operator</span>
+              <input
+                value={`${form.operator?.companyName || "-"} (${form.operator?.operatorCode || "-"})`}
+                disabled
+              />
+            </label>
+
+            <label>
+              <span>Operator Email</span>
+              <input value={form.operator?.email || "-"} disabled />
+            </label>
+
+            <label>
+              <span>Payment Deadline Days</span>
+              <input
+                type="number"
+                min="1"
+                name="paymentDeadlineDays"
+                value={form.paymentDeadlineDays || 3}
+                onChange={handleChange}
+              />
+              <small>
+                Used when calculating customer payment deadline after booking acceptance.
+              </small>
+            </label>
+
+            <label>
+              <span>Invoice Logo URL</span>
+              <input
+                name="invoiceLogoUrl"
+                value={form.invoiceLogoUrl || ""}
+                onChange={handleChange}
+                placeholder="https://..."
+              />
+            </label>
+
+            <label className="wide">
+              <span>Invoice Footer Text</span>
+              <textarea
+                name="invoiceFooterText"
+                value={form.invoiceFooterText || ""}
+                onChange={handleChange}
+                placeholder="Thank you for your booking."
+              />
+            </label>
+
+            <label className="wide">
+              <span>Manual Payment Note</span>
+              <textarea
+                name="manualPaymentNote"
+                value={form.manualPaymentNote || ""}
+                onChange={handleChange}
+                placeholder="DuitNow/SPay payment instructions"
+              />
+              <small>
+                Required when manual receipt upload is enabled.
+              </small>
+            </label>
+
+            <label className="admin-checkbox">
+              <input
+                type="checkbox"
+                name="allowReceiptUpload"
+                checked={Boolean(form.allowReceiptUpload)}
+                onChange={handleChange}
+              />
+              <span>Allow manual DuitNow/SPay receipt upload</span>
+            </label>
+
+            <label className="admin-checkbox">
+              <input
+                type="checkbox"
+                name="autoCancelOverdue"
+                checked={Boolean(form.autoCancelOverdue)}
+                onChange={handleChange}
+              />
+              <span>Auto-mark unpaid bookings as overdue after deadline</span>
+            </label>
+
+            <div className="wide">
+              <h4>System-managed behaviour</h4>
+              <table className="table">
+                <tbody>
+                  <tr>
+                    <td>Payment reminder check</td>
+                    <td>Handled by cron job</td>
+                  </tr>
+                  <tr>
+                    <td>No merchant response check</td>
+                    <td>Handled by cron job</td>
+                  </tr>
+                  <tr>
+                    <td>Auto completion check</td>
+                    <td>Handled by cron job</td>
+                  </tr>
+                  <tr>
+                    <td>Last Updated</td>
+                    <td>{dateTime(form.updatedAt)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="admin-form-actions">
+              <button className="btn primary" disabled={saving}>
+                {saving ? "Saving..." : "Save Settings"}
+              </button>
+            </div>
+          </form>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function averageDeadline(configs) {
+  if (!configs.length) return "-";
+
+  const total = configs.reduce(
+    (sum, config) => sum + Number(config.paymentDeadlineDays || 0),
+    0
+  );
+
+  return Math.round((total / configs.length) * 10) / 10;
+}
+
+function Stat({ title, value }) {
+  return (
+    <div className="stat-card">
+      <span>{title}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }

@@ -1144,3 +1144,35 @@
     text-align: left;
   }
 }
+
+.dashboard-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.admin-action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stat-card.danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+@media (max-width: 900px) {
+  .dashboard-two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-filter-row {
+    flex-direction: column;
+  }
+
+  .admin-filter-row input,
+  .admin-filter-row select {
+    width: 100%;
+  }
+}
