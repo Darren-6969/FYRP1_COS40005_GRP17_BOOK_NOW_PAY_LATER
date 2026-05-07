@@ -12,29 +12,23 @@ import {
 } from "../services/email_templates.js";
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import { allowRoles } from "../middlewares/rbac_middleware.js";
+import { paymentLimiter } from "../middlewares/rate_limit_middleware.js";
 
 const router = express.Router();
 
+// Platform takes this % of every transaction; merchant receives the rest minus Stripe's processing fee.
+const PLATFORM_FEE_PERCENT = Number(process.env.STRIPE_PLATFORM_FEE_PERCENT ?? 5);
+
 function parseBookingId(value) {
   const parsed = Number(value);
-
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    return null;
-  }
-
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
   return parsed;
 }
 
 function includeBookingRelations() {
   return {
     customer: {
-      select: {
-        id: true,
-        userCode: true,
-        name: true,
-        email: true,
-        role: true,
-      },
+      select: { id: true, userCode: true, name: true, email: true, role: true },
     },
     operator: true,
     payment: true,
@@ -43,8 +37,76 @@ function includeBookingRelations() {
   };
 }
 
-// Shared logic: mark a booking as PAID after a confirmed Stripe payment.
-async function applyPaidState(bookingId, transactionId, sessionId) {
+// ── Separate Charges and Transfers ──────────────────────────────────────────
+// Platform charges the customer on its own account.
+// After payment, it creates a Transfer to the connected merchant account for
+// (95% of gross) minus the actual Stripe processing fee, so the merchant bears
+// the Stripe cost.  The platform retains the remaining 5%.
+async function createMerchantTransfer(stripe, booking, paymentIntentId, bookingId) {
+  const operator = await prisma.operator.findUnique({
+    where: { id: booking.operatorId },
+    select: { stripeAccountId: true, companyName: true },
+  });
+
+  const destination =
+    operator?.stripeAccountId || process.env.STRIPE_CONNECTED_ACCOUNT_ID;
+
+  if (!destination) {
+    console.error(
+      `[Stripe Transfer] No connected account configured for operator ${booking.operatorId}. Transfer skipped.`
+    );
+    return null;
+  }
+
+  const totalCents = Math.round(Number(booking.totalAmount) * 100);
+
+  // Retrieve the actual Stripe processing fee from the balance transaction.
+  let stripeFee = 0;
+  if (paymentIntentId?.startsWith("pi_")) {
+    try {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+        expand: ["latest_charge.balance_transaction"],
+      });
+      stripeFee = pi.latest_charge?.balance_transaction?.fee ?? 0;
+    } catch (err) {
+      console.warn(
+        "[Stripe Transfer] Could not retrieve balance transaction fee:",
+        err.message
+      );
+    }
+  }
+
+  // Merchant share = 95% of gross minus the Stripe fee (merchant bears processing cost).
+  const merchantShareCents = Math.round(totalCents * (1 - PLATFORM_FEE_PERCENT / 100));
+  const transferAmountCents = Math.max(0, merchantShareCents - stripeFee);
+
+  const transfer = await stripe.transfers.create({
+    amount: transferAmountCents,
+    currency: "myr",
+    destination,
+    transfer_group: `booking_${bookingId}`,
+    metadata: {
+      bookingId: String(bookingId),
+      grossAmountCents: String(totalCents),
+      platformFeePercent: String(PLATFORM_FEE_PERCENT),
+      stripeFeeCents: String(stripeFee),
+      merchantShareCents: String(merchantShareCents),
+      transferAmountCents: String(transferAmountCents),
+    },
+  });
+
+  console.log(
+    `[Stripe Transfer] booking ${bookingId}: gross=${totalCents} sen, ` +
+    `platformFee=${Math.round(totalCents * PLATFORM_FEE_PERCENT / 100)} sen, ` +
+    `stripeFee=${stripeFee} sen, transferred=${transferAmountCents} sen → ${destination}`
+  );
+
+  return transfer;
+}
+
+// ── Shared paid-state logic ──────────────────────────────────────────────────
+// Called from both the webhook handler and the /confirm-session fallback endpoint.
+async function applyPaidState(stripe, bookingId, transactionId, sessionId) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: includeBookingRelations(),
@@ -92,6 +154,19 @@ async function applyPaidState(bookingId, transactionId, sessionId) {
     include: includeBookingRelations(),
   });
 
+  // Create the merchant transfer (Separate Charges and Transfers model).
+  // Failures are logged but do not roll back the payment — the platform still
+  // received the money and the transfer can be retried manually in the dashboard.
+  let transfer = null;
+  try {
+    transfer = await createMerchantTransfer(stripe, booking, transactionId, bookingId);
+  } catch (err) {
+    console.error(
+      `[Stripe Transfer] Failed for booking ${bookingId}. Manual action required.`,
+      err.message
+    );
+  }
+
   await prisma.auditLog.create({
     data: {
       userId: null,
@@ -104,6 +179,11 @@ async function applyPaidState(bookingId, transactionId, sessionId) {
         paymentId: payment.id,
         invoiceId: invoice.id,
         invoiceNo: invoice.invoiceNo,
+        // Transfer details
+        transferId: transfer?.id ?? null,
+        transferAmountCents: transfer?.amount ?? null,
+        transferDestination: transfer?.destination ?? null,
+        platformFeePercent: PLATFORM_FEE_PERCENT,
       },
     },
   });
@@ -117,9 +197,7 @@ async function applyPaidState(bookingId, transactionId, sessionId) {
       updatedBooking.bookingCode || updatedBooking.id
     } has been issued.`,
     type: "PAYMENT_RECEIPT_ISSUED",
-    emailSubject: `Official Receipt - ${
-      updatedBooking.bookingCode || updatedBooking.id
-    }`,
+    emailSubject: `Official Receipt - ${updatedBooking.bookingCode || updatedBooking.id}`,
     emailHtml: paymentReceiptTemplate({
       booking: updatedBooking,
       payment,
@@ -134,9 +212,7 @@ async function applyPaidState(bookingId, transactionId, sessionId) {
       updatedBooking.bookingCode || updatedBooking.id
     } has been confirmed.`,
     type: "PAYMENT_CONFIRMED",
-    emailSubject: `Payment Confirmed - ${
-      updatedBooking.bookingCode || updatedBooking.id
-    }`,
+    emailSubject: `Payment Confirmed - ${updatedBooking.bookingCode || updatedBooking.id}`,
     emailHtml: merchantPaymentConfirmedTemplate({
       booking: updatedBooking,
       payment,
@@ -145,9 +221,10 @@ async function applyPaidState(bookingId, transactionId, sessionId) {
   });
 
   console.log(`[Stripe] Booking ${bookingId} marked as PAID.`);
-  return { payment, invoice, updatedBooking };
+  return { payment, invoice, updatedBooking, transfer };
 }
 
+// ── Webhook ──────────────────────────────────────────────────────────────────
 router.post(
   "/webhook",
   express.raw({ type: "application/json" }),
@@ -156,8 +233,8 @@ router.post(
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
     if (!secret) {
-      console.warn("[Stripe] STRIPE_WEBHOOK_SECRET not set. Webhook skipped.");
-      return res.json({ received: true, skipped: true });
+      console.error("[Stripe] STRIPE_WEBHOOK_SECRET not set. Rejecting webhook.");
+      return res.status(500).json({ message: "Webhook endpoint is not configured" });
     }
 
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -177,7 +254,7 @@ router.post(
 
     try {
       switch (event.type) {
-        // ── Primary payment confirmation ────────────────────────────────────
+        // ── Primary payment confirmation ──────────────────────────────────────
         case "checkout.session.completed": {
           const session = event.data.object;
           const bookingId = parseBookingId(session.metadata?.bookingId);
@@ -188,16 +265,14 @@ router.post(
           }
 
           const transactionId = session.payment_intent || session.id || `STRIPE-${Date.now()}`;
-          await applyPaidState(bookingId, transactionId, session.id);
+          await applyPaidState(stripe, bookingId, transactionId, session.id);
           break;
         }
 
-        // ── Fallback: fires just before checkout.session.completed ──────────
-        // Handles the rare case where checkout.session.completed is missed.
+        // ── Fallback: fires just before checkout.session.completed ────────────
         case "payment_intent.succeeded": {
           const paymentIntent = event.data.object;
 
-          // First try: booking already in DB with this transactionId
           const existingPayment = await prisma.payment.findFirst({
             where: { transactionId: paymentIntent.id },
           });
@@ -208,12 +283,11 @@ router.post(
               include: includeBookingRelations(),
             });
             if (booking && !(booking.status === "PAID" && booking.payment?.status === "PAID")) {
-              await applyPaidState(existingPayment.bookingId, paymentIntent.id, null);
+              await applyPaidState(stripe, existingPayment.bookingId, paymentIntent.id, null);
             }
             break;
           }
 
-          // Second try: look up the checkout session to get the bookingId metadata
           const sessions = await stripe.checkout.sessions.list({
             payment_intent: paymentIntent.id,
             limit: 1,
@@ -222,14 +296,14 @@ router.post(
           const bookingId = parseBookingId(linkedSession?.metadata?.bookingId);
 
           if (bookingId) {
-            await applyPaidState(bookingId, paymentIntent.id, linkedSession.id);
+            await applyPaidState(stripe, bookingId, paymentIntent.id, linkedSession.id);
           } else {
             console.log(`[Stripe] payment_intent.succeeded: no matching booking for PI ${paymentIntent.id}`);
           }
           break;
         }
 
-        // ── Payment failed — let customer retry ─────────────────────────────
+        // ── Payment failed — let customer retry ───────────────────────────────
         case "payment_intent.payment_failed": {
           const paymentIntent = event.data.object;
           const failureMessage = paymentIntent.last_payment_error?.message || "Payment declined";
@@ -239,7 +313,6 @@ router.post(
           });
 
           if (!failedPayment) {
-            // No DB record yet (failure before any prior attempt was stored)
             console.log(`[Stripe] payment_intent.payment_failed: no payment record for PI ${paymentIntent.id}`);
             break;
           }
@@ -249,7 +322,6 @@ router.post(
             data: { status: "FAILED" },
           });
 
-          // Reset to PENDING_PAYMENT so the customer can return and retry
           await prisma.booking.update({
             where: { id: failedPayment.bookingId },
             data: { status: "PENDING_PAYMENT" },
@@ -298,7 +370,7 @@ router.post(
           break;
         }
 
-        // ── Refund issued ───────────────────────────────────────────────────
+        // ── Refund issued ─────────────────────────────────────────────────────
         case "charge.refunded": {
           const charge = event.data.object;
           const refundedPiId = charge.payment_intent;
@@ -317,8 +389,6 @@ router.post(
             break;
           }
 
-          // No REFUNDED enum exists — use FAILED to indicate the payment is reversed.
-          // The booking is cancelled since money was returned.
           await prisma.payment.update({
             where: { id: refundedPayment.id },
             data: { status: "FAILED" },
@@ -329,7 +399,6 @@ router.post(
             data: { status: "CANCELLED" },
           });
 
-          // Void the invoice if one exists
           await prisma.invoice.updateMany({
             where: { bookingId: refundedPayment.bookingId },
             data: { status: "CANCELLED" },
@@ -396,7 +465,7 @@ router.post(
           break;
         }
 
-        // ── Payout to bank account (platform-level, no booking) ─────────────
+        // ── Payout to bank account (platform-level) ───────────────────────────
         case "payout.created": {
           const payout = event.data.object;
 
@@ -431,9 +500,11 @@ router.post(
   }
 );
 
+// ── Create checkout session ───────────────────────────────────────────────────
 router.post(
   "/checkout",
   express.json(),
+  paymentLimiter,
   verifyToken,
   allowRoles("CUSTOMER"),
   async (req, res, next) => {
@@ -445,18 +516,12 @@ router.post(
       }
 
       if (!process.env.STRIPE_SECRET_KEY) {
-        return res.status(500).json({
-          message: "STRIPE_SECRET_KEY is not configured",
-        });
+        return res.status(500).json({ message: "STRIPE_SECRET_KEY is not configured" });
       }
 
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
-        include: {
-          customer: true,
-          operator: true,
-          payment: true,
-        },
+        include: { customer: true, operator: true, payment: true },
       });
 
       if (!booking || booking.customerId !== req.user.id) {
@@ -492,13 +557,18 @@ router.post(
             },
           },
         ],
+        // transfer_group links this charge to the Transfer created in the webhook,
+        // making reconciliation visible in the Stripe dashboard.
+        payment_intent_data: {
+          transfer_group: `booking_${booking.id}`,
+        },
         metadata: {
           bookingId: String(booking.id),
           customerId: String(req.user.id),
         },
-      success_url: `${
-        process.env.FRONTEND_URL || "http://localhost:5173"
-      }/customer/payment-status/${booking.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${
+          process.env.FRONTEND_URL || "http://localhost:5173"
+        }/customer/payment-status/${booking.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${
           process.env.FRONTEND_URL || "http://localhost:5173"
         }/customer/checkout/${booking.id}?payment=cancelled`,
@@ -511,9 +581,11 @@ router.post(
   }
 );
 
+// ── Confirm session (frontend fallback when webhook is delayed) ───────────────
 router.post(
   "/confirm-session",
   express.json(),
+  paymentLimiter,
   verifyToken,
   allowRoles("CUSTOMER"),
   async (req, res, next) => {
@@ -525,9 +597,7 @@ router.post(
       }
 
       if (!process.env.STRIPE_SECRET_KEY) {
-        return res.status(500).json({
-          message: "STRIPE_SECRET_KEY is not configured",
-        });
+        return res.status(500).json({ message: "STRIPE_SECRET_KEY is not configured" });
       }
 
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -536,18 +606,12 @@ router.post(
       const bookingId = parseBookingId(session.metadata?.bookingId);
 
       if (!bookingId) {
-        return res.status(400).json({
-          message: "Invalid Stripe session booking metadata",
-        });
+        return res.status(400).json({ message: "Invalid Stripe session booking metadata" });
       }
 
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
-        include: {
-          customer: true,
-          operator: true,
-          payment: true,
-        },
+        include: { customer: true, operator: true, payment: true },
       });
 
       if (!booking || booking.customerId !== req.user.id) {
@@ -555,15 +619,11 @@ router.post(
       }
 
       if (session.payment_status !== "paid") {
-        return res.status(400).json({
-          message: `Stripe payment is ${session.payment_status}`,
-        });
+        return res.status(400).json({ message: `Stripe payment is ${session.payment_status}` });
       }
 
-      const transactionId =
-        session.payment_intent || session.id || `STRIPE-${Date.now()}`;
-
-      const result = await applyPaidState(bookingId, transactionId, session.id);
+      const transactionId = session.payment_intent || session.id || `STRIPE-${Date.now()}`;
+      const result = await applyPaidState(stripe, bookingId, transactionId, session.id);
 
       const refreshed = await prisma.booking.findUnique({
         where: { id: bookingId },
@@ -579,6 +639,6 @@ router.post(
       next(err);
     }
   }
-);  
+);
 
 export default router;

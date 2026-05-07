@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import dotenv from "dotenv";
 
 import authRoutes       from "./routes/auth_routes.js";
@@ -19,6 +20,7 @@ import hostRoutes       from "./routes/host_routes.js";
 
 import { errorHandler }  from "./middlewares/errorHandler.js";
 import { requestLogger } from "./middlewares/logger_middleware.js";
+import { generalLimiter } from "./middlewares/rate_limit_middleware.js";
 
 dotenv.config();
 
@@ -32,15 +34,50 @@ function requiredEnvStatus() {
     console.warn(`[CONFIG] Missing required environment variables: ${missing.join(", ")}`);
   }
 
-  return {
-    ok: missing.length === 0,
-    missing,
-  };
+  return { ok: missing.length === 0, missing };
 }
 
 requiredEnvStatus();
 
-// ── CORS ────────────────────────────────────────────────────────────────────
+// ── Security headers (OWASP A05 2025 / PCI DSS Req 6.3) ─────────────────────
+app.use(
+  helmet({
+    // Content-Security-Policy: restrict resource origins
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        frameSrc: ["'none'"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+    // HSTS – force HTTPS for 1 year (PCI DSS Req 4.2 / GDPR Art. 32)
+    strictTransportSecurity: {
+      maxAge: 31_536_000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    // Prevent MIME sniffing (OWASP A03)
+    noSniff: true,
+    // Deny framing – click-jacking protection
+    frameguard: { action: "deny" },
+    // Remove X-Powered-By fingerprint
+    hidePoweredBy: true,
+    // XSS filter (legacy browsers)
+    xssFilter: true,
+    // Referrer policy – do not leak URL to third parties (GDPR)
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    // Prevent cross-origin resource leaks
+    crossOriginResourcePolicy: { policy: "same-origin" },
+    crossOriginOpenerPolicy: { policy: "same-origin" },
+  })
+);
+
+// ── CORS ─────────────────────────────────────────────────────────────────────
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
@@ -51,14 +88,12 @@ const allowedOrigins = [
 
 function isAllowedOrigin(origin) {
   if (!origin) return true;
-
   if (allowedOrigins.includes(origin)) return true;
 
-  // Allow your own Vercel frontend preview deployments.
+  // Allow preview deployments only outside production
   if (
     process.env.NODE_ENV !== "production" &&
-    origin.endsWith(".vercel.app") &&
-    origin.includes("darren-6969s-projects")
+    /^https:\/\/[a-z0-9-]+-darren-6969s-projects\.vercel\.app$/.test(origin)
   ) {
     return true;
   }
@@ -75,37 +110,37 @@ app.use(
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-bnpl-api-key"],
+    exposedHeaders: ["RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset"],
   })
 );
 
 app.options("*", cors());
 
-// ── Stripe webhook — must come BEFORE express.json() ────────────────────────
+// ── Global rate limiting (OWASP A05 2025) ───────────────────────────────────
+app.use(generalLimiter);
+
+// ── Stripe webhook – must come BEFORE express.json() ────────────────────────
 app.use("/api/stripe", stripeRoutes);
 
 // ── Body parsing ─────────────────────────────────────────────────────────────
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+app.use(express.json({ limit: "512kb" }));
+app.use(express.urlencoded({ extended: true, limit: "512kb" }));
 
 // ── Request logger ───────────────────────────────────────────────────────────
 app.use(requestLogger);
 
-// ── Static file serving for uploaded receipts ────────────────────────────────
-// For production, use object storage and store a public/private URL instead.
-app.use("/uploads", express.static("uploads"));
+// ── Static uploads – only in non-production; use object storage in prod ─────
+if (process.env.NODE_ENV !== "production") {
+  app.use("/uploads", express.static("uploads"));
+}
 
-// ── Root / Health check ──────────────────────────────────────────────────────
+// ── Health check ─────────────────────────────────────────────────────────────
 app.get("/", (_req, res) => {
-  res.json({
-    message: "BNPL API is running",
-    version: "1.0.0",
-    status: "ok",
-  });
+  res.json({ message: "BNPL API is running", version: "1.0.0", status: "ok" });
 });
 
 app.get("/health", (_req, res) => {
   const config = requiredEnvStatus();
-
   res.status(config.ok ? 200 : 503).json({
     status: config.ok ? "ok" : "degraded",
     message: "BNPL API health check",

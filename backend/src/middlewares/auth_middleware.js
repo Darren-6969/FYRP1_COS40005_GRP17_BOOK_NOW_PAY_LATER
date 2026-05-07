@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import prisma from "../config/db.js";
 
+// Verifies a short-lived access token (Bearer <jwt>)
 export async function verifyToken(req, res, next) {
   try {
     const header = req.headers.authorization;
@@ -10,7 +11,17 @@ export async function verifyToken(req, res, next) {
     }
 
     const token = header.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      // Distinguish between expired and invalid so the client can decide to refresh
+      if (err.name === "TokenExpiredError") {
+        return res.status(401).json({ message: "Token expired", code: "TOKEN_EXPIRED" });
+      }
+      return res.status(401).json({ message: "Invalid token" });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
@@ -23,7 +34,7 @@ export async function verifyToken(req, res, next) {
 
     req.user = user;
     next();
-  } catch {
+  } catch (err) {
     return res.status(401).json({ message: "Invalid or expired token" });
   }
 }

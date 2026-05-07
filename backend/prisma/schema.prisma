@@ -79,7 +79,7 @@ model User {
 
   phone String?
   profileImageUrl String? @db.Text
-  
+
   notifyBookingUpdates Boolean @default(true)
   notifyPaymentReminders Boolean @default(true)
   notifyInvoices Boolean @default(true)
@@ -91,6 +91,7 @@ model User {
   bookings      Booking[]
   notifications Notification[]
   auditLogs     AuditLog[]
+  refreshTokens RefreshToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -98,6 +99,18 @@ model User {
   @@index([userCode])
   @@index([operatorId])
   @@index([role])
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Operator {
@@ -108,6 +121,7 @@ model Operator {
   phone        String?
   logoUrl      String?
   status       OperatorStatus @default(ACTIVE)
+  stripeAccountId String?
 
   users    User[]
   bookings Booking[]
