@@ -75,7 +75,6 @@ export default function CustomerProfile() {
     name: "",
     phone: "",
     profileImageUrl: "",
-    profileImageFile: null,
   });
 
   const [passwordForm, setPasswordForm] = useState({
@@ -95,7 +94,6 @@ export default function CustomerProfile() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [savingNotifications, setSavingNotifications] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -133,14 +131,10 @@ export default function CustomerProfile() {
   const syncUserToForms = (nextUser) => {
     if (!nextUser) return;
 
-    console.log("Syncing user to forms:", nextUser);
-    console.log("Profile image URL:", nextUser.profileImageUrl);
-
     setProfileForm({
       name: nextUser.name || "",
       phone: nextUser.phone || "",
       profileImageUrl: nextUser.profileImageUrl || "",
-      profileImageFile: null,
     });
 
     setNotificationForm({
@@ -177,33 +171,6 @@ export default function CustomerProfile() {
     loadProfile();
   }, []);
 
-  useEffect(() => {
-  if (user) {
-    syncUserToForms(user);
-  }
-}, [user]);
-
-useEffect(() => {
-  const fetchLatestUser = async () => {
-    try {
-      const token = localStorage.getItem("bnpl_token") || localStorage.getItem("token");
-      if (token) {
-        const res = await getMe();
-        const latestUser = res.data?.user || res.data;
-        if (latestUser) {
-          setUser(latestUser);
-          localStorage.setItem("user", JSON.stringify(latestUser));
-          console.log("Fetched latest user on mount:", latestUser.profileImageUrl);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch latest user:", err);
-    }
-  };
-  
-  fetchLatestUser();
-}, []);
-
   const handleLogout = () => {
     clearSession();
     navigate("/login", { replace: true });
@@ -228,164 +195,65 @@ useEffect(() => {
   };
 
   const handleProfileImageChange = async (e) => {
-  const file = e.target.files?.[0];
+    const file = e.target.files?.[0];
 
-  if (!file) return;
+    if (!file) return;
 
-  if (!file.type.startsWith("image/")) {
-    setError("Please upload an image file.");
-    return;
-  }
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload an image file.");
+      return;
+    }
 
-  if (file.size > 2_000_000) { // 2MB limit
-    setError("Profile picture must be below 2MB.");
-    return;
-  }
+    if (file.size > 1_000_000) {
+      setError("Profile picture must be below 1MB.");
+      return;
+    }
 
-  // Create a preview URL
-  const previewUrl = URL.createObjectURL(file);
-  
-  setProfileForm((prev) => ({
-    ...prev,
-    profileImageFile: file,  // Store the actual file for upload
-    profileImageUrl: previewUrl,  // Store preview URL for display
-  }));
+    try {
+      const dataUrl = await fileToDataUrl(file);
 
-  setError("");
-};
+      setProfileForm((prev) => ({
+        ...prev,
+        profileImageUrl: dataUrl,
+      }));
+
+      setError("");
+    } catch {
+      setError("Failed to load selected profile picture.");
+    }
+  };
 
   const handleSaveProfile = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  if (!profileForm.name.trim()) {
-    setError("Name is required.");
-    return;
-  }
-
-  setSavingProfile(true);
-  setError("");
-
-  try {
-    let imageUrl = null;
-    const token = localStorage.getItem("bnpl_token") || localStorage.getItem("token");
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-    
-    // If there's a new image file, upload it first
-    if (profileForm.profileImageFile) {
-      setUploadingImage(true);
-      
-      const formData = new FormData();
-      formData.append("image", profileForm.profileImageFile);
-      
-      const uploadRes = await fetch(`${API_URL}/api/customer/upload-profile-image`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-      
-      const uploadData = await uploadRes.json();
-      console.log("Upload response:", uploadData);
-      
-      if (uploadData.success) {
-        imageUrl = uploadData.imageUrl;
-        
-        if (uploadData.user) {
-          console.log("User from upload response:", uploadData.user);
-          console.log("Profile image URL from user:", uploadData.user.profileImageUrl);
-          
-          // Update the user state with the full user object from backend
-          setUser(uploadData.user);
-          updateStoredUser(uploadData.user);
-          syncUserToForms(uploadData.user);
-          
-          // 🔔 DISPATCH EVENT TO UPDATE TOP-RIGHT PROFILE PICTURE
-          window.dispatchEvent(new CustomEvent('userProfileUpdated', { 
-            detail: uploadData.user 
-          }));
-          console.log("Dispatched userProfileUpdated event");
-          
-          showSuccess("Profile picture updated successfully!");
-          setUploadingImage(false);
-          setSavingProfile(false);
-          
-          // Clear the pending image file
-          setProfileForm((prev) => ({
-            ...prev,
-            profileImageFile: null,
-          }));
-          return;
-        }
-        
-        // Fallback: If user object not returned, manually update the image URL
-        if (imageUrl && user) {
-          const updatedUser = {
-            ...user,
-            profileImageUrl: imageUrl
-          };
-          console.log("Manually updating user with:", updatedUser);
-          setUser(updatedUser);
-          updateStoredUser(updatedUser);
-          syncUserToForms(updatedUser);
-          
-          // 🔔 DISPATCH EVENT FOR FALLBACK CASE TOO
-          window.dispatchEvent(new CustomEvent('userProfileUpdated', { 
-            detail: updatedUser 
-          }));
-          
-          showSuccess("Profile picture updated successfully!");
-          setUploadingImage(false);
-          setSavingProfile(false);
-          
-          setProfileForm((prev) => ({
-            ...prev,
-            profileImageFile: null,
-          }));
-          return;
-        }
-      } else {
-        throw new Error(uploadData.message || "Failed to upload image");
-      }
+    if (!profileForm.name.trim()) {
+      setError("Name is required.");
+      return;
     }
-    
-    // Update profile if name or phone changed (no image upload)
-    if (profileForm.name !== user?.name || profileForm.phone !== user?.phone) {
-      const updateData = {
+
+    setSavingProfile(true);
+    setError("");
+
+    try {
+      const res = await updateProfile({
         name: profileForm.name.trim(),
         phone: profileForm.phone.trim(),
-      };
-      
-      const res = await updateProfile(updateData);
-      const nextUser = res.data?.user;
-      
-      if (nextUser) {
-        setUser(nextUser);
-        updateStoredUser(nextUser);
-        syncUserToForms(nextUser);
-        
-        // 🔔 DISPATCH EVENT FOR NAME/PHONE UPDATES TOO
-        window.dispatchEvent(new CustomEvent('userProfileUpdated', { 
-          detail: nextUser 
-        }));
-      }
-    }
+        profileImageUrl: profileForm.profileImageUrl,
+      });
 
-    showSuccess("Profile updated successfully.");
-    
-    setProfileForm((prev) => ({
-      ...prev,
-      profileImageFile: null,
-    }));
-    
-  } catch (err) {
-    console.error("Profile update error:", err);
-    setError(err.message || "Failed to update profile");
-  } finally {
-    setSavingProfile(false);
-    setUploadingImage(false);
-  }
-};
+      const nextUser = res.data?.user;
+
+      setUser(nextUser);
+      updateStoredUser(nextUser);
+      syncUserToForms(nextUser);
+
+      showSuccess("Profile updated successfully.");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to update profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
@@ -479,33 +347,27 @@ useEffect(() => {
           <p className="customer-profile-title">Profile</p>
 
           <div className="customer-profile-avatar-wrap">
-              {user?.profileImageUrl ? (
-                <img
-                  className="customer-profile-avatar-img"
-                  src={user.profileImageUrl}
-                  alt="Profile"
-                />
-              ) : profileForm.profileImageUrl ? (
+            {profileForm.profileImageUrl ? (
               <img
                 className="customer-profile-avatar-img"
                 src={profileForm.profileImageUrl}
-                alt="Profile preview"
+                alt="Profile"
               />
             ) : (
-            <div className="customer-profile-avatar-fallback">
-              {avatarInitial}
-            </div>
-        )}
+              <div className="customer-profile-avatar-fallback">
+                {avatarInitial}
+              </div>
+            )}
 
-        <label className="customer-profile-upload-btn">
-          Upload Photo
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={handleProfileImageChange}
-          />
-        </label>
-      </div>
+            <label className="customer-profile-upload-btn">
+            Upload Photo
+              <input
+               type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleProfileImageChange}
+              />
+            </label>
+          </div>
 
           <h1>{displayName}</h1>
           <p>{displayEmail}</p>
