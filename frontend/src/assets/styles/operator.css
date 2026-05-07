@@ -1,3 +1,52 @@
+/*Operator Logo*/
+.operator-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.operator-brand-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+
+  border-radius: 18px;
+  background: white;
+
+  padding: 6px;
+
+  flex-shrink: 0;
+}
+
+.operator-brand strong {
+  display: block;
+  font-size: 1.7rem;
+  line-height: 1.1;
+  color: #0f172a;
+}
+
+.operator-brand span {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+/*Notification*/
+.operator-notification-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/*Avatar*/
+.operator-avatar-img {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .operator-shell {
   min-height: 100vh;
   display: flex;

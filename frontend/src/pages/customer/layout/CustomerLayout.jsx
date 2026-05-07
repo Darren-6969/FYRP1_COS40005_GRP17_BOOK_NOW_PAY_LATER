@@ -26,7 +26,25 @@ function clearSession() {
 export default function CustomerLayout() {
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
+
   const [openNotifications, setOpenNotifications] = useState(false);
+
+  const closeTimerRef = useRef(null);
+
+  const openNotificationMenu = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+    }
+
+    setOpenNotifications(true);
+  };
+
+  const closeNotificationMenu = () => {
+    closeTimerRef.current = setTimeout(() => {
+      setOpenNotifications(false);
+    }, 180);
+  };
+
   const user = getStoredUser();
   const displayName = user?.name || user?.fullName || "Customer";
   const avatarInitial = displayName?.[0]?.toUpperCase() || "C";
@@ -58,6 +76,7 @@ export default function CustomerLayout() {
     clearSession();
     navigate("/login", { replace: true });
   };
+  
 
   return (
     <div className="customer-shell">
@@ -69,75 +88,96 @@ export default function CustomerLayout() {
             <h2>Customer Portal</h2>
           </div>
 
-          <div className="customer-topbar-actions" ref={dropdownRef}>
-            <button
-              type="button"
-              className="customer-notification-trigger"
-              onClick={() => setOpenNotifications((prev) => !prev)}
-              aria-label="Open notifications"
-            >
-              <span className="customer-bell-icon">🔔</span>
-              {unreadCount > 0 && <span className="portal-notification-badge">{unreadCount}</span>}
-            </button>
+          <div className="customer-topbar-actions">
+    <div
+      className="customer-notification-wrapper"
+      ref={dropdownRef}
+      onMouseEnter={openNotificationMenu}
+      onMouseLeave={closeNotificationMenu}
+    >
+    <button
+      type="button"
+      className="customer-notification-trigger"
+      onClick={() => navigate("/customer/notifications")}
+      aria-label="Open notifications"
+    >
+      <span className="customer-bell-icon">🔔</span>
+      {unreadCount > 0 && (
+        <span className="portal-notification-badge">{unreadCount}</span>
+      )}
+    </button>
 
-            {openNotifications && (
-              <div className="portal-notification-dropdown customer-notification-dropdown">
-                <div className="portal-dropdown-head">
-                  <div>
-                    <strong>Notifications</strong>
-                    <p>
-                      {unreadCount} unread update{unreadCount === 1 ? "" : "s"}
-                      {" · "}
-                      {socketConnected ? "Live" : "Syncing"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={markAllRead}
-                    disabled={!unreadCount}
-                  >
-                    Mark all read
-                  </button>
-                </div>
+    {openNotifications && (
+      <div className="portal-notification-dropdown customer-notification-dropdown">
+        <div className="portal-dropdown-head">
+          <div>
+            <strong>Notifications</strong>
+            <p>
+              {unreadCount} unread update{unreadCount === 1 ? "" : "s"}
+              {" · "}
+              {socketConnected ? "Live" : "Syncing"}
+            </p>
+          </div>
 
-                {loading && <div className="portal-dropdown-empty">Loading notifications...</div>}
-                {error && <div className="portal-dropdown-empty portal-dropdown-error">{error}</div>}
+          <button type="button" onClick={markAllRead} disabled={!unreadCount}>
+            Mark all read
+          </button>
+        </div>
 
-                {!loading && !error && recentNotifications.length > 0 && (
-                  <div className="portal-dropdown-list">
-                    {recentNotifications.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={`portal-dropdown-item ${!item.isRead ? "unread" : ""}`}
-                        onClick={() => markRead(item.id)}
-                      >
-                        <span className="portal-dropdown-dot" />
-                        <span>
-                          <strong>{item.title || item.type || "Notification"}</strong>
-                          <small>{item.message || item.description || "Booking update received."}</small>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+        {loading && (
+          <div className="portal-dropdown-empty">Loading notifications...</div>
+        )}
 
-                {!loading && !error && !recentNotifications.length && (
-                  <div className="portal-dropdown-empty">No notifications yet.</div>
-                )}
+        {error && (
+          <div className="portal-dropdown-empty portal-dropdown-error">
+            {error}
+          </div>
+        )}
 
-                <Link
-                  className="portal-dropdown-footer"
-                  to="/customer/notifications"
-                  onClick={() => setOpenNotifications(false)}
-                >
-                  View all notifications
-                </Link>
-              </div>
-            )}
+        {!loading && !error && recentNotifications.length > 0 && (
+          <div className="portal-dropdown-list">
+            {recentNotifications.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`portal-dropdown-item ${!item.isRead ? "unread" : ""}`}
+                onClick={() => markRead(item.id)}
+              >
+                <span className="portal-dropdown-dot" />
+                <span>
+                  <strong>{item.title || item.type || "Notification"}</strong>
+                  <small>
+                    {item.message ||
+                      item.description ||
+                      "Booking update received."}
+                  </small>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!loading && !error && !recentNotifications.length && (
+          <div className="portal-dropdown-empty">No notifications yet.</div>
+        )}
+
+        <Link className="portal-dropdown-footer" to="/customer/notifications">
+          View all notifications
+        </Link>
+      </div>
+    )}
+  </div>
 
             <Link className="customer-profile-chip" to="/customer/profile">
+            {user?.profileImageUrl ? (
+              <img
+                src={user.profileImageUrl}
+                alt="Profile"
+                className="customer-avatar-img"
+              />
+            ) : (
               <span className="customer-avatar">{avatarInitial}</span>
+            )}
               <span className="customer-profile-chip-text">
                 <strong>{displayName}</strong>
                 <small>Customer</small>

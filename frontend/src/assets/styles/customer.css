@@ -1,3 +1,55 @@
+/*Customer Logo*/
+.customer-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.customer-brand-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: 18px;
+  background: white;
+  padding: 6px;
+  flex-shrink: 0;
+}
+
+.customer-brand strong {
+  display: block;
+  font-size: 1.7rem;
+  line-height: 1.1;
+  color: #0f172a;
+}
+
+.customer-brand span {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+/*Customer Right Corner Avatar*/
+.customer-avatar-img {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.customer-notification-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.customer-notification-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+}
+
 .customer-shell {
   min-height: 100vh;
   display: flex;
@@ -204,9 +256,7 @@
 .customer-topbar-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  position: relative;
-  z-index: 220;
+  gap: 16px;
 }
 
 .customer-eyebrow {

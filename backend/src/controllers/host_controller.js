@@ -37,6 +37,10 @@ function frontendUrl(path) {
   return `${baseUrl}${path}`;
 }
 
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
 function buildIntentUrls(intent) {
   const registerPath =
     `/register?hostToken=${encodeURIComponent(intent.token)}` +
@@ -58,7 +62,7 @@ async function buildIntentResponse(intent) {
 
   const existingCustomer = await prisma.user.findUnique({
     where: {
-      email: intent.customerEmail,
+      email: normalizeEmail(intent.customerEmail),
     },
     select: {
       id: true,
@@ -118,11 +122,13 @@ export async function createHostBookingIntent(req, res, next) {
       totalAmount,
     } = req.body;
 
+    const safeCustomerEmail = normalizeEmail(customerEmail);
+
     if (
       !operatorCode ||
       !hostBookingRef ||
       !customerName ||
-      !customerEmail ||
+      !safeCustomerEmail ||
       !serviceName ||
       totalAmount === undefined
     ) {
@@ -150,6 +156,11 @@ export async function createHostBookingIntent(req, res, next) {
       });
     }
 
+    /**
+     * If GoCar submitted the same booking before and the real BNPL booking
+     * already exists, send the customer to login first, then redirect them
+     * to the BNPL booking details page.
+     */
     const existingBooking = await prisma.booking.findFirst({
       where: {
         hostBookingRef,
@@ -161,24 +172,30 @@ export async function createHostBookingIntent(req, res, next) {
     });
 
     if (existingBooking) {
-      const checkoutPath = `/customer/checkout/${existingBooking.id}`;
+      const bookingDetailPath = `/customer/bookings/${existingBooking.id}`;
+
       const loginUrl = frontendUrl(
-        `/login?redirect=${encodeURIComponent(checkoutPath)}&email=${encodeURIComponent(
-          existingBooking.customer.email
-        )}`
+        `/login?redirect=${encodeURIComponent(
+          bookingDetailPath
+        )}&email=${encodeURIComponent(existingBooking.customer.email)}`
       );
 
       return res.status(200).json({
         message: "Booking already exists",
         bookingId: existingBooking.id,
         bookingCode: existingBooking.bookingCode,
-        checkoutUrl: frontendUrl(checkoutPath),
+        bookingDetailUrl: frontendUrl(bookingDetailPath),
+        checkoutUrl: frontendUrl(`/customer/checkout/${existingBooking.id}`),
         loginUrl,
         redirectUrl: loginUrl,
         suggestedAction: "LOGIN",
       });
     }
 
+    /**
+     * If there is already a pending unclaimed intent, reuse it instead of
+     * creating duplicate pending intents.
+     */
     const existingIntent = await prisma.hostBookingIntent.findFirst({
       where: {
         hostBookingRef,
@@ -211,8 +228,8 @@ export async function createHostBookingIntent(req, res, next) {
         operatorId: operator.id,
         operatorCode,
         hostBookingRef,
-        customerName,
-        customerEmail,
+        customerName: String(customerName).trim(),
+        customerEmail: safeCustomerEmail,
         serviceName,
         serviceType: serviceType || null,
         bookingDate: bookingDate ? new Date(bookingDate) : new Date(),
@@ -255,6 +272,10 @@ export async function claimHostBookingIntent(req, res, next) {
       });
     }
 
+    /**
+     * If the intent was already claimed by the same logged-in customer,
+     * send them to booking details, not checkout.
+     */
     if (intent.status === "CLAIMED" && intent.claimedBookingId) {
       const booking = await prisma.booking.findFirst({
         where: {
@@ -273,6 +294,7 @@ export async function claimHostBookingIntent(req, res, next) {
         message: "Booking intent already claimed",
         bookingId: booking.id,
         bookingCode: booking.bookingCode,
+        bookingDetailUrl: frontendUrl(`/customer/bookings/${booking.id}`),
         checkoutUrl: frontendUrl(`/customer/checkout/${booking.id}`),
       });
     }
@@ -290,13 +312,12 @@ export async function claimHostBookingIntent(req, res, next) {
       });
 
       return res.status(400).json({
-        message: "Booking intent has expired. Please submit the GoCar booking again.",
+        message:
+          "Booking intent has expired. Please submit the GoCar booking again.",
       });
     }
 
-    if (
-      intent.customerEmail.toLowerCase() !== String(req.user.email).toLowerCase()
-    ) {
+    if (normalizeEmail(intent.customerEmail) !== normalizeEmail(req.user.email)) {
       return res.status(403).json({
         message:
           "This booking was created for a different email address. Please login using the same email used in GoCar booking.",

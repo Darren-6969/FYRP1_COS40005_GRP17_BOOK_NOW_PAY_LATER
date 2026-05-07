@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import logo from "../../../assets/logo.png";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -41,7 +42,11 @@ export default function OperatorSidebar({
     <aside className={`operator-sidebar ${isMobileOpen ? "mobile-open" : ""}`}>
       <div>
         <div className="operator-brand">
-          <div className="operator-brand-icon">BNPL</div>
+          <img
+            src={logo}
+            alt="BNPL Logo"
+            className="operator-brand-logo"
+          />
 
           <div>
             <strong>BNPL</strong>
@@ -79,12 +84,11 @@ export default function OperatorSidebar({
       <div>
         <button
           type="button"
-          className="operator-logout-btn"
+          className="customer-sidebar-logout"
           onClick={onLogout}
-        >
-          <span className="operator-nav-icon">
+          >
           <LogOut size={20} />
-          </span>
+          <span>LOGOUT</span>
         </button>
       </div>
     </aside>

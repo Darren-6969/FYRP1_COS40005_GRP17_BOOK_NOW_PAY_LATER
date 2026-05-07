@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import logo from "../../../assets/logo.png";
 import {
   LayoutDashboard,
   ListOrdered,
@@ -28,6 +29,7 @@ const links = [
   { to: "/master/system-settings", label: "System Settings", icon: Settings },
   { to: "/master/email-logs", label: "Email Logs", icon: Mail },
   { to: "/master/system-logs", label: "System Logs", icon: FileText },
+  { to: "/master/help", label: "Help & Support", icon: HelpCircle },
 ];
 
 export default function MasterSidebar({
@@ -45,12 +47,16 @@ export default function MasterSidebar({
     <aside className={`master-sidebar ${isMobileOpen ? "mobile-open" : ""}`}>
       <div>
         <div className="master-brand">
-          <div className="master-brand-icon">BNPL</div>
+          <img
+            src={logo}
+            alt="BNPL Logo"
+            className="master-brand-logo"
+          />
 
-          <div>
+          <div className="master-brand-text">
             <strong>BNPL</strong>
             <span>Master Seller Console</span>
-          </div>
+        </div>
 
           <button
             type="button"
@@ -75,7 +81,9 @@ export default function MasterSidebar({
                 }
                 onClick={handleNavClick}
               >
-                <Icon size={17} />
+                <span className="master-nav-icon">
+                  <Icon size={20} />
+                </span>
                 <span>{item.label}</span>
               </NavLink>
             );
@@ -83,16 +91,13 @@ export default function MasterSidebar({
         </nav>
       </div>
 
-      <div className="master-sidebar-bottom">
-        <button type="button" className="master-help-btn">
-          <HelpCircle size={17} />
-          Help & Support
-        </button>
-
-        <button type="button" className="master-logout-btn" onClick={onLogout}>
-          <LogOut size={17} />
-          Logout
-        </button>
+      <div>
+      <button type="button" className="master-logout-btn" onClick={onLogout}>
+        <span className="master-nav-icon">
+        <LogOut size={20} />
+        </span>
+        <span>LOGOUT</span>
+      </button>
       </div>
     </aside>
   );

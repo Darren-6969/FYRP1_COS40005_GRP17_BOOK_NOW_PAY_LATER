@@ -25,7 +25,7 @@ export function getSocket() {
       transports: ["websocket", "polling"],
       withCredentials: true,
       autoConnect: false,
-    });
+      });
   }
 
   return socket;
@@ -38,18 +38,16 @@ export function connectUserSocket(userId) {
 
   const activeSocket = getSocket();
   if (!activeSocket) return null;
-
   if (!activeSocket.connected) {
     activeSocket.connect();
   }
 
   activeSocket.emit("join_user_room", userId);
-  return activeSocket;
+   return activeSocket;
 }
 
 export function disconnectUserSocket(userId) {
   if (!socket) return;
-
   if (userId) {
     socket.emit("leave_user_room", userId);
   }

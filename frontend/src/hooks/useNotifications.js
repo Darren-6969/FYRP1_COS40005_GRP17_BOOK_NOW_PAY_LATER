@@ -154,7 +154,7 @@ function useNotificationsWithFallback({
     };
 
     const handleNewNotification = (notification) => {
-      setNotifications((current) =>
+  setNotifications((current) =>
         mergeNotification(current, notification)
       );
 
