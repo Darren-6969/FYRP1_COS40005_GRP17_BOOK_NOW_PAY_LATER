@@ -22,25 +22,10 @@ export function getSocket() {
 
   if (!socket) {
     socket = io(getApiBaseUrl(), {
-      transports: ["polling", "websocket"],
+      transports: ["websocket", "polling"],
       withCredentials: true,
       autoConnect: false,
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-    });
-
-    socket.on("connect", () => {
-      console.log("Socket connected:", socket.id);
-    });
-
-    socket.on("connect_error", (error) => {
-      console.error("Socket connection error:", error.message);
-    });
-
-    socket.on("disconnect", (reason) => {
-      console.log("Socket disconnected:", reason);
-    });
+      });
   }
 
   return socket;
@@ -52,25 +37,17 @@ export function connectUserSocket(userId) {
   }
 
   const activeSocket = getSocket();
-
-  if (!activeSocket) {
-    return null;
-  }
-
+  if (!activeSocket) return null;
   if (!activeSocket.connected) {
     activeSocket.connect();
   }
 
   activeSocket.emit("join_user_room", userId);
-
-  return activeSocket;
+   return activeSocket;
 }
 
 export function disconnectUserSocket(userId) {
-  if (!socket) {
-    return;
-  }
-
+  if (!socket) return;
   if (userId) {
     socket.emit("leave_user_room", userId);
   }

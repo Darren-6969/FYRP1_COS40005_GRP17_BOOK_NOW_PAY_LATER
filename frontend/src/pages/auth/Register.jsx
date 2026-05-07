@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import api from "../../services/api";
+import { register } from "../../services/auth_service";
 import "../../assets/styles/global.css";
 
 export default function Register() {
@@ -38,7 +38,8 @@ export default function Register() {
     const params = new URLSearchParams();
 
     if (hostToken) params.set("hostToken", hostToken);
-    params.set("email", form.email.trim());
+    if (redirectParam) params.set("redirect", redirectParam);
+    if (form.email.trim()) params.set("email", form.email.trim());
 
     navigate(`/login?${params.toString()}`);
   };
@@ -46,8 +47,17 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!form.name.trim() || !form.email.trim() || !form.password) {
+    const name = form.name.trim();
+    const email = form.email.trim().toLowerCase();
+    const password = form.password;
+
+    if (!name || !email || !password) {
       setError("Please complete all fields.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long.");
       return;
     }
 
@@ -55,19 +65,21 @@ export default function Register() {
     setError("");
 
     try {
-      await api.post("/auth/register", {
-        name: form.name.trim(),
-        email: form.email.trim(),
-        password: form.password,
+      await register({
+        name,
+        email,
+        password,
       });
 
       const params = new URLSearchParams();
 
       if (hostToken) params.set("hostToken", hostToken);
       if (redirectParam) params.set("redirect", redirectParam);
-      params.set("email", form.email.trim());
+      params.set("email", email);
 
-      navigate(`/login?${params.toString()}`);
+      navigate(`/login?${params.toString()}`, {
+        replace: true,
+      });
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -89,13 +101,21 @@ export default function Register() {
               <br />
               Account
             </h1>
+
             <p className="bnpl-auth-subtitle">
               Register to use Book Now Pay Later.
             </p>
 
-            {redirectParam && (
+            {hostToken && (
               <p className="bnpl-auth-subtitle">
-                After registration, please login to continue your BNPL payment.
+                This account must use the same email from your GoCar booking.
+                After registration, please login to claim your booking.
+              </p>
+            )}
+
+            {redirectParam && !hostToken && (
+              <p className="bnpl-auth-subtitle">
+                After registration, please login to continue your BNPL booking.
               </p>
             )}
 

@@ -63,14 +63,18 @@ function extractUser(data) {
 }
 
 function isSafeRedirectPath(path) {
-  return typeof path === "string" && path.startsWith("/") && !path.startsWith("//");
+  return (
+    typeof path === "string" &&
+    path.startsWith("/") &&
+    !path.startsWith("//")
+  );
 }
 
 export default function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const hostToken = searchParams.get("hostToken");
 
+  const hostToken = searchParams.get("hostToken");
   const redirectParam = searchParams.get("redirect");
   const emailParam = searchParams.get("email");
 
@@ -130,8 +134,29 @@ export default function Login() {
 
     if (hostToken) params.set("hostToken", hostToken);
     if (form.email.trim()) params.set("email", form.email.trim());
+    if (redirectParam) params.set("redirect", redirectParam);
 
     navigate(`/register?${params.toString()}`);
+  };
+
+  const redirectAfterHostClaim = (claimData) => {
+    const bookingDetailUrl = claimData?.bookingDetailUrl;
+    const bookingId = claimData?.bookingId;
+
+    if (bookingDetailUrl) {
+      window.location.href = bookingDetailUrl;
+      return true;
+    }
+
+    if (bookingId) {
+      navigate(`/customer/bookings/${bookingId}`, {
+        replace: true,
+      });
+      return true;
+    }
+
+    navigate("/customer/bookings", { replace: true });
+    return true;
   };
 
   const handleSubmit = async (e) => {
@@ -194,26 +219,14 @@ export default function Login() {
         role: roleForStorage,
       });
 
+      /**
+       * Host booking flow:
+       * GoCar -> Login/Register -> claim HostBookingIntent -> Booking Details.
+       */
       if (hostToken && roleForStorage === "CUSTOMER") {
         try {
           const claimResponse = await claimHostBookingIntent(hostToken);
-          const bookingId = claimResponse.data?.bookingId;
-
-          if (bookingId) {
-            navigate(`/customer/bookings/${bookingId}`, {
-              replace: true,
-            });
-            return;
-          }
-
-          const bookingDetailUrl = claimResponse.data?.bookingDetailUrl;
-
-          if (bookingDetailUrl) {
-            window.location.href = bookingDetailUrl;
-            return;
-          }
-
-          navigate("/customer/bookings", { replace: true });
+          redirectAfterHostClaim(claimResponse.data);
           return;
         } catch (claimErr) {
           setError(
@@ -224,6 +237,11 @@ export default function Login() {
         }
       }
 
+      /**
+       * Existing booking flow:
+       * If GoCar returns login with redirect=/customer/bookings/:id,
+       * allow that safe redirect.
+       */
       if (
         redirectParam &&
         isSafeRedirectPath(redirectParam) &&
@@ -257,13 +275,20 @@ export default function Login() {
               <br />
               Pay Later
             </h1>
+
             <p className="bnpl-auth-subtitle">
               Welcome back! Please sign in to continue.
             </p>
 
-            {redirectParam && (
+            {hostToken && (
               <p className="bnpl-auth-subtitle">
-                Please login to continue your BNPL payment.
+                Please login with the same email used in your GoCar booking.
+              </p>
+            )}
+
+            {redirectParam && !hostToken && (
+              <p className="bnpl-auth-subtitle">
+                Please login to continue your BNPL booking.
               </p>
             )}
 

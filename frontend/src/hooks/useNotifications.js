@@ -154,9 +154,7 @@ function useNotificationsWithFallback({
     };
 
     const handleNewNotification = (notification) => {
-    console.log("Realtime notification received:", notification);
-
-      setNotifications((current) =>
+  setNotifications((current) =>
         mergeNotification(current, notification)
       );
 
