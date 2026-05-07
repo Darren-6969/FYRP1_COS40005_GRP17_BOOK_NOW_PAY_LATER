@@ -308,7 +308,7 @@
 .customer-hero-card h1 {
   margin: 0;
   max-width: 720px;
-  font-size: clamp(28px, 4vw, 48px);
+  font-size: clamp(28px, 2.8vw, 40px) !important;
   line-height: 1.05;
   letter-spacing: -0.04em;
 }
@@ -2041,5 +2041,354 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+/* =========================================================
+   CUSTOMER SIDEBAR + LAYOUT 
+   
+   ========================================================= */
+
+/* ---------- Desktop Layout ---------- */
+@media (min-width: 769px) {
+  .customer-shell {
+    display: block !important;
+    min-height: 100vh !important;
+  }
+
+  .customer-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 280px !important;
+    height: 100vh !important;
+    padding: 20px 20px !important;
+    background: rgba(248, 251, 255, 0.82) !important;
+    border-right: 1px solid rgba(226, 232, 240, 0.72) !important;
+    backdrop-filter: blur(22px) !important;
+    z-index: 3000 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    overflow-y: auto !important;
+    box-shadow: 18px 0 55px rgba(15, 23, 42, 0.08) !important;
+  }
+
+  .customer-main {
+    margin-left: 280px !important;
+    width: calc(100% - 280px) !important;
+    min-height: 100vh !important;
+    padding: 28px !important;
+  }
+
+  .customer-sidebar-close,
+  .customer-sidebar-overlay,
+  .customer-mobile-menu-btn,
+  .customer-bottom-nav {
+    display: none !important;
+  }
+
+  .customer-topbar-glass {
+    padding: 18px 24px !important;
+    margin-bottom: 28px !important;
+    border-radius: 28px !important;
+  }
+
+  .customer-topbar-glass h2 {
+    font-size: 32px !important;
+  }
+}
+
+/* ---------- Sidebar Brand ---------- */
+.customer-brand {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+  margin-bottom: 36px !important;
+}
+
+.customer-brand-logo {
+  width: 72px !important;
+  height: 72px !important;
+  object-fit: contain !important;
+  background: white !important;
+  border-radius: 20px !important;
+  padding: 12px !important;
+  flex-shrink: 0 !important;
+}
+
+.customer-brand-text {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.customer-brand-text strong {
+  font-size: 31px !important;
+  font-weight: 650 !important;
+  color: #111827 !important;
+  line-height: 1 !important;
+}
+
+.customer-brand-text span {
+  margin-top: 6px !important;
+  color: #64748b !important;
+  font-size: 14px !important;
+}
+
+/* ---------- Sidebar Menu ---------- */
+.customer-nav-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  margin-top: 20px !important;
+}
+
+.customer-nav-link {
+  text-decoration: none !important;
+  color: #475569 !important;
+  font-size: 16px !important;
+  font-weight: 650 !important;
+  padding: 13px 15px !important;
+  border-radius: 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+}
+
+.customer-nav-icon {
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 14px !important;
+  background: rgba(37, 99, 235, 0.1) !important;
+  color: #475569 !important;
+  display: grid !important;
+  place-items: center !important;
+  flex-shrink: 0 !important;
+}
+
+.customer-nav-link:hover {
+  background: rgba(37, 99, 235, 0.08) !important;
+  transform: translateX(4px) !important;
+}
+
+.customer-nav-link.active {
+  background: #2563eb !important;
+  color: white !important;
+  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.3) !important;
+}
+
+.customer-nav-link.active .customer-nav-icon {
+  background: rgba(255, 255, 255, 0.18) !important;
+  color: white !important;
+}
+
+/* ---------- Logout Button ---------- */
+.customer-sidebar-logout {
+  width: 100% !important;
+  padding: 15px !important;
+  border: none !important;
+  border-radius: 999px !important;
+  background: #fee2e2 !important;
+  color: #be123c !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+  cursor: pointer !important;
+}
+
+/* ---------- Page Size Tuning ---------- */
+.customer-hero-card,
+.customer-dashboard-hero,
+.customer-glass-card,
+.customer-table-card,
+.customer-booking-card,
+.customer-empty-state {
+  border-radius: 30px !important;
+  padding: 26px !important;
+}
+
+.customer-dashboard-hero h1,
+.customer-hero-card h1 {
+  font-size: clamp(28px, 2.8vw, 40px) !important;
+  line-height: 1.1 !important;
+  max-width: 600px !important;
+}
+
+.customer-dashboard-hero p,
+.customer-hero-card p {
+  font-size: 16px !important;
+  line-height: 1.6 !important;
+  max-width: 620px !important;
+}
+
+.customer-dashboard-stats {
+  gap: 14px !important;
+}
+
+.customer-stat-card {
+  min-width: 145px !important;
+  padding: 18px !important;
+  border-radius: 24px !important;
+}
+
+.customer-stat-card strong {
+  font-size: 32px !important;
+}
+
+.customer-stat-card span {
+  font-size: 12px !important;
+}
+
+.customer-page {
+  gap: 20px !important;
+}
+
+.customer-table-card h2,
+.customer-glass-card h2 {
+  font-size: 28px !important;
+}
+
+/* ---------- Mobile Layout ---------- */
+@media (max-width: 768px) {
+  .customer-shell {
+    display: block !important;
+    min-height: 100vh !important;
+    padding-bottom: 0 !important;
+  }
+
+  .customer-main {
+    margin-left: 0 !important;
+    width: 100% !important;
+    padding: 8px !important;
+  }
+
+  .customer-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: -100% !important;
+    width: 365px !important;
+    max-width: 86vw !important;
+    height: 100vh !important;
+    padding: 20px 16px !important;
+    background: rgba(248, 251, 255, 0.82) !important;
+    border-right: 1px solid rgba(226, 232, 240, 0.72) !important;
+    backdrop-filter: blur(22px) !important;
+    z-index: 3000 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    overflow-y: auto !important;
+    transition: left 0.28s ease !important;
+    box-shadow: 12px 0 40px rgba(15, 23, 42, 0.18) !important;
+  }
+
+  .customer-sidebar.show {
+    left: 0 !important;
+  }
+
+  .customer-sidebar-close {
+    display: grid !important;
+    place-items: center !important;
+    margin-left: auto !important;
+    width: 48px !important;
+    height: 48px !important;
+    border: 1px solid #cbd8ea !important;
+    background: white !important;
+    border-radius: 16px !important;
+    color: #111827 !important;
+    cursor: pointer !important;
+  }
+
+  .customer-sidebar-overlay {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(15, 23, 42, 0.38) !important;
+    backdrop-filter: blur(8px) !important;
+    z-index: 2500 !important;
+  }
+
+  .customer-mobile-menu-btn {
+    width: 54px !important;
+    height: 54px !important;
+    border: 1px solid #d7e2f3 !important;
+    border-radius: 18px !important;
+    background: #f8fbff !important;
+    color: #1f3763 !important;
+    display: grid !important;
+    place-items: center !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+  }
+
+  .customer-bottom-nav {
+    display: none !important;
+  }
+
+  .customer-topbar-left {
+    display: flex !important;
+    align-items: center !important;
+    gap: 14px !important;
+  }
+
+  .customer-topbar-glass {
+    min-height: 174px !important;
+    align-items: flex-start !important;
+    position: relative !important;
+  }
+
+  .customer-topbar-actions {
+    position: absolute !important;
+    left: 28px !important;
+    bottom: 28px !important;
+  }
+
+  .customer-profile-chip-text {
+    display: none !important;
+  }
+
+  /* Fix customer profile right side overflow */
+  .customer-profile-shell,
+  .customer-profile-shell.no-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    grid-template-columns: 1fr !important;
+    overflow: hidden !important;
+  }
+
+  .customer-profile-content,
+  .customer-profile-content.no-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .customer-profile-sidebar {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-right: none !important;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.86) !important;
+  }
+
+  .customer-profile-tabs {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    padding: 18px 14px !important;
+  }
+
+  .customer-profile-tabs button {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  .customer-profile-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 22px 16px !important;
   }
 }

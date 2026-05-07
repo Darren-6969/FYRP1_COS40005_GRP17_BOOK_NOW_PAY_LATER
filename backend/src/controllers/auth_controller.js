@@ -83,7 +83,7 @@ async function issueTokenPair(userId, role) {
   const expiresAt    = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS);
 
   await prisma.refreshToken.create({
-    data: { tokenHash, userId, expiresAt },
+   data: { tokenHash, userId, expiresAt },
   });
 
   return { accessToken, refreshToken: plainRefresh };

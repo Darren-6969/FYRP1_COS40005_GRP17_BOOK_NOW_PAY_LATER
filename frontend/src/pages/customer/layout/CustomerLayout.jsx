@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import CustomerNavbar from "./CustomerNavbar";
 import { useCustomerNotifications } from "../../../hooks/useNotifications";
+import { Menu } from "lucide-react";
 
 function getStoredUser() {
   try {
@@ -28,7 +29,8 @@ export default function CustomerLayout() {
   const dropdownRef = useRef(null);
 
   const [openNotifications, setOpenNotifications] = useState(false);
-
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
   const closeTimerRef = useRef(null);
 
   const openNotificationMenu = () => {
@@ -79,14 +81,37 @@ export default function CustomerLayout() {
   
 
   return (
-    <div className="customer-shell">
-      <CustomerNavbar onLogout={handleLogout} />
-      <main className="customer-main">
+  <div className={`customer-shell ${mobileMenuOpen ? "customer-menu-open" : ""}`}>
+    <CustomerNavbar
+      onLogout={handleLogout}
+      mobileMenuOpen={mobileMenuOpen}
+      onCloseMenu={() => setMobileMenuOpen(false)}
+    />
+
+    {mobileMenuOpen && (
+      <div
+        className="customer-sidebar-overlay"
+        onClick={() => setMobileMenuOpen(false)}
+      />
+    )}
+
+    <main className="customer-main">
         <header className="customer-topbar-glass">
-          <div>
-            <p className="customer-eyebrow">Book Now Pay Later</p>
-            <h2>Customer Portal</h2>
-          </div>
+  <div className="customer-topbar-left">
+    <button
+      type="button"
+      className="customer-mobile-menu-btn"
+      onClick={() => setMobileMenuOpen(true)}
+      aria-label="Open customer menu"
+    >
+      <Menu size={30} />
+    </button>
+
+    <div>
+      <p className="customer-eyebrow">Book Now Pay Later</p>
+      <h2>Customer Portal</h2>
+    </div>
+  </div>
 
           <div className="customer-topbar-actions">
     <div
@@ -185,7 +210,7 @@ export default function CustomerLayout() {
             </Link>
           </div>
         </header>
-        <Outlet />
+        <Outlet />  
       </main>
     </div>
   );
