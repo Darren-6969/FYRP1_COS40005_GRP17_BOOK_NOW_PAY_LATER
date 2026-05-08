@@ -2046,7 +2046,6 @@
 
 /* =========================================================
    CUSTOMER SIDEBAR + LAYOUT 
-   
    ========================================================= */
 
 /* ---------- Desktop Layout ---------- */
@@ -2252,7 +2251,7 @@
 }
 
 /* ---------- Mobile Layout ---------- */
-@media (max-width: 768px) {
+@media (max-width: 860px) {
   .customer-shell {
     display: block !important;
     min-height: 100vh !important;
