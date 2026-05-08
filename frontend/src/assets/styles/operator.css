@@ -1966,3 +1966,11 @@
     display: block;
   }
 }
+
+/* Eyes Description for Dashboard*/
+.operator-metric-info-wrap:hover .operator-metric-tooltip {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateX(-50%) translateY(4px) !important;
+}
+

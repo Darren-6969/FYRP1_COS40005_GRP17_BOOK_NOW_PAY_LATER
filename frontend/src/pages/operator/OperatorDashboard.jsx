@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Eye } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, Legend, ComposedChart, BarChart, Bar
@@ -19,6 +20,25 @@ export default function OperatorDashboard() {
   const [forecastData, setForecastData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const MetricTitle = ({ title, description }) => (
+  <div style={styles.metricTitleRow}>
+    <span style={styles.metricTitleText}>{title}</span>
+
+    <span
+      className="operator-metric-info-wrap"
+      style={styles.metricInfoWrap}
+    >
+      <Eye size={14} />
+      <span
+        className="operator-metric-tooltip"
+        style={styles.metricTooltip}
+      >
+        {description}
+      </span>
+    </span>
+  </div>
+);
 
   const loadDashboard = async () => {
     try {
@@ -44,6 +64,8 @@ export default function OperatorDashboard() {
   useEffect(() => {
     loadDashboard();
   }, []);
+
+
 
   // ========== PREPARE FORECAST CHART DATA ==========
   const prepareForecastData = () => {
@@ -130,13 +152,66 @@ export default function OperatorDashboard() {
       marginBottom: '32px'
     },
     metricCard: {
-      background: 'white',
-      border: '1px solid #e5e7eb',
-      borderRadius: '12px',
-      padding: '16px',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+       background: 'white',
+       border: '1px solid #e5e7eb',
+       borderRadius: '12px',
+       padding: '16px',
+       boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+       position: 'relative',
+       overflow: 'visible',
     },
+
     metricTitle: { fontSize: '13px', color: '#6b7280', marginBottom: '8px' },
+    metricTitleRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        position: 'relative',
+        marginBottom: '8px',
+    },
+
+    metricTitleText: {
+        fontSize: '13px',
+        color: '#6b7280',
+        fontWeight: 600,
+    },
+
+    metricInfoWrap: {
+        position: 'relative',
+      width: '20px',
+      height: '20px',
+      borderRadius: '50%',
+      background: 'rgba(37, 99, 235, 0.1)',
+      color: '#64748b',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      flexShrink: 0,
+    },
+
+    metricTooltip: {
+      position: 'absolute',
+      top: '26px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      minWidth: '220px',
+      maxWidth: '260px',
+      padding: '10px 12px',
+      borderRadius: '12px',
+      background: 'rgba(15, 23, 42, 0.96)',
+      color: '#ffffff',
+      fontSize: '12px',
+      lineHeight: 1.45,
+      fontWeight: 600,
+      textAlign: 'left',
+      boxShadow: '0 14px 35px rgba(15, 23, 42, 0.22)',
+      zIndex: 9999,
+      opacity: 0,
+      visibility: 'hidden',
+      pointerEvents: 'none',
+    },
+
     metricValue: { fontSize: '28px', fontWeight: '700', color: '#1f2937' },
     metricSub: { fontSize: '11px', color: '#9ca3af', marginTop: '4px' },
     
@@ -301,33 +376,52 @@ export default function OperatorDashboard() {
       </div>
 
       {/* 5 Metrics */}
-      <div style={{ ...styles.responsiveMetricGrid, gridTemplateColumns: metricColumns }}>
-        <div style={styles.metricCard}>
-          <div style={styles.metricTitle}>Total Bookings</div>
-          <div style={styles.metricValue}>{summary?.totalBookings || 0}</div>
-          <div style={styles.metricSub}>Live backend data</div>
-        </div>
-        <div style={styles.metricCard}>
-          <div style={styles.metricTitle}>Pending Requests</div>
-          <div style={styles.metricValue}>{summary?.pendingRequests || 0}</div>
-          <div style={styles.metricSub}>Awaiting approval</div>
-        </div>
-        <div style={styles.metricCard}>
-          <div style={styles.metricTitle}>Payment Pending</div>
-          <div style={styles.metricValue}>{summary?.paymentPending || 0}</div>
-          <div style={styles.metricSub}>Awaiting payment</div>
-        </div>
-        <div style={styles.metricCard}>
-          <div style={styles.metricTitle}>Paid Bookings</div>
-          <div style={styles.metricValue}>{summary?.paidBookings || 0}</div>
-          <div style={styles.metricSub}>Completed</div>
-        </div>
-        <div style={styles.metricCard}>
-          <div style={styles.metricTitle}>Expired</div>
-          <div style={styles.metricValue}>{summary?.expiredBookings || 0}</div>
-          <div style={styles.metricSub}>Overdue/Cancelled</div>
-        </div>
-      </div>
+<div style={{ ...styles.responsiveMetricGrid, gridTemplateColumns: metricColumns }}>
+  <div style={styles.metricCard}>
+    <MetricTitle
+      title="Total Bookings"
+      description="Total number of bookings recorded in the system, including pending, paid, and expired bookings."
+    />
+    <div style={styles.metricValue}>{summary?.totalBookings || 0}</div>
+    <div style={styles.metricSub}>Live backend data</div>
+  </div>
+
+  <div style={styles.metricCard}>
+    <MetricTitle
+      title="Pending Requests"
+      description="Bookings submitted by customers that are waiting for operator review or approval."
+    />
+    <div style={styles.metricValue}>{summary?.pendingRequests || 0}</div>
+    <div style={styles.metricSub}>Awaiting approval</div>
+  </div>
+
+  <div style={styles.metricCard}>
+    <MetricTitle
+      title="Payment Pending"
+      description="Approved bookings where the customer has not completed payment yet."
+    />
+    <div style={styles.metricValue}>{summary?.paymentPending || 0}</div>
+    <div style={styles.metricSub}>Awaiting payment</div>
+  </div>
+
+  <div style={styles.metricCard}>
+    <MetricTitle
+      title="Paid Bookings"
+      description="Bookings that have been successfully paid and confirmed."
+    />
+    <div style={styles.metricValue}>{summary?.paidBookings || 0}</div>
+    <div style={styles.metricSub}>Completed</div>
+  </div>
+
+  <div style={styles.metricCard}>
+    <MetricTitle
+      title="Expired"
+      description="Bookings that are overdue, cancelled, expired, or no longer valid."
+    />
+    <div style={styles.metricValue}>{summary?.expiredBookings || 0}</div>
+    <div style={styles.metricSub}>Overdue/Cancelled</div>
+  </div>
+</div>
 
       {/* SARIMA Forecast Section */}
       {forecastData?.demandForecast?.length > 0 && (
