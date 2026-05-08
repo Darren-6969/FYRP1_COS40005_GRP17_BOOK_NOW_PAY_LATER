@@ -371,13 +371,16 @@ export default function Dashboard() {
         <ResponsiveContainer width="100%" height={380}>
           <ComposedChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis 
-              dataKey="date" 
-              tick={{ fontSize: 11, fill: '#6b7280' }}
-              axisLine={{ stroke: '#e5e7eb' }}
-              tickLine={false}
-              interval={Math.floor(chartData.length / 10)}
-            />
+            <XAxis
+  dataKey="date"
+  tick={{ fontSize: 10, fill: "#6b7280" }}
+  axisLine={{ stroke: "#e5e7eb" }}
+  tickLine={false}
+  angle={-45}
+  textAnchor="end"
+  height={75}
+  interval={5}
+/>
             <YAxis 
               tick={{ fontSize: 11, fill: '#6b7280' }}
               axisLine={{ stroke: '#e5e7eb' }}
