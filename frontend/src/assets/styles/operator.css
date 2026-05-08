@@ -1593,14 +1593,10 @@
     padding: 10px;
   }
 
-  @media (max-width: 860px) {
   .operator-topbar {
     border-radius: 22px;
     padding: 14px;
-    min-height: 82px;
-    align-items: flex-start;
   }
-}
 
   .operator-topbar-title {
     gap: 10px;
@@ -1951,4 +1947,22 @@
 .operator-help-card p {
   color: #475569;
   font-size: 1.05rem;
+}
+
+/* Menu Bar on Mobile View*/
+@media (max-width: 860px) {
+  .operator-topbar-title {
+    align-items: center;
+  }
+
+  .operator-menu-toggle {
+    display: inline-grid;
+    place-items: center;
+    padding: 0;
+    line-height: 1;
+  }
+
+  .operator-menu-toggle svg {
+    display: block;
+  }
 }
