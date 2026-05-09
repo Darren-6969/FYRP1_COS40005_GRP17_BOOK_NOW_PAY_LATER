@@ -48,6 +48,72 @@ function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
+function firstPresent(...values) {
+  return values.find(
+    (value) => value !== undefined && value !== null && String(value).trim() !== ""
+  );
+}
+
+function combineDateAndTime(dateValue, timeValue) {
+  if (!dateValue || !timeValue) return null;
+
+  const date = String(dateValue).trim();
+  let time = String(timeValue).trim();
+
+  const pmMatch = time.match(/^(\d{1,2}):(\d{2})\s*PM$/i);
+  const amMatch = time.match(/^(\d{1,2}):(\d{2})\s*AM$/i);
+
+  if (pmMatch) {
+    let hour = Number(pmMatch[1]);
+    const minute = pmMatch[2];
+    if (hour !== 12) hour += 12;
+    time = `${String(hour).padStart(2, "0")}:${minute}`;
+  }
+
+  if (amMatch) {
+    let hour = Number(amMatch[1]);
+    const minute = amMatch[2];
+    if (hour === 12) hour = 0;
+    time = `${String(hour).padStart(2, "0")}:${minute}`;
+  }
+
+  return `${date}T${time}:00`;
+}
+
+function resolveHostDateTime({
+  datetime,
+  date,
+  time,
+  fieldName,
+  required = false,
+}) {
+  const combined = firstPresent(
+    datetime,
+    combineDateAndTime(date, time),
+    date
+  );
+
+  if (!combined) {
+    if (required) {
+      const error = new Error(`${fieldName} is required`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    return null;
+  }
+
+  if (!hasTimeComponent(combined)) {
+    const error = new Error(
+      `${fieldName} must include time. Example: 2026-05-21T09:00:00`
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return parseMalaysiaLocalDateTime(combined);
+}
+
 function buildIntentUrls(intent) {
   const registerPath =
     `/register?hostToken=${encodeURIComponent(intent.token)}` +
@@ -123,8 +189,24 @@ export async function createHostBookingIntent(req, res, next) {
       serviceName,
       serviceType,
       bookingDate,
+
       pickupDate,
+      pickupTime,
+      pickupDateTime,
+      checkInDate,
+      checkInTime,
+      checkInDateTime,
+
       returnDate,
+      returnTime,
+      returnDateTime,
+      checkOutDate,
+      checkOutTime,
+      checkOutDateTime,
+      dropoffDate,
+      dropoffTime,
+      dropoffDateTime,
+
       location,
       totalAmount,
     } = req.body;
@@ -244,16 +326,24 @@ export async function createHostBookingIntent(req, res, next) {
     expiresAt.setHours(expiresAt.getHours() + 24);
 
     const submittedAt = bookingDate
-    ? parseMalaysiaLocalDateTime(bookingDate)
-    : new Date();
+      ? parseMalaysiaLocalDateTime(bookingDate)
+      : new Date();
 
-  const parsedPickupDate = pickupDate
-    ? parseMalaysiaLocalDateTime(pickupDate)
-    : null;
+    const parsedPickupDate = resolveHostDateTime({
+      datetime: firstPresent(pickupDateTime, checkInDateTime),
+      date: firstPresent(pickupDate, checkInDate),
+      time: firstPresent(pickupTime, checkInTime),
+      fieldName: "pickupDate",
+      required: true,
+    });
 
-  const parsedReturnDate = returnDate
-    ? parseMalaysiaLocalDateTime(returnDate)
-    : null;
+    const parsedReturnDate = resolveHostDateTime({
+      datetime: firstPresent(returnDateTime, checkOutDateTime, dropoffDateTime),
+      date: firstPresent(returnDate, checkOutDate, dropoffDate),
+      time: firstPresent(returnTime, checkOutTime, dropoffTime),
+      fieldName: "returnDate",
+      required: true,
+    });
 
     const intent = await prisma.hostBookingIntent.create({
       data: {

@@ -242,7 +242,7 @@ export default function Bookings() {
 
                   <td>{booking.operator?.companyName || "-"}</td>
                   <td>{booking.serviceName}</td>
-                  <td>{dateTime(booking.pickupDate || booking.bookingDate)}</td>
+                  <td>{dateTime(booking.pickupDate)}</td>
                   <td>{dateTime(booking.paymentDeadline)}</td>
                   <td>{money(booking.totalAmount)}</td>
 
@@ -311,7 +311,7 @@ export default function Bookings() {
 
             <table className="table">
               <tbody>
-                <tr><td>Booking Date</td><td>{dateTime(selected.bookingDate)}</td></tr>
+                <tr><td>Booking Date</td><td>{dateTime(selected.createdAt)}</td></tr>
                 <tr><td>Pickup / Check-in</td><td>{dateTime(selected.pickupDate)}</td></tr>
                 <tr><td>Return / Check-out</td><td>{dateTime(selected.returnDate)}</td></tr>
                 <tr><td>Location</td><td>{selected.location || "-"}</td></tr>
