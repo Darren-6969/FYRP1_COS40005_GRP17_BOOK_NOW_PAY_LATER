@@ -1316,7 +1316,7 @@
   background: white;
   color: #0f172a;
   font-size: 28px;
-  font-weight: 600;
+  font-weight: 800;
   cursor: pointer;
 }
 
@@ -1403,4 +1403,13 @@
   .booking-modal {
     padding: 18px;
   }
+}
+
+.admin-formula-three {
+  grid-template-columns: repeat(3, minmax(260px, 360px)) !important;
+  justify-content: center !important;
+}
+
+.admin-formula-three > div {
+  min-height: 150px;
 }

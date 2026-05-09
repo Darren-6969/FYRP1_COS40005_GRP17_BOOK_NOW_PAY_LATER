@@ -1249,26 +1249,17 @@ export async function getOperatorSettlements(req, res, next) {
         ((customerPaid * totalStripeFeePercent) / 100 + stripeFixedFee).toFixed(2)
       );
 
-      // Merchant only bears 3% + RM1
+      // Merchant only bears 4% + RM1
       const merchantStripeFeePercent = Number(
-        process.env.MERCHANT_STRIPE_FEE_PERCENT ?? 3
+        process.env.MERCHANT_STRIPE_FEE_PERCENT ?? 4
       );
 
       const merchantStripeFee = Number(
         ((customerPaid * merchantStripeFeePercent) / 100 + stripeFixedFee).toFixed(2)
       );
 
-      // BNPL absorbs the remaining 1%
-      const bnplAbsorbedStripeFee = Number(
-        (totalStripeFee - merchantStripeFee).toFixed(2)
-      );
-
       const merchantReceives = Number(
         (customerPaid - bnplAdminFee - merchantStripeFee).toFixed(2)
-      );
-
-      const bnplNetEarned = Number(
-        (bnplAdminFee - bnplAbsorbedStripeFee).toFixed(2)
       );
 
       return {
@@ -1289,8 +1280,6 @@ export async function getOperatorSettlements(req, res, next) {
         totalStripeFee,
         merchantStripeFeePercent,
         merchantStripeFee,
-        bnplAbsorbedStripeFee,
-        bnplNetEarned,
 
         // keep this name if your frontend still uses item.stripeFee
         stripeFee: merchantStripeFee,
