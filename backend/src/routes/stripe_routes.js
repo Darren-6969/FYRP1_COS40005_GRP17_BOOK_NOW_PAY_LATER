@@ -598,11 +598,15 @@ router.post(
 
       const platformFeeCents = Math.round(totalCents * PLATFORM_FEE_PERCENT / 100);
 
+      // Destination Charges: platform fee is retained via application_fee_amount,
+      // remainder goes to the connected account automatically.
+      // No on_behalf_of — this ensures Stripe applies the platform account's fee
+      // rate (3% + RM1) instead of the connected account's default Express rate.
+      // Tradeoff: the Stripe processing fee is deducted from the platform's share.
       const paymentIntentData = destinationAccountId
         ? {
             application_fee_amount: platformFeeCents,
             transfer_data: { destination: destinationAccountId },
-            on_behalf_of: destinationAccountId,
           }
         : {};
 
