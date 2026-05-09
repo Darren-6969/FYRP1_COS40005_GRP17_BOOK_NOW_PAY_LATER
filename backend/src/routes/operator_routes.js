@@ -7,6 +7,7 @@ import {
 
   getOperatorDashboard,
   getOperatorBookings,
+  getOperatorSettlements, /*Getting Settlements for STRIPE*/
   getOperatorBookingById,
   acceptBooking,
   rejectBooking,
@@ -73,6 +74,7 @@ router.patch("/notifications/read-all", ...operatorAccess, markAllNotificationsR
 
 router.get("/reports", ...operatorAccess, getOperatorReports);
 router.get("/analytics", ...operatorAccess, getOperatorAnalytics);
+router.get("/settlements", ...operatorAccess, getOperatorSettlements); /*OPERATOR STRIPE SETTLEMENT DETAILS*/ 
 router.get("/settings", ...operatorAccess, getOperatorSettings);
 
 export default router;

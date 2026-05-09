@@ -1180,6 +1180,166 @@ export async function getOperatorPaymentVerifications(req, res, next) {
   }
 }
 
+/*Getting Operator Payment for STRIPE DETAILS*/
+export async function getOperatorSettlements(req, res, next) {
+  try {
+    if (!canAccessOperator(req)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const platformFeePercent = Number(
+      process.env.STRIPE_PLATFORM_FEE_PERCENT ?? 10
+    );
+
+    const bookings = await prisma.booking.findMany({
+      where: {
+        ...bookingWhere(req),
+        OR: [
+          { status: "PAID" },
+          { status: "COMPLETED" },
+          {
+            payment: {
+              is: {
+                status: "PAID",
+              },
+            },
+          },
+        ],
+      },
+      include: {
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        operator: {
+          select: {
+            id: true,
+            companyName: true,
+            stripeAccountId: true,
+          },
+        },
+        payment: true,
+        invoice: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    const settlements = bookings.map((booking) => {
+      const customerPaid = toNumber(booking.totalAmount);
+
+      const bnplAdminFee = Number(
+        ((customerPaid * platformFeePercent) / 100).toFixed(2)
+      );
+
+      // Total Stripe fee is 4% + RM1
+      const totalStripeFeePercent = Number(
+        process.env.STRIPE_PROCESSING_FEE_PERCENT ?? 4
+      );
+
+      const stripeFixedFee = Number(
+        process.env.STRIPE_PROCESSING_FIXED_FEE ?? 1
+      );
+
+      const totalStripeFee = Number(
+        ((customerPaid * totalStripeFeePercent) / 100 + stripeFixedFee).toFixed(2)
+      );
+
+      // Merchant only bears 3% + RM1
+      const merchantStripeFeePercent = Number(
+        process.env.MERCHANT_STRIPE_FEE_PERCENT ?? 3
+      );
+
+      const merchantStripeFee = Number(
+        ((customerPaid * merchantStripeFeePercent) / 100 + stripeFixedFee).toFixed(2)
+      );
+
+      // BNPL absorbs the remaining 1%
+      const bnplAbsorbedStripeFee = Number(
+        (totalStripeFee - merchantStripeFee).toFixed(2)
+      );
+
+      const merchantReceives = Number(
+        (customerPaid - bnplAdminFee - merchantStripeFee).toFixed(2)
+      );
+
+      const bnplNetEarned = Number(
+        (bnplAdminFee - bnplAbsorbedStripeFee).toFixed(2)
+      );
+
+      return {
+        bookingId: booking.id,
+        bookingCode:
+          booking.bookingCode || `BNPL-${String(booking.id).padStart(4, "0")}`,
+        serviceName: booking.serviceName,
+
+        customerName: booking.customer?.name || "Customer",
+        customerEmail: booking.customer?.email || null,
+
+        operatorName: booking.operator?.companyName || "Merchant",
+
+        customerPaid,
+        platformFeePercent,
+        bnplAdminFee,
+
+        totalStripeFee,
+        merchantStripeFeePercent,
+        merchantStripeFee,
+        bnplAbsorbedStripeFee,
+        bnplNetEarned,
+
+        // keep this name if your frontend still uses item.stripeFee
+        stripeFee: merchantStripeFee,
+
+        merchantReceives,
+
+        paymentStatus: booking.payment?.status || "PAID",
+        bookingStatus: booking.status,
+        paymentMethod: booking.payment?.method || "STRIPE",
+        transactionId: booking.payment?.transactionId || null,
+        paidAt: booking.payment?.paidAt || null,
+
+        invoiceNo: booking.invoice?.invoiceNo || null,
+        };
+        })
+
+    const summary = settlements.reduce(
+      (acc, item) => {
+        acc.totalCustomerPaid += item.customerPaid;
+        acc.totalBnplAdminFee += item.bnplAdminFee;
+        acc.totalStripeFee += item.stripeFee;
+        acc.totalMerchantReceives += item.merchantReceives;
+        return acc;
+      },
+      {
+        totalCustomerPaid: 0,
+        totalBnplAdminFee: 0,
+        totalStripeFee: 0,
+        totalMerchantReceives: 0,
+      }
+    );
+
+    res.json({
+      platformFeePercent,
+      summary: {
+        totalCustomerPaid: Number(summary.totalCustomerPaid.toFixed(2)),
+        totalBnplAdminFee: Number(summary.totalBnplAdminFee.toFixed(2)),
+        totalStripeFee: Number(summary.totalStripeFee.toFixed(2)),
+        totalMerchantReceives: Number(
+          summary.totalMerchantReceives.toFixed(2)
+        ),
+      },
+      settlements,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function approvePayment(req, res, next) {
   try {
     const payment = await prisma.payment.findFirst({

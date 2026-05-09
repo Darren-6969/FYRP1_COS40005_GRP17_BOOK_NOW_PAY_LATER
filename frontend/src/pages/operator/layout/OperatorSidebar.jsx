@@ -9,6 +9,7 @@ import {
   BarChart3,
   TrendingUp,
   Bell,
+  Wallet,
   Settings,
   CircleHelp,
   LogOut,
@@ -23,6 +24,7 @@ const links = [
   { to: "/operator/reports", label: "Reports", icon: <BarChart3 size={20} /> },
   { to: "/operator/analytics", label: "Analytics & Demand Forecast", icon: <TrendingUp size={20} /> },
   { to: "/operator/notifications", label: "Notifications", icon: <Bell size={20} /> },
+  { to: "/operator/settlements", label: "Settlements", icon: <Wallet size={20} /> },
   { to: "/operator/settings", label: "Settings", icon: <Settings size={20} /> },
   { to: "/operator/help", label: "Help & Support", icon: <CircleHelp size={20} /> },
 ];

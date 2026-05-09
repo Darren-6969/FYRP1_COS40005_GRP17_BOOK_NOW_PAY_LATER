@@ -46,6 +46,7 @@ import OperatorInvoices from "./pages/operator/OperatorInvoices";
 import OperatorSalesReport from "./pages/operator/OperatorSalesReport";
 import OperatorAnalytics from "./pages/operator/OperatorAnalytics";
 import OperatorNotifications from "./pages/operator/OperatorNotifications";
+import OperatorSettlements from "./pages/operator/OperatorSettlements"; /* Operator Settlements for Stripe*/
 import OperatorSettings from "./pages/operator/OperatorSettings";
 import OperatorHelp from "./pages/operator/OperatorHelp";
 
@@ -91,6 +92,7 @@ export default function App() {
               <Route path="reports" element={<OperatorSalesReport />} />
               <Route path="analytics" element={<OperatorAnalytics />} />
               <Route path="notifications" element={<OperatorNotifications />} />
+              <Route path="settlements" element={<OperatorSettlements />} />  
               <Route path="settings" element={<OperatorSettings />} />
               <Route path="help" element={<OperatorHelp />} />
 

@@ -1974,3 +1974,47 @@
   transform: translateX(-50%) translateY(4px) !important;
 }
 
+/* Operator Settlements for STRIPE*/
+.operator-settlement-formula {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.operator-settlement-formula div {
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  display: grid;
+  gap: 8px;
+}
+
+.operator-settlement-formula svg {
+  color: #2563eb;
+}
+
+.operator-settlement-formula span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.operator-settlement-formula strong {
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+  .operator-settlement-formula {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .operator-settlement-formula {
+    grid-template-columns: 1fr;
+  }
+}
