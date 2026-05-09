@@ -199,7 +199,7 @@ function closeBookingDetails() {
             <table className="operator-table">
               <thead>
                 <tr>
-                  <th>Booking</th>
+                  <th>Booking ID</th> 
                   <th>Customer</th>
                   <th>Customer Paid</th>
                   <th>BNPL Fee</th>
