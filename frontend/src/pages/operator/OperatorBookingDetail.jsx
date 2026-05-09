@@ -149,7 +149,7 @@ export default function OperatorBookingDetail() {
             </div>
           </div>
 
-          <InfoRow label="Booking Date" value={formatOperatorDateTime(booking.bookingDate)} />
+          <InfoRow label="Booking Date" value={formatOperatorDateTime(booking.createdAt)} />
           <InfoRow label="Pickup / Check-in" value={formatOperatorDateTime(booking.pickupDate)} />
           <InfoRow label="Return / Check-out" value={formatOperatorDateTime(booking.returnDate)} />
           <InfoRow label="Location" value={booking.location || "-"} />
@@ -369,8 +369,8 @@ function AlternativeModal({ booking, onClose, onDone }) {
           <div className="operator-alt-card">
             <p>Original Booking</p>
             <strong>{booking.serviceName}</strong>
-            <span>{formatOperatorDateTime(booking.pickupDate)}</span>
-            <span>{formatOperatorDateTime(booking.returnDate)}</span>
+            <span>Pickup: {formatOperatorDateTime(booking.pickupDate)}</span>
+            <span>Return: {formatOperatorDateTime(booking.returnDate)}</span>
             <strong>{formatOperatorMoney(booking.totalAmount)}</strong>
           </div>
 

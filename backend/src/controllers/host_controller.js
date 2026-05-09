@@ -34,6 +34,11 @@ function validateAmount(totalAmount) {
   return amount;
 }
 
+function hasTimeComponent(value) {
+  if (!value) return false;
+  return /[T\s]\d{1,2}:\d{2}/.test(String(value));
+}
+
 function frontendUrl(path) {
   const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
   return `${baseUrl}${path}`;
@@ -142,6 +147,20 @@ export async function createHostBookingIntent(req, res, next) {
 
     const amount = validateAmount(totalAmount);
 
+    if (pickupDate && !hasTimeComponent(pickupDate)) {
+      return res.status(400).json({
+        message:
+          "pickupDate must include time. Example: 2026-05-11T03:00:00",
+      });
+    }
+
+    if (returnDate && !hasTimeComponent(returnDate)) {
+      return res.status(400).json({
+        message:
+          "returnDate must include time. Example: 2026-05-15T02:00:00",
+      });
+    }
+    
     const operator = await prisma.operator.findUnique({
       where: { operatorCode },
     });
@@ -224,6 +243,18 @@ export async function createHostBookingIntent(req, res, next) {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24);
 
+    const submittedAt = bookingDate
+    ? parseMalaysiaLocalDateTime(bookingDate)
+    : new Date();
+
+  const parsedPickupDate = pickupDate
+    ? parseMalaysiaLocalDateTime(pickupDate)
+    : null;
+
+  const parsedReturnDate = returnDate
+    ? parseMalaysiaLocalDateTime(returnDate)
+    : null;
+
     const intent = await prisma.hostBookingIntent.create({
       data: {
         token: generateIntentToken(),
@@ -234,17 +265,11 @@ export async function createHostBookingIntent(req, res, next) {
         customerEmail: safeCustomerEmail,
         serviceName,
         serviceType: serviceType || null,
-        bookingDate: bookingDate
-          ? parseMalaysiaLocalDateTime(bookingDate)
-          : new Date(),
-        pickupDate: pickupDate
-          ? parseMalaysiaLocalDateTime(pickupDate)
-          : null,
-        returnDate: returnDate
-          ? parseMalaysiaLocalDateTime(returnDate)
-          : null,
+        bookingDate: submittedAt,
+        pickupDate: parsedPickupDate,
+        returnDate: parsedReturnDate,
         location: location || null,
-        totalAmount: amount,
+        totalAmount: totalAmount,
         payload: req.body,
         status: "PENDING",
         expiresAt,
