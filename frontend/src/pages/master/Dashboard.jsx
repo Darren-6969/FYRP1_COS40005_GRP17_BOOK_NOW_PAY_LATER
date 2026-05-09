@@ -7,6 +7,7 @@ import {
 import { getBookings } from "../../services/booking_service";
 import { getPayments } from "../../services/payment_service";
 import { operatorService } from "../../services/operator_service";
+import { Eye } from "lucide-react";
 
 export default function Dashboard() {
   // ========== ALL HOOKS - TOP LEVEL ==========
@@ -230,15 +231,22 @@ export default function Dashboard() {
       gap: '16px',
       marginBottom: '32px'
     },
+
     metricCard: {
-      background: 'white',
-      border: '1px solid #e5e7eb',
-      borderRadius: '12px',
-      padding: '16px',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-    },
+    background: 'white',
+    border: '1px solid #e5e7eb',
+    borderRadius: '12px',
+    padding: '18px 20px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+    position: 'relative',
+    overflow: 'visible',
+    minHeight: '132px',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+
     metricTitle: { fontSize: '13px', color: '#6b7280', marginBottom: '8px' },
-    metricValue: { fontSize: '28px', fontWeight: '700', color: '#1f2937' },
+    metricValue: { fontSize: '30px', fontWeight: '700', color: '#1f2937', lineHeight: 1.1, marginTop: '12px'},
     metricSub: { fontSize: '11px', color: '#9ca3af', marginTop: '4px' },
     chartSection: {
       background: 'white',
@@ -289,6 +297,17 @@ export default function Dashboard() {
     forecastNote: { marginTop: '16px', textAlign: 'center', fontSize: '12px', color: '#6b7280', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }
   };
 
+  const MetricTitle = ({ title, description }) => (
+    <div className="master-metric-title-row">
+      <span className="master-metric-title-text">{title}</span>
+
+      <span className="master-metric-info-wrap">
+        <Eye size={14} />
+        <span className="master-metric-tooltip">{description}</span>
+      </span>
+    </div>
+  );
+
   // ========== CONDITIONAL RETURNS ==========
   if (loading) {
     return (
@@ -318,31 +337,54 @@ export default function Dashboard() {
 
       {/* ROW 1: Six Metric Cards */}
       <div style={styles.metricsGrid}>
-        <div style={styles.metricCard}>
-          <div style={styles.metricTitle}>Total Bookings</div>
-          <div style={styles.metricValue}>{totalBookings}</div>
-        </div>
-        <div style={styles.metricCard}>
-          <div style={styles.metricTitle}>Pending Bookings</div>
-          <div style={styles.metricValue}>{pendingBookings}</div>
-        </div>
-        <div style={styles.metricCard}>
-          <div style={styles.metricTitle}>Paid Bookings</div>
-          <div style={styles.metricValue}>{paidBookings}</div>
-        </div>
-        <div style={styles.metricCard}>
-          <div style={styles.metricTitle}>Cancelled/Voided</div>
-          <div style={styles.metricValue}>{cancelledBookings}</div>
-        </div>
-        <div style={styles.metricCard}>
-          <div style={styles.metricTitle}>Overdue Payments</div>
-          <div style={styles.metricValue}>{overduePayments}</div>
-        </div>
-        <div style={styles.metricCard}>
-          <div style={styles.metricTitle}>Total Revenue</div>
-          <div style={styles.metricValue}>RM {totalRevenue.toLocaleString()}</div>
-        </div>
+      <div style={styles.metricCard}>
+        <MetricTitle
+          title="Total Bookings"
+          description="Total number of bookings recorded in the BNPL system, including pending, paid, cancelled, and overdue bookings."
+        />
+        <div style={styles.metricValue}>{totalBookings}</div>
       </div>
+
+      <div style={styles.metricCard}>
+        <MetricTitle
+          title="Pending Bookings"
+          description="Bookings that are still waiting for review, approval, or payment action."
+        />
+        <div style={styles.metricValue}>{pendingBookings}</div>
+      </div>
+
+      <div style={styles.metricCard}>
+        <MetricTitle
+          title="Paid Bookings"
+          description="Bookings that have been successfully paid through the BNPL payment process."
+        />
+        <div style={styles.metricValue}>{paidBookings}</div>
+      </div>
+
+      <div style={styles.metricCard}>
+        <MetricTitle
+          title="Cancelled/Voided"
+          description="Bookings that were cancelled, rejected, voided, or no longer valid."
+        />
+        <div style={styles.metricValue}>{cancelledBookings}</div>
+      </div>
+
+      <div style={styles.metricCard}>
+        <MetricTitle
+          title="Overdue Payments"
+          description="Bookings where the customer did not complete payment before the payment deadline."
+        />
+        <div style={styles.metricValue}>{overduePayments}</div>
+      </div>
+
+      <div style={styles.metricCard}>
+        <MetricTitle
+          title="Total Revenue"
+          description="Total paid booking amount collected through the BNPL platform."
+        />
+        <div style={styles.metricValue}>RM {totalRevenue.toLocaleString()}</div>
+      </div>
+    </div>
 
       {/* ROW 2: Booking Overview & Forecast Line Chart (MOST IMPORTANT) */}
       <div style={styles.chartSection}>
@@ -372,15 +414,15 @@ export default function Dashboard() {
           <ComposedChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
-  dataKey="date"
-  tick={{ fontSize: 10, fill: "#6b7280" }}
-  axisLine={{ stroke: "#e5e7eb" }}
-  tickLine={false}
-  angle={-45}
-  textAnchor="end"
-  height={75}
-  interval={5}
-/>
+              dataKey="date"
+              tick={{ fontSize: 10, fill: "#6b7280" }}
+              axisLine={{ stroke: "#e5e7eb" }}
+              tickLine={false}
+              angle={-45}
+              textAnchor="end"
+              height={75}
+              interval={5}
+            />
             <YAxis 
               tick={{ fontSize: 11, fill: '#6b7280' }}
               axisLine={{ stroke: '#e5e7eb' }}

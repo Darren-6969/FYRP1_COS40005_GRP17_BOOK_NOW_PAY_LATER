@@ -14,6 +14,7 @@ import {
   Mail,
   LogOut,
   HelpCircle,
+  Wallet,
 } from "lucide-react";
 
 const links = [
@@ -25,6 +26,7 @@ const links = [
   { to: "/master/operators", label: "Operators", icon: Users },
   { to: "/master/sales-report", label: "Sales Report", icon: BarChart2 },
   { to: "/master/analytics", label: "Analytics & Demand Forecast", icon: TrendingUp },
+  { to: "/master/settlements", label: "Settlements", icon: Wallet },
   { to: "/master/cron-jobs", label: "Cron Jobs", icon: Clock },
   { to: "/master/system-settings", label: "System Settings", icon: Settings },
   { to: "/master/email-logs", label: "Email Logs", icon: Mail },

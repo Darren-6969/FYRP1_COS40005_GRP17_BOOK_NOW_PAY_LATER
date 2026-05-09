@@ -13,6 +13,7 @@ import Invoices from "./pages/master/Invoices";
 import Operators from "./pages/master/Operators";
 import SalesReport from "./pages/master/SalesReport";
 import MasterAnalytics from "./pages/master/MasterAnalytics";
+import MasterSettlements from "./pages/master/MasterSettlements";
 import CronJobs from "./pages/master/CronJobs";
 import SystemLogs from "./pages/master/SystemLogs";
 import SystemSettings from "./pages/master/SystemSettings";
@@ -71,6 +72,7 @@ export default function App() {
               <Route path="operators" element={<Operators />} />
               <Route path="sales-report" element={<SalesReport />} />
               <Route path="analytics" element={<MasterAnalytics />} />
+              <Route path="settlements" element={<MasterSettlements />} />
               <Route path="cron-jobs" element={<CronJobs />} />
               <Route path="system-logs" element={<SystemLogs />} />
               <Route path="system-settings" element={<SystemSettings />} />

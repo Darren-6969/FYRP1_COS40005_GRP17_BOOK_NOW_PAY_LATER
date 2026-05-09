@@ -9,7 +9,6 @@ import {
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
   "http://localhost:5000/api"
 ).replace(/\/$/, "");
 
@@ -34,14 +33,14 @@ function formatDate(value) {
   });
 }
 
-export default function OperatorSettlements() {
+export default function MasterSettlements() {
   const [data, setData] = useState({
+    platformFeePercent: 10,
     summary: null,
     settlements: [],
-    platformFeePercent: 10,
   });
   const [selectedBooking, setSelectedBooking] = useState(null);
-  const [bookingModalOpen, setBookingModalOpen] = useState(false);  
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [bookingModalLoading, setBookingModalLoading] = useState(false);
   const [bookingModalError, setBookingModalError] = useState("");
 
@@ -61,7 +60,16 @@ export default function OperatorSettlements() {
         },
       });
 
-      const json = await res.json();
+      const text = await res.text();
+
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        throw new Error(
+          `Server returned non-JSON response. Status: ${res.status}. Check API URL.`
+        );
+      }
 
       if (!res.ok) {
         throw new Error(json.message || "Failed to load settlement data");
@@ -79,13 +87,40 @@ export default function OperatorSettlements() {
     loadSettlements();
   }, []);
 
-  const summary = data.summary || {
-    totalCustomerPaid: 0,
-    totalBnplAdminFee: 0,
-    totalStripeFee: 0,
-    totalMerchantReceives: 0,
-  };
+  const settlements = data.settlements || [];
 
+  const summary = settlements.reduce(
+    (acc, item) => {
+      const customerPaid = Number(item.customerPaid || 0);
+      const bnplAdminFee = Number(item.bnplAdminFee || 0);
+
+      // BNPL bears 1% of customer paid.
+      const bnplAbsorbedStripeFee =
+        item.bnplAbsorbedStripeFee != null
+          ? Number(item.bnplAbsorbedStripeFee)
+          : Number((customerPaid * 0.01).toFixed(2));
+
+      const actualGet =
+        item.bnplNetEarned != null
+          ? Number(item.bnplNetEarned)
+          : Number((bnplAdminFee - bnplAbsorbedStripeFee).toFixed(2));
+
+      acc.totalCustomerPaid += customerPaid;
+      acc.totalBnplAdminFee += bnplAdminFee;
+      acc.totalBnplStripeFee += bnplAbsorbedStripeFee;
+      acc.totalActualGet += actualGet;
+
+      return acc;
+    },
+    {
+      totalCustomerPaid: 0,
+      totalBnplAdminFee: 0,
+      totalBnplStripeFee: 0,
+      totalActualGet: 0,
+    }
+  );
+  
+  /*Clickable Booking ID Details*/
   async function openBookingDetails(bookingId) {
   try {
     setBookingModalOpen(true);
@@ -114,34 +149,34 @@ export default function OperatorSettlements() {
       throw new Error(json.message || "Failed to load booking details");
     }
 
-    setSelectedBooking(json.booking);
-  } catch (err) {
-    setBookingModalError(err.message || "Failed to load booking details");
-  } finally {
-    setBookingModalLoading(false);
-  }
-}
+        setSelectedBooking(json.booking);
+            } catch (err) {
+        setBookingModalError(err.message || "Failed to load booking details");
+            } finally {
+        setBookingModalLoading(false);
+            }
+        }
 
-function closeBookingDetails() {
-  setBookingModalOpen(false);
-  setSelectedBooking(null);
-  setBookingModalError("");
-}
+        function closeBookingDetails() {
+        setBookingModalOpen(false);
+        setSelectedBooking(null);
+        setBookingModalError("");
+        }
 
   return (
     <div className="operator-page">
       <section className="operator-page-head">
         <div>
-          <p className="operator-eyebrow">Merchant Settlement</p>
-          <h1>Payment Breakdown</h1>
+          <p className="operator-eyebrow">Admin Settlement</p>
+          <h1>BNPL Payment Breakdown</h1>
           <p>
-            View how much customers paid, how much BNPL admin earned, and how
-            much the merchant receives from Stripe payments.
+            View total customer payments, BNPL platform commission, Stripe fee
+            absorbed by BNPL, and actual BNPL earnings.
           </p>
         </div>
 
         <span className="operator-model-badge">
-          BNPL Fee: {data.platformFeePercent}%
+          BNPL Fee: {data.platformFeePercent || 10}%
         </span>
       </section>
 
@@ -155,28 +190,28 @@ function closeBookingDetails() {
         </div>
 
         <div className="operator-metric">
-          <span>BNPL Admin Fee (10%)</span>
+          <span>BNPL Admin Fee</span>
           <strong>{formatMoney(summary.totalBnplAdminFee)}</strong>
-          <small>Platform commission</small>
+          <small>{data.platformFeePercent || 10}% platform commission</small>
         </div>
 
         <div className="operator-metric">
-          <span>Stripe Fee (3%+RM1)</span>
-          <strong>{formatMoney(summary.totalStripeFee)}</strong>
-          <small>Processing fee</small>
+          <span>Stripe</span>
+          <strong>{formatMoney(summary.totalBnplStripeFee)}</strong>
+          <small>1% absorbed by BNPL</small>
         </div>
 
         <div className="operator-metric">
-          <span>Merchant Receives</span>
-          <strong>{formatMoney(summary.totalMerchantReceives)}</strong>
-          <small>Net merchant amount</small>
+          <span>Actual Income</span>
+          <strong>{formatMoney(summary.totalActualGet)}</strong>
+          <small>BNPL fee after Stripe cost</small>
         </div>
       </section>
 
       <section className="operator-card">
         <div className="operator-card-head">
           <div>
-            <h2>Settlement Details</h2>
+            <h2>Admin Settlement Details</h2>
             <p>
               Each row is connected to a real paid booking and its Stripe
               transaction ID.
@@ -190,7 +225,7 @@ function closeBookingDetails() {
 
         {loading ? (
           <div className="operator-empty-state">Loading settlement data...</div>
-        ) : data.settlements.length === 0 ? (
+        ) : settlements.length === 0 ? (
           <div className="operator-empty-state">
             No paid Stripe bookings found yet.
           </div>
@@ -200,20 +235,37 @@ function closeBookingDetails() {
               <thead>
                 <tr>
                   <th>Booking</th>
+                  <th>Merchant</th>
                   <th>Customer</th>
                   <th>Customer Paid</th>
-                  <th>BNPL Fee</th>
-                  <th>Stripe Fee</th>
-                  <th>Merchant Receives</th>
+                  <th>BNPL Admin Fee</th>
+                  <th>Stripe</th>
+                  <th>Actual Get</th>
                   <th>Transaction</th>
                   <th>Paid At</th>
                 </tr>
               </thead>
 
               <tbody>
-                {data.settlements.map((item) => (
-                  <tr key={item.bookingId}>
-                    <td>
+                {settlements.map((item) => {
+                  const customerPaid = Number(item.customerPaid || 0);
+                  const bnplAdminFee = Number(item.bnplAdminFee || 0);
+
+                  const bnplAbsorbedStripeFee =
+                    item.bnplAbsorbedStripeFee != null
+                      ? Number(item.bnplAbsorbedStripeFee)
+                      : Number((customerPaid * 0.01).toFixed(2));
+
+                  const actualGet =
+                    item.bnplNetEarned != null
+                      ? Number(item.bnplNetEarned)
+                      : Number(
+                          (bnplAdminFee - bnplAbsorbedStripeFee).toFixed(2)
+                        );
+
+                  return (
+                    <tr key={item.bookingId}>
+                      <td>
                         <button
                             type="button"
                             className="settlement-booking-link"
@@ -222,83 +274,86 @@ function closeBookingDetails() {
                             {item.bookingCode}
                         </button>
                         <small>{item.serviceName}</small>
-                        </td>
+                      </td>
 
-                    <td>
-                      <strong>{item.customerName}</strong>
-                      <small>{item.customerEmail || "-"}</small>
-                    </td>
+                      <td>
+                        <strong>{item.operatorName || "Merchant"}</strong>
+                        <small>Merchant</small>
+                      </td>
 
-                    <td>{formatMoney(item.customerPaid)}</td>
+                      <td>
+                        <strong>{item.customerName}</strong>
+                        <small>{item.customerEmail || "-"}</small>
+                      </td>
 
-                    <td>
-                      <strong>{formatMoney(item.bnplAdminFee)}</strong>
-                      <small>{item.platformFeePercent}% platform fee</small>
-                    </td>
+                      <td>{formatMoney(customerPaid)}</td>
 
-                    <td>
-                      <strong>{formatMoney(item.stripeFee)}</strong>
-                      <small>Stripe processing</small>
-                    </td>
+                      <td>
+                        <strong>{formatMoney(bnplAdminFee)}</strong>
+                        <small>{item.platformFeePercent || 10}% platform fee</small>
+                      </td>
 
-                    <td>
-                      <strong>{formatMoney(item.merchantReceives)}</strong>
-                      <small>Net amount</small>
-                    </td>
+                      <td>
+                        <strong>{formatMoney(bnplAbsorbedStripeFee)}</strong>
+                        <small>1% absorbed by BNPL</small>
+                      </td>
 
-                    <td>
-                      <small>{item.transactionId || "-"}</small>
-                    </td>
+                      <td>
+                        <strong>{formatMoney(actualGet)}</strong>
+                        <small>BNPL actual earning</small>
+                      </td>
 
-                    <td>{formatDate(item.paidAt)}</td>
-                  </tr>
-                ))}
+                      <td>
+                        <small>{item.transactionId || "-"}</small>
+                      </td>
+
+                      <td>{formatDate(item.paidAt)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </section>
-
-      <section className="operator-card">
+            <section className="operator-card">
         <div className="operator-card-head">
-          <div>
+            <div>
             <h2>How this is calculated</h2>
-            <p>Formula used for the merchant settlement calculation.</p>
-          </div>
+            <p>Formula used for the admin settlement calculation.</p>
+            </div>
         </div>
 
         <div className="operator-settlement-formula">
-          <div>
+            <div>
             <CreditCard size={22} />
             <span>Customer Paid</span>
             <strong>Full booking amount paid through Stripe</strong>
-          </div>
+            </div>
 
-          <div>
+            <div>
             <Percent size={22} />
             <span>BNPL Admin Fee</span>
-            <strong>Customer Paid × {data.platformFeePercent}%</strong>
-          </div>
+            <strong>Customer Paid × {data.platformFeePercent || 10}%</strong>
+            </div>
 
-          <div>
+            <div>
             <Receipt size={22} />
             <span>Stripe Fee</span>
-            <strong>Processing fee from Stripe</strong>
-          </div>
+            <strong>1% absorbed by BNPL</strong>
+            </div>
 
-          <div>
+            <div>
             <Wallet size={22} />
-            <span>Merchant Receives</span>
-            <strong>Customer Paid - BNPL Fee - Stripe Fee</strong>
-          </div>
+            <span>Actual Income</span>
+            <strong>BNPL Admin Fee - Stripe absorbed fee</strong>
+            </div>
         </div>
-      </section>
-      {bookingModalOpen && (
+        </section>
+
+{bookingModalOpen && (
   <div className="booking-modal-overlay" onClick={closeBookingDetails}>
-    <div
-      className="booking-modal"
-      onClick={(e) => e.stopPropagation()}
-    >
+    <div className="booking-modal" onClick={(e) => e.stopPropagation()}>
       <div className="booking-modal-head">
         <div>
           <p className="operator-eyebrow">Booking Details</p>
@@ -343,7 +398,9 @@ function closeBookingDetails() {
             </p>
 
             <h4>{selectedBooking.serviceName}</h4>
-            <p className="booking-muted">{selectedBooking.serviceType || "Service"}</p>
+            <p className="booking-muted">
+              {selectedBooking.serviceType || "Service"}
+            </p>
 
             <div className="booking-info-list">
               <div>
@@ -397,7 +454,9 @@ function closeBookingDetails() {
           <section className="booking-modal-card">
             <h3>Customer Information</h3>
             <h4>{selectedBooking.customer?.name || "Customer"}</h4>
-            <p className="booking-muted">{selectedBooking.customer?.email || "-"}</p>
+            <p className="booking-muted">
+              {selectedBooking.customer?.email || "-"}
+            </p>
 
             <h3>Booking Information</h3>
             <div className="booking-info-list">
@@ -431,7 +490,11 @@ function closeBookingDetails() {
             <div className="booking-info-list">
               <div>
                 <span>Amount</span>
-                <strong>{formatMoney(selectedBooking.payment?.amount || selectedBooking.totalAmount)}</strong>
+                <strong>
+                  {formatMoney(
+                    selectedBooking.payment?.amount || selectedBooking.totalAmount
+                  )}
+                </strong>
               </div>
 
               <div>
@@ -458,3 +521,4 @@ function closeBookingDetails() {
     </div>
   );
 }
+
