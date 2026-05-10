@@ -52,7 +52,13 @@ function mapBooking(booking) {
     createdAt: booking.createdAt,
     updatedAt: booking.updatedAt,
     customer: booking.customer,
-    operator: booking.operator,
+    operator: booking.operator
+  ? {
+      ...booking.operator,
+      config: booking.operator.configs?.[0] || null,
+      configs: undefined,
+    }
+  : null,
 
     payment: booking.payment
       ? {
@@ -102,8 +108,24 @@ async function assertCustomerBooking(bookingId, customerId) {
       customerId,
     },
     include: {
-      customer: { select: { id: true, userCode: true, name: true, email: true } },
-      operator: true,
+      customer: {
+        select: {
+          id: true,
+          userCode: true,
+          name: true,
+          email: true,
+        },
+      },
+      operator: {
+        include: {
+          configs: {
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: 1,
+          },
+        },
+      },
       payment: true,
       receipt: true,
       invoice: true,

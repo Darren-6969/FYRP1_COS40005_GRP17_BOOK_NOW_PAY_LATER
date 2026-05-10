@@ -62,12 +62,8 @@ const DEFAULT_SETTINGS = {
 
   acceptedPaymentMethods: {
     stripe: true,
-    paypal: false,
-    duitnow: true,
-    manualTransfer: true,
+    duitnowSpay: true,
   },
-  manualPaymentInstructions:
-    "Please complete payment using the provided account details and upload your proof of payment before the deadline.",
 
   operatorReminderBeforeAutoRejectMinutes: 30,
   enableOperatorReminderAlerts: true,
@@ -393,34 +389,20 @@ const handleSave = async () => {
             <div className="operator-payment-methods">
               <CheckboxField
                 label="Stripe"
-                checked={form.acceptedPaymentMethods.stripe}
+                checked={Boolean(form.acceptedPaymentMethods.stripe)}
                 onChange={(checked) => updatePaymentMethod("stripe", checked)}
               />
 
               <CheckboxField
-                label="PayPal"
-                checked={form.acceptedPaymentMethods.paypal}
-                onChange={(checked) => updatePaymentMethod("paypal", checked)}
-              />
-
-              <CheckboxField
                 label="DuitNow / SPay"
-                checked={form.acceptedPaymentMethods.duitnow}
-                onChange={(checked) => updatePaymentMethod("duitnow", checked)}
-              />
-
-              <CheckboxField
-                label="Manual transfer"
-                checked={form.acceptedPaymentMethods.manualTransfer}
-                onChange={(checked) =>
-                  updatePaymentMethod("manualTransfer", checked)
-                }
+                checked={Boolean(form.acceptedPaymentMethods.duitnowSpay)}
+                onChange={(checked) => updatePaymentMethod("duitnowSpay", checked)}
               />
             </div>
 
-            {form.acceptedPaymentMethods.manualTransfer && (
+            {form.acceptedPaymentMethods.duitnowSpay && (
               <FormField
-                label="Manual payment instructions"
+                label="DuitNow / SPay payment instructions"
                 helper="Shown to customers when manual transfer is available."
               >
                 <textarea

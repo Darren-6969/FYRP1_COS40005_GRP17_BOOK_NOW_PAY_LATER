@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useCustomerBooking } from "../../hooks/useBookings";
 import { submitCustomerPayment } from "../../hooks/usePayments";
@@ -11,11 +11,44 @@ export default function Checkout() {
   const navigate = useNavigate();
   const { booking, loading, error } = useCustomerBooking(id);
 
-  const [method, setMethod] = useState("STRIPE");
+  const [method, setMethod] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
   const isManualPayment = method === "DUITNOW_SPAY";
+
+const acceptedPaymentMethods = useMemo(() => {
+  return booking?.operator?.config?.acceptedPaymentMethods || {};
+}, [booking]);
+
+const paymentOptions = useMemo(() => {
+  return [
+    acceptedPaymentMethods.stripe && [
+      "STRIPE",
+      "Stripe",
+      "Card payment using Stripe sandbox",
+    ],
+    acceptedPaymentMethods.duitnowSpay && [
+      "DUITNOW_SPAY",
+      "DuitNow / SPay",
+      "Scan DuitNow QR and upload receipt for verification",
+    ],
+  ].filter(Boolean);
+}, [acceptedPaymentMethods]);
+
+useEffect(() => {
+  if (!method && paymentOptions.length > 0) {
+    setMethod(paymentOptions[0][0]);
+  }
+
+  if (
+    method &&
+    paymentOptions.length > 0 &&
+    !paymentOptions.some(([value]) => value === method)
+  ) {
+    setMethod(paymentOptions[0][0]);
+  }
+}, [method, paymentOptions]);
 
   const handlePay = async () => {
     setSubmitError("");
@@ -119,14 +152,7 @@ export default function Checkout() {
           <h2>Payment Method</h2>
 
           <div className="customer-payment-options">
-            {[
-              ["STRIPE", "Stripe", "Card payment using Stripe sandbox"],
-              [
-                "DUITNOW_SPAY",
-                "DuitNow / SPay",
-                "Scan DuitNow QR and upload receipt for verification",
-              ],
-            ].map(([value, label, description]) => (
+            {paymentOptions.map(([value, label, description]) => (
               <button
                 key={value}
                 type="button"
@@ -143,6 +169,11 @@ export default function Checkout() {
                 </div>
               </button>
             ))}
+            {paymentOptions.length === 0 && (
+              <div className="customer-alert customer-alert-danger">
+                No payment method is currently available for this booking. Please contact the operator.
+              </div>
+            )}
           </div>
 
           {method === "STRIPE" && (
@@ -215,7 +246,7 @@ export default function Checkout() {
 
           <button
             className="customer-primary-btn full"
-            disabled={submitting}
+            disabled={submitting || paymentOptions.length === 0}
             onClick={handlePay}
           >
             {isManualPayment
