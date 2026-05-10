@@ -113,6 +113,29 @@ async function findOperatorBooking(req, bookingId) {
   });
 }
 
+async function autoCompletePaidBookings(req) {
+  await prisma.booking.updateMany({
+    where: {
+      ...bookingWhere(req),
+
+      status: "PAID",
+
+      payment: {
+        is: {
+          status: "PAID",
+        },
+      },
+
+      returnDate: {
+        lte: new Date(),
+      },
+    },
+    data: {
+      status: "COMPLETED",
+    },
+  });
+}
+
 async function createAuditLog({ req, action, entityType, entityId, details = {} }) {
   return prisma.auditLog.create({
     data: {
@@ -457,6 +480,8 @@ export async function getOperatorDashboard(req, res, next) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
+    await autoCompletePaidBookings(req);
+
     const where = bookingWhere(req);
 
     const [allBookings, recentBookings, notifications] = await Promise.all([
@@ -518,6 +543,8 @@ export async function getOperatorBookings(req, res, next) {
     if (!canAccessOperator(req)) {
       return res.status(403).json({ message: "Forbidden" });
     }
+
+    await autoCompletePaidBookings(req);
 
     const { status, paymentStatus, q } = req.query;
 

@@ -128,19 +128,21 @@ export default function OperatorLayout() {
               onMouseLeave={closeNotificationMenu}
             >
               <button
-                className="operator-notification-trigger"
-                type="button"
-                onClick={() => navigate("/operator/notifications")}
-                aria-label="Open notifications"
-              >
-                <span className="portal-bell-icon">🔔</span>
+  className={`operator-notification-trigger ${
+    unreadCount > 0 ? "has-unread" : ""
+  }`}
+  type="button"
+  onClick={() => navigate("/operator/notifications")}
+  aria-label="Open notifications"
+>
+  <span className="portal-bell-icon operator-bell-icon">🔔</span>
 
-                {unreadCount > 0 && (
-                  <span className="portal-notification-badge">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
+  {unreadCount > 0 && (
+    <span className="portal-notification-badge">
+      {unreadCount}
+    </span>
+  )}
+</button>
 
               {openNotifications && (
                 <div className="portal-notification-dropdown operator-notification-dropdown">

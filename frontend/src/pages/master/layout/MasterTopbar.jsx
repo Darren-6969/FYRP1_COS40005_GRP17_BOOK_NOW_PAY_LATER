@@ -90,12 +90,14 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
           onMouseLeave={closeNotificationMenu}
         >
           <button
-            className="master-notification-trigger"
+            className={`master-notification-trigger ${
+              unreadCount > 0 ? "has-unread" : ""
+            }`}
             type="button"
             onClick={() => setOpenNotifications((prev) => !prev)}
             aria-label="Open notifications"
           >
-            <Bell size={18} />
+            <Bell size={18} className="master-bell-icon" />
 
             {unreadCount > 0 && (
               <span className="portal-notification-badge">{unreadCount}</span>

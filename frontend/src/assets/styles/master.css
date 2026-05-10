@@ -1413,3 +1413,34 @@
 .admin-formula-three > div {
   min-height: 150px;
 }
+
+/* Animated Dashboard Top Right Bell*/
+.master-notification-trigger {
+  position: relative;
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  min-height: 42px !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+.master-bell-icon {
+  display: inline-block !important;
+  transform-origin: top center;
+}
+
+.master-notification-trigger.has-unread .master-bell-icon {
+  animation: masterBellRing 1.2s ease-in-out infinite;
+}
+
+@keyframes masterBellRing {
+  0% { transform: rotate(0deg); }
+  15% { transform: rotate(15deg); }
+  30% { transform: rotate(-12deg); }
+  45% { transform: rotate(10deg); }
+  60% { transform: rotate(-8deg); }
+  75% { transform: rotate(5deg); }
+  100% { transform: rotate(0deg); }
+}
