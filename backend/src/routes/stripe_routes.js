@@ -583,14 +583,13 @@ router.post(
       const totalCents = Math.round(Number(booking.totalAmount) * 100);
 
       // ── Destination Charges split ─────────────────────────────────────────
-      // Platform fee: 5% of gross, retained by the platform account.
-      // Merchant receives: 95% minus the Stripe processing fee.
-      // on_behalf_of routes the Stripe fee against the connected account so the
-      // merchant bears it, and the platform always keeps exactly 5%.
+      // Platform fee: 10% of gross, retained by the platform account.
+      // Merchant receives: 90% minus the Stripe processing fee.
+      // platform bears it, and the platform always keeps exactly 10%.
       //
       // This makes the split visible in the Stripe dashboard as:
       //   Gross amount  MYR XX.XX
-      //   Stripe fee  − MYR  X.XX   (charged to merchant)
+      //   Stripe fee  − MYR  X.XX   (charged to platform)
       //   Platform fee − MYR  X.XX  (application_fee_amount)
       //   Net to merchant MYR XX.XX
       const destinationAccountId =
@@ -611,7 +610,7 @@ router.post(
         : {};
 
       const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
+        payment_method_types: ["card", "fpx", "grabpay"],
         mode: "payment",
         customer_email: booking.customer.email,
         line_items: [
