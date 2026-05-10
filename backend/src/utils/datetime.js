@@ -1,5 +1,3 @@
-const MALAYSIA_TIMEZONE_OFFSET_HOURS = 8;
-
 /**
  * Parse a date/time value that represents Malaysia local time.
  *
