@@ -2533,3 +2533,485 @@
 .customer-notification-clickable small {
   text-decoration: none;
 }
+
+/* =========================
+   Operator Settings Page
+   ========================= */
+
+.operator-settings-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 18px;
+  align-items: start;
+}
+
+.operator-settings-content {
+  display: grid;
+  gap: 18px;
+}
+
+.operator-settings-toc {
+  position: sticky;
+  top: 110px;
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 18px 55px rgba(15, 23, 42, 0.07);
+}
+
+.operator-settings-toc strong {
+  margin-bottom: 6px;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.operator-settings-toc a {
+  padding: 10px 12px;
+  border-radius: 14px;
+  color: #475569;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 800;
+  transition: all 0.2s ease;
+}
+
+.operator-settings-toc a:hover {
+  background: #eff6ff;
+  color: #2563eb;
+  transform: translateX(4px);
+}
+
+.operator-settings-section {
+  scroll-margin-top: 120px;
+}
+
+.operator-settings-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.operator-settings-section-head h2 {
+  margin: 0 0 4px;
+}
+
+.operator-settings-section-head p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.operator-settings-section-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: #eff6ff;
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.operator-settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.operator-settings-field {
+  display: grid;
+  gap: 8px;
+}
+
+.operator-settings-field span {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.operator-settings-field small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.operator-settings-field select,
+.operator-settings-field input,
+.operator-settings-field textarea {
+  width: 100%;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: 14px;
+  padding: 11px 13px;
+  outline: none;
+  color: #0f172a;
+  font-family: inherit;
+}
+
+.operator-settings-field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.operator-settings-field select:focus,
+.operator-settings-field input:focus,
+.operator-settings-field textarea:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.operator-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.82);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.operator-toggle-row strong {
+  display: block;
+  color: #334155;
+  font-size: 13px;
+}
+
+.operator-toggle-row p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.operator-toggle {
+  width: 54px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  padding: 3px;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.operator-toggle span {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.operator-toggle.active {
+  background: #2563eb;
+}
+
+.operator-toggle.active span {
+  transform: translateX(24px);
+}
+
+.operator-payment-methods {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.operator-checkbox-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 13px;
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.82);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  font-weight: 900;
+  color: #334155;
+}
+
+.operator-checkbox-card input {
+  width: 17px;
+  height: 17px;
+  accent-color: #2563eb;
+}
+
+.operator-email-template-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+  gap: 18px;
+}
+
+.operator-logo-upload-box {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  margin-top: 14px;
+  border-radius: 22px;
+  background: rgba(248, 250, 252, 0.82);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.operator-logo-preview {
+  width: 92px;
+  height: 92px;
+  border-radius: 20px;
+  background: white;
+  border: 1px dashed #cbd5e1;
+  display: grid;
+  place-items: center;
+  color: #94a3b8;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.operator-logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 8px;
+}
+
+.operator-logo-upload-box h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.operator-logo-upload-box p {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.operator-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 9px 13px;
+  margin-right: 8px;
+  border-radius: 14px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.operator-upload-btn input {
+  display: none;
+}
+
+.operator-email-preview {
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: #f8fafc;
+}
+
+.operator-email-preview-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.operator-email-preview-body {
+  padding: 24px;
+  background: white;
+}
+
+.operator-email-logo-area {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.operator-email-logo-area img {
+  max-width: 120px;
+  max-height: 70px;
+  object-fit: contain;
+}
+
+.operator-email-logo-placeholder {
+  width: 70px;
+  height: 70px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  background: #2563eb;
+  color: white;
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.operator-email-company {
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.operator-email-preview-body h3 {
+  margin: 18px 0 12px;
+  color: #0f172a;
+  font-size: 20px;
+}
+
+.operator-email-preview-body p {
+  color: #475569;
+  line-height: 1.6;
+}
+
+.operator-email-preview-body button {
+  border: 0;
+  border-radius: 14px;
+  padding: 11px 16px;
+  background: #2563eb;
+  color: white;
+  font-weight: 900;
+}
+
+.operator-email-preview-body small {
+  display: block;
+  margin-top: 18px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.operator-security-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.operator-security-card {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.82);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.operator-security-card-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  color: #2563eb;
+}
+
+.operator-security-card h3 {
+  margin: 0 0 4px;
+  color: #334155;
+  font-size: 14px;
+}
+
+.operator-security-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.operator-security-card > strong {
+  display: block;
+  margin-top: 12px;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.operator-api-key-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.operator-api-key-row code {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: white;
+  color: #334155;
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+.operator-api-key-row .operator-secondary-btn {
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.operator-primary-btn svg,
+.operator-secondary-btn svg {
+  margin-right: 6px;
+}
+
+@media (max-width: 1180px) {
+  .operator-settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .operator-settings-toc {
+    position: static;
+    order: -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .operator-settings-toc strong {
+    grid-column: 1 / -1;
+  }
+
+  .operator-payment-methods {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .operator-email-template-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .operator-settings-form-grid,
+  .operator-security-grid,
+  .operator-payment-methods,
+  .operator-settings-toc {
+    grid-template-columns: 1fr;
+  }
+
+  .operator-logo-upload-box,
+  .operator-api-key-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .operator-logo-preview {
+    width: 100%;
+  }
+}
+
+.operator-email-preview-frame {
+  width: 100%;
+  min-height: 720px;
+  border: 0;
+  background: white;
+}
+
+.operator-email-preview-placeholder {
+  padding: 24px;
+  color: #64748b;
+  font-weight: 800;
+}

@@ -260,9 +260,22 @@ model BNPLConfig {
   allowReceiptUpload  Boolean @default(true)
   autoCancelOverdue   Boolean @default(true)
 
+  // Operator booking action settings
+  bookingResponseDeadlineMinutes      Int     @default(120)
+  autoRejectInactiveBooking           Boolean @default(true)
+  reminderBeforeAutoRejectMinutes     Int     @default(30)
+
+  // Payment settings
+  acceptedPaymentMethods Json?
+  manualPaymentNote      String?
+
+  // Notification settings
+  operatorReminderBeforeAutoRejectMinutes Int     @default(30)
+  enableOperatorReminderAlerts            Boolean @default(true)
+
+  // Email branding
   invoiceLogoUrl    String?
   invoiceFooterText String?
-  manualPaymentNote String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

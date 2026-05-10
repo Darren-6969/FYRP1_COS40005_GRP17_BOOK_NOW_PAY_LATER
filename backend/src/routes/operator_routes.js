@@ -32,6 +32,8 @@ import {
   getOperatorReports,
   getOperatorAnalytics,
   getOperatorSettings,
+  updateOperatorSettings,
+  previewOperatorEmailTemplate,
 } from "../controllers/operator_controller.js";
 
 import { verifyToken } from "../middlewares/auth_middleware.js";
@@ -76,5 +78,7 @@ router.get("/reports", ...operatorAccess, getOperatorReports);
 router.get("/analytics", ...operatorAccess, getOperatorAnalytics);
 router.get("/settlements", ...operatorAccess, getOperatorSettlements); /*OPERATOR STRIPE SETTLEMENT DETAILS*/ 
 router.get("/settings", ...operatorAccess, getOperatorSettings);
+router.patch("/settings", ...operatorAccess, updateOperatorSettings);
+router.get("/settings/email-preview", ...operatorAccess, previewOperatorEmailTemplate);
 
 export default router;

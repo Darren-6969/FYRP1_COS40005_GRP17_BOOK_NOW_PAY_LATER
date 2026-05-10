@@ -2101,34 +2101,6 @@ export async function getOperatorAnalytics(req, res, next) {
 /**
  * Operator settings
  */
-export async function getOperatorSettings(req, res, next) {
-  try {
-    const operator = req.user.operatorId
-      ? await prisma.operator.findUnique({
-          where: {
-            id: req.user.operatorId,
-          },
-          include: {
-            configs: true,
-          },
-        })
-      : null;
-
-    res.json({
-      user: {
-        id: req.user.id,
-        name: req.user.name,
-        email: req.user.email,
-        role: req.user.role,
-      },
-      operator,
-      config: operator?.configs?.[0] || null,
-    });
-  } catch (err) {
-    next(err);
-  }
-} 
-
 export async function deleteOperator(req, res, next) {
   try {
     const id = parseId(req.params.id, "operator id");
@@ -2258,6 +2230,401 @@ export async function deleteOperator(req, res, next) {
       operatorId: id,
       operatorCode: operator.operatorCode,
       companyName: operator.companyName,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+function getOperatorIdFromRequest(req) {
+  if (req.user.role === "MASTER_SELLER") {
+    return req.user.operatorId || null;
+  }
+
+  return req.user.operatorId;
+}
+
+function getDefaultAcceptedPaymentMethods() {
+  return {
+    stripe: true,
+    paypal: false,
+    duitnow: true,
+    spay: false,
+    bankTransfer: true,
+    cash: false,
+  };
+}
+
+async function getOrCreateOperatorConfig(operatorId) {
+  let config = await prisma.bNPLConfig.findFirst({
+    where: { operatorId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!config) {
+    config = await prisma.bNPLConfig.create({
+      data: {
+        operatorId,
+        paymentDeadlineDays: 3,
+        allowReceiptUpload: true,
+        autoCancelOverdue: true,
+        bookingResponseDeadlineMinutes: 120,
+        autoRejectInactiveBooking: true,
+        reminderBeforeAutoRejectMinutes: 30,
+        acceptedPaymentMethods: getDefaultAcceptedPaymentMethods(),
+        manualPaymentNote:
+          "Please upload your DuitNow/SPay receipt after payment.",
+        operatorReminderBeforeAutoRejectMinutes: 30,
+        enableOperatorReminderAlerts: true,
+      },
+    });
+  }
+
+  return config;
+}
+
+export async function getOperatorSettings(req, res, next) {
+  try {
+    if (!canAccessOperator(req)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const operatorId = getOperatorIdFromRequest(req);
+
+    if (!operatorId) {
+      return res.status(400).json({
+        message: "No operator profile is linked to this account.",
+      });
+    }
+
+    const operator = await prisma.operator.findUnique({
+      where: { id: operatorId },
+      include: {
+        configs: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!operator) {
+      return res.status(404).json({ message: "Operator not found" });
+    }
+
+    const config = operator.configs[0] || (await getOrCreateOperatorConfig(operatorId));
+
+    res.json({
+      user: {
+        id: req.user.id,
+        name: req.user.name,
+        email: req.user.email,
+        role: req.user.role,
+        operatorId: req.user.operatorId,
+      },
+      operator: {
+        id: operator.id,
+        operatorCode: operator.operatorCode,
+        companyName: operator.companyName,
+        email: operator.email,
+        phone: operator.phone,
+        logoUrl: operator.logoUrl,
+        status: operator.status,
+      },
+      config: {
+        ...config,
+        acceptedPaymentMethods:
+          config.acceptedPaymentMethods || getDefaultAcceptedPaymentMethods(),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateOperatorSettings(req, res, next) {
+  try {
+    if (!canAccessOperator(req)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const operatorId = getOperatorIdFromRequest(req);
+
+    if (!operatorId) {
+      return res.status(400).json({
+        message: "No operator profile is linked to this account.",
+      });
+    }
+
+    const {
+      bookingResponseDeadlineMinutes,
+      autoRejectInactiveBooking,
+      reminderBeforeAutoRejectMinutes,
+      acceptedPaymentMethods,
+      manualPaymentNote,
+      operatorReminderBeforeAutoRejectMinutes,
+      enableOperatorReminderAlerts,
+      companyLogo,
+      invoiceFooterText,
+    } = req.body || {};
+
+    const parsedBookingDeadline = Number(bookingResponseDeadlineMinutes);
+    const parsedReminderBeforeReject = Number(reminderBeforeAutoRejectMinutes);
+    const parsedOperatorReminder = Number(operatorReminderBeforeAutoRejectMinutes);
+
+    if (
+      !Number.isInteger(parsedBookingDeadline) ||
+      parsedBookingDeadline < 10 ||
+      parsedBookingDeadline > 1440
+    ) {
+      return res.status(400).json({
+        message: "Booking response deadline must be between 10 and 1440 minutes.",
+      });
+    }
+
+    if (
+      !Number.isInteger(parsedReminderBeforeReject) ||
+      parsedReminderBeforeReject < 5 ||
+      parsedReminderBeforeReject > parsedBookingDeadline
+    ) {
+      return res.status(400).json({
+        message:
+          "Reminder before auto-reject must be at least 5 minutes and cannot exceed the booking response deadline.",
+      });
+    }
+
+    if (
+      !Number.isInteger(parsedOperatorReminder) ||
+      parsedOperatorReminder < 5 ||
+      parsedOperatorReminder > parsedBookingDeadline
+    ) {
+      return res.status(400).json({
+        message:
+          "Operator reminder must be at least 5 minutes and cannot exceed the booking response deadline.",
+      });
+    }
+
+    const config = await getOrCreateOperatorConfig(operatorId);
+
+    const updatedConfig = await prisma.bNPLConfig.update({
+      where: { id: config.id },
+      data: {
+        bookingResponseDeadlineMinutes: parsedBookingDeadline,
+        autoRejectInactiveBooking: Boolean(autoRejectInactiveBooking),
+        reminderBeforeAutoRejectMinutes: parsedReminderBeforeReject,
+        acceptedPaymentMethods:
+          acceptedPaymentMethods || getDefaultAcceptedPaymentMethods(),
+        manualPaymentNote: manualPaymentNote || null,
+        operatorReminderBeforeAutoRejectMinutes: parsedOperatorReminder,
+        enableOperatorReminderAlerts: Boolean(enableOperatorReminderAlerts),
+        invoiceLogoUrl: companyLogo || null,
+        invoiceFooterText: invoiceFooterText || null,
+      },
+    });
+
+    const updatedOperator = await prisma.operator.update({
+      where: { id: operatorId },
+      data: {
+        logoUrl: companyLogo || null,
+      },
+    });
+
+    await createAuditLog({
+      req,
+      action: "OPERATOR_SETTINGS_UPDATED",
+      entityType: "Operator",
+      entityId: operatorId,
+      details: {
+        bookingResponseDeadlineMinutes: parsedBookingDeadline,
+        autoRejectInactiveBooking: Boolean(autoRejectInactiveBooking),
+        reminderBeforeAutoRejectMinutes: parsedReminderBeforeReject,
+        acceptedPaymentMethods,
+        operatorReminderBeforeAutoRejectMinutes: parsedOperatorReminder,
+        enableOperatorReminderAlerts: Boolean(enableOperatorReminderAlerts),
+        logoUpdated: Boolean(companyLogo),
+      },
+    });
+
+    res.json({
+      message: "Operator settings updated successfully",
+      operator: updatedOperator,
+      config: {
+        ...updatedConfig,
+        acceptedPaymentMethods:
+          updatedConfig.acceptedPaymentMethods || getDefaultAcceptedPaymentMethods(),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+function buildSampleBooking({ operator, config }) {
+  const now = new Date();
+  const pickupDate = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+  const returnDate = new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000);
+  const deadline = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  return {
+    id: 1,
+    bookingCode: "BNPL-DEMO-0001",
+    serviceName: "GoCar Compact Car Rental",
+    serviceType: "Car Rental",
+    bookingDate: now,
+    pickupDate,
+    returnDate,
+    location: "Kuching, Sarawak",
+    totalAmount: 350,
+    paymentDeadline: deadline,
+    status: "PENDING_PAYMENT",
+    customer: {
+      name: "Demo Customer",
+      email: "customer@example.com",
+    },
+    operator: {
+      id: operator.id,
+      companyName: operator.companyName,
+      email: operator.email,
+      phone: operator.phone,
+      logoUrl: operator.logoUrl || config.invoiceLogoUrl,
+    },
+    payment: {
+      id: 1,
+      amount: 350,
+      method: "STRIPE",
+      status: "UNPAID",
+      createdAt: now,
+      updatedAt: now,
+    },
+    alternativeServiceName: "GoCar Sedan Alternative",
+    alternativePrice: 420,
+    alternativePickupDate: pickupDate,
+    alternativeReturnDate: returnDate,
+    alternativeReason: "The original selected car is unavailable.",
+  };
+}
+
+export async function previewOperatorEmailTemplate(req, res, next) {
+  try {
+    if (!canAccessOperator(req)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const operatorId = getOperatorIdFromRequest(req);
+
+    if (!operatorId) {
+      return res.status(400).json({
+        message: "No operator profile is linked to this account.",
+      });
+    }
+
+    const template = req.query.template || "invoice_sent";
+
+    const operator = await prisma.operator.findUnique({
+      where: { id: operatorId },
+    });
+
+    if (!operator) {
+      return res.status(404).json({ message: "Operator not found" });
+    }
+
+    const config = await getOrCreateOperatorConfig(operatorId);
+    const booking = buildSampleBooking({ operator, config });
+
+    const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;
+    const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/bookings/${booking.id}`;
+
+    const invoice = {
+      id: 1,
+      invoiceNo: "INV-DEMO-0001",
+      amount: booking.totalAmount,
+      status: "SENT",
+      issuedAt: new Date(),
+      createdAt: new Date(),
+    };
+
+    const payment = {
+      id: 1,
+      amount: booking.totalAmount,
+      method: "STRIPE",
+      status: "PAID",
+      paidAt: new Date(),
+      transactionId: "txn_demo_123456",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    let html;
+    let subject;
+
+    switch (template) {
+      case "booking_accepted":
+      case "payment_request":
+        subject = `Booking Accepted - ${booking.bookingCode}`;
+        html = paymentRequestTemplate({
+          booking,
+          customerUrl,
+        });
+        break;
+
+      case "booking_rejected":
+        subject = `Booking Rejected - ${booking.bookingCode}`;
+        html = bookingStatusTemplate({
+          booking: {
+            ...booking,
+            status: "REJECTED",
+          },
+          status: "REJECTED",
+          customerUrl,
+        });
+        break;
+
+      case "alternative_suggested":
+        subject = `Alternative Booking Suggested - ${booking.bookingCode}`;
+        html = alternativeSuggestionTemplate({
+          booking,
+          customerUrl,
+        });
+        break;
+
+      case "payment_confirmed":
+        subject = `Payment Confirmed - ${booking.bookingCode}`;
+        html = merchantPaymentConfirmedTemplate({
+          booking: {
+            ...booking,
+            payment,
+          },
+          payment,
+          operatorUrl,
+        });
+        break;
+
+      case "payment_receipt":
+        subject = `Official Receipt - ${booking.bookingCode}`;
+        html = paymentReceiptTemplate({
+          booking: {
+            ...booking,
+            payment,
+          },
+          payment,
+          customerUrl,
+        });
+        break;
+
+      case "invoice_sent":
+      default:
+        subject = `Invoice Issued - ${booking.bookingCode}`;
+        html = invoiceSentTemplate({
+          invoice,
+          booking,
+          customerUrl,
+        });
+        break;
+    }
+
+    res.json({
+      template,
+      subject,
+      html,
     });
   } catch (err) {
     next(err);

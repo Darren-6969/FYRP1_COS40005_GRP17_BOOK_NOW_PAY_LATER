@@ -106,6 +106,15 @@ export const operatorService = {
     return api.get("/operators/settings");
   },
 
+  updateSettings(payload) {
+  return api.patch("/operators/settings", payload);
+},
+
+previewEmailTemplate(template) {
+  return api.get("/operators/settings/email-preview", {
+    params: { template },
+  });
+},
   // Fetch live Stripe Connect account status (charges enabled, restrictions, etc.)
   getStripeAccountStatus() {
     return api.get("/stripe/account-status");
