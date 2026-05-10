@@ -11,11 +11,13 @@ import {
 const tabs = [
   { label: "All", value: "ALL" },
   { label: "Pending", value: "PENDING" },
-  { label: "Rejected", value: "REJECTED" },
   { label: "Accepted", value: "ACCEPTED" },
   { label: "Payment Required", value: "PENDING_PAYMENT" },
   { label: "Paid", value: "PAID" },
-  { label: "Expired", value: "OVERDUE" },
+  { label: "Completed", value: "COMPLETED" },
+  { label: "Rejected", value: "REJECTED" },
+  { label: "Cancelled", value: "CANCELLED" },
+  { label: "Overdue", value: "OVERDUE" },
 ];
 
 export default function OperatorBookingRequests() {
@@ -54,7 +56,6 @@ export default function OperatorBookingRequests() {
 
       if (action === "accept") await operatorService.acceptBooking(bookingId);
       if (action === "reject") await operatorService.rejectBooking(bookingId);
-      if (action === "payment") await operatorService.sendPaymentRequest(bookingId);
 
       await loadBookings();
     } catch (err) {
@@ -62,6 +63,20 @@ export default function OperatorBookingRequests() {
     } finally {
       setActionLoading("");
     }
+  };
+
+  const canAcceptReject = (booking) => {
+  return String(booking.status || "").toUpperCase() === "PENDING";
+};
+
+  const canSendPayment = (booking) => {
+    const status = String(booking.status || "").toUpperCase();
+    const paymentStatus = String(booking.payment?.status || "").toUpperCase();
+
+    return (
+      ["ACCEPTED", "PENDING_PAYMENT"].includes(status) &&
+      paymentStatus !== "PAID"
+    );
   };
 
   return (
@@ -149,7 +164,7 @@ export default function OperatorBookingRequests() {
                     </td>
 
                     <td>{formatOperatorDateTime(booking.createdAt)}</td>
-                    <td>{formatOperatorDateTime(booking.pickupDate || booking.bookingDate)}</td>
+                    <td>{formatOperatorDateTime(booking.pickupDate)}</td>
                     <td>{formatOperatorMoney(booking.totalAmount)}</td>
 
                     <td>
@@ -168,33 +183,33 @@ export default function OperatorBookingRequests() {
 
                     <td>
                       <div className="operator-table-actions">
-                        <Link to={`/operator/bookings/${booking.id}`}>👁</Link>
+                        <Link to={`/operator/bookings/${booking.id}`} title="View Booking">
+                          👁
+                        </Link>
 
-                        <button
-                          type="button"
-                          className="success"
-                          disabled={!!actionLoading}
-                          onClick={() => handleAction(booking.id, "accept")}
-                        >
-                          ✓
-                        </button>
+                        {String(booking.status || "").toUpperCase() === "PENDING" && (
+                          <>
+                            <button
+                              type="button"
+                              className="success"
+                              disabled={!!actionLoading}
+                              onClick={() => handleAction(booking.id, "accept")}
+                              title="Accept Booking"
+                            >
+                              ✓
+                            </button>
 
-                        <button
-                          type="button"
-                          className="danger"
-                          disabled={!!actionLoading}
-                          onClick={() => handleAction(booking.id, "reject")}
-                        >
-                          ✗
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={!!actionLoading}
-                          onClick={() => handleAction(booking.id, "payment")}
-                        >
-                          $
-                        </button>
+                            <button
+                              type="button"
+                              className="danger"
+                              disabled={!!actionLoading}
+                              onClick={() => handleAction(booking.id, "reject")}
+                              title="Reject Booking"
+                            >
+                              ✗
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

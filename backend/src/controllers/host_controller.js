@@ -34,11 +34,6 @@ function validateAmount(totalAmount) {
   return amount;
 }
 
-function hasTimeComponent(value) {
-  if (!value) return false;
-  return /[T\s]\d{1,2}:\d{2}/.test(String(value));
-}
-
 function frontendUrl(path) {
   const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
   return `${baseUrl}${path}`;
@@ -50,32 +45,73 @@ function normalizeEmail(email) {
 
 function firstPresent(...values) {
   return values.find(
-    (value) => value !== undefined && value !== null && String(value).trim() !== ""
+    (value) =>
+      value !== undefined &&
+      value !== null &&
+      String(value).trim() !== ""
   );
 }
 
+function hasTimeComponent(value) {
+  if (!value) return false;
+  return /[T\s]\d{1,2}:\d{2}(?::\d{2})?/.test(String(value));
+}
+
+function normalizeDateOnly(value) {
+  if (!value) return null;
+
+  const raw = String(value).trim();
+
+  // Accept "2026-05-12"
+  const dateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) return raw;
+
+  // Accept "2026-05-12T00:00:00" or "2026-05-12 00:00:00"
+  const datePartMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (datePartMatch) {
+    return `${datePartMatch[1]}-${datePartMatch[2]}-${datePartMatch[3]}`;
+  }
+
+  return raw;
+}
+
+function normalizeTime(value) {
+  if (!value) return null;
+
+  let time = String(value).trim();
+
+  // Accept "2 AM", "2:00 AM", "02:00 am"
+  const ampmMatch = time.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i);
+
+  if (ampmMatch) {
+    let hour = Number(ampmMatch[1]);
+    const minute = ampmMatch[2] || "00";
+    const period = ampmMatch[3].toUpperCase();
+
+    if (period === "PM" && hour !== 12) hour += 12;
+    if (period === "AM" && hour === 12) hour = 0;
+
+    return `${String(hour).padStart(2, "0")}:${minute}`;
+  }
+
+  // Accept "02:00", "2:00"
+  const timeMatch = time.match(/^(\d{1,2}):(\d{2})$/);
+
+  if (timeMatch) {
+    const hour = Number(timeMatch[1]);
+    const minute = timeMatch[2];
+
+    return `${String(hour).padStart(2, "0")}:${minute}`;
+  }
+
+  return time;
+}
+
 function combineDateAndTime(dateValue, timeValue) {
-  if (!dateValue || !timeValue) return null;
+  const date = normalizeDateOnly(dateValue);
+  const time = normalizeTime(timeValue);
 
-  const date = String(dateValue).trim();
-  let time = String(timeValue).trim();
-
-  const pmMatch = time.match(/^(\d{1,2}):(\d{2})\s*PM$/i);
-  const amMatch = time.match(/^(\d{1,2}):(\d{2})\s*AM$/i);
-
-  if (pmMatch) {
-    let hour = Number(pmMatch[1]);
-    const minute = pmMatch[2];
-    if (hour !== 12) hour += 12;
-    time = `${String(hour).padStart(2, "0")}:${minute}`;
-  }
-
-  if (amMatch) {
-    let hour = Number(amMatch[1]);
-    const minute = amMatch[2];
-    if (hour === 12) hour = 0;
-    time = `${String(hour).padStart(2, "0")}:${minute}`;
-  }
+  if (!date || !time) return null;
 
   return `${date}T${time}:00`;
 }
@@ -87,13 +123,14 @@ function resolveHostDateTime({
   fieldName,
   required = false,
 }) {
-  const combined = firstPresent(
+  const combinedDateTime = combineDateAndTime(date, time);
+
+  const value = firstPresent(
     datetime,
-    combineDateAndTime(date, time),
-    date
+    combinedDateTime
   );
 
-  if (!combined) {
+  if (!value) {
     if (required) {
       const error = new Error(`${fieldName} is required`);
       error.statusCode = 400;
@@ -103,15 +140,15 @@ function resolveHostDateTime({
     return null;
   }
 
-  if (!hasTimeComponent(combined)) {
+  if (!hasTimeComponent(value)) {
     const error = new Error(
-      `${fieldName} must include time. Example: 2026-05-21T09:00:00`
+      `${fieldName} must include time. Send either ${fieldName}Time or separate date and time fields. Example: 2026-05-12T02:00:00`
     );
     error.statusCode = 400;
     throw error;
   }
 
-  return parseMalaysiaLocalDateTime(combined);
+  return parseMalaysiaLocalDateTime(value);
 }
 
 function buildIntentUrls(intent) {
@@ -181,35 +218,65 @@ export async function createHostBookingIntent(req, res, next) {
       });
     }
 
-    const {
-      operatorCode,
-      hostBookingRef,
-      customerName,
-      customerEmail,
-      serviceName,
-      serviceType,
-      bookingDate,
+  const {
+    operatorCode,
+    hostBookingRef,
+    customerName,
+    customerEmail,
+    serviceName,
+    serviceType,
+    bookingDate,
 
-      pickupDate,
-      pickupTime,
-      pickupDateTime,
-      checkInDate,
-      checkInTime,
-      checkInDateTime,
+    pickupDate,
+    pickupTime,
+    pickupDateTime,
+    pickup_date,
+    pickup_time,
+    pickup_datetime,
+    pickUpDate,
+    pickUpTime,
+    pickUpDateTime,
 
-      returnDate,
-      returnTime,
-      returnDateTime,
-      checkOutDate,
-      checkOutTime,
-      checkOutDateTime,
-      dropoffDate,
-      dropoffTime,
-      dropoffDateTime,
+    checkInDate,
+    checkInTime,
+    checkInDateTime,
+    check_in_date,
+    check_in_time,
+    check_in_datetime,
+    startDate,
+    startTime,
+    startDateTime,
 
-      location,
-      totalAmount,
-    } = req.body;
+    returnDate,
+    returnTime,
+    returnDateTime,
+    return_date,
+    return_time,
+    return_datetime,
+
+    checkOutDate,
+    checkOutTime,
+    checkOutDateTime,
+    check_out_date,
+    check_out_time,
+    check_out_datetime,
+
+    dropoffDate,
+    dropoffTime,
+    dropoffDateTime,
+    dropoff_date,
+    dropoff_time,
+    dropoff_datetime,
+    dropOffDate,
+    dropOffTime,
+    dropOffDateTime,
+    endDate,
+    endTime,
+    endDateTime,
+
+    location,
+    totalAmount,
+  } = req.body;
 
     const safeCustomerEmail = normalizeEmail(customerEmail);
 
@@ -228,20 +295,6 @@ export async function createHostBookingIntent(req, res, next) {
     }
 
     const amount = validateAmount(totalAmount);
-
-    if (pickupDate && !hasTimeComponent(pickupDate)) {
-      return res.status(400).json({
-        message:
-          "pickupDate must include time. Example: 2026-05-11T03:00:00",
-      });
-    }
-
-    if (returnDate && !hasTimeComponent(returnDate)) {
-      return res.status(400).json({
-        message:
-          "returnDate must include time. Example: 2026-05-15T02:00:00",
-      });
-    }
     
     const operator = await prisma.operator.findUnique({
       where: { operatorCode },
@@ -330,19 +383,104 @@ export async function createHostBookingIntent(req, res, next) {
       : new Date();
 
     const parsedPickupDate = resolveHostDateTime({
-      datetime: firstPresent(pickupDateTime, checkInDateTime),
-      date: firstPresent(pickupDate, checkInDate),
-      time: firstPresent(pickupTime, checkInTime),
+      datetime: firstPresent(
+        pickupDateTime,
+        pickup_datetime,
+        pickUpDateTime,
+        checkInDateTime,
+        check_in_datetime,
+        startDateTime
+      ),
+      date: firstPresent(
+        pickupDate,
+        pickup_date,
+        pickUpDate,
+        checkInDate,
+        check_in_date,
+        startDate
+      ),
+      time: firstPresent(
+        pickupTime,
+        pickup_time,
+        pickUpTime,
+        checkInTime,
+        check_in_time,
+        startTime
+      ),
       fieldName: "pickupDate",
       required: true,
     });
 
     const parsedReturnDate = resolveHostDateTime({
-      datetime: firstPresent(returnDateTime, checkOutDateTime, dropoffDateTime),
-      date: firstPresent(returnDate, checkOutDate, dropoffDate),
-      time: firstPresent(returnTime, checkOutTime, dropoffTime),
+      datetime: firstPresent(
+        returnDateTime,
+        return_datetime,
+        checkOutDateTime,
+        check_out_datetime,
+        dropoffDateTime,
+        dropoff_datetime,
+        dropOffDateTime,
+        endDateTime
+      ),
+      date: firstPresent(
+        returnDate,
+        return_date,
+        checkOutDate,
+        check_out_date,
+        dropoffDate,
+        dropoff_date,
+        dropOffDate,
+        endDate
+      ),
+      time: firstPresent(
+        returnTime,
+        return_time,
+        checkOutTime,
+        check_out_time,
+        dropoffTime,
+        dropoff_time,
+        dropOffTime,
+        endTime
+      ),
       fieldName: "returnDate",
       required: true,
+    });
+
+    console.log("[Host Booking Datetime Debug]", {
+      hostBookingRef,
+      rawPickupFields: {
+        pickupDate,
+        pickupTime,
+        pickupDateTime,
+        pickup_date,
+        pickup_time,
+        pickup_datetime,
+        checkInDate,
+        checkInTime,
+        checkInDateTime,
+        startDate,
+        startTime,
+        startDateTime,
+      },
+      rawReturnFields: {
+        returnDate,
+        returnTime,
+        returnDateTime,
+        return_date,
+        return_time,
+        return_datetime,
+        checkOutDate,
+        checkOutTime,
+        checkOutDateTime,
+        dropoffDate,
+        dropoffTime,
+        dropoffDateTime,
+        endDate,
+        endTime,
+        endDateTime,
+      },
+      parsedPickupDate,
+      parsedReturnDate,
     });
 
     const intent = await prisma.hostBookingIntent.create({

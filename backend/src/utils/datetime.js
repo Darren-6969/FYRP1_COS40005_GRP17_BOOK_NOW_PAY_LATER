@@ -12,6 +12,20 @@ const MALAYSIA_TIMEZONE_OFFSET_HOURS = 8;
  * because some frontend/host forms send "2026-05-11T10:00:00.000Z"
  * even though they actually mean 10:00 AM Malaysia time.
  */
+const MALAYSIA_TIMEZONE_OFFSET_HOURS = 8;
+
+/**
+ * Parse a date/time value that represents Malaysia local time.
+ *
+ * Accepts:
+ * - 2026-05-12
+ * - 2026-05-12 2:00
+ * - 2026-05-12 02:00
+ * - 2026-05-12T2:00
+ * - 2026-05-12T02:00
+ * - 2026-05-12 2:00:00
+ * - 2026-05-12T02:00:00
+ */
 export function parseMalaysiaLocalDateTime(value) {
   if (!value) return null;
 
@@ -23,7 +37,7 @@ export function parseMalaysiaLocalDateTime(value) {
   const raw = String(value).trim();
 
   const match = raw.match(
-    /^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d{1,3})?)?/
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2})?$/
   );
 
   if (!match) {
