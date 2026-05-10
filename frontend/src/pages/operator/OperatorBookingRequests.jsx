@@ -148,8 +148,8 @@ export default function OperatorBookingRequests() {
                       <small>{booking.serviceType || "-"}</small>
                     </td>
 
-                    <td>{formatOperatorDateTime(booking.bookingDate)}</td>
-                    <td>{formatOperatorDateTime(booking.pickupDate)}</td>
+                    <td>{formatOperatorDateTime(booking.createdAt)}</td>
+                    <td>{formatOperatorDateTime(booking.pickupDate || booking.bookingDate)}</td>
                     <td>{formatOperatorMoney(booking.totalAmount)}</td>
 
                     <td>

@@ -59,7 +59,8 @@ export default function OperatorBookingLog() {
                   <th>Booking ID</th>
                   <th>Customer</th>
                   <th>Service</th>
-                  <th>Date & Time</th>
+                  <th>Pick-up / Check-in</th>
+                  <th>Return / Check-out</th>
                   <th>Amount</th>
                   <th>Payment Status</th>
                   <th>Booking Status</th>
@@ -73,7 +74,8 @@ export default function OperatorBookingLog() {
                     <td>{booking.id}</td>
                     <td>{booking.customer?.name || "-"}</td>
                     <td>{booking.serviceName}</td>
-                    <td>{formatOperatorDateTime(booking.pickupDate || booking.bookingDate)}</td>
+                    <td>{formatOperatorDateTime(booking.pickupDate)}</td>
+                    <td>{formatOperatorDateTime(booking.returnDate)}</td>
                     <td>{formatOperatorMoney(booking.totalAmount)}</td>
                     <td>
                       <span className={`operator-status ${operatorStatusClass(booking.payment?.status)}`}>

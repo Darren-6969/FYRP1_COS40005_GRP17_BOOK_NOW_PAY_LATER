@@ -99,6 +99,11 @@ export default function Checkout() {
             </div>
 
             <div>
+              <span>Return</span>
+              <strong>{formatCustomerDate(booking.returnDate)}</strong>
+            </div>
+
+            <div>
               <span>Payment Deadline</span>
               <strong>{formatCustomerDate(booking.paymentDeadline)}</strong>
             </div>

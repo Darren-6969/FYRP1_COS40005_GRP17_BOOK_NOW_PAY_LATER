@@ -113,6 +113,29 @@ async function findOperatorBooking(req, bookingId) {
   });
 }
 
+async function autoCompletePaidBookings(req) {
+  await prisma.booking.updateMany({
+    where: {
+      ...bookingWhere(req),
+
+      status: "PAID",
+
+      payment: {
+        is: {
+          status: "PAID",
+        },
+      },
+
+      returnDate: {
+        lte: new Date(),
+      },
+    },
+    data: {
+      status: "COMPLETED",
+    },
+  });
+}
+
 async function createAuditLog({ req, action, entityType, entityId, details = {} }) {
   return prisma.auditLog.create({
     data: {
@@ -457,6 +480,8 @@ export async function getOperatorDashboard(req, res, next) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
+    await autoCompletePaidBookings(req);
+
     const where = bookingWhere(req);
 
     const [allBookings, recentBookings, notifications] = await Promise.all([
@@ -518,6 +543,8 @@ export async function getOperatorBookings(req, res, next) {
     if (!canAccessOperator(req)) {
       return res.status(403).json({ message: "Forbidden" });
     }
+
+    await autoCompletePaidBookings(req);
 
     const { status, paymentStatus, q } = req.query;
 
@@ -1249,26 +1276,17 @@ export async function getOperatorSettlements(req, res, next) {
         ((customerPaid * totalStripeFeePercent) / 100 + stripeFixedFee).toFixed(2)
       );
 
-      // Merchant only bears 3% + RM1
+      // Merchant only bears 4% + RM1
       const merchantStripeFeePercent = Number(
-        process.env.MERCHANT_STRIPE_FEE_PERCENT ?? 3
+        process.env.MERCHANT_STRIPE_FEE_PERCENT ?? 4
       );
 
       const merchantStripeFee = Number(
         ((customerPaid * merchantStripeFeePercent) / 100 + stripeFixedFee).toFixed(2)
       );
 
-      // BNPL absorbs the remaining 1%
-      const bnplAbsorbedStripeFee = Number(
-        (totalStripeFee - merchantStripeFee).toFixed(2)
-      );
-
       const merchantReceives = Number(
         (customerPaid - bnplAdminFee - merchantStripeFee).toFixed(2)
-      );
-
-      const bnplNetEarned = Number(
-        (bnplAdminFee - bnplAbsorbedStripeFee).toFixed(2)
       );
 
       return {
@@ -1289,8 +1307,6 @@ export async function getOperatorSettlements(req, res, next) {
         totalStripeFee,
         merchantStripeFeePercent,
         merchantStripeFee,
-        bnplAbsorbedStripeFee,
-        bnplNetEarned,
 
         // keep this name if your frontend still uses item.stripeFee
         stripeFee: merchantStripeFee,

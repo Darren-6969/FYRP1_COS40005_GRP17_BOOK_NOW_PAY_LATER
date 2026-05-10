@@ -93,17 +93,17 @@ export default function BookingDetail() {
 
             <div>
               <span>Booking Date</span>
-              <strong>{formatCustomerDate(booking.bookingDate)}</strong>
+              <strong>{formatCustomerDate(booking.createdAt)}</strong>
             </div>
 
             <div>
               <span>Pick-up / Check-in</span>
-              <strong>{formatCustomerDate(booking.pickupDate)}</strong>
+              {formatCustomerDate(booking.alternativePickupDate || booking.pickupDate)}
             </div>
 
             <div>
               <span>Return / Check-out</span>
-              <strong>{formatCustomerDate(booking.returnDate)}</strong>
+              {formatCustomerDate(booking.alternativeReturnDate || booking.returnDate)}
             </div>
 
             <div>

@@ -119,7 +119,7 @@ function BookingCard({ booking }) {
 
       <div className="customer-booking-meta">
         <span>Booking Date</span>
-        <strong>{formatCustomerDate(getBookingDateLabel(booking))}</strong>
+        <strong>{formatCustomerDate(booking.createdAt)}</strong>
       </div>
 
       <div className="customer-booking-meta">

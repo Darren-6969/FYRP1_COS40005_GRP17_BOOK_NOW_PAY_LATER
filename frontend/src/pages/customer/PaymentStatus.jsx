@@ -104,8 +104,13 @@ export default function PaymentStatus() {
           </div>
         )}
 
-        <button type="button" onClick={() => reload()}>
-          Refresh Payment Status
+        <button
+          type="button"
+          className="customer-secondary-btn customer-refresh-payment-btn"
+          onClick={() => reload()}
+          disabled={syncing}
+        >
+          {syncing ? "Refreshing..." : "Refresh Payment Status"}
         </button>
 
         <div className="customer-info-list detail">

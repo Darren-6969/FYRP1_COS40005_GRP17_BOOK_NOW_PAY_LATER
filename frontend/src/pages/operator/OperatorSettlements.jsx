@@ -155,15 +155,15 @@ function closeBookingDetails() {
         </div>
 
         <div className="operator-metric">
-          <span>BNPL Admin Fee (10%)</span>
+          <span>Total BNPL Admin Fee (10%)</span>
           <strong>{formatMoney(summary.totalBnplAdminFee)}</strong>
           <small>Platform commission</small>
         </div>
 
         <div className="operator-metric">
-          <span>Stripe Fee (3%+RM1)</span>
+          <span>Total Stripe Fee (4%+RM1)</span>
           <strong>{formatMoney(summary.totalStripeFee)}</strong>
-          <small>Processing fee</small>
+          <small>Processing fee per transaction</small>
         </div>
 
         <div className="operator-metric">
@@ -238,7 +238,7 @@ function closeBookingDetails() {
 
                     <td>
                       <strong>{formatMoney(item.stripeFee)}</strong>
-                      <small>Stripe processing</small>
+                      <small>4% + RM1 processing fee</small>
                     </td>
 
                     <td>
@@ -283,7 +283,7 @@ function closeBookingDetails() {
           <div>
             <Receipt size={22} />
             <span>Stripe Fee</span>
-            <strong>Processing fee from Stripe</strong>
+            <strong>4% + RM1 Processing fee from Stripe</strong>
           </div>
 
           <div>

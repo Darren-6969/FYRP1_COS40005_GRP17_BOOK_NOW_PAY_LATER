@@ -121,16 +121,19 @@ export default function CustomerLayout() {
       onMouseLeave={closeNotificationMenu}
     >
     <button
-      type="button"
-      className="customer-notification-trigger"
-      onClick={() => navigate("/customer/notifications")}
-      aria-label="Open notifications"
-    >
-      <span className="customer-bell-icon">🔔</span>
-      {unreadCount > 0 && (
-        <span className="portal-notification-badge">{unreadCount}</span>
-      )}
-    </button>
+        type="button"
+        className={`customer-notification-trigger ${
+        unreadCount > 0 ? "has-unread" : ""
+      }`}
+        onClick={() => navigate("/customer/notifications")}
+        aria-label="Open notifications"
+      >
+        <span className="customer-bell-icon">🔔</span>
+
+        {unreadCount > 0 && (
+          <span className="portal-notification-badge">{unreadCount}</span>
+        )}
+      </button>
 
     {openNotifications && (
       <div className="portal-notification-dropdown customer-notification-dropdown">

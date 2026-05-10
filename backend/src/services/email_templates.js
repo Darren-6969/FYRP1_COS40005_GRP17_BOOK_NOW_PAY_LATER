@@ -8,15 +8,24 @@ function formatMoney(value) {
 function formatDate(value) {
   if (!value) return "-";
 
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "-";
+
   return new Intl.DateTimeFormat("en-MY", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(new Date(value));
+    timeZone: "Asia/Kuala_Lumpur",
+  }).format(date);
 }
 
 function formatDateTime(value) {
   if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "-";
 
   return new Intl.DateTimeFormat("en-MY", {
     day: "2-digit",
@@ -24,7 +33,9 @@ function formatDateTime(value) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+    hour12: true,
+    timeZone: "Asia/Kuala_Lumpur",
+  }).format(date);
 }
 
 function titleCase(value) {

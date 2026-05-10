@@ -90,35 +90,34 @@ export default function MasterSettlements() {
   const settlements = data.settlements || [];
 
   const summary = settlements.reduce(
-    (acc, item) => {
-      const customerPaid = Number(item.customerPaid || 0);
-      const bnplAdminFee = Number(item.bnplAdminFee || 0);
+  (acc, item) => {
+    const customerPaid = Number(
+      item.customerPaid ??
+      item.customer_paid ??
+      item.amount ??
+      item.totalAmount ??
+      0
+    );
 
-      // BNPL bears 1% of customer paid.
-      const bnplAbsorbedStripeFee =
-        item.bnplAbsorbedStripeFee != null
-          ? Number(item.bnplAbsorbedStripeFee)
-          : Number((customerPaid * 0.01).toFixed(2));
+    const bnplAdminFee = Number(
+      item.bnplAdminFee ??
+      item.platformFee ??
+      item.bnplFee ??
+      0
+    );
 
-      const actualGet =
-        item.bnplNetEarned != null
-          ? Number(item.bnplNetEarned)
-          : Number((bnplAdminFee - bnplAbsorbedStripeFee).toFixed(2));
+    acc.totalCustomerPaid += customerPaid;
+    acc.totalBnplAdminFee += bnplAdminFee;
+    acc.totalActualIncome += bnplAdminFee;
 
-      acc.totalCustomerPaid += customerPaid;
-      acc.totalBnplAdminFee += bnplAdminFee;
-      acc.totalBnplStripeFee += bnplAbsorbedStripeFee;
-      acc.totalActualGet += actualGet;
-
-      return acc;
-    },
-    {
-      totalCustomerPaid: 0,
-      totalBnplAdminFee: 0,
-      totalBnplStripeFee: 0,
-      totalActualGet: 0,
-    }
-  );
+    return acc;
+  },
+  {
+    totalCustomerPaid: 0,
+    totalBnplAdminFee: 0,
+    totalActualIncome: 0,
+  }
+);
   
   /*Clickable Booking ID Details*/
   async function openBookingDetails(bookingId) {
@@ -184,27 +183,27 @@ export default function MasterSettlements() {
 
       <section className="operator-metric-grid four">
         <div className="operator-metric">
-          <span>Customer Paid</span>
-          <strong>{formatMoney(summary.totalCustomerPaid)}</strong>
-          <small>Total Stripe payments</small>
+        <span>Customer Paid</span>
+        <strong>{formatMoney(summary.totalCustomerPaid)}</strong>
+        <small>Total Stripe payments</small>
         </div>
 
         <div className="operator-metric">
-          <span>BNPL Admin Fee</span>
-          <strong>{formatMoney(summary.totalBnplAdminFee)}</strong>
-          <small>{data.platformFeePercent || 10}% platform commission</small>
+        <span>BNPL Admin Fee</span>
+        <strong>{formatMoney(summary.totalBnplAdminFee)}</strong>
+        <small>{data.platformFeePercent || 10}% platform commission</small>
         </div>
 
         <div className="operator-metric">
-          <span>Stripe</span>
-          <strong>{formatMoney(summary.totalBnplStripeFee)}</strong>
-          <small>1% absorbed by BNPL</small>
+        <span>Total Paid Bookings</span>
+        <strong>{settlements.length}</strong>
+        <small>Completed Stripe payments</small>
         </div>
 
         <div className="operator-metric">
-          <span>Actual Income</span>
-          <strong>{formatMoney(summary.totalActualGet)}</strong>
-          <small>BNPL fee after Stripe cost</small>
+        <span>Actual Income</span>
+        <strong>{formatMoney(summary.totalActualIncome)}</strong>
+        <small>BNPL Total Income</small>
         </div>
       </section>
 
@@ -239,8 +238,7 @@ export default function MasterSettlements() {
                   <th>Customer</th>
                   <th>Customer Paid</th>
                   <th>BNPL Admin Fee</th>
-                  <th>Stripe</th>
-                  <th>Actual Get</th>
+                  <th>Actual Income</th>
                   <th>Transaction</th>
                   <th>Paid At</th>
                 </tr>
@@ -250,18 +248,6 @@ export default function MasterSettlements() {
                 {settlements.map((item) => {
                   const customerPaid = Number(item.customerPaid || 0);
                   const bnplAdminFee = Number(item.bnplAdminFee || 0);
-
-                  const bnplAbsorbedStripeFee =
-                    item.bnplAbsorbedStripeFee != null
-                      ? Number(item.bnplAbsorbedStripeFee)
-                      : Number((customerPaid * 0.01).toFixed(2));
-
-                  const actualGet =
-                    item.bnplNetEarned != null
-                      ? Number(item.bnplNetEarned)
-                      : Number(
-                          (bnplAdminFee - bnplAbsorbedStripeFee).toFixed(2)
-                        );
 
                   return (
                     <tr key={item.bookingId}>
@@ -294,14 +280,9 @@ export default function MasterSettlements() {
                       </td>
 
                       <td>
-                        <strong>{formatMoney(bnplAbsorbedStripeFee)}</strong>
-                        <small>1% absorbed by BNPL</small>
-                      </td>
-
-                      <td>
-                        <strong>{formatMoney(actualGet)}</strong>
-                        <small>BNPL actual earning</small>
-                      </td>
+                        <strong>{formatMoney(bnplAdminFee)}</strong>
+                        <small>BNPL platform income</small>
+                    </td>
 
                       <td>
                         <small>{item.transactionId || "-"}</small>
@@ -317,39 +298,33 @@ export default function MasterSettlements() {
         )}
       </section>
             <section className="operator-card">
-        <div className="operator-card-head">
-            <div>
-            <h2>How this is calculated</h2>
-            <p>Formula used for the admin settlement calculation.</p>
-            </div>
-        </div>
-
-        <div className="operator-settlement-formula">
-            <div>
-            <CreditCard size={22} />
-            <span>Customer Paid</span>
-            <strong>Full booking amount paid through Stripe</strong>
+            <div className="operator-card-head">
+                <div>
+                <h2>How this is calculated</h2>
+                <p>Formula used for the admin settlement calculation.</p>
+                </div>
             </div>
 
-            <div>
-            <Percent size={22} />
-            <span>BNPL Admin Fee</span>
-            <strong>Customer Paid × {data.platformFeePercent || 10}%</strong>
-            </div>
+            <div className="operator-settlement-formula admin-formula-three">
+                <div>
+                <CreditCard size={22} />
+                <span>Customer Paid</span>
+                <strong>Full booking amount paid by customer through Stripe</strong>
+                </div>
 
-            <div>
-            <Receipt size={22} />
-            <span>Stripe Fee</span>
-            <strong>1% absorbed by BNPL</strong>
-            </div>
+                <div>
+                <Percent size={22} />
+                <span>BNPL Admin Fee</span>
+                <strong>Customer Paid × {data.platformFeePercent || 10}% platform commission</strong>
+                </div>
 
-            <div>
-            <Wallet size={22} />
-            <span>Actual Income</span>
-            <strong>BNPL Admin Fee - Stripe absorbed fee</strong>
+                <div>
+                <Wallet size={22} />
+                <span>Actual Income</span>
+                <strong>Same as BNPL Admin Fee</strong>
+                </div>
             </div>
-        </div>
-        </section>
+            </section>
 
 {bookingModalOpen && (
   <div className="booking-modal-overlay" onClick={closeBookingDetails}>
