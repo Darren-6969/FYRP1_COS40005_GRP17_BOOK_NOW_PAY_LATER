@@ -123,8 +123,8 @@ app.use(generalLimiter);
 app.use("/api/stripe", stripeRoutes);
 
 // ── Body parsing ─────────────────────────────────────────────────────────────
-app.use(express.json({ limit: "512kb" }));
-app.use(express.urlencoded({ extended: true, limit: "512kb" }));
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
 // ── Request logger ───────────────────────────────────────────────────────────
 app.use(requestLogger);

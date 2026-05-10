@@ -64,6 +64,46 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  /*Function Notification Bell*/
+  function getMasterNotificationLink(item) {
+    const text = `${item.title || ""} ${item.message || ""}`.toLowerCase();
+    const type = `${item.type || ""}`.toLowerCase();
+
+    if (type.includes("payment") || text.includes("payment")) {
+      return "/master/payments";
+    }
+
+    if (type.includes("receipt") || text.includes("receipt") || text.includes("e-receipt")) {
+      return "/master/receipts";
+    }
+
+    if (type.includes("invoice") || text.includes("invoice")) {
+      return "/master/invoices";
+    }
+
+    if (type.includes("operator") || text.includes("operator")) {
+      return "/master/operators";
+    }
+
+    if (
+      type.includes("booking") ||
+      text.includes("booking") ||
+      text.match(/bnpl-\d+/i)
+    ) {
+      return "/master/bookings";
+    }
+
+    if (type.includes("cron") || text.includes("cron")) {
+      return "/master/cron-jobs";
+    }
+
+    if (type.includes("email") || text.includes("email")) {
+      return "/master/email-logs";
+    }
+
+    return "/master/system-logs";
+  }
+
   return (
     <header className="master-topbar">
       <div className="master-topbar-title">
@@ -141,23 +181,26 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
               {!loading && !error && recentNotifications.length > 0 && (
                 <div className="portal-dropdown-list">
                   {recentNotifications.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`portal-dropdown-item ${
-                        !item.isRead ? "unread" : ""
-                      }`}
-                      onClick={() => markRead(item.id)}
-                    >
-                      <span className="portal-dropdown-dot" />
+                    <Link
+                        key={item.id}
+                        className={`portal-dropdown-item ${
+                          !item.isRead ? "unread" : ""
+                        }`}
+                        to={getMasterNotificationLink(item)}
+                        onClick={() => {
+                          markRead(item.id);
+                          setOpenNotifications(false);
+                        }}
+                      >
+                        <span className="portal-dropdown-dot" />
 
-                      <span>
-                        <strong>
-                          {item.title || item.type || "Notification"}
-                        </strong>
-                        <small>{item.message || "System update received."}</small>
-                      </span>
-                    </button>
+                        <span>
+                          <strong>
+                            {item.title || item.type || "Notification"}
+                          </strong>
+                          <small>{item.message || "System update received."}</small>
+                        </span>
+                      </Link>
                   ))}
                 </div>
               )}
@@ -179,7 +222,11 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
           )}
         </div>
 
-        <div className="master-user-chip">
+        <Link
+          className="master-user-chip"
+          to="/master/profile"
+          onClick={() => setOpenNotifications(false)}
+        >
           {user?.profileImageUrl ? (
             <img
               src={user.profileImageUrl}
@@ -194,7 +241,7 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
             <strong>{displayName}</strong>
             <small>Master Seller</small>
           </div>
-        </div>
+        </Link>
       </div>
     </header>
   );

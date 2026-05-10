@@ -848,6 +848,19 @@
   color: #64748b;
 }
 
+/*Add Booking ID to Payment Page*/
+.customer-payment-booking-id {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.customer-payment-booking-id strong {
+  color: #2563eb;
+  font-weight: 900;
+}
+
 .customer-card-form {
   display: grid;
   gap: 12px;
@@ -2496,4 +2509,27 @@
   opacity: 0.65;
   cursor: not-allowed;
   transform: none;
+}
+
+/*Function Customer Notification Page*/
+.customer-notification-clickable {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  transition: all 0.25s ease;
+}
+
+.customer-notification-clickable:hover {
+  transform: translateY(-2px);
+  background: rgba(239, 246, 255, 0.9);
+  border-color: rgba(37, 99, 235, 0.25);
+}
+
+.customer-notification-clickable h3,
+.customer-notification-clickable p,
+.customer-notification-clickable small {
+  text-decoration: none;
 }

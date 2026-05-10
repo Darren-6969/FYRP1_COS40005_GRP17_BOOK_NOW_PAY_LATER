@@ -85,6 +85,30 @@ export default function OperatorLayout() {
     navigate("/login", { replace: true });
   };
 
+  /*Function for Notification Bell*/
+    function getNotificationLink(item) {
+      const text = `${item.title || ""} ${item.message || ""}`;
+      const type = item.type || "";
+
+      if (type.includes("PAYMENT") || text.toLowerCase().includes("payment")) {
+        return "/operator/payments";
+      }
+
+      if (type.includes("INVOICE") || text.toLowerCase().includes("invoice")) {
+        return "/operator/invoices";
+      }
+
+      if (
+        type.includes("BOOKING") ||
+        text.toLowerCase().includes("booking") ||
+        text.match(/BNPL-\d+/i)
+      ) {
+        return "/operator/booking-requests";
+      }
+
+      return "/operator/notifications";
+    }
+
   return (
     <div className="operator-shell">
       {mobileMenuOpen && (
@@ -128,21 +152,21 @@ export default function OperatorLayout() {
               onMouseLeave={closeNotificationMenu}
             >
               <button
-  className={`operator-notification-trigger ${
-    unreadCount > 0 ? "has-unread" : ""
-  }`}
-  type="button"
-  onClick={() => navigate("/operator/notifications")}
-  aria-label="Open notifications"
->
-  <span className="portal-bell-icon operator-bell-icon">🔔</span>
+                  className={`operator-notification-trigger ${
+                    unreadCount > 0 ? "has-unread" : ""
+                  }`}
+                  type="button"
+                  onClick={() => navigate("/operator/notifications")}
+                  aria-label="Open notifications"
+                >
+                  <span className="portal-bell-icon operator-bell-icon">🔔</span>
 
-  {unreadCount > 0 && (
-    <span className="portal-notification-badge">
-      {unreadCount}
-    </span>
-  )}
-</button>
+                  {unreadCount > 0 && (
+                    <span className="portal-notification-badge">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
 
               {openNotifications && (
                 <div className="portal-notification-dropdown operator-notification-dropdown">
@@ -181,13 +205,14 @@ export default function OperatorLayout() {
                   {!loading && !error && recentNotifications.length > 0 && (
                     <div className="portal-dropdown-list">
                       {recentNotifications.map((item) => (
-                        <button
+                        <Link
                           key={item.id}
-                          type="button"
-                          className={`portal-dropdown-item ${
-                            !item.isRead ? "unread" : ""
-                          }`}
-                          onClick={() => markRead(item.id)}
+                          className={`portal-dropdown-item ${!item.isRead ? "unread" : ""}`}
+                          to={getNotificationLink(item)}
+                          onClick={() => {
+                            markRead(item.id);
+                            setOpenNotifications(false);
+                          }}
                         >
                           <span className="portal-dropdown-dot" />
 
@@ -199,7 +224,7 @@ export default function OperatorLayout() {
                               {item.message || "Booking update received."}
                             </small>
                           </span>
-                        </button>
+                        </Link>
                       ))}
                     </div>
                   )}
@@ -221,7 +246,11 @@ export default function OperatorLayout() {
               )}
             </div>
 
-            <div className="operator-user-chip">
+            <Link
+              className="operator-user-chip"
+              to="/operator/profile"
+              onClick={() => setOpenNotifications(false)}
+            >
               {user?.profileImageUrl ? (
                 <img
                   src={user.profileImageUrl}
@@ -236,7 +265,7 @@ export default function OperatorLayout() {
                 <strong>{displayName}</strong>
                 <small>Normal Seller</small>
               </div>
-            </div>
+            </Link>
           </div>
         </header>
 

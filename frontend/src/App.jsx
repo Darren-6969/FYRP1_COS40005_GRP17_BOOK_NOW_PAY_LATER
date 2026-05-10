@@ -6,6 +6,7 @@ import Register from "./pages/auth/Register";
 // Master Pages
 import MasterLayout from "./pages/master/layout/MasterLayout";
 import Dashboard from "./pages/master/Dashboard";
+import MasterProfile from "./pages/master/MasterProfile";
 import Bookings from "./pages/master/Bookings";
 import Payments from "./pages/master/Payments";
 import Receipts from "./pages/master/Receipts";
@@ -39,6 +40,7 @@ import CustomerHelp from "./pages/customer/CustomerHelp";
 // Operator Pages
 import OperatorLayout from "./pages/operator/layout/OperatorLayout";
 import OperatorDashboard from "./pages/operator/OperatorDashboard";
+import OperatorProfile from "./pages/operator/OperatorProfile";
 import OperatorBookingRequests from "./pages/operator/OperatorBookingRequests";
 import OperatorBookingDetail from "./pages/operator/OperatorBookingDetail";
 import OperatorPaymentVerification from "./pages/operator/OperatorPaymentVerification";
@@ -65,6 +67,7 @@ export default function App() {
             <Route path="/master" element={<MasterLayout />}>
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
+              <Route path="profile" element={<MasterProfile />} />
               <Route path="bookings" element={<Bookings />} />
               <Route path="payments" element={<Payments />} />
               <Route path="receipts" element={<Receipts />} />
@@ -86,6 +89,7 @@ export default function App() {
             <Route path="/operator" element={<OperatorLayout />}>
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<OperatorDashboard />} />
+              <Route path="profile" element={<OperatorProfile />} />
               <Route path="booking-requests" element={<OperatorBookingRequests />} />
               <Route path="bookings/:id" element={<OperatorBookingDetail />} />
               <Route path="payments" element={<OperatorPaymentVerification />} />

@@ -216,11 +216,22 @@
   grid-template-columns: 10px 1fr;
   gap: 10px;
   text-align: left;
+
+  /* Add these for Notification Bell */
+  text-decoration: none !important;
+  color: inherit !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .portal-dropdown-item:hover,
 .portal-dropdown-item.unread {
   background: #eff6ff;
+  text-decoration: none !important;
+}
+
+.portal-dropdown-item:hover {
+  transform: translateX(2px);
 }
 
 .portal-dropdown-dot {
@@ -239,6 +250,7 @@
   display: block;
   color: #0f172a;
   font-size: 13px;
+  text-decoration: none !important;
 }
 
 .portal-dropdown-item small {
@@ -246,6 +258,11 @@
   margin-top: 4px;
   color: #64748b;
   line-height: 1.4;
+  text-decoration: none !important;
+}
+
+.portal-dropdown-item:hover strong {
+  color: #2563eb;
 }
 
 .portal-dropdown-empty {
@@ -275,3 +292,4 @@
   align-items: center;
   gap: 4px;
 }
+

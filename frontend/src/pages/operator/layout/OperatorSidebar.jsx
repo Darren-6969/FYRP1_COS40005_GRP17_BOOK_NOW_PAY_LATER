@@ -13,6 +13,7 @@ import {
   Settings,
   CircleHelp,
   LogOut,
+  UserRound
 } from "lucide-react";
 
 const links = [
@@ -25,6 +26,7 @@ const links = [
   { to: "/operator/analytics", label: "Analytics & Demand Forecast", icon: <TrendingUp size={20} /> },
   { to: "/operator/notifications", label: "Notifications", icon: <Bell size={20} /> },
   { to: "/operator/settlements", label: "Settlements", icon: <Wallet size={20} /> },
+  { to: "/operator/profile", label: "Profile", icon: <UserRound size={20} /> },
   { to: "/operator/settings", label: "Settings", icon: <Settings size={20} /> },
   { to: "/operator/help", label: "Help & Support", icon: <CircleHelp size={20} /> },
 ];

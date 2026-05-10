@@ -1,7 +1,9 @@
+import { useNavigate } from "react-router-dom";
 import { useOperatorNotifications } from "../../hooks/useNotifications";
 import { formatOperatorDateTime } from "../../services/operator_service";
 
 export default function OperatorNotifications() {
+  const navigate = useNavigate();
   const {
     notifications,
     loading,
@@ -12,6 +14,102 @@ export default function OperatorNotifications() {
   } = useOperatorNotifications();
 
   const unreadCount = notifications.filter((item) => !item.isRead).length;
+  
+/*Notification Page Clickable for Details*/
+function getOperatorNotificationLink(item) {
+  const text = `${item.title || ""} ${item.message || ""}`.toLowerCase();
+  const type = `${item.type || ""}`.toLowerCase();
+
+  // New booking request / pending review
+  if (
+    text.includes("new booking request") ||
+    text.includes("requires review") ||
+    type.includes("booking_request") ||
+    type.includes("new_booking")
+  ) {
+    return "/operator/booking-requests";
+  }
+
+  // Booking auto-rejected
+  if (
+    text.includes("auto-rejected") ||
+    text.includes("automatically rejected") ||
+    text.includes("no merchant response") ||
+    type.includes("auto_rejected")
+  ) {
+    return "/operator/booking-log";
+  }
+
+  // Booking cancelled by customer
+  if (
+    text.includes("cancelled by customer") ||
+    text.includes("canceled by customer") ||
+    text.includes("cancelled booking") ||
+    text.includes("canceled booking") ||
+    text.includes("cancelled") ||
+    text.includes("canceled") ||
+    type.includes("cancel")
+  ) {
+    return "/operator/booking-log";
+  }
+
+  // Booking completed
+  if (
+    text.includes("booking completed") ||
+    text.includes("marked as completed") ||
+    text.includes("completed") ||
+    type.includes("completed")
+  ) {
+    return "/operator/booking-log";
+  }
+
+  // Booking rejected / accepted / general booking status
+  if (
+    text.includes("booking rejected") ||
+    text.includes("booking accepted") ||
+    text.includes("booking approved") ||
+    text.includes("booking bnpl-") ||
+    type.includes("booking")
+  ) {
+    return "/operator/booking-log";
+  }
+
+  // Payment
+  if (
+    text.includes("payment") ||
+    text.includes("stripe") ||
+    text.includes("paid") ||
+    type.includes("payment")
+  ) {
+    return "/operator/payments";
+  }
+
+  // Invoice
+  if (text.includes("invoice") || type.includes("invoice")) {
+    return "/operator/invoices";
+  }
+
+  // Receipt
+  if (
+    text.includes("receipt") ||
+    text.includes("e-receipt") ||
+    type.includes("receipt")
+  ) {
+    return "/operator/payments";
+  }
+
+  // Settlement
+  if (text.includes("settlement") || type.includes("settlement")) {
+    return "/operator/settlements";
+  }
+
+  return "/operator/notifications";
+  }
+
+const handleNotificationClick = async (item) => {
+  await markRead(item.id);
+  navigate(getOperatorNotificationLink(item));
+};
 
   return (
     <div className="operator-page">
@@ -63,7 +161,7 @@ export default function OperatorNotifications() {
                 key={item.id}
                 type="button"
                 className={`operator-notification-item ${!item.isRead ? "unread" : ""}`}
-                onClick={() => markRead(item.id)}
+                onClick={() => handleNotificationClick(item)}
               >
                 <span className={`operator-notification-icon ${item.isRead ? "neutral" : "info"}`}>
                   🔔

@@ -79,6 +79,29 @@ export default function CustomerLayout() {
     navigate("/login", { replace: true });
   };
   
+  /*Function the Notification Bell*/
+function getCustomerNotificationLink(item) {
+  const text = `${item.title || ""} ${item.message || ""}`.toLowerCase();
+  const type = `${item.type || ""}`.toLowerCase();
+
+  if (type.includes("receipt") || text.includes("receipt") || text.includes("e-receipt")) {
+    return "/customer/payments";
+  }
+
+  if (type.includes("payment") || text.includes("payment")) {
+    return "/customer/payments";
+  }
+
+  if (type.includes("invoice") || text.includes("invoice")) {
+    return "/customer/invoices";
+  }
+
+  if (type.includes("booking") || text.includes("booking") || text.match(/bnpl-\d+/i)) {
+    return "/customer/bookings";
+  }
+
+  return "/customer/notifications";
+}
 
   return (
   <div className={`customer-shell ${mobileMenuOpen ? "customer-menu-open" : ""}`}>
@@ -165,13 +188,17 @@ export default function CustomerLayout() {
         {!loading && !error && recentNotifications.length > 0 && (
           <div className="portal-dropdown-list">
             {recentNotifications.map((item) => (
-              <button
+              <Link
                 key={item.id}
-                type="button"
                 className={`portal-dropdown-item ${!item.isRead ? "unread" : ""}`}
-                onClick={() => markRead(item.id)}
+                to={getCustomerNotificationLink(item)}
+                onClick={() => {
+                  markRead(item.id);
+                  setOpenNotifications(false);
+                }}
               >
                 <span className="portal-dropdown-dot" />
+
                 <span>
                   <strong>{item.title || item.type || "Notification"}</strong>
                   <small>
@@ -180,7 +207,7 @@ export default function CustomerLayout() {
                       "Booking update received."}
                   </small>
                 </span>
-              </button>
+              </Link>
             ))}
           </div>
         )}

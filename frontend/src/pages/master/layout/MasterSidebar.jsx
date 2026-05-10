@@ -15,6 +15,7 @@ import {
   LogOut,
   HelpCircle,
   Wallet,
+  UserRound,
 } from "lucide-react";
 
 const links = [
@@ -31,6 +32,7 @@ const links = [
   { to: "/master/system-settings", label: "System Settings", icon: Settings },
   { to: "/master/email-logs", label: "Email Logs", icon: Mail },
   { to: "/master/system-logs", label: "System Logs", icon: FileText },
+  { to: "/master/profile", label: "Profile", icon: UserRound },
   { to: "/master/help", label: "Help & Support", icon: HelpCircle },
 ];
 
