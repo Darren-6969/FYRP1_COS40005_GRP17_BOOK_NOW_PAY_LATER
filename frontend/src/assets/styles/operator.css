@@ -3014,3 +3014,69 @@
   font-size: 11px;
   line-height: 1;
 }
+
+/*Settlement Alignment 10 rows per page
+  Add Pages Function*/
+  .operator-pagination {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.operator-pagination > span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.operator-pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.operator-pagination-actions button {
+  min-width: 36px;
+  height: 36px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #2563eb;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.operator-pagination-actions button:hover:not(:disabled),
+.operator-pagination-actions button.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+.operator-pagination-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+  .operator-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .operator-pagination-actions {
+    width: 100%;
+  }
+
+  .operator-pagination-actions button {
+    flex: 1;
+    min-width: 42px;
+  }
+}

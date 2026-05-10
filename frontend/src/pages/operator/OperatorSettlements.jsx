@@ -48,6 +48,9 @@ export default function OperatorSettlements() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 10;
+
   async function loadSettlements() {
     try {
       setLoading(true);
@@ -68,6 +71,7 @@ export default function OperatorSettlements() {
       }
 
       setData(json);
+      setCurrentPage(1);
     } catch (err) {
       setError(err.message || "Failed to load settlement data");
     } finally {
@@ -85,6 +89,21 @@ export default function OperatorSettlements() {
     totalStripeFee: 0,
     totalMerchantReceives: 0,
   };
+
+  const totalPages = Math.max(
+  1,
+  Math.ceil((data.settlements?.length || 0) / rowsPerPage)
+);
+
+const paginatedSettlements = (data.settlements || []).slice(
+  (currentPage - 1) * rowsPerPage,
+  currentPage * rowsPerPage
+);
+
+function goToPage(page) {
+  if (page < 1 || page > totalPages) return;
+  setCurrentPage(page);
+}
 
   async function openBookingDetails(bookingId) {
   try {
@@ -211,7 +230,7 @@ function closeBookingDetails() {
               </thead>
 
               <tbody>
-                {data.settlements.map((item) => (
+                {paginatedSettlements.map((item) => (
                   <tr key={item.bookingId}>
                     <td>
                         <button
@@ -257,6 +276,46 @@ function closeBookingDetails() {
                 ))}
               </tbody>
             </table>
+            <div className="operator-pagination">
+              <span>
+                Showing {(currentPage - 1) * rowsPerPage + 1}-
+                {Math.min(currentPage * rowsPerPage, data.settlements.length)} of{" "}
+                {data.settlements.length}
+              </span>
+
+              <div className="operator-pagination-actions">
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+
+                {Array.from({ length: totalPages }, (_, index) => {
+                  const page = index + 1;
+
+                  return (
+                    <button
+                      key={page}
+                      type="button"
+                      className={currentPage === page ? "active" : ""}
+                      onClick={() => goToPage(page)}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </section>
