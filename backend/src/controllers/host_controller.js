@@ -127,7 +127,8 @@ function resolveHostDateTime({
 
   const value = firstPresent(
     datetime,
-    combinedDateTime
+    combinedDateTime,
+    date
   );
 
   if (!value) {
