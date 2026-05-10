@@ -71,7 +71,7 @@ export default function OperatorBookingLog() {
               <tbody>
                 {bookings.map((booking) => (
                   <tr key={booking.id}>
-                    <td>{booking.id}</td>
+                    {booking.bookingCode || `BNPL-${String(booking.id).padStart(4, "0")}`}
                     <td>{booking.customer?.name || "-"}</td>
                     <td>{booking.serviceName}</td>
                     <td>{formatOperatorDateTime(booking.pickupDate)}</td>
