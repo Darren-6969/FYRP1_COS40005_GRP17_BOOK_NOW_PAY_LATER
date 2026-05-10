@@ -276,6 +276,10 @@ model BNPLConfig {
   // Email branding
   invoiceLogoUrl    String?
   invoiceFooterText String?
+  
+  // Rejection email custom text
+  bookingRejectedEmailText String?
+  autoRejectedEmailText    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

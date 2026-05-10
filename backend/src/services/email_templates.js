@@ -92,15 +92,25 @@ function getBalanceRemaining(booking, payment) {
   );
 }
 
-function baseTemplate({ title, body, buttonText, buttonUrl }) {
+function baseTemplate({ title, body, buttonText, buttonUrl, operator }) {
+  const logoHtml = operator?.logoUrl
+    ? `<img src="${operator.logoUrl}" alt="Company Logo" style="width:72px;height:72px;object-fit:contain;border-radius:18px;background:#ffffff;margin-bottom:12px;" />`
+    : `<div style="width:72px;height:72px;border-radius:18px;background:#2563eb;color:white;display:inline-block;text-align:center;line-height:72px;font-weight:900;margin-bottom:12px;">BNPL</div>`;
+
+  const companyName = operator?.companyName || "Book Now Pay Later";
+
   return `
     <div style="margin:0;padding:0;background:#eef4ff;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
       <div style="max-width:860px;margin:0 auto;padding:34px 18px;">
         <div style="background:#ffffff;border:1px solid #dbeafe;border-radius:28px;overflow:hidden;box-shadow:0 24px 70px rgba(15,23,42,0.10);">
+          
           <div style="padding:28px 32px;background:linear-gradient(135deg,#f8fbff 0%,#eff6ff 100%);border-bottom:1px solid #e2e8f0;">
+            ${logoHtml}
+
             <p style="margin:0 0 8px;color:#2563eb;font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;">
-              Book Now Pay Later
+              ${companyName}
             </p>
+
             <h1 style="margin:0;font-size:28px;line-height:1.2;color:#0f172a;">
               ${title}
             </h1>
@@ -124,7 +134,7 @@ function baseTemplate({ title, body, buttonText, buttonUrl }) {
 
           <div style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
             <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;">
-              This is an automated email from the Book Now Pay Later system.
+              This is an automated email from ${companyName}.
             </p>
           </div>
         </div>
@@ -274,6 +284,7 @@ export function bookingSubmittedTemplate({ booking, operatorUrl }) {
     title: "New Booking Request Received",
     buttonText: "Review Booking",
     buttonUrl: operatorUrl,
+    operator: booking?.operator,
     body: `
       <p style="margin-top:0;">Dear Operator,</p>
       <p>A new BNPL booking request has been submitted and is waiting for your review.</p>
@@ -282,15 +293,33 @@ export function bookingSubmittedTemplate({ booking, operatorUrl }) {
   });
 }
 
-export function bookingStatusTemplate({ booking, status, customerUrl }) {
+export function bookingStatusTemplate({
+  booking,
+  status,
+  customerUrl,
+  bookingRejectedEmailText,
+}) {
+  const isRejected = status === "REJECTED";
+
   return baseTemplate({
     title: `Booking ${titleCase(status)}`,
     buttonText: "View Booking",
     buttonUrl: customerUrl,
+    operator: booking?.operator,
     body: `
-      <p style="margin-top:0;">Dear ${booking?.customer?.name || "Customer"},</p>
-      <p>Your booking has been updated to:</p>
-      <p style="margin:14px 0;">${badge(titleCase(status), "blue")}</p>
+      <p style="margin-top:0;">Dear ${
+        booking?.customer?.name || "Customer"
+      },</p>
+
+      ${
+        isRejected && bookingRejectedEmailText
+          ? `<p>${bookingRejectedEmailText}</p>`
+          : `
+            <p>Your booking has been updated to:</p>
+            <p style="margin:14px 0;">${badge(titleCase(status), "blue")}</p>
+          `
+      }
+
       ${bookingTable(booking)}
     `,
   });
@@ -301,6 +330,7 @@ export function paymentRequestTemplate({ booking, customerUrl }) {
     title: "Payment Required",
     buttonText: "Proceed to Payment",
     buttonUrl: customerUrl,
+    operator: booking?.operator,
     body: `
       <p style="margin-top:0;">Dear ${booking?.customer?.name || "Customer"},</p>
       <p>Your booking has been accepted. Please complete the payment before the deadline.</p>
@@ -314,6 +344,7 @@ export function alternativeSuggestionTemplate({ booking, customerUrl }) {
     title: "Alternative Booking Suggested",
     buttonText: "Review Alternative",
     buttonUrl: customerUrl,
+    operator: booking?.operator,
     body: `
       <p style="margin-top:0;">Dear ${booking?.customer?.name || "Customer"},</p>
       <p>The original booking option is unavailable. The operator has suggested an alternative option.</p>
@@ -362,6 +393,7 @@ export function customerAlternativeResponseTemplate({
     title: accepted ? "Customer Accepted Alternative" : "Customer Rejected Alternative",
     buttonText: "View Booking",
     buttonUrl: operatorUrl,
+    operator: booking?.operator,
     body: `
       <p style="margin-top:0;">Dear Operator,</p>
       <p>
@@ -381,6 +413,7 @@ export function receiptUploadedTemplate({ booking, operatorUrl }) {
     title: "Payment Receipt Uploaded",
     buttonText: "Verify Receipt",
     buttonUrl: operatorUrl,
+    operator: booking?.operator,
     body: `
       <p style="margin-top:0;">Dear Operator,</p>
       <p>The customer has uploaded a payment receipt for verification.</p>
@@ -402,6 +435,7 @@ export function merchantPaymentConfirmedTemplate({
     title: "Payment Confirmed",
     buttonText: "View Payment",
     buttonUrl: operatorUrl,
+    operator: booking?.operator,
     body: `
       <p style="margin-top:0;">Dear Merchant,</p>
       <p>A customer payment has been confirmed for the following BNPL booking.</p>
@@ -446,6 +480,7 @@ export function paymentConfirmedTemplate({ booking, customerUrl }) {
     title: "Payment Confirmed",
     buttonText: "View Booking",
     buttonUrl: customerUrl,
+    operator: booking?.operator,
     body: `
       <p style="margin-top:0;">Dear ${booking?.customer?.name || "Customer"},</p>
       <p>Your payment for booking <strong>${getBookingRef(
@@ -470,6 +505,7 @@ export function invoiceSentTemplate({ invoice, booking, customerUrl }) {
     title: "Invoice Issued",
     buttonText: "View Invoice",
     buttonUrl: customerUrl,
+    operator: booking?.operator,
     body: `
       ${documentHeader({
         title: "Invoice",
@@ -592,6 +628,7 @@ export function paymentReceiptTemplate({ booking, payment, customerUrl }) {
     title: "Official Payment Receipt",
     buttonText: "View Booking",
     buttonUrl: customerUrl,
+    operator: booking?.operator,
     body: `
       ${documentHeader({
         title: "Official Receipt",
@@ -655,6 +692,35 @@ export function paymentReceiptTemplate({ booking, payment, customerUrl }) {
         Operator Contact: ${safe(operator?.email, "-")}
         ${operator?.phone ? ` · ${operator.phone}` : ""}
       </p>
+    `,
+  });
+}
+
+export function autoRejectedBookingTemplate({
+  booking,
+  customerUrl,
+  autoRejectedEmailText,
+}) {
+  return baseTemplate({
+    title: "Booking Auto-Rejected",
+    buttonText: "View Booking",
+    buttonUrl: customerUrl,
+    operator: booking?.operator,
+    body: `
+      <p style="margin-top:0;">Dear ${booking?.customer?.name || "Customer"},</p>
+
+      ${
+        autoRejectedEmailText
+          ? `<p>${autoRejectedEmailText}</p>`
+          : `
+            <p>
+              Your booking request has been automatically rejected because no operator action
+              was taken before the booking response deadline.
+            </p>
+          `
+      }
+
+      ${bookingTable(booking)}
     `,
   });
 }

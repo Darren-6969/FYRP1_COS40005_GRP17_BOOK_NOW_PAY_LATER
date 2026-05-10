@@ -12,6 +12,7 @@ import {
 } from "../services/notification_email_service.js";
 import {
   alternativeSuggestionTemplate,
+  autoRejectedBookingTemplate,
   bookingStatusTemplate,
   invoiceSentTemplate,
   merchantPaymentConfirmedTemplate,
@@ -721,16 +722,31 @@ async function updateBookingStatus(req, res, next, status, action) {
 
     const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;
 
+    const config =
+      status === "REJECTED"
+        ? await prisma.bNPLConfig.findFirst({
+            where: { operatorId: updatedBooking.operatorId },
+            orderBy: { createdAt: "desc" },
+          })
+        : null;
+
     await createCustomerNotification({
       booking: updatedBooking,
       title: `Booking ${status.replace("_", " ").toLowerCase()}`,
-      message: `Your booking ${booking.bookingCode || booking.id} has been updated to ${status}.`,
+      message: `Your booking ${
+        booking.bookingCode || booking.id
+      } has been updated to ${status}.`,
       type: action,
-      emailSubject: `Booking Update - ${booking.bookingCode || booking.id}`,
+      emailSubject:
+        status === "REJECTED"
+          ? `Booking Rejected - ${booking.bookingCode || booking.id}`
+          : `Booking Update - ${booking.bookingCode || booking.id}`,
       emailHtml: bookingStatusTemplate({
         booking: updatedBooking,
         status,
         customerUrl,
+        bookingRejectedEmailText:
+          status === "REJECTED" ? config?.bookingRejectedEmailText : null,
       }),
     });
 
@@ -2428,6 +2444,8 @@ export async function updateOperatorSettings(req, res, next) {
       enableOperatorReminderAlerts,
       companyLogo,
       invoiceFooterText,
+      bookingRejectedEmailText,
+      autoRejectedEmailText,
     } = req.body || {};
 
     const parsedBookingDeadline = Number(bookingResponseDeadlineMinutes);
@@ -2481,6 +2499,8 @@ export async function updateOperatorSettings(req, res, next) {
         enableOperatorReminderAlerts: Boolean(enableOperatorReminderAlerts),
         invoiceLogoUrl: companyLogo || null,
         invoiceFooterText: invoiceFooterText || null,
+        bookingRejectedEmailText: bookingRejectedEmailText || null,
+        autoRejectedEmailText: autoRejectedEmailText || null,
       },
     });
 
@@ -2638,6 +2658,7 @@ export async function previewOperatorEmailTemplate(req, res, next) {
           },
           status: "REJECTED",
           customerUrl,
+          bookingRejectedEmailText: config?.bookingRejectedEmailText,
         });
         break;
 
@@ -2680,6 +2701,18 @@ export async function previewOperatorEmailTemplate(req, res, next) {
           invoice,
           booking,
           customerUrl,
+        });
+        break;
+        
+        case "auto_rejected":
+          subject = `Booking Auto-Rejected - ${booking.bookingCode}`;
+          html = autoRejectedBookingTemplate({
+            booking: {
+              ...booking,
+              status: "REJECTED",
+            },
+            customerUrl,
+          autoRejectedEmailText: config?.autoRejectedEmailText,
         });
         break;
     }

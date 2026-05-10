@@ -68,6 +68,13 @@ router.post(
 );
 
 router.post(
+  "/run-auto-reject-inactive-bookings",
+  verifyToken,
+  allowRoles("MASTER_SELLER"),
+  runNoResponseCron
+);
+
+router.post(
   "/run-maintenance-checks",
   verifyToken,
   allowRoles("MASTER_SELLER"),

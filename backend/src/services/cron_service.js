@@ -220,21 +220,20 @@ export async function runOverdueBookingCheck({
 
       await notifyCustomerByBooking({
         booking: updatedBooking,
-        title: "Booking overdue",
+        title: "Booking auto-rejected",
         message: `Booking ${
           updatedBooking.bookingCode || updatedBooking.id
-        } has been marked overdue because payment was not completed before the deadline.`,
-        type: "BOOKING_OVERDUE",
-        emailSubject: `Booking Overdue - ${
+        } was automatically rejected because the merchant did not respond before the booking response deadline.`,
+        type: "BOOKING_AUTO_REJECTED_NO_RESPONSE",
+        emailSubject: `Booking Auto-Rejected - ${
           updatedBooking.bookingCode || updatedBooking.id
         }`,
-        emailHtml: bookingStatusTemplate({
+        emailHtml: autoRejectedBookingTemplate({
           booking: updatedBooking,
-          status: "OVERDUE",
           customerUrl: frontendBookingUrl(booking.id),
+          autoRejectedEmailText: config?.autoRejectedEmailText,
         }),
       });
-
       expired.push(updatedBooking);
     }
 
@@ -593,13 +592,16 @@ export async function runNoMerchantResponseCheck({
     }
 
     const now = new Date();
-    const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
 
     const noResponseCandidates = await prisma.booking.findMany({
       where: {
         status: "PENDING",
-        createdAt: {
-          lt: twoDaysAgo,
+        operator: {
+          configs: {
+            some: {
+              autoRejectInactiveBooking: true,
+            },
+          },
         },
       },
       include: includeBookingRelations(),
@@ -608,6 +610,31 @@ export async function runNoMerchantResponseCheck({
     const rejected = [];
 
     for (const booking of noResponseCandidates) {
+      const config = await prisma.bNPLConfig.findFirst({
+        where: {
+          operatorId: booking.operatorId,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      if (!config?.autoRejectInactiveBooking) {
+        continue;
+      }
+
+      const responseDeadlineMinutes =
+        config.bookingResponseDeadlineMinutes || 120;
+
+      const responseDeadline = new Date(
+        new Date(booking.createdAt).getTime() +
+          responseDeadlineMinutes * 60 * 1000
+      );
+
+      if (responseDeadline > now) {
+        continue;
+      }
+
       const alreadyRejected = await hasAuditLog(
         booking.id,
         "BOOKING_AUTO_REJECTED_NO_MERCHANT_RESPONSE"
@@ -636,8 +663,10 @@ export async function runNoMerchantResponseCheck({
           details: {
             bookingCode: booking.bookingCode,
             createdAt: booking.createdAt,
+            responseDeadline,
+            responseDeadlineMinutes,
             reason:
-              "Merchant/operator did not respond within 2 days after booking submission.",
+              "Merchant/operator did not respond before the configured booking response deadline.",
             cronRunId: cronRun?.id || null,
           },
         },
@@ -648,7 +677,7 @@ export async function runNoMerchantResponseCheck({
         title: "Booking rejected",
         message: `Booking ${
           updatedBooking.bookingCode || updatedBooking.id
-        } was automatically rejected because the merchant did not respond within 2 days.`,
+        } was automatically rejected because the merchant did not respond within the configured deadline.`,
         type: "BOOKING_AUTO_REJECTED_NO_RESPONSE",
         emailSubject: `Booking Rejected - ${
           updatedBooking.bookingCode || updatedBooking.id
@@ -665,7 +694,7 @@ export async function runNoMerchantResponseCheck({
         title: "Booking auto-rejected",
         message: `Booking ${
           updatedBooking.bookingCode || updatedBooking.id
-        } was automatically rejected because there was no merchant response within 2 days.`,
+        } was automatically rejected because there was no merchant response before the configured response deadline.`,
         type: "BOOKING_AUTO_REJECTED_NO_RESPONSE",
       });
 
@@ -673,7 +702,7 @@ export async function runNoMerchantResponseCheck({
         title: "Booking auto-rejected",
         message: `Booking ${
           updatedBooking.bookingCode || updatedBooking.id
-        } was rejected due to no merchant response within 2 days.`,
+        } was rejected due to no merchant response before the configured response deadline.`,
         type: "BOOKING_AUTO_REJECTED_NO_RESPONSE",
         relatedEntityType: "Booking",
         relatedEntityId: updatedBooking.id,

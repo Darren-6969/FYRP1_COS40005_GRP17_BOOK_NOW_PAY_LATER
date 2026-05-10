@@ -75,6 +75,9 @@ const DEFAULT_SETTINGS = {
   selectedEmailTemplate: "booking_accepted",
   companyLogo: "",
 
+  bookingRejectedEmailText: "",
+  autoRejectedEmailText: "",
+
   mfaEnabled: false,
   apiKeyVisible: false,
 };
@@ -108,6 +111,44 @@ export default function OperatorSettings() {
 
       const res = await operatorService.getSettings();
       setSettings(res.data);
+
+        const config = res.data.config;
+        const operator = res.data.operator;
+
+        setForm((prev) => ({
+          ...prev,
+
+          bookingResponseDeadlineMinutes:
+            config?.bookingResponseDeadlineMinutes ?? prev.bookingResponseDeadlineMinutes,
+
+          autoRejectInactiveBooking:
+            config?.autoRejectInactiveBooking ?? prev.autoRejectInactiveBooking,
+
+          reminderBeforeAutoRejectMinutes:
+            config?.reminderBeforeAutoRejectMinutes ?? prev.reminderBeforeAutoRejectMinutes,
+
+          acceptedPaymentMethods:
+            config?.acceptedPaymentMethods ?? prev.acceptedPaymentMethods,
+
+          manualPaymentInstructions:
+            config?.manualPaymentNote ?? prev.manualPaymentInstructions,
+
+          operatorReminderBeforeAutoRejectMinutes:
+            config?.operatorReminderBeforeAutoRejectMinutes ??
+            prev.operatorReminderBeforeAutoRejectMinutes,
+
+          enableOperatorReminderAlerts:
+            config?.enableOperatorReminderAlerts ?? prev.enableOperatorReminderAlerts,
+
+          companyLogo:
+            operator?.logoUrl || config?.invoiceLogoUrl || prev.companyLogo || "",
+
+          bookingRejectedEmailText:
+            config?.bookingRejectedEmailText || "",
+
+          autoRejectedEmailText:
+            config?.autoRejectedEmailText || "",
+        }));
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -197,6 +238,8 @@ const handleSave = async () => {
       enableOperatorReminderAlerts: form.enableOperatorReminderAlerts,
       companyLogo: form.companyLogo,
       invoiceFooterText: form.invoiceFooterText || null,
+      bookingRejectedEmailText: form.bookingRejectedEmailText,
+      autoRejectedEmailText: form.autoRejectedEmailText,
     });
 
     setSettings((prev) => ({
@@ -487,6 +530,38 @@ const handleSave = async () => {
                     )}
                   </div>
                 </div>
+
+                {form.selectedEmailTemplate === "booking_rejected" && (
+                  <FormField
+                    label="Custom booking rejected message"
+                    helper="This text is only used when an operator manually rejects a booking."
+                  >
+                    <textarea
+                      rows={5}
+                      value={form.bookingRejectedEmailText}
+                      onChange={(event) =>
+                        updateField("bookingRejectedEmailText", event.target.value)
+                      }
+                      placeholder="Example: Unfortunately, your requested booking is unavailable. Please contact us for further assistance."
+                    />
+                  </FormField>
+                )}
+
+                {form.selectedEmailTemplate === "auto_rejected" && (
+                  <FormField
+                    label="Custom auto-rejected message"
+                    helper="This text is only used when a booking is automatically rejected because no operator action was taken."
+                  >
+                    <textarea
+                      rows={5}
+                      value={form.autoRejectedEmailText}
+                      onChange={(event) =>
+                        updateField("autoRejectedEmailText", event.target.value)
+                      }
+                      placeholder="Example: Your booking request has expired because no operator response was made before the deadline."
+                    />
+                  </FormField>
+                )}
               </div>
 
               <BackendEmailPreview template={form.selectedEmailTemplate} />
