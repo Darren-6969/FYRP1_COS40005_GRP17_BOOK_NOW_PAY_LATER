@@ -58,9 +58,6 @@ export function parseMalaysiaLocalDateTime(value) {
   );
 }
 
-/**
- * Used when reading a normal ISO date that is already correctly UTC.
- */
 export function parseUtcDate(value) {
   if (!value) return null;
 
