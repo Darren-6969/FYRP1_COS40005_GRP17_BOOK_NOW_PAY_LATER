@@ -236,12 +236,12 @@ function closeBookingDetails() {
                       <small>{item.platformFeePercent}% platform fee</small>
                     </td>
 
-                    <td>
+                   <td>
                       <strong>{formatMoney(item.stripeFee)}</strong>
                       <small className="stripe-method-label">
-                        {(item.paymentMethodLabel || "Stripe").replace("Stripe - ", "")}
+                        STRIPE - {(item.paymentMethodLabel || "Stripe").replace("Stripe - ", "")}
                       </small>
-                    </td>
+                  </td>
 
                     <td>
                       <strong>{formatMoney(item.merchantReceives)}</strong>

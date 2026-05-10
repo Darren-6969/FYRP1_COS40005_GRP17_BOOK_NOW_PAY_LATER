@@ -619,6 +619,32 @@
   margin-top: 3px;
 }
 
+/* Fix settlement table labels showing on desktop */
+@media (min-width: 861px) {
+  .operator-table td::before {
+    content: none !important;
+    display: none !important;
+  }
+
+  .operator-table td {
+    display: table-cell !important;
+  }
+}
+
+/* Stripe method badge under Stripe Fee */
+.stripe-method-label {
+  display: inline-flex !important;
+  width: fit-content;
+  margin-top: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #2563eb !important;
+  font-weight: 900;
+  font-size: 11px;
+  line-height: 1;
+}
+
 .operator-table a {
   color: #2563eb;
   font-weight: 900;
