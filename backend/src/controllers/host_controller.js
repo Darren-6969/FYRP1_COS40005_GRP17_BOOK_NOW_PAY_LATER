@@ -295,21 +295,7 @@ export async function createHostBookingIntent(req, res, next) {
     }
 
     const amount = validateAmount(totalAmount);
-        
-    if (pickupDate && !hasTimeComponent(pickupDate)) {
-      return res.status(400).json({
-        message:
-          "pickupDate must include time. Example: 2026-05-11T03:00:00",
-      });
-    }
-
-    if (returnDate && !hasTimeComponent(returnDate)) {
-      return res.status(400).json({
-        message:
-          "returnDate must include time. Example: 2026-05-15T02:00:00",
-      });
-    }
-
+    
     const operator = await prisma.operator.findUnique({
       where: { operatorCode },
     });
