@@ -625,11 +625,20 @@ export function paymentReceiptTemplate({ booking, payment, customerUrl }) {
   const receiptNumber = getReceiptNo(payment);
 
   return baseTemplate({
-    title: "Official Payment Receipt",
+    title: "Booking Confirmed & Official Receipt",
     buttonText: "View Booking",
     buttonUrl: customerUrl,
     operator: booking?.operator,
     body: `
+      <p style="margin-top:0;">
+        Dear ${booking?.customer?.name || "Customer"},
+      </p>
+
+      <p>
+        Your payment has been received and your booking is now fully confirmed.
+        Please keep this official receipt for your records.
+      </p>
+
       ${documentHeader({
         title: "Official Receipt",
         number: receiptNumber,

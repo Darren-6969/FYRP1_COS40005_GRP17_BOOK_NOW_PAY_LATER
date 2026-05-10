@@ -2613,8 +2613,13 @@ export async function previewOperatorEmailTemplate(req, res, next) {
     const config = await getOrCreateOperatorConfig(operatorId);
     const booking = buildSampleBooking({ operator, config });
 
-    const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;
-    const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/bookings/${booking.id}`;
+    const customerUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/customer/bookings/${booking.id}`;
+
+    const operatorUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:5173"
+    }/operator/bookings/${booking.id}`;
 
     const invoice = {
       id: 1,
@@ -2640,6 +2645,14 @@ export async function previewOperatorEmailTemplate(req, res, next) {
     let subject;
 
     switch (template) {
+      case "booking_received":
+        subject = `Booking Received - ${booking.bookingCode}`;
+        html = bookingSubmittedTemplate({
+          booking,
+          operatorUrl,
+        });
+        break;
+
       case "booking_accepted":
       case "payment_request":
         subject = `Booking Accepted - ${booking.bookingCode}`;
@@ -2662,6 +2675,18 @@ export async function previewOperatorEmailTemplate(req, res, next) {
         });
         break;
 
+      case "auto_rejected":
+        subject = `Booking Auto-Rejected - ${booking.bookingCode}`;
+        html = autoRejectedBookingTemplate({
+          booking: {
+            ...booking,
+            status: "REJECTED",
+          },
+          customerUrl,
+          autoRejectedEmailText: config?.autoRejectedEmailText,
+        });
+        break;
+
       case "alternative_suggested":
         subject = `Alternative Booking Suggested - ${booking.bookingCode}`;
         html = alternativeSuggestionTemplate({
@@ -2676,6 +2701,7 @@ export async function previewOperatorEmailTemplate(req, res, next) {
           booking: {
             ...booking,
             payment,
+            status: "PAID",
           },
           payment,
           operatorUrl,
@@ -2683,11 +2709,12 @@ export async function previewOperatorEmailTemplate(req, res, next) {
         break;
 
       case "payment_receipt":
-        subject = `Official Receipt - ${booking.bookingCode}`;
+        subject = `Booking Confirmed & Official Receipt - ${booking.bookingCode}`;
         html = paymentReceiptTemplate({
           booking: {
             ...booking,
             payment,
+            status: "PAID",
           },
           payment,
           customerUrl,
@@ -2701,18 +2728,6 @@ export async function previewOperatorEmailTemplate(req, res, next) {
           invoice,
           booking,
           customerUrl,
-        });
-        break;
-        
-        case "auto_rejected":
-          subject = `Booking Auto-Rejected - ${booking.bookingCode}`;
-          html = autoRejectedBookingTemplate({
-            booking: {
-              ...booking,
-              status: "REJECTED",
-            },
-            customerUrl,
-          autoRejectedEmailText: config?.autoRejectedEmailText,
         });
         break;
     }

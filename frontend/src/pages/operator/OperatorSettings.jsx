@@ -44,9 +44,9 @@ const EMAIL_TEMPLATES = [
     subject: "Your payment has been confirmed",
   },
   {
-    value: "final_confirmation",
-    label: "Final Confirmation",
-    subject: "Your booking is fully confirmed",
+  value: "payment_receipt",
+  label: "Booking Confirmed & Official Receipt",
+  subject: "Your booking is confirmed and your receipt is ready",
   },
   {
     value: "auto_rejected",
@@ -249,6 +249,9 @@ const handleSave = async () => {
     }));
 
     setSuccessMessage("Operator settings saved successfully.");
+    setTimeout(() => {
+    setSuccessMessage("");
+    }, 3500);
   } catch (err) {
     setError(err.response?.data?.message || "Failed to save operator settings.");
   } finally {
@@ -297,7 +300,10 @@ const handleSave = async () => {
       )}
 
       {successMessage && (
-        <div className="operator-alert success">{successMessage}</div>
+        <div className="operator-toast success" role="status" aria-live="polite">
+          <strong>Success</strong>
+          <span>{successMessage}</span>
+        </div>
       )}
 
       {/* Stripe return banners */}
