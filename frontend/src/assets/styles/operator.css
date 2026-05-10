@@ -2950,3 +2950,41 @@
   background: rgba(239, 246, 255, 0.9);
   border-color: rgba(37, 99, 235, 0.25);
 }
+
+/*Settlement Alignment*/
+.operator-table td:nth-child(7)::before {
+  content: "Method";
+}
+
+.operator-table td:nth-child(8)::before {
+  content: "Transaction";
+}
+
+.operator-table td:nth-child(9)::before {
+  content: "Paid At";
+}
+
+.operator-table td small.stripe-method-label {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #2563eb;
+  font-weight: 900;
+  font-size: 11px;
+}
+
+.stripe-method-label {
+  display: inline-flex !important;
+  width: fit-content;
+  margin-top: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #2563eb !important;
+  font-weight: 900;
+  font-size: 11px;
+  line-height: 1;
+}

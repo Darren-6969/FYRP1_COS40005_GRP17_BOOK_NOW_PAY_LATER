@@ -1,5 +1,6 @@
 import prisma from "../config/db.js";
 import bcrypt from "bcryptjs";
+import Stripe from "stripe";
 import { sendEmail } from "../services/email_service.js";
 import { generateForecast, generateAnalytics } from "../services/sarima_service.js";
 import { generateInvoiceForBooking } from "../services/invoice_service.js";
@@ -101,6 +102,54 @@ function mapBooking(booking) {
     payment: mapPayment(booking.payment),
     invoice: mapInvoice(booking.invoice),
   };
+}
+
+/*Helper For Stripe*/
+async function getStripeMethodLabel(transactionId, paymentMethod = "STRIPE") {
+  console.log("[Stripe Method Helper Called]", {
+    transactionId,
+    paymentMethod,
+  });
+
+  if (paymentMethod !== "STRIPE") {
+    return paymentMethod;
+  }
+
+  if (!transactionId || !transactionId.startsWith("pi_")) {
+    return "Stripe";
+  }
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.log("[Stripe Method Debug] Missing STRIPE_SECRET_KEY");
+    return "Stripe";
+  }
+
+  try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+    const paymentIntent = await stripe.paymentIntents.retrieve(transactionId, {
+      expand: ["latest_charge", "payment_method"],
+    });
+
+    const methodType =
+      paymentIntent.latest_charge?.payment_method_details?.type ||
+      paymentIntent.payment_method?.type ||
+      paymentIntent.payment_method_types?.[0];
+
+    console.log("[Stripe Method Debug]", {
+      transactionId,
+      methodType,
+    });
+
+    if (methodType === "card") return "Stripe - Card";
+    if (methodType === "fpx") return "Stripe - FPX";
+    if (methodType === "grabpay") return "Stripe - GrabPay";
+
+    return methodType ? `Stripe - ${methodType}` : "Stripe";
+  } catch (err) {
+    console.error("[Settlement] Failed to detect Stripe method:", err.message);
+    return "Stripe";
+  }
 }
 
 async function findOperatorBooking(req, bookingId) {
@@ -1256,7 +1305,11 @@ export async function getOperatorSettlements(req, res, next) {
       },
     });
 
-    const settlements = bookings.map((booking) => {
+console.log("[Settlement Debug] bookings count:", bookings.length);
+
+    const settlements = await Promise.all(
+      bookings.map(async (booking) => {
+console.log("[Settlement Debug] transaction:", booking.payment?.transactionId);
       const customerPaid = toNumber(booking.totalAmount);
 
       const bnplAdminFee = Number(
@@ -1315,13 +1368,23 @@ export async function getOperatorSettlements(req, res, next) {
 
         paymentStatus: booking.payment?.status || "PAID",
         bookingStatus: booking.status,
+
+        // Main payment method stays STRIPE
         paymentMethod: booking.payment?.method || "STRIPE",
+
+        // This shows Stripe - Card / Stripe - FPX / Stripe - GrabPay
+        paymentMethodLabel: await getStripeMethodLabel(
+  booking.payment?.transactionId,
+  booking.payment?.method
+),
+
         transactionId: booking.payment?.transactionId || null,
         paidAt: booking.payment?.paidAt || null,
 
         invoiceNo: booking.invoice?.invoiceNo || null,
-        };
-        })
+      };
+    })
+  );
 
     const summary = settlements.reduce(
       (acc, item) => {

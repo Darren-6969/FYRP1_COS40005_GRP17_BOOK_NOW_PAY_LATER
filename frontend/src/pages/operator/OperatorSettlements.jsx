@@ -238,7 +238,9 @@ function closeBookingDetails() {
 
                     <td>
                       <strong>{formatMoney(item.stripeFee)}</strong>
-                      <small>4% + RM1 processing fee</small>
+                      <small className="stripe-method-label">
+                        {(item.paymentMethodLabel || "Stripe").replace("Stripe - ", "")}
+                      </small>
                     </td>
 
                     <td>
@@ -437,11 +439,6 @@ function closeBookingDetails() {
               <div>
                 <span>Payment Status</span>
                 <strong>{selectedBooking.payment?.status || "UNPAID"}</strong>
-              </div>
-
-              <div>
-                <span>Payment Method</span>
-                <strong>{selectedBooking.payment?.method || "-"}</strong>
               </div>
 
               <div>
