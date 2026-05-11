@@ -2308,3 +2308,106 @@
     min-width: 42px;
   }
 }
+
+/* =====================================================
+   FINAL FIX: Admin / Master Profile Mobile Overflow
+   ===================================================== */
+
+@media (max-width: 860px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden !important;
+  }
+
+  .master-page,
+  .master-profile-page,
+  .master-profile-shell,
+  .master-profile-shell.no-panel,
+  .master-profile-content,
+  .master-profile-content.no-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  .master-profile-shell,
+  .master-profile-shell.no-panel {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    margin: 0 auto !important;
+    border-radius: 26px !important;
+  }
+
+  .master-profile-content,
+  .master-profile-content.no-panel {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .master-profile-sidebar {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 28px 18px !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.86) !important;
+  }
+
+  .master-profile-tabs {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    padding: 18px 14px !important;
+    box-sizing: border-box !important;
+  }
+
+  .master-profile-tabs button {
+    width: 100% !important;
+    max-width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  .master-profile-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 22px 16px !important;
+    box-sizing: border-box !important;
+  }
+
+  .master-profile-meta {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .master-profile-meta strong,
+  .master-profile-sidebar p {
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+
+  .master-profile-grid,
+  .master-profile-grid.single,
+  .master-help-list {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .master-profile-avatar-img,
+  .master-profile-avatar-fallback {
+    width: 112px !important;
+    height: 112px !important;
+  }
+
+  .master-profile-sidebar h1 {
+    font-size: 1.45rem !important;
+  }
+
+  .master-profile-meta {
+    padding: 14px 16px !important;
+  }
+}

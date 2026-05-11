@@ -3344,3 +3344,95 @@
     font-size: 10px !important;
   }
 }
+
+/* =====================================================
+   FINAL FIX: Operator Profile Mobile Overflow
+   ===================================================== */
+
+@media (max-width: 860px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden !important;
+  }
+
+  .operator-main,
+  .operator-page,
+  .operator-profile-page,
+  .operator-profile-shell,
+  .operator-profile-shell.no-panel,
+  .operator-profile-content,
+  .operator-profile-content.no-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  .operator-profile-shell,
+  .operator-profile-shell.no-panel {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    margin: 0 auto !important;
+    border-radius: 26px !important;
+  }
+
+  .operator-profile-content,
+  .operator-profile-content.no-panel {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .operator-profile-sidebar {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.86) !important;
+    padding: 28px 18px !important;
+    box-sizing: border-box !important;
+  }
+
+  .operator-profile-tabs {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    padding: 18px 14px !important;
+    box-sizing: border-box !important;
+  }
+
+  .operator-profile-tabs button {
+    width: 100% !important;
+    max-width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  .operator-profile-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 22px 16px !important;
+    box-sizing: border-box !important;
+  }
+
+  .operator-profile-meta {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .operator-profile-avatar-img,
+  .operator-profile-avatar-fallback {
+    width: 112px !important;
+    height: 112px !important;
+  }
+
+  .operator-profile-sidebar h1 {
+    font-size: 1.45rem !important;
+  }
+
+  .operator-profile-meta {
+    padding: 14px 16px !important;
+  }
+}
