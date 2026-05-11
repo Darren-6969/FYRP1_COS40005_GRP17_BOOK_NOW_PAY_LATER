@@ -127,8 +127,8 @@ export default function OperatorBookingRequests() {
         {loading ? (
           <div className="operator-empty-state">Loading bookings...</div>
         ) : (
-          <div className="operator-table-wrap">
-            <table className="operator-table">
+          <div className="operator-table-wrap operator-booking-table-wrap">
+           <table className="operator-table operator-booking-table">
               <thead>
                 <tr>
                   <th>Booking ID</th>
