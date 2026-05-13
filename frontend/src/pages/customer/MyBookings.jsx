@@ -14,17 +14,7 @@ const bookingTabs = [
   { key: "ALL", label: "All" },
 ];
 
-const activeStatuses = [
-  "PENDING",
-  "ACCEPTED",
-  "PENDING_PAYMENT",
-  "ALTERNATIVE_SUGGESTED",
-];
-
-const pastStatuses = [
-  "PAID",
-  "COMPLETED",
-  "CONFIRMED",
+const closedStatuses = [
   "CANCELLED",
   "REJECTED",
   "OVERDUE",
@@ -39,9 +29,23 @@ function isPaymentRequired(booking) {
   const status = normalize(booking.status);
   const paymentStatus = normalize(booking.payment?.status);
 
+  const closedStatuses = [
+    "CANCELLED",
+    "REJECTED",
+    "PAID",
+    "COMPLETED",
+    "CONFIRMED",
+    "OVERDUE",
+    "EXPIRED",
+  ];
+
+  if (closedStatuses.includes(status)) {
+    return false;
+  }
+
   return (
-    ["ACCEPTED", "PENDING_PAYMENT"].includes(status) ||
-    paymentStatus === "UNPAID"
+    ["ACCEPTED", "PENDING_PAYMENT"].includes(status) &&
+    ["", "UNPAID", "PENDING"].includes(paymentStatus)
   );
 }
 
@@ -49,13 +53,51 @@ function isPendingVerification(booking) {
   return normalize(booking.payment?.status) === "PENDING_VERIFICATION";
 }
 
+function getBookingEndDate(booking) {
+  return (
+    booking.returnDateTime ||
+    booking.returnDatetime ||
+    booking.returnDate ||
+    booking.dropOffDateTime ||
+    booking.dropoffDateTime ||
+    booking.dropOffDate ||
+    booking.dropoffDate ||
+    booking.checkOutDateTime ||
+    booking.checkoutDateTime ||
+    booking.checkOutDate ||
+    booking.checkoutDate ||
+    booking.endDateTime ||
+    booking.endDate ||
+    booking.bookingEndDateTime ||
+    booking.bookingEndDate ||
+    null
+  );
+}
+
+function hasBookingEnded(booking) {
+  const endDate = getBookingEndDate(booking);
+
+  if (!endDate) {
+    return false;
+  }
+
+  const endTime = new Date(endDate).getTime();
+
+  if (Number.isNaN(endTime)) {
+    return false;
+  }
+
+  return endTime < Date.now();
+}
+
 function isActiveBooking(booking) {
   const status = normalize(booking.status);
-  const paymentStatus = normalize(booking.payment?.status);
 
-  if (paymentStatus === "PENDING_VERIFICATION") return true;
-  if (isPaymentRequired(booking)) return true;
-  return activeStatuses.includes(status);
+  if (closedStatuses.includes(status)) {
+    return false;
+  }
+
+  return !hasBookingEnded(booking);
 }
 
 function isPastBooking(booking) {
@@ -305,9 +347,9 @@ export default function MyBookings() {
 
           <p>
             {activeTab === "ACTIVE"
-              ? "Bookings that are pending, waiting for payment, or under verification."
+              ? "Bookings that are upcoming, ongoing, waiting for payment, or under verification."
               : activeTab === "PAST"
-              ? "Completed, paid, cancelled, rejected, overdue, or expired bookings."
+              ? "Bookings that have ended, been cancelled, rejected, overdue, or expired."
               : "Complete booking history for this customer account."}
           </p>
         </div>
