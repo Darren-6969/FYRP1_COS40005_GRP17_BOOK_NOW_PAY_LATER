@@ -53,6 +53,7 @@ function sanitizeUser(user) {
     notifyPromotions: Boolean(user.notifyPromotions),
     operatorId: user.operatorId || null,
     operator: user.operator || null,
+    operatorAccessLevel: user.operatorAccessLevel || null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -69,11 +70,11 @@ function hashToken(plain) {
   return crypto.createHash("sha256").update(plain).digest("hex");
 }
 
-async function issueTokenPair(userId, role) {
+async function issueTokenPair(userId, role, operatorAccessLevel = null) {
   const secret = process.env.JWT_SECRET;
 
   // Short-lived access token
-  const accessToken = jwt.sign({ id: userId, role }, secret, {
+  const accessToken = jwt.sign({ id: userId, role, operatorAccessLevel }, secret, {
     expiresIn: ACCESS_TOKEN_EXPIRY,
   });
 
@@ -180,7 +181,11 @@ export async function login(req, res, next) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    const { accessToken, refreshToken } = await issueTokenPair(user.id, user.role);
+    const { accessToken, refreshToken } = await issueTokenPair(
+      user.id,
+      user.role,
+      user.operatorAccessLevel
+    );
 
     await prisma.auditLog.create({
       data: {

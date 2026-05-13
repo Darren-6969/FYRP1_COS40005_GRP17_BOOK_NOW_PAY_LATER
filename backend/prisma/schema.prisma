@@ -69,6 +69,11 @@ enum EmailStatus {
   SKIPPED
 }
 
+enum OperatorAccessLevel {
+  OWNER
+  STAFF
+}
+
 model User {
   id       Int      @id @default(autoincrement())
   userCode String   @unique
@@ -84,6 +89,8 @@ model User {
   notifyPaymentReminders Boolean @default(true)
   notifyInvoices Boolean @default(true)
   notifyPromotions Boolean @default(false)
+
+  operatorAccessLevel OperatorAccessLevel?
 
   operatorId Int?
   operator   Operator? @relation(fields: [operatorId], references: [id])

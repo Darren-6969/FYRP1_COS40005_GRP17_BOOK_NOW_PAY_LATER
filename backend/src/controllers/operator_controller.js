@@ -346,6 +346,7 @@ export async function createOperator(req, res, next) {
             email,
             password: hashedPassword,
             role: "NORMAL_SELLER",
+            operatorAccessLevel: "OWNER",
             operatorId: operator.id,
           },
           select: {
@@ -2360,6 +2361,141 @@ async function getOrCreateOperatorConfig(operatorId) {
   }
 
   return config;
+}
+
+export async function createOperatorUser(req, res, next) {
+  try {
+    const operatorId = parseId(req.params.id, "operator id");
+
+    const {
+      name,
+      email,
+      password,
+      accessLevel = "STAFF",
+      sendWelcomeEmail = true,
+    } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({
+        message: "Name and email are required",
+      });
+    }
+
+    if (!["OWNER", "STAFF"].includes(accessLevel)) {
+      return res.status(400).json({
+        message: "Invalid operator access level",
+      });
+    }
+
+    const operator = await prisma.operator.findUnique({
+      where: { id: operatorId },
+    });
+
+    if (!operator) {
+      return res.status(404).json({
+        message: "Operator/company not found",
+      });
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        message: "A user account with this email already exists",
+      });
+    }
+
+    const loginPassword = password || "Password123!";
+    const hashedPassword = await bcrypt.hash(loginPassword, 10);
+    const userCode = await generateUserCode("NORMAL_SELLER");
+
+    const user = await prisma.user.create({
+      data: {
+        userCode,
+        name,
+        email,
+        password: hashedPassword,
+        role: "NORMAL_SELLER",
+        operatorAccessLevel: accessLevel,
+        operatorId: operator.id,
+      },
+      select: {
+        id: true,
+        userCode: true,
+        name: true,
+        email: true,
+        role: true,
+        operatorAccessLevel: true,
+        operatorId: true,
+        createdAt: true,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user?.id || null,
+        action: "OPERATOR_USER_CREATED",
+        entityType: "User",
+        entityId: String(user.id),
+        details: {
+          operatorId: operator.id,
+          companyName: operator.companyName,
+          accessLevel,
+        },
+      },
+    });
+
+    if (sendWelcomeEmail) {
+      await sendEmail({
+        to: user.email,
+        subject: "Your BNPL Operator Staff Account Has Been Created",
+        type: "OPERATOR_STAFF_ACCOUNT_CREATED",
+        relatedEntityType: "User",
+        relatedEntityId: user.id,
+        userId: user.id,
+        html: `
+          <div style="font-family:Arial,sans-serif;line-height:1.6;">
+            <h2>BNPL Operator Account Created</h2>
+            <p>Hello ${user.name},</p>
+            <p>Your account for <strong>${operator.companyName}</strong> has been created.</p>
+
+            <table style="border-collapse:collapse;width:100%;max-width:520px;">
+              <tr>
+                <td style="padding:8px;border:1px solid #ddd;"><strong>Email</strong></td>
+                <td style="padding:8px;border:1px solid #ddd;">${user.email}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px;border:1px solid #ddd;"><strong>Temporary Password</strong></td>
+                <td style="padding:8px;border:1px solid #ddd;">${loginPassword}</td>
+              </tr>
+              <tr>
+                <td style="padding:8px;border:1px solid #ddd;"><strong>Access Level</strong></td>
+                <td style="padding:8px;border:1px solid #ddd;">${accessLevel}</td>
+              </tr>
+            </table>
+
+            <p>Please login using the temporary password above.</p>
+          </div>
+        `,
+      });
+    }
+
+    res.status(201).json({
+      message: "Operator user created successfully",
+      user,
+    });
+  } catch (err) {
+    if (err.code === "P2002") {
+      return res.status(409).json({
+        message: "Duplicate user value detected. Please use another email.",
+        target: err.meta?.target,
+      });
+    }
+
+    next(err);
+  }
 }
 
 export async function getOperatorSettings(req, res, next) {
