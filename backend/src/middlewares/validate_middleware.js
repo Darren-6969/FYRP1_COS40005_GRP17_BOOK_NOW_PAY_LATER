@@ -4,14 +4,19 @@ export function validate(schema) {
     const result = schema.safeParse(req.body);
 
     if (!result.success) {
-      const errors = result.error.errors.map((e) => ({
-        field: e.path.join("."),
+      const zodIssues = result.error.issues || result.error.errors || [];
+
+      const errors = zodIssues.map((e) => ({
+        field: Array.isArray(e.path) ? e.path.join(".") : "",
         message: e.message,
       }));
-      return res.status(400).json({ message: "Validation failed", errors });
+
+      return res.status(400).json({
+        message: "Validation failed",
+        errors,
+      });
     }
 
-    // Replace req.body with the coerced, sanitised output from Zod
     req.body = result.data;
     next();
   };
