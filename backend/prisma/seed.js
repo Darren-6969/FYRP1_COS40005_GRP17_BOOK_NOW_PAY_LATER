@@ -45,18 +45,32 @@ async function main() {
       email: "admin@bnpl.test",
       password,
       role: "MASTER_SELLER",
-      operatorId: operator.id,
+      operatorId: null,
+      operatorAccessLevel: null,
     },
   });
 
   const seller = await prisma.user.create({
     data: {
       userCode: userCode("OPR", 1),
-      name: "GoCar Operator",
+      name: "GoCar Owner",
       email: "seller@bnpl.test",
       password,
       role: "NORMAL_SELLER",
       operatorId: operator.id,
+      operatorAccessLevel: "OWNER",
+    },
+  });
+
+  const staff = await prisma.user.create({
+  data: {
+    userCode: userCode("OPR", 2),
+    name: "GoCar Staff",
+    email: "staff@bnpl.test",
+    password,
+    role: "NORMAL_SELLER",
+    operatorId: operator.id,
+    operatorAccessLevel: "STAFF",
     },
   });
 
