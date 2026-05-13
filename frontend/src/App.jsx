@@ -52,6 +52,7 @@ import OperatorNotifications from "./pages/operator/OperatorNotifications";
 import OperatorSettlements from "./pages/operator/OperatorSettlements"; /* Operator Settlements for Stripe*/
 import OperatorSettings from "./pages/operator/OperatorSettings";
 import OperatorHelp from "./pages/operator/OperatorHelp";
+import OperatorAccessRoute from "./components/OperatorAccessRoute";
 
 export default function App() {
   return (
@@ -88,20 +89,27 @@ export default function App() {
           <Route element={<ProtectedRoute allowedRoles={["NORMAL_SELLER", "MASTER_SELLER"]} />}>
             <Route path="/operator" element={<OperatorLayout />}>
               <Route index element={<Navigate to="dashboard" replace />} />
-              <Route path="dashboard" element={<OperatorDashboard />} />
-              <Route path="profile" element={<OperatorProfile />} />
-              <Route path="booking-requests" element={<OperatorBookingRequests />} />
-              <Route path="bookings/:id" element={<OperatorBookingDetail />} />
-              <Route path="payments" element={<OperatorPaymentVerification />} />
-              <Route path="booking-log" element={<OperatorBookingLog />} />
-              <Route path="invoices" element={<OperatorInvoices />} />
-              <Route path="reports" element={<OperatorSalesReport />} />
-              <Route path="analytics" element={<OperatorAnalytics />} />
-              <Route path="notifications" element={<OperatorNotifications />} />
-              <Route path="settlements" element={<OperatorSettlements />} />  
-              <Route path="settings" element={<OperatorSettings />} />
-              <Route path="help" element={<OperatorHelp />} />
 
+              {/* OWNER + STAFF */}
+              <Route element={<OperatorAccessRoute allowedAccess={["OWNER", "STAFF"]} />}>
+                <Route path="dashboard" element={<OperatorDashboard />} />
+                <Route path="profile" element={<OperatorProfile />} />
+                <Route path="booking-requests" element={<OperatorBookingRequests />} />
+                <Route path="bookings/:id" element={<OperatorBookingDetail />} />
+                <Route path="payments" element={<OperatorPaymentVerification />} />
+                <Route path="booking-log" element={<OperatorBookingLog />} />
+                <Route path="invoices" element={<OperatorInvoices />} />
+                <Route path="notifications" element={<OperatorNotifications />} />
+                <Route path="help" element={<OperatorHelp />} />
+              </Route>
+
+              {/* OWNER ONLY */}
+              <Route element={<OperatorAccessRoute allowedAccess={["OWNER"]} />}>
+                <Route path="reports" element={<OperatorSalesReport />} />
+                <Route path="analytics" element={<OperatorAnalytics />} />
+                <Route path="settlements" element={<OperatorSettlements />} />
+                <Route path="settings" element={<OperatorSettings />} />
+              </Route>
             </Route>
           </Route>
 
