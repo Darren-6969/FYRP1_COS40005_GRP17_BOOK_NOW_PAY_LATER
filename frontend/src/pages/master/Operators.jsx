@@ -92,6 +92,42 @@ function getStaffUsers(op) {
   );
 }
 
+function getAccountSummary(op) {
+  const owner = getOwnerUser(op);
+  const staffUsers = getStaffUsers(op);
+
+  return {
+    owner,
+    staffUsers,
+    ownerCount: owner ? 1 : 0,
+    staffCount: staffUsers.length,
+    total: op.users?.length || 0,
+  };
+}
+
+function accessLevelBadgeClass(level) {
+  const normalized = String(level || "").toUpperCase();
+
+  if (normalized === "OWNER") return "active";
+  if (normalized === "STAFF") return "pending";
+
+  return "suspended";
+}
+
+function accessLevelDescription(level) {
+  const normalized = String(level || "").toUpperCase();
+
+  if (normalized === "OWNER") {
+    return "Full access to all operator features";
+  }
+
+  if (normalized === "STAFF") {
+    return "Booking operations, manual payment verification, invoices, profile and notifications";
+  }
+
+  return "No access level assigned";
+}
+
 function readLogoFile(file) {
   return new Promise((resolve, reject) => {
     if (!file) {
@@ -153,6 +189,7 @@ export default function Operators() {
 
   const [showCompanyForm, setShowCompanyForm] = useState(false);
   const [showStaffForm, setShowStaffForm] = useState(false);
+  const [expandedOperatorId, setExpandedOperatorId] = useState(null);
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -334,6 +371,12 @@ export default function Operators() {
     } finally {
       setSavingStaff(false);
     }
+  };
+
+  const toggleExpandedOperator = (operatorId) => {
+    setExpandedOperatorId((currentId) =>
+      currentId === operatorId ? null : operatorId
+    );
   };
 
   const openStaffFormForOperator = (op) => {
@@ -714,11 +757,11 @@ export default function Operators() {
           <table className="table">
             <thead>
               <tr>
-                <th>Operator</th>
+
                 <th>Company</th>
                 <th>Status</th>
                 <th>Readiness</th>
-                <th>Users</th>
+                <th>Accounts</th>
                 <th>Bookings</th>
                 <th>Pending Verification</th>
                 <th>Overdue</th>
@@ -732,116 +775,197 @@ export default function Operators() {
                 const readiness = readinessLabel(op);
                 const bookings = op.bookings || [];
                 const bookingCount = bookings.length;
-                const owner = getOwnerUser(op);
-                const staffUsers = getStaffUsers(op);
+                const accounts = getAccountSummary(op);
+                const isExpanded = expandedOperatorId === op.id;
 
                 return (
-                  <tr key={op.id}>
-                    <td>
-                      <strong>{op.operatorCode}</strong>
-                      <br />
-                      <small>{op.email}</small>
-                    </td>
+                  <>
+                    <tr key={op.id}>
+                      <td>
+                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                          {op.logoUrl && (
+                            <img
+                              src={op.logoUrl}
+                              alt={`${op.companyName} logo`}
+                              style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 8,
+                                objectFit: "contain",
+                                border: "1px solid #ddd",
+                                background: "#fff",
+                              }}
+                            />
+                          )}
 
-                    <td>
-                      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                        {op.logoUrl && (
-                          <img
-                            src={op.logoUrl}
-                            alt={`${op.companyName} logo`}
+                          <div>
+                            <strong>{op.companyName}</strong>
+                            <br />
+                            <small>{op.phone || "-"}</small>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td>
+                        <span className={`badge ${String(op.status).toLowerCase()}`}>
+                          {op.status}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className={`badge ${readiness.className}`}>
+                          {readiness.label}
+                        </span>
+                        <br />
+                        <small>{op.stripeAccountId ? "Stripe linked" : "No Stripe"}</small>
+                      </td>
+
+                      <td>
+                        <strong>
+                          {accounts.ownerCount} Owner · {accounts.staffCount} Staff
+                        </strong>
+                        <br />
+                        <small>{accounts.total} total login account(s)</small>
+
+                        <div style={{ marginTop: 8 }}>
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => toggleExpandedOperator(op.id)}
+                          >
+                            {isExpanded ? "Hide Accounts" : "View Accounts"}
+                          </button>
+                        </div>
+                      </td>
+
+                      <td>{bookingCount}</td>
+                      <td>{countPendingVerification(bookings)}</td>
+                      <td>{countByBookingStatus(bookings, "OVERDUE")}</td>
+                      <td>{countPaidBookings(bookings)}</td>
+
+                      <td>
+                        <div className="actions">
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => openStaffFormForOperator(op)}
+                          >
+                            Add Staff
+                          </button>
+
+                          <button className="btn" type="button" onClick={() => toggleStatus(op)}>
+                            {op.status === "ACTIVE" ? "Suspend" : "Activate"}
+                          </button>
+
+                          <button
+                            className="btn danger"
+                            type="button"
+                            disabled={bookingCount > 0}
+                            title={
+                              bookingCount > 0
+                                ? "Cannot delete a company/operator with existing bookings"
+                                : "Delete wrongly created company/operator"
+                            }
+                            onClick={() => handleDelete(op)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {isExpanded && (
+                      <tr key={`${op.id}-accounts`}>
+                        <td colSpan="10">
+                          <div
                             style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: 8,
-                              objectFit: "contain",
-                              border: "1px solid #ddd",
-                              background: "#fff",
+                              padding: "16px",
+                              borderRadius: "12px",
+                              background: "#f8fafc",
+                              border: "1px solid #e5e7eb",
                             }}
-                          />
-                        )}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: "12px",
+                                alignItems: "center",
+                                marginBottom: "12px",
+                              }}
+                            >
+                              <div>
+                                <strong>Accounts under {op.companyName}</strong>
+                                <p style={{ margin: "4px 0 0" }}>
+                                  Owner and staff login accounts linked to this company.
+                                </p>
+                              </div>
 
-                        <div>
-                          <strong>{op.companyName}</strong>
-                          <br />
-                          <small>{op.phone || "-"}</small>
-                        </div>
-                      </div>
-                    </td>
+                              <button
+                                className="btn primary"
+                                type="button"
+                                onClick={() => openStaffFormForOperator(op)}
+                              >
+                                Add Staff Account
+                              </button>
+                            </div>
 
-                    <td>
-                      <span
-                        className={`badge ${String(op.status).toLowerCase()}`}
-                      >
-                        {op.status}
-                      </span>
-                    </td>
+                            <div style={{ display: "grid", gap: "10px" }}>
+                              {(op.users || []).map((user) => {
+                                const level = user.operatorAccessLevel || "UNASSIGNED";
 
-                    <td>
-                      <span className={`badge ${readiness.className}`}>
-                        {readiness.label}
-                      </span>
-                      <br />
-                      <small>
-                        {op.stripeAccountId ? "Stripe linked" : "No Stripe"}
-                      </small>
-                    </td>
+                                return (
+                                  <div
+                                    key={user.id}
+                                    style={{
+                                      display: "grid",
+                                      gridTemplateColumns: "1.2fr 1.4fr 0.7fr 1.8fr",
+                                      gap: "12px",
+                                      alignItems: "center",
+                                      padding: "12px",
+                                      borderRadius: "10px",
+                                      background: "#ffffff",
+                                      border: "1px solid #e5e7eb",
+                                    }}
+                                  >
+                                    <div>
+                                      <strong>{user.name}</strong>
+                                      <br />
+                                      <small>{user.userCode || `User ID: ${user.id}`}</small>
+                                    </div>
 
-                    <td>
-                      <strong>{op.users?.length || 0} user(s)</strong>
+                                    <div>
+                                      <small>Email</small>
+                                      <br />
+                                      <strong>{user.email}</strong>
+                                    </div>
 
-                      <div style={{ marginTop: 6 }}>
-                        <small>
-                          OWNER:{" "}
-                          {owner ? `${owner.name} (${owner.email})` : "Not set"}
-                        </small>
-                      </div>
+                                    <div>
+                                      <span
+                                        className={`badge ${accessLevelBadgeClass(level)}`}
+                                      >
+                                        {level}
+                                      </span>
+                                    </div>
 
-                      {staffUsers.length > 0 && (
-                        <div style={{ marginTop: 4 }}>
-                          <small>
-                            STAFF:{" "}
-                            {staffUsers
-                              .map((user) => `${user.name} (${user.email})`)
-                              .join(", ")}
-                          </small>
-                        </div>
-                      )}
-                    </td>
+                                    <div>
+                                      <small>{accessLevelDescription(level)}</small>
+                                    </div>
+                                  </div>
+                                );
+                              })}
 
-                    <td>{bookingCount}</td>
-                    <td>{countPendingVerification(bookings)}</td>
-                    <td>{countByBookingStatus(bookings, "OVERDUE")}</td>
-                    <td>{countPaidBookings(bookings)}</td>
-
-                    <td>
-                      <div className="actions">
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => openStaffFormForOperator(op)}
-                        >
-                          Add Staff
-                        </button>
-
-                        <button className="btn" onClick={() => toggleStatus(op)}>
-                          {op.status === "ACTIVE" ? "Suspend" : "Activate"}
-                        </button>
-
-                        <button
-                          className="btn danger"
-                          disabled={bookingCount > 0}
-                          title={
-                            bookingCount > 0
-                              ? "Cannot delete a company/operator with existing bookings"
-                              : "Delete wrongly created company/operator"
-                          }
-                          onClick={() => handleDelete(op)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                              {!op.users?.length && (
+                                <div className="empty-state">
+                                  No login accounts found for this company.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 );
               })}
 

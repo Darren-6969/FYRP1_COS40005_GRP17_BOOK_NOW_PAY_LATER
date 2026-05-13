@@ -479,10 +479,15 @@ export async function getOperators(req, res, next) {
         users: {
           select: {
             id: true,
+            userCode: true,
             name: true,
             email: true,
             role: true,
             operatorAccessLevel: true,
+            createdAt: true,
+          },
+          orderBy: {
+            createdAt: "asc",
           },
         },
         configs: true,
