@@ -181,6 +181,12 @@ export async function login(req, res, next) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
+    if (user.status === "SUSPENDED") {
+      return res.status(403).json({
+        message: "Your account has been suspended. Please contact the administrator.",
+      });
+    }
+
     const { accessToken, refreshToken } = await issueTokenPair(
       user.id,
       user.role,

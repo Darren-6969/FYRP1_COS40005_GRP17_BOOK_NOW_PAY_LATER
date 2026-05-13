@@ -18,10 +18,14 @@ export const sendInvoice = (id) => api.post(`/invoices/${id}/send`);
 export const voidInvoice = (id) => api.patch(`/invoices/${id}/void`);
 
 export const getOperators = () => api.get("/operators");
+/// Create new company with initial admin user (OWNER)
 export const createOperator = (payload) => api.post("/operators", payload);
 export const createOperatorUser = (operatorId, payload) => api.post(`/operators/${operatorId}/users`, payload);
 export const updateOperatorStatus = (id, status) => api.patch(`/operators/${id}/status`, { status });
 export const deleteOperator = (id) => api.delete(`/operators/${id}`);
+/// Update operator user status (ACTIVE, SUSPENDED)
+export const updateOperatorUserStatus = (operatorId, userId, status) => api.patch(`/operators/${operatorId}/users/${userId}/status`, { status });
+export const deleteOperatorUser = (operatorId, userId) => api.delete(`/operators/${operatorId}/users/${userId}`);
 
 export const getBNPLConfigs = () => api.get("/config/bnpl");
 export const getBNPLConfig = (operatorId) => api.get(`/config/bnpl/${operatorId}`);

@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+
 import {
   createOperator,
   createOperatorUser,
   deleteOperator,
+  deleteOperatorUser,
   getOperators,
   updateOperatorStatus,
+  updateOperatorUserStatus,
 } from "../../services/admin_service";
 
 const LOGO_MAX_FILE_SIZE = 500 * 1024; // 500KB
@@ -390,6 +393,7 @@ export default function Operators() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // Toggle company status between ACTIVE and SUSPENDED. PENDING status is only for company/owners that are created but have not completed the initial setup, and they can only be activated but not suspended until they are active.
   const toggleStatus = async (op) => {
     const nextStatus = op.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
 
@@ -434,6 +438,46 @@ export default function Operators() {
       await load();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to delete operator");
+    }
+  };
+
+  // Toggle operator user status between ACTIVE and SUSPENDED. Deletion is only allowed for wrongly created staff accounts with no activity.
+const toggleUserStatus = async (op, user) => {
+  const currentStatus = user.operatorUserStatus || "ACTIVE";
+  const nextStatus = currentStatus === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+
+  if (!window.confirm(`Change ${user.name} to ${nextStatus}?`)) return;
+
+  try {
+    setError("");
+    setMessage("");
+
+    await updateOperatorUserStatus(op.id, user.id, nextStatus);
+
+    setMessage(`${user.name} updated to ${nextStatus}.`);
+    await load();
+  } catch (err) {
+    setError(
+      err.response?.data?.message || "Failed to update operator account status"
+    );
+  }
+};
+
+  const handleDeleteUser = async (op, user) => {
+    const typed = window.prompt(
+      `This will delete ${user.name} (${user.email}) from ${op.companyName}.\n\nType exactly: DELETE ${user.email}`
+    );
+
+    if (typed !== `DELETE ${user.email}`) return;
+
+    try {
+      setError("");
+      setMessage("");
+      await deleteOperatorUser(op.id, user.id);
+      setMessage(`${user.name} was deleted successfully.`);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to delete user");
     }
   };
 
@@ -779,7 +823,7 @@ export default function Operators() {
                 const isExpanded = expandedOperatorId === op.id;
 
                 return (
-                  <>
+                <Fragment key={op.id}>
                     <tr key={op.id}>
                       <td>
                         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -854,7 +898,7 @@ export default function Operators() {
                           </button>
 
                           <button className="btn" type="button" onClick={() => toggleStatus(op)}>
-                            {op.status === "ACTIVE" ? "Suspend" : "Activate"}
+                            {op.status === "ACTIVE" ? "Suspend Company" : "Activate Company"}
                           </button>
 
                           <button
@@ -876,7 +920,7 @@ export default function Operators() {
 
                     {isExpanded && (
                       <tr key={`${op.id}-accounts`}>
-                        <td colSpan="10">
+                        <td colSpan="9">
                           <div
                             style={{
                               padding: "16px",
@@ -919,7 +963,7 @@ export default function Operators() {
                                     key={user.id}
                                     style={{
                                       display: "grid",
-                                      gridTemplateColumns: "1.2fr 1.4fr 0.7fr 1.8fr",
+                                      gridTemplateColumns: "1.2fr 1.4fr 0.7fr 0.8fr 1.8fr 1fr",
                                       gap: "12px",
                                       alignItems: "center",
                                       padding: "12px",
@@ -931,7 +975,7 @@ export default function Operators() {
                                     <div>
                                       <strong>{user.name}</strong>
                                       <br />
-                                      <small>{user.userCode || `User ID: ${user.id}`}</small>
+                                      <small>{user.userCode || "-"}</small>
                                     </div>
 
                                     <div>
@@ -941,37 +985,69 @@ export default function Operators() {
                                     </div>
 
                                     <div>
-                                      <span
-                                        className={`badge ${accessLevelBadgeClass(level)}`}
-                                      >
+                                      <small>Access</small>
+                                      <br />
+                                      <span className={`badge ${accessLevelBadgeClass(level)}`}>
                                         {level}
+                                      </span>
+                                    </div>
+
+                                    <div>
+                                      <small>Status</small>
+                                      <br />
+                                      <span
+                                        className={`badge ${String(
+                                          user.operatorUserStatus || "ACTIVE"
+                                        ).toLowerCase()}`}
+                                      >
+                                        {user.operatorUserStatus || "ACTIVE"}
                                       </span>
                                     </div>
 
                                     <div>
                                       <small>{accessLevelDescription(level)}</small>
                                     </div>
+
+                                    <div>
+                                      <small>Actions</small>
+                                      <br />
+                                      <div className="actions" style={{ marginTop: 6 }}>
+                                        <button
+                                          className="btn"
+                                          type="button"
+                                          onClick={() => toggleUserStatus(op, user)}
+                                        >
+                                          {(user.operatorUserStatus || "ACTIVE") === "ACTIVE"
+                                            ? "Suspend"
+                                            : "Activate"}
+                                        </button>
+
+                                        {String(user.operatorAccessLevel || "").toUpperCase() === "STAFF" && (
+                                          <button
+                                            className="btn danger"
+                                            type="button"
+                                            onClick={() => handleDeleteUser(op, user)}
+                                          >
+                                            Delete
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
                                 );
                               })}
-
-                              {!op.users?.length && (
-                                <div className="empty-state">
-                                  No login accounts found for this company.
-                                </div>
-                              )}
                             </div>
                           </div>
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
 
               {!filteredOperators.length && (
                 <tr>
-                  <td colSpan="10">No operators found.</td>
+                  <td colSpan="9">No operators found.</td>
                 </tr>
               )}
             </tbody>

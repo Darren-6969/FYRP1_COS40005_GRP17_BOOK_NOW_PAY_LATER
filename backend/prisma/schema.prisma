@@ -13,10 +13,15 @@ enum UserRole {
   CUSTOMER
 }
 
-enum OperatorStatus {
+enum CompanyStatus {
   ACTIVE
   SUSPENDED
   PENDING
+}
+
+enum OperatorUserStatus {
+  ACTIVE
+  SUSPENDED
 }
 
 enum BookingStatus {
@@ -91,6 +96,7 @@ model User {
   notifyPromotions Boolean @default(false)
 
   operatorAccessLevel OperatorAccessLevel?
+  operatorUserStatus OperatorUserStatus @default(ACTIVE)
 
   operatorId Int?
   operator   Operator? @relation(fields: [operatorId], references: [id])
@@ -106,6 +112,7 @@ model User {
   @@index([userCode])
   @@index([operatorId])
   @@index([role])
+  @@index([operatorUserStatus])
 }
 
 model RefreshToken {
@@ -127,7 +134,7 @@ model Operator {
   email        String         @unique
   phone        String?
   logoUrl      String?
-  status       OperatorStatus @default(ACTIVE)
+  status       CompanyStatus @default(ACTIVE)
   stripeAccountId String?
 
   users    User[]

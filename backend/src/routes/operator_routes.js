@@ -2,10 +2,11 @@ import express from "express";
 import {
   createOperator,
   createOperatorUser,
+  updateOperatorUserStatus,
+  deleteOperatorUser,
   getOperators,
   updateOperatorStatus,
   deleteOperator,
-
   getOperatorDashboard,
   getOperatorBookings,
   getOperatorSettlements, /* Getting Settlements for STRIPE */
@@ -92,9 +93,14 @@ const ownerOnlyAccess = [
 router.post("/", ...masterOnly, createOperator);
 router.post("/:id/users", ...masterOnly, createOperatorUser);
 
+router.patch("/:operatorId/users/:userId/status", ...masterOnly, updateOperatorUserStatus);
+
+router.delete("/:operatorId/users/:userId", ...masterOnly, deleteOperatorUser);
+
 router.get("/", ...masterOnly, getOperators);
 router.patch("/:id/status", ...masterOnly, updateOperatorStatus);
 router.delete("/:id", ...masterOnly, deleteOperator);
+
 
 /**
  * DASHBOARD

@@ -14,6 +14,7 @@ import {
   alternativeSuggestionTemplate,
   autoRejectedBookingTemplate,
   bookingStatusTemplate,
+  bookingSubmittedTemplate,
   invoiceSentTemplate,
   merchantPaymentConfirmedTemplate,
   paymentReceiptTemplate,
@@ -355,6 +356,8 @@ export async function createOperator(req, res, next) {
             name: true,
             email: true,
             role: true,
+            operatorAccessLevel: true,
+            operatorUserStatus: true,
             operatorId: true,
             createdAt: true,
           },
@@ -484,6 +487,7 @@ export async function getOperators(req, res, next) {
             email: true,
             role: true,
             operatorAccessLevel: true,
+            operatorUserStatus: true,
             createdAt: true,
           },
           orderBy: {
@@ -500,13 +504,14 @@ export async function getOperators(req, res, next) {
   }
 }
 
+/// Update company status (ACTIVE, SUSPENDED, PENDING)
 export async function updateOperatorStatus(req, res, next) {
   try {
     const id = parseId(req.params.id, "operator id");
     const { status } = req.body;
 
     if (!["ACTIVE", "SUSPENDED", "PENDING"].includes(status)) {
-      return res.status(400).json({ message: "Invalid operator status" });
+      return res.status(400).json({ message: "Invalid company status" });
     }
 
     const operator = await prisma.operator.update({
@@ -516,13 +521,191 @@ export async function updateOperatorStatus(req, res, next) {
 
     await createAuditLog({
       req,
-      action: "OPERATOR_STATUS_UPDATED",
+      action: "COMPANY_STATUS_UPDATED",
       entityType: "Operator",
       entityId: id,
       details: { status },
     });
 
     res.json(operator);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// update operators user status (ACTIVE, SUSPENDED)
+export async function updateOperatorUserStatus(req, res, next) {
+  try {
+    const operatorId = parseId(req.params.operatorId, "operator id");
+    const userId = parseId(req.params.userId, "user id");
+
+    const nextStatus = req.body.operatorUserStatus || req.body.status;
+
+    if (!["ACTIVE", "SUSPENDED"].includes(nextStatus)) {
+      return res.status(400).json({
+        message: "Invalid operator user status",
+      });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        id: userId,
+        operatorId,
+        role: "NORMAL_SELLER",
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "Operator user not found",
+      });
+    }
+
+    if (
+      user.operatorAccessLevel === "OWNER" &&
+      nextStatus === "SUSPENDED"
+    ) {
+      const activeOwnerCount = await prisma.user.count({
+        where: {
+          operatorId,
+          role: "NORMAL_SELLER",
+          operatorAccessLevel: "OWNER",
+          operatorUserStatus: "ACTIVE",
+          id: {
+            not: userId,
+          },
+        },
+      });
+
+      if (activeOwnerCount === 0) {
+        return res.status(400).json({
+          message:
+            "Cannot suspend the only active OWNER account for this company.",
+        });
+      }
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        operatorUserStatus: nextStatus,
+      },
+      select: {
+        id: true,
+        userCode: true,
+        name: true,
+        email: true,
+        role: true,
+        operatorAccessLevel: true,
+        operatorUserStatus: true,
+        operatorId: true,
+        createdAt: true,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user?.id || null,
+        action: "OPERATOR_USER_STATUS_UPDATED",
+        entityType: "User",
+        entityId: String(userId),
+        details: {
+          operatorId,
+          operatorUserStatus: nextStatus,
+        },
+      },
+    });
+
+    res.json({
+      message: "Operator user status updated successfully",
+      user: updatedUser,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteOperatorUser(req, res, next) {
+  try {
+    const operatorId = parseId(req.params.operatorId, "operator id");
+    const userId = parseId(req.params.userId, "user id");
+
+    const user = await prisma.user.findFirst({
+      where: {
+        id: userId,
+        operatorId,
+        role: "NORMAL_SELLER",
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "Operator user not found",
+      });
+    }
+
+    if (user.operatorAccessLevel === "OWNER") {
+      const ownerCount = await prisma.user.count({
+        where: {
+          operatorId,
+          role: "NORMAL_SELLER",
+          operatorAccessLevel: "OWNER",
+        },
+      });
+
+      if (ownerCount <= 1) {
+        return res.status(400).json({
+          message: "Cannot delete the only OWNER account for this company.",
+        });
+      }
+    }
+
+    await prisma.refreshToken.deleteMany({
+      where: {
+        userId,
+      },
+    });
+
+    await prisma.notification.deleteMany({
+      where: {
+        userId,
+      },
+    });
+
+    await prisma.auditLog.updateMany({
+      where: {
+        userId,
+      },
+      data: {
+        userId: null,
+      },
+    });
+
+    await prisma.user.delete({
+      where: {
+        id: userId,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user?.id || null,
+        action: "OPERATOR_USER_DELETED",
+        entityType: "User",
+        entityId: String(userId),
+        details: {
+          operatorId,
+          deletedEmail: user.email,
+          accessLevel: user.operatorAccessLevel,
+        },
+      },
+    });
+
+    res.json({
+      message: "Operator user deleted successfully",
+    });
   } catch (err) {
     next(err);
   }
@@ -2425,6 +2608,7 @@ export async function createOperatorUser(req, res, next) {
         password: hashedPassword,
         role: "NORMAL_SELLER",
         operatorAccessLevel: accessLevel,
+        operatorUserStatus: "ACTIVE",
         operatorId: operator.id,
       },
       select: {
@@ -2434,6 +2618,7 @@ export async function createOperatorUser(req, res, next) {
         email: true,
         role: true,
         operatorAccessLevel: true,
+        operatorUserStatus: true,
         operatorId: true,
         createdAt: true,
       },
