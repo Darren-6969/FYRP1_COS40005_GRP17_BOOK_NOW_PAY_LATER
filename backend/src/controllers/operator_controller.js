@@ -605,6 +605,14 @@ export async function updateOperatorUserStatus(req, res, next) {
       },
     });
 
+    if (nextStatus === "SUSPENDED") {
+      await prisma.refreshToken.deleteMany({
+        where: {
+          userId,
+        },
+      });
+    }
+
     await prisma.auditLog.create({
       data: {
         userId: req.user?.id || null,

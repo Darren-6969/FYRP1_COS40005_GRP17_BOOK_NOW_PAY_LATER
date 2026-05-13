@@ -54,6 +54,7 @@ function sanitizeUser(user) {
     operatorId: user.operatorId || null,
     operator: user.operator || null,
     operatorAccessLevel: user.operatorAccessLevel || null,
+    operatorUserStatus: user.operatorUserStatus || null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -181,9 +182,32 @@ export async function login(req, res, next) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    if (user.status === "SUSPENDED") {
+    if (
+      user.role === "NORMAL_SELLER" &&
+      user.operatorUserStatus === "SUSPENDED"
+    ) {
+      await prisma.refreshToken.deleteMany({
+        where: { userId: user.id },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "LOGIN_BLOCKED_SUSPENDED_OPERATOR_USER",
+          entityType: "User",
+          entityId: String(user.id),
+          details: {
+            email: user.email,
+            operatorId: user.operatorId,
+            operatorAccessLevel: user.operatorAccessLevel,
+            operatorUserStatus: user.operatorUserStatus,
+          },
+        },
+      });
+
       return res.status(403).json({
-        message: "Your account has been suspended. Please contact the administrator.",
+        message:
+          "Your operator account has been suspended. Please contact the administrator.",
       });
     }
 
@@ -230,11 +254,26 @@ export async function refreshAccessToken(req, res, next) {
       return res.status(401).json({ message: "Invalid or expired refresh token" });
     }
 
+    if (
+      stored.user.role === "NORMAL_SELLER" &&
+      stored.user.operatorUserStatus === "SUSPENDED"
+    ) {
+      await prisma.refreshToken.deleteMany({
+        where: { userId: stored.userId },
+      });
+
+      return res.status(403).json({
+        message:
+          "Your operator account has been suspended. Please contact the administrator.",
+      });
+    }
+
     // Rotate the refresh token (token rotation – OWASP 2025 A07)
     await prisma.refreshToken.delete({ where: { tokenHash } });
     const { accessToken, refreshToken: newRefresh } = await issueTokenPair(
       stored.userId,
-      stored.user.role
+      stored.user.role,
+      stored.user.operatorAccessLevel
     );
 
     res.json({ token: accessToken, refreshToken: newRefresh, user: sanitizeUser(stored.user) });
