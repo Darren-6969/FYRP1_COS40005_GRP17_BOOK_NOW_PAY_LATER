@@ -1,18 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   createOperator,
+  createOperatorUser,
   deleteOperator,
   getOperators,
   updateOperatorStatus,
 } from "../../services/admin_service";
 
-const initialForm = {
+const LOGO_MAX_FILE_SIZE = 500 * 1024; // 500KB
+const LOGO_MAX_WIDTH = 600;
+const LOGO_MAX_HEIGHT = 600;
+const LOGO_RECOMMENDED_TEXT =
+  "Recommended logo size: 300x300px square. Accepted: PNG, JPG, WebP. Max file size: 500KB. Max dimension: 600x600px.";
+
+const initialCompanyForm = {
   companyName: "",
   operatorName: "",
   email: "",
   phone: "",
   logoUrl: "",
   password: "Password123!",
+  sendWelcomeEmail: true,
+};
+
+const initialStaffForm = {
+  operatorId: "",
+  name: "",
+  email: "",
+  password: "Password123!",
+  accessLevel: "STAFF",
   sendWelcomeEmail: true,
 };
 
@@ -64,16 +80,86 @@ function readinessLabel(op) {
   };
 }
 
+function getOwnerUser(op) {
+  return (op.users || []).find(
+    (user) => String(user.operatorAccessLevel || "").toUpperCase() === "OWNER"
+  );
+}
+
+function getStaffUsers(op) {
+  return (op.users || []).filter(
+    (user) => String(user.operatorAccessLevel || "").toUpperCase() === "STAFF"
+  );
+}
+
+function readLogoFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve("");
+      return;
+    }
+
+    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      reject(new Error("Logo must be a PNG, JPG, JPEG, or WebP image."));
+      return;
+    }
+
+    if (file.size > LOGO_MAX_FILE_SIZE) {
+      reject(new Error("Logo file size must be 500KB or below."));
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const image = new Image();
+
+      image.onload = () => {
+        if (image.width > LOGO_MAX_WIDTH || image.height > LOGO_MAX_HEIGHT) {
+          reject(
+            new Error(
+              `Logo dimension must not exceed ${LOGO_MAX_WIDTH}x${LOGO_MAX_HEIGHT}px. Current image is ${image.width}x${image.height}px.`
+            )
+          );
+          return;
+        }
+
+        resolve(dataUrl);
+      };
+
+      image.onerror = () => {
+        reject(new Error("Invalid image file. Please upload another logo."));
+      };
+
+      image.src = dataUrl;
+    };
+
+    reader.onerror = () => {
+      reject(new Error("Failed to read logo file."));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function Operators() {
   const [operators, setOperators] = useState([]);
-  const [form, setForm] = useState(initialForm);
-  const [showForm, setShowForm] = useState(false);
+
+  const [companyForm, setCompanyForm] = useState(initialCompanyForm);
+  const [staffForm, setStaffForm] = useState(initialStaffForm);
+
+  const [showCompanyForm, setShowCompanyForm] = useState(false);
+  const [showStaffForm, setShowStaffForm] = useState(false);
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingCompany, setSavingCompany] = useState(false);
+  const [savingStaff, setSavingStaff] = useState(false);
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -96,6 +182,16 @@ export default function Operators() {
   }, []);
 
   const summary = useMemo(() => {
+    const ownerCount = operators.reduce(
+      (total, op) => total + (getOwnerUser(op) ? 1 : 0),
+      0
+    );
+
+    const staffCount = operators.reduce(
+      (total, op) => total + getStaffUsers(op).length,
+      0
+    );
+
     return {
       total: operators.length,
       active: operators.filter((op) => op.status === "ACTIVE").length,
@@ -103,6 +199,8 @@ export default function Operators() {
       incomplete: operators.filter(
         (op) => readinessLabel(op).label === "Incomplete"
       ).length,
+      owners: ownerCount,
+      staff: staffCount,
     };
   }, [operators]);
 
@@ -113,7 +211,16 @@ export default function Operators() {
         op.companyName,
         op.email,
         op.phone,
-        ...(op.users || []).map((user) => user.email),
+        ...(op.users || []).map((user) =>
+          [
+            user.name,
+            user.email,
+            user.role,
+            user.operatorAccessLevel,
+          ]
+            .filter(Boolean)
+            .join(" ")
+        ),
       ]
         .filter(Boolean)
         .join(" ")
@@ -127,34 +234,117 @@ export default function Operators() {
     });
   }, [operators, query, statusFilter]);
 
-  const handleChange = (event) => {
+  const handleCompanyChange = (event) => {
     const { name, value, type, checked } = event.target;
 
-    setForm((prev) => ({
+    setCompanyForm((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
   };
 
-  const handleCreate = async (event) => {
-    event.preventDefault();
+  const handleStaffChange = (event) => {
+    const { name, value, type, checked } = event.target;
+
+    setStaffForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const handleLogoUpload = async (event) => {
+    const file = event.target.files?.[0];
 
     try {
-      setSaving(true);
       setError("");
       setMessage("");
 
-      await createOperator(form);
+      const dataUrl = await readLogoFile(file);
 
-      setForm(initialForm);
-      setShowForm(false);
-      setMessage("Operator company and login account created successfully.");
+      setCompanyForm((prev) => ({
+        ...prev,
+        logoUrl: dataUrl,
+      }));
+
+      if (dataUrl) {
+        setMessage("Logo uploaded successfully.");
+      }
+    } catch (err) {
+      event.target.value = "";
+      setCompanyForm((prev) => ({
+        ...prev,
+        logoUrl: "",
+      }));
+      setError(err.message || "Failed to upload logo.");
+    }
+  };
+
+  const handleCreateCompany = async (event) => {
+    event.preventDefault();
+
+    try {
+      setSavingCompany(true);
+      setError("");
+      setMessage("");
+
+      await createOperator(companyForm);
+
+      setCompanyForm(initialCompanyForm);
+      setShowCompanyForm(false);
+      setMessage(
+        "Company/operator and OWNER login account created successfully."
+      );
       await load();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to create operator");
+      setError(
+        err.response?.data?.message || "Failed to create company/operator"
+      );
     } finally {
-      setSaving(false);
+      setSavingCompany(false);
     }
+  };
+
+  const handleCreateStaff = async (event) => {
+    event.preventDefault();
+
+    if (!staffForm.operatorId) {
+      setError("Please select a company for this staff account.");
+      return;
+    }
+
+    try {
+      setSavingStaff(true);
+      setError("");
+      setMessage("");
+
+      await createOperatorUser(staffForm.operatorId, {
+        name: staffForm.name,
+        email: staffForm.email,
+        password: staffForm.password,
+        accessLevel: staffForm.accessLevel,
+        sendWelcomeEmail: staffForm.sendWelcomeEmail,
+      });
+
+      setStaffForm(initialStaffForm);
+      setShowStaffForm(false);
+      setMessage("Staff account created successfully.");
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to create staff account");
+    } finally {
+      setSavingStaff(false);
+    }
+  };
+
+  const openStaffFormForOperator = (op) => {
+    setStaffForm((prev) => ({
+      ...prev,
+      operatorId: String(op.id),
+      accessLevel: "STAFF",
+    }));
+    setShowStaffForm(true);
+    setShowCompanyForm(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const toggleStatus = async (op) => {
@@ -209,19 +399,36 @@ export default function Operators() {
       <section className="card">
         <div className="section-header">
           <div>
-            <h3>Operator Accounts</h3>
+            <h3>Operator Companies</h3>
             <p>
-              Create, monitor, suspend, activate, or delete wrongly created
-              operator companies.
+              Create company/operator profiles, add staff accounts, and manage
+              operator access.
             </p>
           </div>
 
-          <button
-            className="btn primary"
-            onClick={() => setShowForm((prev) => !prev)}
-          >
-            {showForm ? "Close Form" : "Create Operator"}
-          </button>
+          <div className="actions">
+            <button
+              className="btn primary"
+              type="button"
+              onClick={() => {
+                setShowCompanyForm((prev) => !prev);
+                setShowStaffForm(false);
+              }}
+            >
+              {showCompanyForm ? "Close Company Form" : "Create Company"}
+            </button>
+
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                setShowStaffForm((prev) => !prev);
+                setShowCompanyForm(false);
+              }}
+            >
+              {showStaffForm ? "Close Staff Form" : "Add Staff Account"}
+            </button>
+          </div>
         </div>
 
         {error && <div className="alert danger">{error}</div>}
@@ -229,7 +436,7 @@ export default function Operators() {
 
         <div className="stats-grid">
           <div className="stat-card">
-            <span>Total Operators</span>
+            <span>Total Companies</span>
             <strong>{summary.total}</strong>
           </div>
 
@@ -244,40 +451,50 @@ export default function Operators() {
           </div>
 
           <div className="stat-card">
+            <span>Owners</span>
+            <strong>{summary.owners}</strong>
+          </div>
+
+          <div className="stat-card">
+            <span>Staff</span>
+            <strong>{summary.staff}</strong>
+          </div>
+
+          <div className="stat-card">
             <span>Incomplete Setup</span>
             <strong>{summary.incomplete}</strong>
           </div>
         </div>
 
-        {showForm && (
-          <form className="admin-form-grid" onSubmit={handleCreate}>
+        {showCompanyForm && (
+          <form className="admin-form-grid" onSubmit={handleCreateCompany}>
             <label>
               <span>Company Name</span>
               <input
                 name="companyName"
-                value={form.companyName}
-                onChange={handleChange}
+                value={companyForm.companyName}
+                onChange={handleCompanyChange}
                 required
               />
             </label>
 
             <label>
-              <span>Operator Name</span>
+              <span>Owner Name</span>
               <input
                 name="operatorName"
-                value={form.operatorName}
-                onChange={handleChange}
-                placeholder="Person in charge"
+                value={companyForm.operatorName}
+                onChange={handleCompanyChange}
+                placeholder="Person in charge / company owner"
               />
             </label>
 
             <label>
-              <span>Login Email</span>
+              <span>Owner Login Email</span>
               <input
                 type="email"
                 name="email"
-                value={form.email}
-                onChange={handleChange}
+                value={companyForm.email}
+                onChange={handleCompanyChange}
                 required
               />
             </label>
@@ -286,39 +503,175 @@ export default function Operators() {
               <span>Temporary Password</span>
               <input
                 name="password"
-                value={form.password}
-                onChange={handleChange}
+                value={companyForm.password}
+                onChange={handleCompanyChange}
                 required
               />
             </label>
 
             <label>
               <span>Phone</span>
-              <input name="phone" value={form.phone} onChange={handleChange} />
+              <input
+                name="phone"
+                value={companyForm.phone}
+                onChange={handleCompanyChange}
+              />
             </label>
 
             <label>
-              <span>Logo URL</span>
+              <span>Company Logo</span>
               <input
-                name="logoUrl"
-                value={form.logoUrl}
-                onChange={handleChange}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleLogoUpload}
               />
+              <small>{LOGO_RECOMMENDED_TEXT}</small>
+            </label>
+
+            {companyForm.logoUrl && (
+              <div>
+                <span>Logo Preview</span>
+                <div
+                  style={{
+                    marginTop: 8,
+                    width: 96,
+                    height: 96,
+                    border: "1px solid #ddd",
+                    borderRadius: 12,
+                    padding: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "#fff",
+                  }}
+                >
+                  <img
+                    src={companyForm.logoUrl}
+                    alt="Company logo preview"
+                    style={{
+                      maxWidth: "100%",
+                      maxHeight: "100%",
+                      objectFit: "contain",
+                    }}
+                  />
+                </div>
+
+                <button
+                  className="btn"
+                  type="button"
+                  style={{ marginTop: 8 }}
+                  onClick={() =>
+                    setCompanyForm((prev) => ({
+                      ...prev,
+                      logoUrl: "",
+                    }))
+                  }
+                >
+                  Remove Logo
+                </button>
+              </div>
+            )}
+
+            <label className="admin-checkbox">
+              <input
+                type="checkbox"
+                name="sendWelcomeEmail"
+                checked={companyForm.sendWelcomeEmail}
+                onChange={handleCompanyChange}
+              />
+              <span>Send welcome email with owner login details</span>
+            </label>
+
+            <div className="admin-form-actions">
+              <button className="btn primary" disabled={savingCompany}>
+                {savingCompany
+                  ? "Creating..."
+                  : "Create Company + OWNER Login"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {showStaffForm && (
+          <form className="admin-form-grid" onSubmit={handleCreateStaff}>
+            <label>
+              <span>Select Company</span>
+              <select
+                name="operatorId"
+                value={staffForm.operatorId}
+                onChange={handleStaffChange}
+                required
+              >
+                <option value="">Select company/operator</option>
+                {operators.map((op) => (
+                  <option key={op.id} value={op.id}>
+                    {op.companyName} ({op.operatorCode})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span>Staff Name</span>
+              <input
+                name="name"
+                value={staffForm.name}
+                onChange={handleStaffChange}
+                required
+              />
+            </label>
+
+            <label>
+              <span>Staff Login Email</span>
+              <input
+                type="email"
+                name="email"
+                value={staffForm.email}
+                onChange={handleStaffChange}
+                required
+              />
+            </label>
+
+            <label>
+              <span>Temporary Password</span>
+              <input
+                name="password"
+                value={staffForm.password}
+                onChange={handleStaffChange}
+                required
+              />
+            </label>
+
+            <label>
+              <span>Access Level</span>
+              <select
+                name="accessLevel"
+                value={staffForm.accessLevel}
+                onChange={handleStaffChange}
+              >
+                <option value="STAFF">STAFF</option>
+                <option value="OWNER">OWNER</option>
+              </select>
+              <small>
+                STAFF can manage booking operations, manual payment
+                verification, invoices, profile and notifications. OWNER can
+                access all operator features.
+              </small>
             </label>
 
             <label className="admin-checkbox">
               <input
                 type="checkbox"
                 name="sendWelcomeEmail"
-                checked={form.sendWelcomeEmail}
-                onChange={handleChange}
+                checked={staffForm.sendWelcomeEmail}
+                onChange={handleStaffChange}
               />
-              <span>Send welcome email with login details</span>
+              <span>Send welcome email with staff login details</span>
             </label>
 
             <div className="admin-form-actions">
-              <button className="btn primary" disabled={saving}>
-                {saving ? "Creating..." : "Create Operator + Login"}
+              <button className="btn primary" disabled={savingStaff}>
+                {savingStaff ? "Creating..." : "Create Staff Account"}
               </button>
             </div>
           </form>
@@ -328,17 +681,18 @@ export default function Operators() {
       <section className="card">
         <div className="section-header">
           <div>
-            <h3>Operator List</h3>
+            <h3>Company / Operator List</h3>
             <p>
-              Delete is only allowed for wrongly created operators with no
-              bookings.
+              Each company can have one OWNER account and multiple STAFF
+              accounts. Delete is only allowed for wrongly created companies
+              with no bookings.
             </p>
           </div>
         </div>
 
         <div className="admin-filter-row">
           <input
-            placeholder="Search operator code, company, email, user..."
+            placeholder="Search operator code, company, email, user, access level..."
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -364,7 +718,7 @@ export default function Operators() {
                 <th>Company</th>
                 <th>Status</th>
                 <th>Readiness</th>
-                <th>Login Users</th>
+                <th>Users</th>
                 <th>Bookings</th>
                 <th>Pending Verification</th>
                 <th>Overdue</th>
@@ -378,6 +732,8 @@ export default function Operators() {
                 const readiness = readinessLabel(op);
                 const bookings = op.bookings || [];
                 const bookingCount = bookings.length;
+                const owner = getOwnerUser(op);
+                const staffUsers = getStaffUsers(op);
 
                 return (
                   <tr key={op.id}>
@@ -388,9 +744,28 @@ export default function Operators() {
                     </td>
 
                     <td>
-                      <strong>{op.companyName}</strong>
-                      <br />
-                      <small>{op.phone || "-"}</small>
+                      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                        {op.logoUrl && (
+                          <img
+                            src={op.logoUrl}
+                            alt={`${op.companyName} logo`}
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 8,
+                              objectFit: "contain",
+                              border: "1px solid #ddd",
+                              background: "#fff",
+                            }}
+                          />
+                        )}
+
+                        <div>
+                          <strong>{op.companyName}</strong>
+                          <br />
+                          <small>{op.phone || "-"}</small>
+                        </div>
+                      </div>
                     </td>
 
                     <td>
@@ -411,7 +786,28 @@ export default function Operators() {
                       </small>
                     </td>
 
-                    <td>{op.users?.length || 0}</td>
+                    <td>
+                      <strong>{op.users?.length || 0} user(s)</strong>
+
+                      <div style={{ marginTop: 6 }}>
+                        <small>
+                          OWNER:{" "}
+                          {owner ? `${owner.name} (${owner.email})` : "Not set"}
+                        </small>
+                      </div>
+
+                      {staffUsers.length > 0 && (
+                        <div style={{ marginTop: 4 }}>
+                          <small>
+                            STAFF:{" "}
+                            {staffUsers
+                              .map((user) => `${user.name} (${user.email})`)
+                              .join(", ")}
+                          </small>
+                        </div>
+                      )}
+                    </td>
+
                     <td>{bookingCount}</td>
                     <td>{countPendingVerification(bookings)}</td>
                     <td>{countByBookingStatus(bookings, "OVERDUE")}</td>
@@ -419,6 +815,14 @@ export default function Operators() {
 
                     <td>
                       <div className="actions">
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => openStaffFormForOperator(op)}
+                        >
+                          Add Staff
+                        </button>
+
                         <button className="btn" onClick={() => toggleStatus(op)}>
                           {op.status === "ACTIVE" ? "Suspend" : "Activate"}
                         </button>
@@ -428,8 +832,8 @@ export default function Operators() {
                           disabled={bookingCount > 0}
                           title={
                             bookingCount > 0
-                              ? "Cannot delete an operator with existing bookings"
-                              : "Delete wrongly created operator"
+                              ? "Cannot delete a company/operator with existing bookings"
+                              : "Delete wrongly created company/operator"
                           }
                           onClick={() => handleDelete(op)}
                         >

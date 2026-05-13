@@ -482,6 +482,7 @@ export async function getOperators(req, res, next) {
             name: true,
             email: true,
             role: true,
+            operatorAccessLevel: true,
           },
         },
         configs: true,
