@@ -1,6 +1,7 @@
 import api from "./api";
 
 export const getDashboardStats = () => api.get("/dashboard/stats");
+export const getSalesReport = (params = {}) => api.get("/dashboard/sales-report", { params });
 
 export const getBookings = (params = {}) => api.get("/bookings", { params });
 export const acceptBooking = (id) => api.patch(`/bookings/${id}/accept`);

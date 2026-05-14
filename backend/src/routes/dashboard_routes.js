@@ -1,5 +1,5 @@
 import express from "express";
-import { getDashboardStats } from "../controllers/dashboard_controller.js";
+import { getDashboardStats, getSalesReport } from "../controllers/dashboard_controller.js";
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import { allowRoles } from "../middlewares/rbac_middleware.js";
 
@@ -10,6 +10,13 @@ router.get(
   verifyToken,
   allowRoles("MASTER_SELLER", "NORMAL_SELLER"),
   getDashboardStats
+);
+
+router.get(
+  "/sales-report",
+  verifyToken,
+  allowRoles("MASTER_SELLER"),
+  getSalesReport
 );
 
 export default router;
