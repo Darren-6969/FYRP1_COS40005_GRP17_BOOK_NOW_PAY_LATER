@@ -1,9 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
 import { getEmailLogs } from "../../services/admin_service";
 
+const EMAIL_TYPES = [
+  { value: "ALL", label: "All Types" },
+  { value: "PAYMENT_OVERDUE", label: "Payment Overdue" },
+  { value: "PAYMENT_REMINDER", label: "Payment Reminder" },
+  { value: "FINAL_PAYMENT_REMINDER", label: "Final Payment Reminder" },
+  { value: "PAYMENT_CONFIRMED", label: "Payment Confirmed" },
+  { value: "PAYMENT_REJECTED", label: "Payment Rejected" },
+  { value: "PAYMENT_RECEIPT_ISSUED", label: "Receipt Issued" },
+  { value: "PAYMENT_RECEIPT_RESENT", label: "Receipt Resent" },
+  { value: "BOOKING_ACCEPTED_PAYMENT_AVAILABLE", label: "Booking Accepted" },
+  { value: "BOOKING_AUTO_REJECTED_NO_RESPONSE", label: "Auto-Rejected (No Response)" },
+  { value: "BOOKING_CONFIRMED", label: "Booking Confirmed" },
+  { value: "BOOKING_COMPLETED", label: "Booking Completed" },
+  { value: "OPERATOR_BOOKING_CANCELLED", label: "Booking Cancelled" },
+  { value: "ALTERNATIVE_SUGGESTED", label: "Alternative Suggested" },
+  { value: "INVOICE_SENT", label: "Invoice Sent" },
+  { value: "INVOICE_RESENT", label: "Invoice Resent" },
+  { value: "OPERATOR_ACCOUNT_CREATED", label: "Operator Account Created" },
+  { value: "OPERATOR_STAFF_ACCOUNT_CREATED", label: "Staff Account Created" },
+];
+
 export default function EmailLogs() {
   const [logs, setLogs] = useState([]);
   const [status, setStatus] = useState("ALL");
+  const [emailType, setEmailType] = useState("ALL");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -29,6 +51,7 @@ export default function EmailLogs() {
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
       const matchesStatus = status === "ALL" || log.status === status;
+      const matchesType = emailType === "ALL" || log.type === emailType;
 
       const searchableText = [
         log.toEmail,
@@ -46,9 +69,9 @@ export default function EmailLogs() {
       const matchesQuery =
         !query || searchableText.includes(query.toLowerCase());
 
-      return matchesStatus && matchesQuery;
+      return matchesStatus && matchesType && matchesQuery;
     });
-  }, [logs, status, query]);
+  }, [logs, status, emailType, query]);
 
   return (
     <section className="card">
@@ -73,6 +96,15 @@ export default function EmailLogs() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
+
+        <select
+          value={emailType}
+          onChange={(event) => setEmailType(event.target.value)}
+        >
+          {EMAIL_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
 
         <select
           value={status}

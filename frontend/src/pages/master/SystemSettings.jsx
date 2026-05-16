@@ -214,6 +214,7 @@ export default function SystemSettings() {
           <div className="empty-state">No BNPL config found.</div>
         ) : (
           <form className="admin-form-grid" onSubmit={handleSubmit}>
+            {/* ── Operator identity ───────────────────────── */}
             <label>
               <span>Operator</span>
               <input
@@ -227,6 +228,16 @@ export default function SystemSettings() {
               <input value={form.operator?.email || "-"} disabled />
             </label>
 
+            {/* ── BNPL System Rules ───────────────────────── */}
+            <div className="wide" style={{ marginTop: 8 }}>
+              <h4 style={{ margin: "0 0 4px", fontSize: 14, color: "#0f172a" }}>
+                BNPL System Rules
+              </h4>
+              <p style={{ margin: "0 0 12px", fontSize: 13, color: "#6b7280" }}>
+                Core platform rules that govern booking and payment behaviour for this operator.
+              </p>
+            </div>
+
             <label>
               <span>Payment Deadline Days</span>
               <input
@@ -237,9 +248,41 @@ export default function SystemSettings() {
                 onChange={handleChange}
               />
               <small>
-                Used when calculating customer payment deadline after booking acceptance.
+                Days after booking acceptance before the payment deadline is reached.
               </small>
             </label>
+
+            <label className="admin-checkbox">
+              <input
+                type="checkbox"
+                name="allowReceiptUpload"
+                checked={Boolean(form.allowReceiptUpload)}
+                onChange={handleChange}
+              />
+              <span>Allow manual DuitNow / SPay receipt upload</span>
+            </label>
+
+            <label className="admin-checkbox">
+              <input
+                type="checkbox"
+                name="autoCancelOverdue"
+                checked={Boolean(form.autoCancelOverdue)}
+                onChange={handleChange}
+              />
+              <span>Auto-mark unpaid bookings as overdue after deadline</span>
+            </label>
+
+            {/* ── Email & Invoice Branding ─────────────────── */}
+            <div className="wide" style={{ marginTop: 16 }}>
+              <h4 style={{ margin: "0 0 4px", fontSize: 14, color: "#0f172a" }}>
+                Email &amp; Invoice Branding
+              </h4>
+              <p style={{ margin: "0 0 12px", fontSize: 13, color: "#6b7280" }}>
+                These branding fields are also configurable by each operator through their own
+                portal settings. Edits here act as an admin override — the operator can still
+                update them from their side.
+              </p>
+            </div>
 
             <label>
               <span>Invoice Logo URL</span>
@@ -249,6 +292,7 @@ export default function SystemSettings() {
                 onChange={handleChange}
                 placeholder="https://..."
               />
+              <small>Appears on invoices sent to customers.</small>
             </label>
 
             <label className="wide">
@@ -267,51 +311,39 @@ export default function SystemSettings() {
                 name="manualPaymentNote"
                 value={form.manualPaymentNote || ""}
                 onChange={handleChange}
-                placeholder="DuitNow/SPay payment instructions"
+                placeholder="DuitNow/SPay payment instructions shown to customers"
               />
               <small>
-                Required when manual receipt upload is enabled.
+                Required when manual receipt upload is enabled. Operators typically set this
+                themselves to include their own bank/QR details.
               </small>
             </label>
 
-            <label className="admin-checkbox">
-              <input
-                type="checkbox"
-                name="allowReceiptUpload"
-                checked={Boolean(form.allowReceiptUpload)}
-                onChange={handleChange}
-              />
-              <span>Allow manual DuitNow/SPay receipt upload</span>
-            </label>
-
-            <label className="admin-checkbox">
-              <input
-                type="checkbox"
-                name="autoCancelOverdue"
-                checked={Boolean(form.autoCancelOverdue)}
-                onChange={handleChange}
-              />
-              <span>Auto-mark unpaid bookings as overdue after deadline</span>
-            </label>
-
-            <div className="wide">
-              <h4>System-managed behaviour</h4>
+            {/* ── System-managed behaviour ─────────────────── */}
+            <div className="wide" style={{ marginTop: 16 }}>
+              <h4 style={{ margin: "0 0 8px", fontSize: 14, color: "#0f172a" }}>
+                System-Managed Behaviour
+              </h4>
               <table className="table">
                 <tbody>
                   <tr>
-                    <td>Payment reminder check</td>
-                    <td>Handled by cron job</td>
+                    <td>Payment reminder emails</td>
+                    <td>Sent by cron at 24 h and 6 h before deadline</td>
                   </tr>
                   <tr>
-                    <td>No merchant response check</td>
-                    <td>Handled by cron job</td>
+                    <td>No merchant response</td>
+                    <td>Booking auto-rejected after configured response window</td>
                   </tr>
                   <tr>
-                    <td>Auto completion check</td>
-                    <td>Handled by cron job</td>
+                    <td>Overdue check</td>
+                    <td>Unpaid bookings marked overdue after payment deadline</td>
                   </tr>
                   <tr>
-                    <td>Last Updated</td>
+                    <td>Auto completion</td>
+                    <td>Paid bookings marked completed after service end date</td>
+                  </tr>
+                  <tr>
+                    <td>Last updated</td>
                     <td>{dateTime(form.updatedAt)}</td>
                   </tr>
                 </tbody>

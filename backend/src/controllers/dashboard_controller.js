@@ -27,7 +27,7 @@ export async function getDashboardStats(req, res, next) {
 
 export async function getSalesReport(req, res, next) {
   try {
-    const { from, to } = req.query;
+    const { from, to, operatorId } = req.query;
 
     const dateFilter = {};
     if (from) dateFilter.gte = new Date(from);
@@ -37,8 +37,13 @@ export async function getSalesReport(req, res, next) {
       dateFilter.lte = toDate;
     }
 
-    const whereClause =
-      from || to ? { createdAt: dateFilter } : {};
+    const whereClause = {};
+    if (from || to) whereClause.createdAt = dateFilter;
+    if (operatorId) whereClause.operatorId = Number(operatorId);
+
+    const platformFeePercent = Number(
+      process.env.STRIPE_PLATFORM_FEE_PERCENT ?? 10
+    );
 
     const bookings = await prisma.booking.findMany({
       where: whereClause,
@@ -79,6 +84,10 @@ export async function getSalesReport(req, res, next) {
       ? Math.round((successfulBookings.length / bookings.length) * 100)
       : 0;
 
+    const commissionEarned = Number(
+      ((paidRevenue * platformFeePercent) / 100).toFixed(2)
+    );
+
     // Build monthly trend (group by YYYY-MM)
     const monthlyMap = {};
     for (const b of bookings) {
@@ -108,6 +117,8 @@ export async function getSalesReport(req, res, next) {
         totalRevenue,
         paidRevenue,
         pendingRevenue,
+        commissionEarned,
+        platformFeePercent,
         totalBookings: bookings.length,
         successfulBookings: successfulBookings.length,
         cancelledBookings: cancelledBookings.length,

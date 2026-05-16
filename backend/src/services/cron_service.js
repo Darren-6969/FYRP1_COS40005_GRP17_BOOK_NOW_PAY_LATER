@@ -234,6 +234,25 @@ export async function runOverdueBookingCheck({
           autoRejectedEmailText: config?.autoRejectedEmailText,
         }),
       });
+
+      // Separate overdue notification — tells the customer their payment deadline passed
+      await notifyCustomerByBooking({
+        booking: updatedBooking,
+        title: "Payment overdue",
+        message: `Your payment for booking ${
+          updatedBooking.bookingCode || updatedBooking.id
+        } was not received before the payment deadline and has been marked as overdue.`,
+        type: "PAYMENT_OVERDUE",
+        emailSubject: `Payment Overdue - Booking ${
+          updatedBooking.bookingCode || updatedBooking.id
+        }`,
+        emailHtml: bookingStatusTemplate({
+          booking: updatedBooking,
+          status: "OVERDUE",
+          customerUrl: frontendBookingUrl(booking.id),
+        }),
+      });
+
       expired.push(updatedBooking);
     }
 
