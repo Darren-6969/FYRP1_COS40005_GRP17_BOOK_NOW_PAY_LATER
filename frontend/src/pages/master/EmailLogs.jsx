@@ -90,7 +90,7 @@ export default function EmailLogs() {
 
       {error && <div className="alert danger">{error}</div>}
 
-      <div className="admin-filter-row">
+      <div className="admin-filter-row" style={{ gridTemplateColumns: "1fr 220px 140px" }}>
         <input
           placeholder="Search recipient, subject, type, error..."
           value={query}
