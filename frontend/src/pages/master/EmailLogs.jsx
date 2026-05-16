@@ -90,18 +90,16 @@ export default function EmailLogs() {
 
       {error && <div className="alert danger">{error}</div>}
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <div className="admin-filter-row">
         <input
           placeholder="Search recipient, subject, type, error..."
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          style={{ flex: 1, minWidth: 0 }}
         />
 
         <select
           value={emailType}
           onChange={(event) => setEmailType(event.target.value)}
-          style={{ width: 220, flexShrink: 0 }}
         >
           {EMAIL_TYPES.map((t) => (
             <option key={t.value} value={t.value}>{t.label}</option>
@@ -111,7 +109,6 @@ export default function EmailLogs() {
         <select
           value={status}
           onChange={(event) => setStatus(event.target.value)}
-          style={{ width: 130, flexShrink: 0 }}
         >
           <option value="ALL">All Status</option>
           <option value="SENT">Sent</option>
