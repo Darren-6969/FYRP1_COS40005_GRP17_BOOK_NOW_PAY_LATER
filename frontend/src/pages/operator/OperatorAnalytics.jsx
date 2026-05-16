@@ -313,7 +313,7 @@ export default function OperatorAnalytics() {
       )}
 
       {!loading && data && (
-        <div ref={contentRef}>
+        <div ref={contentRef} style={{ display: "grid", gap: 18 }}>
           {/* ── 30-day Forecast KPIs (dashboard mode or current month) ── */}
           {fs && (
             <section className="operator-metric-grid three">

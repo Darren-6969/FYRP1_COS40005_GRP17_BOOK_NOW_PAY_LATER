@@ -7,8 +7,16 @@ import {
   operatorStatusLabel,
 } from "../../services/operator_service";
 
+const STATUS_TABS = [
+  { key: "PENDING_VERIFICATION", label: "Pending Review" },
+  { key: "PAID", label: "Approved / Paid" },
+  { key: "FAILED", label: "Rejected" },
+  { key: "ALL", label: "All" },
+];
+
 export default function OperatorPaymentVerification() {
   const [payments, setPayments] = useState([]);
+  const [activeTab, setActiveTab] = useState("PENDING_VERIFICATION");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
   const [error, setError] = useState("");
@@ -161,16 +169,34 @@ export default function OperatorPaymentVerification() {
     return <span className="operator-muted-text">No action</span>;
   };
 
+  const pendingCount = payments.filter(
+    (p) => String(p.status).toUpperCase() === "PENDING_VERIFICATION"
+  ).length;
+
+  const visiblePayments =
+    activeTab === "ALL"
+      ? payments
+      : payments.filter((p) => String(p.status).toUpperCase() === activeTab);
+
   return (
     <div className="operator-page">
       <section className="operator-page-head">
         <div>
           <h1>Payment Verification</h1>
           <p>
-            Review pending manual payments. For paid bookings, resend invoice or
-            receipt when the customer requests another copy.
+            Review and approve manual payment receipts submitted by customers
+            (DuitNow, SPay, bank transfer). For Stripe payment financial
+            breakdowns, see <strong>Settlements</strong>.
           </p>
         </div>
+
+        <button
+          type="button"
+          className="operator-secondary-btn"
+          onClick={loadPayments}
+        >
+          Refresh
+        </button>
       </section>
 
       {error && (
@@ -183,6 +209,57 @@ export default function OperatorPaymentVerification() {
       )}
 
       <section className="operator-card">
+        {/* Status tabs */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+          {STATUS_TABS.map((tab) => {
+            const count =
+              tab.key === "ALL"
+                ? payments.length
+                : payments.filter(
+                    (p) => String(p.status).toUpperCase() === tab.key
+                  ).length;
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 999,
+                  border: isActive
+                    ? "1.5px solid #2563eb"
+                    : "1.5px solid #e2e8f0",
+                  background: isActive ? "#2563eb" : "white",
+                  color: isActive ? "white" : "#374151",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                {tab.label}
+                {tab.key === "PENDING_VERIFICATION" && pendingCount > 0 && (
+                  <span
+                    style={{
+                      background: isActive ? "rgba(255,255,255,0.25)" : "#ef4444",
+                      color: "white",
+                      borderRadius: 999,
+                      padding: "1px 7px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
         {loading ? (
           <div className="operator-empty-state">Loading payments...</div>
         ) : (
@@ -190,19 +267,19 @@ export default function OperatorPaymentVerification() {
             <table className="operator-table">
               <thead>
                 <tr>
-                  <th>Submitted Time</th>
-                  <th>Booking ID</th>
+                  <th>Submitted</th>
+                  <th>Booking</th>
                   <th>Customer</th>
                   <th>Method</th>
                   <th>Amount</th>
-                  <th>Receipt Proof</th>
+                  <th>Receipt</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
 
               <tbody>
-                {payments.map((payment) => (
+                {visiblePayments.map((payment) => (
                   <tr key={payment.id}>
                     <td>{formatOperatorDateTime(payment.createdAt)}</td>
 
@@ -223,10 +300,10 @@ export default function OperatorPaymentVerification() {
                           className="operator-link-btn"
                           onClick={() => openReceipt(payment)}
                         >
-                          View Receipt
+                          View
                         </button>
                       ) : (
-                        "-"
+                        <span style={{ color: "#9ca3af" }}>None</span>
                       )}
                     </td>
 
@@ -246,9 +323,11 @@ export default function OperatorPaymentVerification() {
               </tbody>
             </table>
 
-            {!payments.length && (
+            {!visiblePayments.length && (
               <div className="operator-empty-state">
-                No payment records found from backend.
+                {activeTab === "PENDING_VERIFICATION"
+                  ? "No receipts awaiting review."
+                  : "No records for this filter."}
               </div>
             )}
           </div>
