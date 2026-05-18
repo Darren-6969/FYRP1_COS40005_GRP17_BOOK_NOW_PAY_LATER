@@ -218,24 +218,7 @@ export async function runOverdueBookingCheck({
         },
       });
 
-      await notifyCustomerByBooking({
-        booking: updatedBooking,
-        title: "Booking auto-rejected",
-        message: `Booking ${
-          updatedBooking.bookingCode || updatedBooking.id
-        } was automatically rejected because the merchant did not respond before the booking response deadline.`,
-        type: "BOOKING_AUTO_REJECTED_NO_RESPONSE",
-        emailSubject: `Booking Auto-Rejected - ${
-          updatedBooking.bookingCode || updatedBooking.id
-        }`,
-        emailHtml: autoRejectedBookingTemplate({
-          booking: updatedBooking,
-          customerUrl: frontendBookingUrl(booking.id),
-          autoRejectedEmailText: config?.autoRejectedEmailText,
-        }),
-      });
-
-      // Separate overdue notification — tells the customer their payment deadline passed
+      // Notify customer that their payment deadline passed and booking is now overdue
       await notifyCustomerByBooking({
         booking: updatedBooking,
         title: "Payment overdue",

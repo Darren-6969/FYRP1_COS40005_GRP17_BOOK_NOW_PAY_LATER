@@ -9,7 +9,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "prisma:seed": "node prisma/seed.js"
+    "prisma:seed": "node prisma/seed.js",
+    "cron:test-report": "node scripts/generate-cron-report.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
@@ -34,6 +35,7 @@
   "devDependencies": {
     "jest": "^29.7.0",
     "nodemon": "^3.1.0",
+    "puppeteer": "^25.0.4",
     "supertest": "^7.2.2"
   }
 }
