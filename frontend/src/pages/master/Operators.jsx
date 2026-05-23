@@ -84,10 +84,14 @@ function readinessLabel(op) {
   };
 }
 
-function getOwnerUser(op) {
-  return (op.users || []).find(
+function getOwnerUsers(op) {
+  return (op.users || []).filter(
     (user) => String(user.operatorAccessLevel || "").toUpperCase() === "OWNER"
   );
+}
+
+function getOwnerUser(op) {
+  return getOwnerUsers(op)[0] || null;
 }
 
 function getStaffUsers(op) {
@@ -97,13 +101,14 @@ function getStaffUsers(op) {
 }
 
 function getAccountSummary(op) {
-  const owner = getOwnerUser(op);
+  const ownerUsers = getOwnerUsers(op);
   const staffUsers = getStaffUsers(op);
 
   return {
-    owner,
+    owner: ownerUsers[0] || null,
+    ownerUsers,
     staffUsers,
-    ownerCount: owner ? 1 : 0,
+    ownerCount: ownerUsers.length,
     staffCount: staffUsers.length,
     total: op.users?.length || 0,
   };
@@ -910,10 +915,11 @@ const toggleUserStatus = async (op, user) => {
 
                       <td>
                         <strong>
-                          {accounts.ownerCount} Owner · {accounts.staffCount} Staff
+                            {accounts.ownerCount} {accounts.ownerCount === 1 ? "Owner" : "Owners"} ·{" "} 
+                            {accounts.staffCount} Staff
                         </strong>
                         <br />
-                        <small>{accounts.total} total login account(s)</small>
+                        <small>{accounts.total} total login {accounts.total === 1 ? "account" : "accounts"}</small>
 
                         <div style={{ marginTop: 8 }}>
                           <button
