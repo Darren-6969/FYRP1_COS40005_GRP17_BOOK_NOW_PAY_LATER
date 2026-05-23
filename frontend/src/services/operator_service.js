@@ -110,6 +110,17 @@ export const operatorService = {
   return api.patch("/operators/settings", payload);
 },
 
+uploadOperatorLogo(file) {
+  const formData = new FormData();
+  formData.append("logo", file);
+
+  return api.post("/uploads/operator-logo", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+},
+
 previewEmailTemplate(template) {
   return api.get("/operators/settings/email-preview", {
     params: { template },

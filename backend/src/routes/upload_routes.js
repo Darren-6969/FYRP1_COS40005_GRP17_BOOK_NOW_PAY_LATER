@@ -26,7 +26,7 @@ const upload = multer({
 router.post(
   "/operator-logo",
   verifyToken,
-  allowRoles("MASTER_SELLER"),
+  allowRoles("MASTER_SELLER", "NORMAL_SELLER"),
   upload.single("logo"),
   async (req, res, next) => {
     try {
