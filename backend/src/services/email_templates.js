@@ -92,8 +92,12 @@ function getBalanceRemaining(booking, payment) {
   );
 }
 
+function isPublicImageUrl(url) {
+  return typeof url === "string" && /^https:\/\/.+/i.test(url);
+}
+
 function baseTemplate({ title, body, buttonText, buttonUrl, operator }) {
-  const logoHtml = operator?.logoUrl
+  const logoHtml = isPublicImageUrl(operator?.logoUrl)
     ? `<img src="${operator.logoUrl}" alt="Company Logo" style="width:72px;height:72px;object-fit:contain;border-radius:18px;background:#ffffff;margin-bottom:12px;" />`
     : `<div style="width:72px;height:72px;border-radius:18px;background:#2563eb;color:white;display:inline-block;text-align:center;line-height:72px;font-weight:900;margin-bottom:12px;">BNPL</div>`;
 

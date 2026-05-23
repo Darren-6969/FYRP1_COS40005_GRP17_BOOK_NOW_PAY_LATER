@@ -2444,6 +2444,24 @@ export async function deleteOperator(req, res, next) {
       });
 
       if (userIds.length > 0) {
+        const customerBookingUsers = await tx.booking.findMany({
+          where: {
+            customerId: {
+              in: userIds,
+            },
+          },
+          select: {
+            customerId: true,
+          },
+          distinct: ["customerId"],
+        });
+
+        const protectedUserIds = customerBookingUsers.map((booking) => booking.customerId);
+
+        const deletableUserIds = userIds.filter(
+          (userId) => !protectedUserIds.includes(userId)
+        );
+
         await tx.refreshToken.deleteMany({
           where: {
             userId: {
@@ -2471,13 +2489,30 @@ export async function deleteOperator(req, res, next) {
           },
         });
 
-        await tx.user.deleteMany({
-          where: {
-            id: {
-              in: userIds,
+        if (protectedUserIds.length > 0) {
+          await tx.user.updateMany({
+            where: {
+              id: {
+                in: protectedUserIds,
+              },
             },
-          },
-        });
+            data: {
+              operatorId: null,
+              operatorAccessLevel: null,
+              operatorUserStatus: "SUSPENDED",
+            },
+          });
+        }
+
+        if (deletableUserIds.length > 0) {
+          await tx.user.deleteMany({
+            where: {
+              id: {
+                in: deletableUserIds,
+              },
+            },
+          });
+        }
       }
 
       await tx.bNPLConfig.deleteMany({
