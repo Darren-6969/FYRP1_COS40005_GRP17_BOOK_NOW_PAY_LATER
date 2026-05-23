@@ -1,12 +1,32 @@
-import { Resend } from "resend";
+// TEMPORARY DEMO EMAIL SERVICE USING GMAIL SMTP
+// ------------------------------------------------
+// Resend is commented out for now because resend.dev testing domain
+// can only send to the verified Resend account email.
+// After buying/verifying a domain, you can restore Resend later.
+
+// import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import prisma from "../config/db.js";
 
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
+// const resend = process.env.RESEND_API_KEY
+//   ? new Resend(process.env.RESEND_API_KEY)
+//   : null;
 
 function configured() {
-  return Boolean(process.env.RESEND_API_KEY);
+  return Boolean(process.env.GMAIL_SMTP_USER && process.env.GMAIL_SMTP_PASS);
+
+  // Resend version for future production use:
+  // return Boolean(process.env.RESEND_API_KEY);
+}
+
+function getTransporter() {
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.GMAIL_SMTP_USER,
+      pass: process.env.GMAIL_SMTP_PASS,
+    },
+  });
 }
 
 export async function sendEmail({
@@ -35,7 +55,7 @@ export async function sendEmail({
       status: configured() ? "PENDING" : "SKIPPED",
       error: configured()
         ? null
-        : "RESEND_API_KEY is not configured. Email was skipped.",
+        : "GMAIL_SMTP_USER or GMAIL_SMTP_PASS is not configured. Email was skipped.",
     },
   });
 
@@ -48,8 +68,12 @@ export async function sendEmail({
   }
 
   try {
-    const providerResponse = await resend.emails.send({
-      from: process.env.EMAIL_FROM || "BNPL System <onboarding@resend.dev>",
+    const transporter = getTransporter();
+
+    const providerResponse = await transporter.sendMail({
+      from:
+        process.env.EMAIL_FROM ||
+        `BNPL System <${process.env.GMAIL_SMTP_USER}>`,
       to,
       subject,
       html,
