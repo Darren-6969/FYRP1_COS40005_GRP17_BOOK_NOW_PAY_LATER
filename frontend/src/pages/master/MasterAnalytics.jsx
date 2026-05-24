@@ -59,7 +59,7 @@ const DOW_COLORS = ["#3b82f6", "#3b82f6", "#3b82f6", "#3b82f6", "#3b82f6", "#f59
 
 function Metric({ label, value, sub, variant = "" }) {
   return (
-    <div className={`operator-metric ${variant}`}>
+    <div className={`master-analytics-metric ${variant}`}>
       <span>{label}</span>
       <strong>{value}</strong>
       {sub && <small>{sub}</small>}
@@ -171,10 +171,10 @@ export default function MasterAnalytics() {
   const chartInterval = Math.max(1, Math.floor(bookingChartData.length / 8));
 
   return (
-    <div className="operator-page">
+    <div className="master-analytics-page">
       {/* ── Header ── */}
-      <section className="operator-page-head">
-        <div>
+      <section className="master-analytics-head">
+        <div className="master-analytics-head-text">
           <h1>Analytics &amp; Demand Forecast</h1>
           <p>
             SARIMA demand forecasting across all operators.
@@ -183,10 +183,10 @@ export default function MasterAnalytics() {
               : " Showing platform-wide aggregated data."}
           </p>
         </div>
-        <div className="analytics-controls">
+        <div className="master-analytics-controls">
           {/* Operator filter */}
           <select
-            className="analytics-period-select"
+            className="master-analytics-select"
             value={selectedOperatorId}
             onChange={(e) => {
               setSelectedOperatorId(e.target.value);
@@ -203,7 +203,7 @@ export default function MasterAnalytics() {
 
           {/* Period filter */}
           <select
-            className="analytics-period-select"
+            className="master-analytics-select"
             value={selectedPeriod}
             onChange={(e) => setSelectedPeriod(e.target.value)}
           >
@@ -224,7 +224,7 @@ export default function MasterAnalytics() {
 
           <button
             type="button"
-            className="analytics-btn secondary"
+            className="master-analytics-btn secondary"
             onClick={handleExportCSV}
             disabled={loading}
           >
@@ -232,7 +232,7 @@ export default function MasterAnalytics() {
           </button>
           <button
             type="button"
-            className="analytics-btn"
+            className="master-analytics-btn"
             onClick={handleExportPDF}
             disabled={loading || exporting}
           >
@@ -251,7 +251,7 @@ export default function MasterAnalytics() {
       )}
 
       {loading && (
-        <div className="operator-card" style={{ textAlign: "center", padding: 40 }}>
+        <div className="master-analytics-card" style={{ textAlign: "center", padding: 40 }}>
           Loading analytics…
         </div>
       )}
@@ -260,7 +260,7 @@ export default function MasterAnalytics() {
         <div ref={contentRef}>
           {/* ── Forecast KPIs ── */}
           {fs && (
-            <section className="operator-metric-grid three">
+            <section className="master-analytics-metric-grid three">
               <Metric
                 label="Expected Bookings (30 days)"
                 value={fs.expectedBookings}
@@ -283,7 +283,7 @@ export default function MasterAnalytics() {
 
           {/* ── Monthly summary KPIs ── */}
           {ms && (
-            <section className="operator-metric-grid four">
+            <section className="master-analytics-metric-grid four">
               <Metric label="Total Bookings" value={ms.totalBookings} sub={data.period?.label} />
               <Metric label="Paid Bookings" value={ms.paidBookings} sub={data.period?.label} />
               <Metric
@@ -300,8 +300,8 @@ export default function MasterAnalytics() {
           )}
 
           {/* ── Booking trend + SARIMA chart ── */}
-          <div className="operator-card">
-            <div className="operator-card-head">
+          <div className="master-analytics-card master-analytics-chart-card">
+            <div className="master-analytics-card-head">
               <div>
                 <h2>Booking Trend &amp; SARIMA Forecast</h2>
                 <p>
@@ -317,11 +317,14 @@ export default function MasterAnalytics() {
 
             {bookingChartData.length > 1 ? (
               <>
-                <ResponsiveContainer width="100%" height={280}>
+              <div className="master-analytics-chart-scroll">
+              <div className="master-analytics-chart-box">
+                <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={bookingChartData}
                     margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
                   >
+                    
                     <defs>
                       <linearGradient id="masterCiGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#93c5fd" stopOpacity={0.4} />
@@ -382,6 +385,8 @@ export default function MasterAnalytics() {
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
+                </div>
+              </div>
                 <div className="operator-chart-legend">
                   <span><i className="legend-blue" /> Actual Bookings</span>
                   {!isPast && <span><i className="legend-orange" /> SARIMA Forecast</span>}
@@ -394,8 +399,8 @@ export default function MasterAnalytics() {
           </div>
 
           {/* ── Day-of-week + Insights ── */}
-          <section className="operator-report-grid">
-            <div className="operator-card">
+          <section className="master-analytics-report-grid">
+            <div className="master-analytics-card">
               <h2>Avg Bookings by Day of Week</h2>
               <p className="analytics-card-sub">
                 Based on {selectedPeriod ? periodLabel : "the last 90 days"}
@@ -422,7 +427,7 @@ export default function MasterAnalytics() {
               )}
             </div>
 
-            <div className="operator-card">
+            <div className="master-analytics-card">
               <h2>Demand Insights</h2>
               <p className="analytics-card-sub">Analysis of booking patterns</p>
               {insights.length > 0 ? (
@@ -441,7 +446,7 @@ export default function MasterAnalytics() {
           </section>
 
           {/* ── Popular Services ── */}
-          <div className="operator-card">
+          <div className="master-analytics-card">
             <h2>Popular Services</h2>
             <p className="analytics-card-sub">
               {selectedPeriod ? `Booking activity — ${periodLabel}` : "Last 30 days"}
