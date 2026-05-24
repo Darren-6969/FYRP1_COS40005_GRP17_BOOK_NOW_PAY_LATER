@@ -26,6 +26,9 @@ export default function OperatorLayout() {
 
   const [openNotifications, setOpenNotifications] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showTopbar, setShowTopbar] = useState(true);
+  const [hasScrolled, setHasScrolled] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   const user = getStoredUser();
   const displayName = user?.name || user?.fullName || "Operator";
@@ -80,6 +83,34 @@ export default function OperatorLayout() {
     };
   }, [mobileMenuOpen]);
 
+  useEffect(() => {
+  let lastScrollY = window.scrollY;
+
+  const handleScroll = () => {
+    const currentScrollY = window.scrollY;
+
+    if (currentScrollY <= 20) {
+      setShowTopbar(true);
+      setHasScrolled(false);
+    } else if (currentScrollY < lastScrollY) {
+      // scrolling up
+      setShowTopbar(true);
+      setHasScrolled(true);
+    } else {
+      // scrolling down
+      setShowTopbar(false);
+      setHasScrolled(true);
+    }
+
+    lastScrollY = currentScrollY;
+  };
+
+  window.addEventListener("scroll", handleScroll, { passive: true });
+  handleScroll();
+
+  return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const handleLogout = () => {
     clearSession();
     navigate("/login", { replace: true });
@@ -127,7 +158,11 @@ export default function OperatorLayout() {
       />
 
       <main className="operator-main">
-        <header className="operator-topbar">
+        <header
+          className={`operator-topbar ${
+            hasScrolled ? "topbar-scroll-mode" : ""
+          } ${showTopbar ? "topbar-show" : "topbar-hide"}`}
+        >
           <div className="operator-topbar-title">
             <button
               type="button"

@@ -3436,3 +3436,45 @@
     padding: 14px 16px !important;
   }
 }
+
+/* ===== Operator mobile topbar: hide when scroll down, show when scroll up ===== */
+@media (max-width: 860px) {
+  .operator-topbar {
+    transition:
+      transform 0.28s ease,
+      opacity 0.28s ease,
+      box-shadow 0.28s ease,
+      background 0.28s ease !important;
+  }
+
+  .operator-topbar.topbar-scroll-mode {
+    position: fixed !important;
+    top: 10px !important;
+    left: 10px !important;
+    right: 10px !important;
+    z-index: 4500 !important;
+
+    width: auto !important;
+    margin-bottom: 0 !important;
+
+    background: rgba(255, 255, 255, 0.9) !important;
+    backdrop-filter: blur(18px) !important;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.14) !important;
+  }
+
+  .operator-topbar.topbar-scroll-mode.topbar-show {
+    transform: translateY(0) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .operator-topbar.topbar-scroll-mode.topbar-hide {
+    transform: translateY(-130%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  .operator-menu-toggle {
+    display: inline-grid !important;
+  }
+}
