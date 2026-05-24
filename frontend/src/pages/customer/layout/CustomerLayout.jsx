@@ -30,6 +30,9 @@ export default function CustomerLayout() {
 
   const [openNotifications, setOpenNotifications] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showTopbar, setShowTopbar] = useState(true);
+  const [hasScrolled, setHasScrolled] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   
   const closeTimerRef = useRef(null);
 
@@ -72,6 +75,34 @@ export default function CustomerLayout() {
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+  let lastScrollY = window.scrollY;
+
+  const handleScroll = () => {
+    const currentScrollY = window.scrollY;
+
+    if (currentScrollY <= 20) {
+      setShowTopbar(true);
+      setHasScrolled(false);
+    } else if (currentScrollY < lastScrollY) {
+      // scrolling up
+      setShowTopbar(true);
+      setHasScrolled(true);
+    } else {
+      // scrolling down
+      setShowTopbar(false);
+      setHasScrolled(true);
+    }
+
+    lastScrollY = currentScrollY;
+  };
+
+  window.addEventListener("scroll", handleScroll, { passive: true });
+  handleScroll();
+
+  return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const handleLogout = () => {
@@ -119,7 +150,11 @@ function getCustomerNotificationLink(item) {
     )}
 
     <main className="customer-main">
-        <header className="customer-topbar-glass">
+        <header
+          className={`customer-topbar-glass ${
+            hasScrolled ? "topbar-scroll-mode" : ""
+          } ${showTopbar ? "topbar-show" : "topbar-hide"}`}
+        >
   <div className="customer-topbar-left">
     <button
       type="button"
