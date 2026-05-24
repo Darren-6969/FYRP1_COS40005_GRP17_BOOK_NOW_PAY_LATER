@@ -3437,44 +3437,74 @@
   }
 }
 
-/* ===== Operator mobile topbar: hide when scroll down, show when scroll up ===== */
+/* ===== Admin Notification Dropdown Mobile Alignment Fix ===== */
 @media (max-width: 860px) {
-  .operator-topbar {
-    transition:
-      transform 0.28s ease,
-      opacity 0.28s ease,
-      box-shadow 0.28s ease,
-      background 0.28s ease !important;
+  .master-notification-wrapper {
+    position: static !important;
   }
 
-  .operator-topbar.topbar-scroll-mode {
+  .portal-notification-dropdown.master-notification-dropdown,
+  .master-notification-dropdown {
     position: fixed !important;
-    top: 10px !important;
-    left: 10px !important;
-    right: 10px !important;
-    z-index: 4500 !important;
+
+    top: 115px !important;
+    left: 14px !important;
+    right: 14px !important;
 
     width: auto !important;
-    margin-bottom: 0 !important;
+    min-width: 0 !important;
+    max-width: calc(100vw - 28px) !important;
 
-    background: rgba(255, 255, 255, 0.9) !important;
-    backdrop-filter: blur(18px) !important;
-    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.14) !important;
+    max-height: 70vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    border-radius: 24px !important;
+    z-index: 7000 !important;
+
+    transform: none !important;
   }
 
-  .operator-topbar.topbar-scroll-mode.topbar-show {
-    transform: translateY(0) !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
+  .portal-dropdown-head {
+    padding: 18px !important;
   }
 
-  .operator-topbar.topbar-scroll-mode.topbar-hide {
-    transform: translateY(-130%) !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
+  .portal-dropdown-list {
+    max-height: 52vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
   }
 
-  .operator-menu-toggle {
-    display: inline-grid !important;
+  .portal-dropdown-item {
+    width: 100% !important;
+    max-width: 100% !important;
+
+    display: grid !important;
+    grid-template-columns: 10px minmax(0, 1fr) !important;
+    gap: 12px !important;
+
+    padding: 16px !important;
+    border-radius: 18px !important;
+  }
+
+  .portal-dropdown-item span:last-child {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .portal-dropdown-item strong,
+  .portal-dropdown-item small {
+    max-width: 100% !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .portal-dropdown-footer {
+    position: sticky !important;
+    bottom: 0 !important;
+    background: #ffffff !important;
+    z-index: 2 !important;
+    border-radius: 0 0 24px 24px !important;
   }
 }

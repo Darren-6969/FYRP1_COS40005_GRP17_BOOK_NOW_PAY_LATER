@@ -18,12 +18,21 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
   
   const getGridColumns = () => {
-    if (typeof window !== 'undefined' && window.innerWidth <= 1000) return 'repeat(3, 1fr)';
-    if (typeof window !== 'undefined' && window.innerWidth <= 640) return 'repeat(2, 1fr)';
-    return 'repeat(6, 1fr)';
+  if (typeof window !== "undefined" && window.innerWidth <= 640) {
+    return "1fr";
+  }
+
+  if (typeof window !== "undefined" && window.innerWidth <= 1000) {
+    return "repeat(2, 1fr)";
+  }
+
+  return "repeat(6, 1fr)";
   };
   
   const [gridColumns, setGridColumns] = useState(getGridColumns());
+  const [isMobile, setIsMobile] = useState(
+  typeof window !== "undefined" && window.innerWidth <= 860
+  );
 
   // Main data loading effect
   useEffect(() => {
@@ -71,9 +80,15 @@ export default function Dashboard() {
 
   // Resize listener effect
   useEffect(() => {
-    const handleResize = () => setGridColumns(getGridColumns());
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+  const handleResize = () => {
+    setGridColumns(getGridColumns());
+    setIsMobile(window.innerWidth <= 860);
+  };
+
+  window.addEventListener("resize", handleResize);
+  handleResize();
+
+  return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   // ========== CALCULATIONS ==========
@@ -223,7 +238,12 @@ export default function Dashboard() {
 
   // ========== STYLES ==========
   const styles = {
-    container: { padding: '24px', maxWidth: '1400px', margin: '0 auto' },
+    container: { padding: isMobile ? "16px 10px" : "24px",
+                 maxWidth: "1400px",
+                 margin: "0 auto",
+                 width: "100%",
+                 overflowX: "hidden",
+                 boxSizing: "border-box", },
     pageTitle: { fontSize: '24px', fontWeight: '600', marginBottom: '24px', color: '#1f2937' },
     metricsGrid: {
       display: 'grid',
@@ -268,29 +288,57 @@ export default function Dashboard() {
     legendItem: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#6b7280' },
     legendDot: { width: '10px', height: '10px', borderRadius: '50%', display: 'inline-block' },
     twoColumnGrid: {
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '24px',
-      marginBottom: '32px'
+      display: "grid",
+      gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+      gap: isMobile ? "18px" : "24px",
+      marginBottom: "32px",
+      width: "100%",
+      minWidth: 0,
     },
     card: {
-      background: 'white',
-      border: '1px solid #e5e7eb',
-      borderRadius: '12px',
-      padding: '20px',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+      background: "white",
+      border: "1px solid #e5e7eb",
+      borderRadius: isMobile ? "18px" : "12px",
+      padding: isMobile ? "18px" : "20px",
+      boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+      width: "100%",
+      minWidth: 0,
+      boxSizing: "border-box",
+      overflow: "hidden",
     },
     cardTitle: { fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: '#1f2937' },
-    table: { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
-    th: { textAlign: 'left', padding: '12px 8px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb', fontWeight: '600', color: '#6b7280' },
-    td: { padding: '12px 8px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' },
+    table: {
+      width: "100%",
+      borderCollapse: "collapse",
+      fontSize: isMobile ? "13px" : "13px",
+      tableLayout: isMobile ? "fixed" : "auto",
+    },
+    th: {
+      textAlign: "left",
+      padding: isMobile ? "10px 8px" : "12px 8px",
+      background: "#f9fafb",
+      borderBottom: "1px solid #e5e7eb",
+      fontWeight: "600",
+      color: "#6b7280",
+      whiteSpace: "normal",
+      wordBreak: "break-word",
+    },
+    td: {
+      padding: isMobile ? "12px 8px" : "12px 8px",
+      borderBottom: "1px solid #f1f5f9",
+      verticalAlign: "middle",
+      whiteSpace: "normal",
+      wordBreak: "break-word",
+    },
     badge: { display: 'inline-block', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' },
     paymentActivityItem: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: '12px 0',
-      borderBottom: '1px solid #f1f5f9'
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: isMobile ? "flex-start" : "center",
+      gap: "12px",
+      padding: "14px 0",
+      borderBottom: "1px solid #f1f5f9",
+      flexWrap: "wrap",
     },
     noData: { textAlign: 'center', padding: '40px', color: '#9ca3af' },
     errorBox: { background: '#fee2e2', border: '1px solid #fecaca', borderRadius: '12px', padding: '16px', marginBottom: '20px', color: '#dc2626' },
@@ -494,8 +542,15 @@ export default function Dashboard() {
         <div style={styles.card}>
           <h3 style={styles.cardTitle}>📋 Recent Booking Requests</h3>
           {recentBookings.length > 0 ? (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={styles.table}>
+            <div
+                style={{
+                  overflowX: "auto",
+                  width: "100%",
+                  maxWidth: "100%",
+                  WebkitOverflowScrolling: "touch",
+                }}
+              >
+                <table style={{ ...styles.table, minWidth: "720px" }}>
                 <thead>
                   <tr>
                     <th style={styles.th}>Booking ID</th>
