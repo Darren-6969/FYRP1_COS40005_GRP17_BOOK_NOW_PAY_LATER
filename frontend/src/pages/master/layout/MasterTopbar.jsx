@@ -18,6 +18,9 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
   const closeTimerRef = useRef(null);
 
   const [openNotifications, setOpenNotifications] = useState(false);
+  const [showMobileTopbar, setShowMobileTopbar] = useState(true);
+  const [hasScrolled, setHasScrolled] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   const user = getStoredUser();
   const displayName = user?.name || "Master Seller";
@@ -64,6 +67,34 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+  let lastScrollY = window.scrollY;
+
+  const handleScroll = () => {
+    const currentScrollY = window.scrollY;
+
+    if (currentScrollY <= 20) {
+      setShowMobileTopbar(true);
+      setHasScrolled(false);
+    } else if (currentScrollY < lastScrollY) {
+      // scrolling up
+      setShowMobileTopbar(true);
+      setHasScrolled(true);
+    } else {
+      // scrolling down
+      setShowMobileTopbar(false);
+      setHasScrolled(true);
+    }
+
+    lastScrollY = currentScrollY;
+  };
+
+  window.addEventListener("scroll", handleScroll, { passive: true });
+  handleScroll();
+
+  return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   /*Function Notification Bell*/
   function getMasterNotificationLink(item) {
     const text = `${item.title || ""} ${item.message || ""}`.toLowerCase();
@@ -105,11 +136,15 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
   }
 
   return (
-    <header className="master-topbar">
+    <header
+      className={`master-topbar ${
+        hasScrolled ? "mobile-scroll-mode" : ""
+      } ${showMobileTopbar ? "mobile-show" : "mobile-hide"}`}
+    >
       <div className="master-topbar-title">
         <button
           type="button"
-          className="master-menu-toggle"
+          className={`master-menu-toggle ${isScrolled ? "is-floating" : ""}`}
           onClick={onOpenMobileMenu}
           aria-label="Open admin menu"
         >
