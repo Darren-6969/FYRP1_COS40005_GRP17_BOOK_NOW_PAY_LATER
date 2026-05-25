@@ -39,6 +39,9 @@ export default function Payments() {
   const [payments, setPayments] = useState([]);
   const [selected, setSelected] = useState(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 10;
+
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("ALL");
   const [method, setMethod] = useState("ALL");
@@ -51,8 +54,10 @@ export default function Payments() {
     try {
       setLoading(true);
       setError("");
+
       const res = await getPayments();
       setPayments(res.data || []);
+      setCurrentPage(1);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load payments.");
     } finally {
@@ -103,8 +108,45 @@ export default function Payments() {
     });
   }, [payments, query, status, method, operator]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+
+  const paginatedPayments = filtered.slice(
+    (currentPage - 1) * rowsPerPage,
+    currentPage * rowsPerPage
+  );
+
+  function goToPage(page) {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+  }
+
+  function getPageNumbers() {
+    const pages = [];
+
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      return pages;
+    }
+
+    pages.push(1);
+
+    if (currentPage > 3) pages.push("...");
+
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+
+    for (let i = start; i <= end; i++) pages.push(i);
+
+    if (currentPage < totalPages - 2) pages.push("...");
+
+    pages.push(totalPages);
+
+    return pages;
+  }
+
   const summary = useMemo(() => {
     const paid = payments.filter((p) => p.status === "PAID");
+
     return {
       total: payments.length,
       paid: paid.length,
@@ -129,7 +171,9 @@ export default function Payments() {
             </p>
           </div>
 
-          <button className="btn" onClick={load}>Refresh</button>
+          <button className="btn" onClick={load}>
+            Refresh
+          </button>
         </div>
 
         {error && <div className="alert danger">{error}</div>}
@@ -137,7 +181,11 @@ export default function Payments() {
         <div className="stats-grid">
           <Stat title="Total Payments" value={summary.total} />
           <Stat title="Paid" value={summary.paid} />
-          <Stat title="Pending Verification" value={summary.pendingVerification} danger={summary.pendingVerification > 0} />
+          <Stat
+            title="Pending Verification"
+            value={summary.pendingVerification}
+            danger={summary.pendingVerification > 0}
+          />
           <Stat title="Unpaid" value={summary.unpaid} />
           <Stat title="Overdue" value={summary.overdue} danger={summary.overdue > 0} />
           <Stat title="Revenue" value={money(summary.revenue)} />
@@ -149,10 +197,19 @@ export default function Payments() {
           <input
             placeholder="Search payment, booking, customer, transaction..."
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setCurrentPage(1);
+            }}
           />
 
-          <select value={status} onChange={(event) => setStatus(event.target.value)}>
+          <select
+            value={status}
+            onChange={(event) => {
+              setStatus(event.target.value);
+              setCurrentPage(1);
+            }}
+          >
             <option value="ALL">All Status</option>
             <option value="UNPAID">Unpaid</option>
             <option value="PENDING_VERIFICATION">Pending Verification</option>
@@ -161,7 +218,13 @@ export default function Payments() {
             <option value="FAILED">Failed</option>
           </select>
 
-          <select value={method} onChange={(event) => setMethod(event.target.value)}>
+          <select
+            value={method}
+            onChange={(event) => {
+              setMethod(event.target.value);
+              setCurrentPage(1);
+            }}
+          >
             <option value="ALL">All Methods</option>
             <option value="STRIPE">Stripe</option>
             <option value="DUITNOW">DuitNow</option>
@@ -172,10 +235,18 @@ export default function Payments() {
             <option value="PENDING">Pending</option>
           </select>
 
-          <select value={operator} onChange={(event) => setOperator(event.target.value)}>
+          <select
+            value={operator}
+            onChange={(event) => {
+              setOperator(event.target.value);
+              setCurrentPage(1);
+            }}
+          >
             <option value="ALL">All Operators</option>
             {operators.map((op) => (
-              <option key={op.id} value={op.id}>{op.name}</option>
+              <option key={op.id} value={op.id}>
+                {op.name}
+              </option>
             ))}
           </select>
         </div>
@@ -183,94 +254,161 @@ export default function Payments() {
         {loading ? (
           <div className="empty-state">Loading payments...</div>
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Payment</th>
-                <th>Booking</th>
-                <th>Customer</th>
-                <th>Operator</th>
-                <th>Method</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Paid At</th>
-                <th>Receipt</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {filtered.map((payment) => (
-                <tr key={payment.id}>
-                  <td>
-                    <strong>#{payment.id}</strong>
-                    <br />
-                    <small>{payment.transactionId || "-"}</small>
-                  </td>
-
-                  <td>{payment.booking?.bookingCode || payment.bookingId}</td>
-                  <td>
-                    {payment.booking?.customer?.name || "-"}
-                    <br />
-                    <small>{payment.booking?.customer?.email || "-"}</small>
-                  </td>
-                  <td>{payment.booking?.operator?.companyName || "-"}</td>
-                  <td>{payment.method || "-"}</td>
-                  <td>{money(payment.amount)}</td>
-
-                  <td>
-                    <span className={`badge ${statusClass(payment.status)}`}>
-                      {label(payment.status)}
-                    </span>
-                  </td>
-
-                  <td>{dateTime(payment.paidAt)}</td>
-
-                  <td>
-                    {payment.booking?.receipt?.imageUrl ? (
-                      <button
-                        className="btn"
-                        onClick={() => window.open(payment.booking.receipt.imageUrl, "_blank")}
-                      >
-                        View
-                      </button>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-
-                  <td>
-                    <button className="btn" onClick={() => setSelected(payment)}>
-                      Detail
-                    </button>
-                  </td>
-                </tr>
-              ))}
-
-              {!filtered.length && (
+          <>
+            <table className="table">
+              <thead>
                 <tr>
-                  <td colSpan="10">No payments found.</td>
+                  <th>Payment</th>
+                  <th>Booking</th>
+                  <th>Customer</th>
+                  <th>Operator</th>
+                  <th>Method</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Paid At</th>
+                  <th>Receipt</th>
+                  <th>Action</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                {paginatedPayments.map((payment) => (
+                  <tr key={payment.id}>
+                    <td>
+                      <strong>#{payment.id}</strong>
+                      <br />
+                      <small>{payment.transactionId || "-"}</small>
+                    </td>
+
+                    <td>{payment.booking?.bookingCode || payment.bookingId}</td>
+
+                    <td>
+                      {payment.booking?.customer?.name || "-"}
+                      <br />
+                      <small>{payment.booking?.customer?.email || "-"}</small>
+                    </td>
+
+                    <td>{payment.booking?.operator?.companyName || "-"}</td>
+                    <td>{payment.method || "-"}</td>
+                    <td>{money(payment.amount)}</td>
+
+                    <td>
+                      <span className={`badge ${statusClass(payment.status)}`}>
+                        {label(payment.status)}
+                      </span>
+                    </td>
+
+                    <td>{dateTime(payment.paidAt)}</td>
+
+                    <td>
+                      {payment.booking?.receipt?.imageUrl ? (
+                        <button
+                          className="btn"
+                          onClick={() =>
+                            window.open(payment.booking.receipt.imageUrl, "_blank")
+                          }
+                        >
+                          View
+                        </button>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+
+                    <td>
+                      <button className="btn" onClick={() => setSelected(payment)}>
+                        Detail
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+                {!filtered.length && (
+                  <tr>
+                    <td colSpan="10">No payments found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {filtered.length > 0 && (
+              <div className="operator-pagination">
+                <span>
+                  Showing {(currentPage - 1) * rowsPerPage + 1}-
+                  {Math.min(currentPage * rowsPerPage, filtered.length)} of{" "}
+                  {filtered.length}
+                </span>
+
+                <div className="operator-pagination-actions">
+                  <button
+                    type="button"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    Prev
+                  </button>
+
+                  {getPageNumbers().map((page, index) => {
+                    if (page === "...") {
+                      return (
+                        <span
+                          key={`ellipsis-${index}`}
+                          className="pagination-ellipsis"
+                        >
+                          ...
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <button
+                        key={page}
+                        type="button"
+                        className={currentPage === page ? "active" : ""}
+                        onClick={() => goToPage(page)}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </section>
 
       {selected && (
         <div className="admin-modal-backdrop" onClick={() => setSelected(null)}>
-          <div className="admin-document-modal" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="admin-document-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="section-header">
               <div>
                 <h3>Payment #{selected.id}</h3>
                 <p>{selected.booking?.bookingCode || selected.bookingId}</p>
               </div>
-              <button className="btn" onClick={() => setSelected(null)}>Close</button>
+
+              <button className="btn" onClick={() => setSelected(null)}>
+                Close
+              </button>
             </div>
 
             <div className="stats-grid">
               <Info title="Customer" value={selected.booking?.customer?.name || "-"} />
-              <Info title="Operator" value={selected.booking?.operator?.companyName || "-"} />
+              <Info
+                title="Operator"
+                value={selected.booking?.operator?.companyName || "-"}
+              />
               <Info title="Method" value={selected.method || "-"} />
               <Info title="Status" value={label(selected.status)} />
               <Info title="Amount" value={money(selected.amount)} />
@@ -279,11 +417,26 @@ export default function Payments() {
 
             <table className="table">
               <tbody>
-                <tr><td>Transaction ID</td><td>{selected.transactionId || "-"}</td></tr>
-                <tr><td>Booking Status</td><td>{label(selected.booking?.status)}</td></tr>
-                <tr><td>Invoice</td><td>{selected.booking?.invoice?.invoiceNo || "-"}</td></tr>
-                <tr><td>Receipt Status</td><td>{selected.booking?.receipt?.status || "-"}</td></tr>
-                <tr><td>Receipt Remarks</td><td>{selected.booking?.receipt?.remarks || "-"}</td></tr>
+                <tr>
+                  <td>Transaction ID</td>
+                  <td>{selected.transactionId || "-"}</td>
+                </tr>
+                <tr>
+                  <td>Booking Status</td>
+                  <td>{label(selected.booking?.status)}</td>
+                </tr>
+                <tr>
+                  <td>Invoice</td>
+                  <td>{selected.booking?.invoice?.invoiceNo || "-"}</td>
+                </tr>
+                <tr>
+                  <td>Receipt Status</td>
+                  <td>{selected.booking?.receipt?.status || "-"}</td>
+                </tr>
+                <tr>
+                  <td>Receipt Remarks</td>
+                  <td>{selected.booking?.receipt?.remarks || "-"}</td>
+                </tr>
               </tbody>
             </table>
           </div>
