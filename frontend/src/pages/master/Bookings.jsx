@@ -42,6 +42,8 @@ function label(value) {
 export default function Bookings() {
   const [bookings, setBookings] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 10;
 
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("ALL");
@@ -81,33 +83,69 @@ export default function Bookings() {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [bookings]);
 
-  const filtered = useMemo(() => {
-    return bookings.filter((booking) => {
-      const text = [
-        booking.id,
-        booking.bookingCode,
-        booking.hostBookingRef,
-        booking.customer?.name,
-        booking.customer?.email,
-        booking.operator?.companyName,
-        booking.serviceName,
-        booking.location,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+    const filtered = useMemo(() => {
+  return bookings.filter((booking) => {
+    const text = [
+      booking.id,
+      booking.bookingCode,
+      booking.hostBookingRef,
+      booking.customer?.name,
+      booking.customer?.email,
+      booking.operator?.companyName,
+      booking.serviceName,
+      booking.location,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
 
-      const matchesQuery = !query || text.includes(query.toLowerCase());
-      const matchesStatus = status === "ALL" || booking.status === status;
-      const matchesPayment =
-        paymentStatus === "ALL" ||
-        String(booking.payment?.status || "UNPAID") === paymentStatus;
-      const matchesOperator =
-        operator === "ALL" || String(booking.operator?.id) === String(operator);
+    const matchesQuery = !query || text.includes(query.toLowerCase());
+    const matchesStatus = status === "ALL" || booking.status === status;
+    const matchesPayment =
+      paymentStatus === "ALL" ||
+      String(booking.payment?.status || "UNPAID") === paymentStatus;
+    const matchesOperator =
+      operator === "ALL" || String(booking.operator?.id) === String(operator);
 
-      return matchesQuery && matchesStatus && matchesPayment && matchesOperator;
-    });
+    return matchesQuery && matchesStatus && matchesPayment && matchesOperator;
+  });
   }, [bookings, query, status, paymentStatus, operator]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+
+const paginatedBookings = filtered.slice(
+  (currentPage - 1) * rowsPerPage,
+  currentPage * rowsPerPage
+);
+
+function goToPage(page) {
+  if (page < 1 || page > totalPages) return;
+  setCurrentPage(page);
+}
+
+function getPageNumbers() {
+  const pages = [];
+
+  if (totalPages <= 5) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+    return pages;
+  }
+
+  pages.push(1);
+
+  if (currentPage > 3) pages.push("...");
+
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  for (let i = start; i <= end; i++) pages.push(i);
+
+  if (currentPage < totalPages - 2) pages.push("...");
+
+  pages.push(totalPages);
+
+  return pages;
+  }
 
   const handleAccept = async (booking) => {
     if (!window.confirm(`Accept booking ${booking.bookingCode || booking.id}?`)) {
@@ -209,7 +247,8 @@ export default function Bookings() {
         {loading ? (
           <div className="empty-state">Loading bookings...</div>
         ) : (
-          <table className="table">
+          <>
+            <table className="table">
             <thead>
               <tr>
                 <th>Booking</th>
@@ -226,7 +265,7 @@ export default function Bookings() {
             </thead>
 
             <tbody>
-              {filtered.map((booking) => (
+              {paginatedBookings.map((booking) => (
                 <tr key={booking.id}>
                   <td>
                     <strong>{booking.bookingCode || booking.id}</strong>
@@ -286,7 +325,57 @@ export default function Bookings() {
               )}
             </tbody>
           </table>
-        )}
+
+              {filtered.length > 0 && (
+                <div className="operator-pagination">
+                  <span>
+                    Showing {(currentPage - 1) * rowsPerPage + 1}-
+                    {Math.min(currentPage * rowsPerPage, filtered.length)} of{" "}
+                    {filtered.length}
+                  </span>
+
+                  <div className="operator-pagination-actions">
+                    <button
+                      type="button"
+                      onClick={() => goToPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                    >
+                      Prev
+                    </button>
+
+                    {getPageNumbers().map((page, index) => {
+                      if (page === "...") {
+                        return (
+                          <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+                            ...
+                          </span>
+                        );
+                      }
+
+                      return (
+                        <button
+                          key={page}
+                          type="button"
+                          className={currentPage === page ? "active" : ""}
+                          onClick={() => goToPage(page)}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      onClick={() => goToPage(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
       </section>
 
       {selected && (
