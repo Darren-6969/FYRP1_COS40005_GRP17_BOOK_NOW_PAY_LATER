@@ -26,9 +26,8 @@ export default function OperatorLayout() {
 
   const [openNotifications, setOpenNotifications] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [showTopbar, setShowTopbar] = useState(true);
-  const [hasScrolled, setHasScrolled] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [showOperatorHeader, setShowOperatorHeader] = useState(true);
 
   const user = getStoredUser();
   const displayName = user?.name || user?.fullName || "Operator";
@@ -89,27 +88,24 @@ export default function OperatorLayout() {
   const handleScroll = () => {
     const currentScrollY = window.scrollY;
 
-    if (currentScrollY <= 20) {
-      setShowTopbar(true);
-      setHasScrolled(false);
-    } else if (currentScrollY < lastScrollY) {
-      // scrolling up
-      setShowTopbar(true);
-      setHasScrolled(true);
+    setIsScrolled(currentScrollY > 80);
+
+    if (openNotifications || currentScrollY <= 80) {
+  setShowOperatorHeader(true);
+    } else if (currentScrollY > lastScrollY) {
+      setShowOperatorHeader(false);
     } else {
-      // scrolling down
-      setShowTopbar(false);
-      setHasScrolled(true);
+      setShowOperatorHeader(true);
     }
 
     lastScrollY = currentScrollY;
   };
 
-  window.addEventListener("scroll", handleScroll, { passive: true });
+  window.addEventListener("scroll", handleScroll);
   handleScroll();
 
   return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [openNotifications]);
 
   const handleLogout = () => {
     clearSession();
@@ -160,8 +156,8 @@ export default function OperatorLayout() {
       <main className="operator-main">
         <header
           className={`operator-topbar ${
-            hasScrolled ? "topbar-scroll-mode" : ""
-          } ${showTopbar ? "topbar-show" : "topbar-hide"}`}
+            isScrolled ? "operator-mobile-scroll-mode" : ""
+          } ${showOperatorHeader ? "operator-mobile-show" : "operator-mobile-hide"}`}
         >
           <div className="operator-topbar-title">
             <button
@@ -191,7 +187,16 @@ export default function OperatorLayout() {
                     unreadCount > 0 ? "has-unread" : ""
                   }`}
                   type="button"
-                  onClick={() => navigate("/operator/notifications")}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    if (closeTimerRef.current) {
+                      clearTimeout(closeTimerRef.current);
+                    }
+
+                    setOpenNotifications((prev) => !prev);
+                  }}
                   aria-label="Open notifications"
                 >
                   <span className="portal-bell-icon operator-bell-icon">🔔</span>
