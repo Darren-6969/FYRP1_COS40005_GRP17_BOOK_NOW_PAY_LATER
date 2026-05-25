@@ -3753,3 +3753,20 @@
     text-align: center !important;
   }
 }
+
+.pagination-ellipsis {
+  min-width: 28px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-weight: 900;
+}
+
+@media (max-width: 520px) {
+  .pagination-ellipsis {
+    min-width: 18px;
+    font-size: 13px;
+  }
+}
