@@ -21,6 +21,8 @@ export default function OperatorPaymentVerification() {
   const [actionLoading, setActionLoading] = useState("");
   const [error, setError] = useState("");
   const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 10;
 
   const loadPayments = async () => {
     try {
@@ -29,6 +31,7 @@ export default function OperatorPaymentVerification() {
 
       const res = await operatorService.getPayments();
       setPayments(res.data.payments || []);
+      setCurrentPage(1);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load payments");
     } finally {
@@ -178,6 +181,18 @@ export default function OperatorPaymentVerification() {
       ? payments
       : payments.filter((p) => String(p.status).toUpperCase() === activeTab);
 
+  const totalPages = Math.max(1, Math.ceil(visiblePayments.length / rowsPerPage));
+
+  const paginatedPayments = visiblePayments.slice(
+    (currentPage - 1) * rowsPerPage,
+    currentPage * rowsPerPage
+  );
+
+  function goToPage(page) {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+  }
+
   return (
     <div className="operator-page">
       <section className="operator-page-head">
@@ -223,7 +238,10 @@ export default function OperatorPaymentVerification() {
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => {
+                  setActiveTab(tab.key);
+                  setCurrentPage(1);
+                }}
                 style={{
                   padding: "6px 14px",
                   borderRadius: 999,
@@ -279,7 +297,7 @@ export default function OperatorPaymentVerification() {
               </thead>
 
               <tbody>
-                {visiblePayments.map((payment) => (
+                {paginatedPayments.map((payment) => (
                   <tr key={payment.id}>
                     <td>{formatOperatorDateTime(payment.createdAt)}</td>
 
@@ -322,6 +340,49 @@ export default function OperatorPaymentVerification() {
                 ))}
               </tbody>
             </table>
+
+            {visiblePayments.length > 0 && (
+              <div className="operator-pagination">
+                <span>
+                  Showing {(currentPage - 1) * rowsPerPage + 1}-
+                  {Math.min(currentPage * rowsPerPage, visiblePayments.length)} of{" "}
+                  {visiblePayments.length}
+                </span>
+
+                <div className="operator-pagination-actions">
+                  <button
+                    type="button"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    Prev
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, index) => {
+                    const page = index + 1;
+
+                    return (
+                      <button
+                        key={page}
+                        type="button"
+                        className={currentPage === page ? "active" : ""}
+                        onClick={() => goToPage(page)}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
 
             {!visiblePayments.length && (
               <div className="operator-empty-state">

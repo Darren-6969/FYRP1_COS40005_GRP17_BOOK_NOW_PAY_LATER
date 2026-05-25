@@ -245,8 +245,8 @@ export default function MasterSettlements() {
             No paid Stripe bookings found yet.
           </div>
         ) : (
-          <div className="operator-table-wrap">
-            <table className="operator-table">
+          <div className="operator-table-wrap admin-settlement-wrap">
+            <table className="operator-table admin-settlement-table">
               <thead>
                 <tr>
                   <th>Booking ID</th>
@@ -267,50 +267,50 @@ export default function MasterSettlements() {
 
                   return (
                     <tr key={item.bookingId}>
-                      <td>
-                        <button
+                        <td>
+                          <button
                             type="button"
                             className="settlement-booking-link"
                             onClick={() => openBookingDetails(item.bookingId)}
-                        >
+                          >
                             {item.bookingCode}
-                        </button>
-                        <small>{item.serviceName}</small>
-                      </td>
+                          </button>
+                          <small>{item.serviceName}</small>
+                        </td>
 
-                      <td>
-                        <strong>{item.operatorName || "Merchant"}</strong>
-                        <small>Merchant</small>
-                      </td>
+                        <td>
+                          <strong>{item.operatorName || "Merchant"}</strong>
+                          <small>Merchant</small>
+                        </td>
 
-                      <td>
-                        <strong>{item.customerName}</strong>
-                        <small>{item.customerEmail || "-"}</small>
-                      </td>
+                        <td>
+                          <strong>{item.customerName}</strong>
+                          <small>{item.customerEmail || "-"}</small>
+                        </td>
 
-                      <td>
-                        <strong>{formatMoney(customerPaid)}</strong>
-                        <small className="stripe-method-label">
-                          {(item.paymentMethodLabel || "Stripe").replace("Stripe - ", "STRIPE - ")}
-                        </small>
-                      </td>
+                        <td>
+                          <strong>{formatMoney(customerPaid)}</strong>
+                          <small className="stripe-method-label">
+                            {(item.paymentMethodLabel || "Stripe").replace("Stripe - ", "STRIPE - ")}
+                          </small>
+                        </td>
 
-                      <td>
-                        <strong>{formatMoney(bnplAdminFee)}</strong>
-                        <small>{item.platformFeePercent || 10}% platform fee</small>
-                      </td>
+                        <td>
+                          <strong>{formatMoney(bnplAdminFee)}</strong>
+                          <small>{item.platformFeePercent || 10}% platform fee</small>
+                        </td>
 
-                      <td>
-                        <strong>{formatMoney(bnplAdminFee)}</strong>
-                        <small>BNPL platform income</small>
-                    </td>
+                        <td>
+                          <strong>{formatMoney(bnplAdminFee)}</strong>
+                          <small>BNPL platform income</small>
+                        </td>
 
-                      <td>
-                        <small>{item.transactionId || "-"}</small>
-                      </td>
+                        <td>
+                          <small>{item.transactionId || "-"}</small>
+                        </td>
 
-                      <td>{formatDate(item.paidAt)}</td>
-                    </tr>
+                        <td>{formatDate(item.paidAt)}</td>
+                      </tr>
                   );
                 })}
               </tbody>
@@ -328,7 +328,7 @@ export default function MasterSettlements() {
                     onClick={() => goToPage(currentPage - 1)}
                     disabled={currentPage === 1}
                   >
-                    Previous
+                    Prev
                   </button>
 
                   {Array.from({ length: totalPages }, (_, index) => {

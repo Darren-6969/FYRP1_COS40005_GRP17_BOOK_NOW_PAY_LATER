@@ -3509,3 +3509,98 @@
   }
 }
 
+/* Operator Analytics Popular Services Scroll */
+.analytics-services-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+}
+
+.analytics-services-scroll .analytics-services-table {
+  min-width: 720px;
+}
+
+.analytics-services-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.analytics-services-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  border-radius: 999px;
+}
+
+.analytics-services-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (max-width: 860px) {
+  .analytics-services-table th,
+  .analytics-services-table td {
+    white-space: nowrap;
+  }
+
+  .analytics-services-table td:nth-child(2) {
+    white-space: normal;
+    min-width: 130px;
+  }
+
+  .analytics-pct-bar {
+    min-width: 120px;
+  }
+}
+
+/* =========================
+   Operator Dashboard SARIMA Mobile Fix
+   ========================= */
+
+@media (max-width: 860px) {
+  .operator-metric-grid.three,
+  .operator-metric-grid.four,
+  .operator-metric-grid.five {
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+
+  .operator-metric {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .operator-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .operator-card .recharts-responsive-container {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .operator-card h2 {
+    font-size: 18px !important;
+    line-height: 1.35 !important;
+  }
+}
+
+/* Tablet */
+@media (max-width: 860px) {
+  .operator-metric-grid.three {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* Phone */
+@media (max-width: 520px) {
+  .operator-metric-grid.three {
+    grid-template-columns: 1fr !important;
+  }
+
+  .operator-metric {
+    width: 100% !important;
+  }
+}

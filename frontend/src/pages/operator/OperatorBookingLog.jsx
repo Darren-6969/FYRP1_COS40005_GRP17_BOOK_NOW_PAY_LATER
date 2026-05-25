@@ -12,6 +12,8 @@ export default function OperatorBookingLog() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 10;
 
   const loadBookings = async () => {
     try {
@@ -21,6 +23,7 @@ export default function OperatorBookingLog() {
       const res = await operatorService.getBookings();
 
       setBookings(res.data.bookings || []);
+      setCurrentPage(1);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load booking log");
     } finally {
@@ -31,6 +34,18 @@ export default function OperatorBookingLog() {
   useEffect(() => {
     loadBookings();
   }, []);
+
+  const totalPages = Math.max(1, Math.ceil(bookings.length / rowsPerPage));
+
+  const paginatedBookings = bookings.slice(
+    (currentPage - 1) * rowsPerPage,
+    currentPage * rowsPerPage
+  );
+
+  function goToPage(page) {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+  }
 
   return (
     <div className="operator-page">
@@ -69,7 +84,7 @@ export default function OperatorBookingLog() {
               </thead>
 
               <tbody>
-                {bookings.map((booking) => (
+                {paginatedBookings.map((booking) => (
                   <tr key={booking.id}>
                   <td>
                     <Link to={`/operator/bookings/${booking.id}`}>
@@ -98,6 +113,49 @@ export default function OperatorBookingLog() {
                 ))}
               </tbody>
             </table>
+
+            {bookings.length > 0 && (
+              <div className="operator-pagination">
+                <span>
+                  Showing {(currentPage - 1) * rowsPerPage + 1}-
+                  {Math.min(currentPage * rowsPerPage, bookings.length)} of{" "}
+                  {bookings.length}
+                </span>
+
+                <div className="operator-pagination-actions">
+                  <button
+                    type="button"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    Prev
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, index) => {
+                    const page = index + 1;
+
+                    return (
+                      <button
+                        key={page}
+                        type="button"
+                        className={currentPage === page ? "active" : ""}
+                        onClick={() => goToPage(page)}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
 
             {!bookings.length && (
               <div className="operator-empty-state">

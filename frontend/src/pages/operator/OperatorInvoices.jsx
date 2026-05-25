@@ -37,6 +37,8 @@ export default function OperatorInvoices() {
   const [status, setStatus] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 10;
 
   const load = async () => {
     setLoading(true);
@@ -45,6 +47,7 @@ export default function OperatorInvoices() {
     const list = Array.isArray(res.data) ? res.data : res.data?.invoices || [];
 
     setInvoices(list);
+    setCurrentPage(1);
     setLoading(false);
   };
 
@@ -53,26 +56,38 @@ export default function OperatorInvoices() {
   }, []);
 
   const filtered = useMemo(() => {
-    return invoices.filter((invoice) => {
-      const invoiceStatus = invoice.displayStatus || invoice.status;
-      const matchesStatus = status === "ALL" || invoiceStatus === status;
+  return invoices.filter((invoice) => {
+    const invoiceStatus = invoice.displayStatus || invoice.status;
+    const matchesStatus = status === "ALL" || invoiceStatus === status;
 
-      const text = [
-        invoice.invoiceNo,
-        invoice.customerName,
-        invoice.customerEmail,
-        invoice.bookingCode,
-        invoice.operatorName,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+    const text = [
+      invoice.invoiceNo,
+      invoice.customerName,
+      invoice.customerEmail,
+      invoice.bookingCode,
+      invoice.operatorName,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
 
-      const matchesQuery = !query || text.includes(query.toLowerCase());
+    const matchesQuery = !query || text.includes(query.toLowerCase());
 
-      return matchesStatus && matchesQuery;
-    });
-  }, [invoices, query, status]);
+    return matchesStatus && matchesQuery;
+  });
+    }, [invoices, query, status]);
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+
+    const paginatedInvoices = filtered.slice(
+      (currentPage - 1) * rowsPerPage,
+      currentPage * rowsPerPage
+    );
+
+    function goToPage(page) {
+      if (page < 1 || page > totalPages) return;
+      setCurrentPage(page);
+    }
 
   const handleSend = async (id) => {
     try {
@@ -112,12 +127,18 @@ export default function OperatorInvoices() {
           <input
             placeholder="Search customer, booking ref, invoice no..."
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setCurrentPage(1);
+            }}
           />
 
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onChange={(event) => {
+              setStatus(event.target.value);
+              setCurrentPage(1);
+            }}
           >
             <option value="ALL">All Status</option>
             <option value="PAID">Paid</option>
@@ -147,7 +168,7 @@ export default function OperatorInvoices() {
               </thead>
 
               <tbody>
-                {filtered.map((invoice) => {
+                {paginatedInvoices.map((invoice) => {
                   const invoiceStatus = invoice.displayStatus || invoice.status;
 
                   return (
@@ -204,6 +225,50 @@ export default function OperatorInvoices() {
                 )}
               </tbody>
             </table>
+
+                {filtered.length > 0 && (
+                  <div className="operator-pagination">
+                    <span>
+                      Showing {(currentPage - 1) * rowsPerPage + 1}-
+                      {Math.min(currentPage * rowsPerPage, filtered.length)} of{" "}
+                      {filtered.length}
+                    </span>
+
+                    <div className="operator-pagination-actions">
+                      <button
+                        type="button"
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        Prev
+                      </button>
+
+                      {Array.from({ length: totalPages }, (_, index) => {
+                        const page = index + 1;
+
+                        return (
+                          <button
+                            key={page}
+                            type="button"
+                            className={currentPage === page ? "active" : ""}
+                            onClick={() => goToPage(page)}
+                          >
+                            {page}
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+            
           </div>
         )}
       </section>

@@ -429,41 +429,44 @@ export default function OperatorAnalytics() {
               {selectedPeriod ? `Booking activity — ${periodLabel}` : "Last 30 days"}
             </p>
             {services.length > 0 ? (
-              <table className="analytics-services-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Service</th>
-                    <th>Bookings</th>
-                    <th>Revenue</th>
-                    <th>Share</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {services.map((s, i) => (
-                    <tr key={s.service}>
-                      <td className="analytics-rank">{i + 1}</td>
-                      <td>{s.service}</td>
-                      <td>{s.count}</td>
-                      <td>{formatOperatorMoney(s.revenue)}</td>
-                      <td>
-                        <div className="analytics-pct-bar">
-                          <div
-                            className="analytics-pct-fill"
-                            style={{ width: `${s.pct}%` }}
-                          />
-                          <span>{s.pct}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="operator-empty-state">
-                No service data available for this period.
-              </div>
-            )}
+                <div className="analytics-services-scroll">
+                  <table className="analytics-services-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Service</th>
+                        <th>Bookings</th>
+                        <th>Revenue</th>
+                        <th>Share</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {services.map((s, i) => (
+                        <tr key={s.service}>
+                          <td className="analytics-rank">{i + 1}</td>
+                          <td>{s.service}</td>
+                          <td>{s.count}</td>
+                          <td>{formatOperatorMoney(s.revenue)}</td>
+                          <td>
+                            <div className="analytics-pct-bar">
+                              <div
+                                className="analytics-pct-fill"
+                                style={{ width: `${s.pct}%` }}
+                              />
+                              <span>{s.pct}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="operator-empty-state">
+                  No service data available for this period.
+                </div>
+              )}
           </div>
 
           {/* ── Model info footer ── */}

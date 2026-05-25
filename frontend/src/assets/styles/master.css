@@ -3193,3 +3193,183 @@
     padding: 0 14px !important;
   }
 }
+
+/* =========================
+   Admin Settlement Mobile - SAME AS Operator Settlement
+   ========================= */
+
+@media (max-width: 860px) {
+  .admin-settlement-wrap {
+    overflow: visible !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table {
+    min-width: 0 !important;
+    width: 100% !important;
+    border-collapse: separate !important;
+    border-spacing: 0 14px !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table thead {
+    display: none !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table tbody,
+  .admin-settlement-wrap .operator-table.admin-settlement-table tr,
+  .admin-settlement-wrap .operator-table.admin-settlement-table td {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table tr {
+    padding: 16px !important;
+    border-radius: 22px !important;
+    background: rgba(255, 255, 255, 0.86) !important;
+    border: 1px solid rgba(226, 232, 240, 0.9) !important;
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06) !important;
+    overflow: hidden !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td {
+    padding: 10px 0 !important;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.75) !important;
+    display: grid !important;
+    grid-template-columns: 110px minmax(0, 1fr) !important;
+    gap: 12px !important;
+    align-items: start !important;
+    font-size: 14px !important;
+    text-align: left !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td:last-child {
+    border-bottom: none !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td::before {
+    color: #64748b !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td:nth-child(1)::before {
+    content: "Booking" !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td:nth-child(2)::before {
+    content: "Merchant" !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td:nth-child(3)::before {
+    content: "Customer" !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td:nth-child(4)::before {
+    content: "Customer Paid" !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td:nth-child(5)::before {
+    content: "BNPL Admin Fee" !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td:nth-child(6)::before {
+    content: "Actual Income" !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td:nth-child(7)::before {
+    content: "Transaction" !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td:nth-child(8)::before {
+    content: "Paid At" !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td small {
+    display: block !important;
+    margin-top: 4px !important;
+    color: #64748b !important;
+    font-size: 12px !important;
+    line-height: 1.35 !important;
+    word-break: break-word !important;
+  }
+
+  .admin-settlement-wrap .operator-table.admin-settlement-table td:nth-child(7) small {
+    word-break: break-all !important;
+  }
+
+  .admin-settlement-wrap .stripe-method-label {
+    display: inline-flex !important;
+    width: fit-content !important;
+  }
+}
+
+/* MobileView Admin Settlement Details Table */
+@media (max-width: 520px) {
+  .admin-settlement-wrap .operator-table.admin-settlement-table td {
+    grid-template-columns: 95px minmax(0, 1fr) !important;
+  }
+}
+
+/* =========================
+   Admin Settlement Pagination Mobile Fix
+   ========================= */
+
+@media (max-width: 520px) {
+  .operator-pagination {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+
+  .operator-pagination > span {
+    text-align: center !important;
+    font-size: 12px !important;
+  }
+
+  .operator-pagination-actions {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 8px !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .operator-pagination-actions button {
+    width: 46px !important;
+    height: 44px !important;
+    min-width: 46px !important;
+    padding: 0 !important;
+    border-radius: 14px !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+  }
+
+  .operator-pagination-actions button:first-child,
+  .operator-pagination-actions button:last-child {
+    width: 58px !important;
+    min-width: 58px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .operator-pagination-actions {
+    gap: 6px !important;
+  }
+
+  .operator-pagination-actions button {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    font-size: 13px !important;
+  }
+
+  .operator-pagination-actions button:first-child,
+  .operator-pagination-actions button:last-child {
+    width: 52px !important;
+    min-width: 52px !important;
+  }
+}
