@@ -96,8 +96,15 @@ export async function sendInvoice(req, res, next) {
   try {
     const id = parseId(req.params.id, "invoice id");
 
+    // Vuln 4 fix: scope the update to the caller's operator (IDOR prevention).
+    // MASTER_SELLER may send any invoice; NORMAL_SELLER is restricted to their own operator.
+    const where = { id };
+    if (req.user.role === "NORMAL_SELLER") {
+      where.booking = { operatorId: req.user.operatorId };
+    }
+
     const invoice = await prisma.invoice.update({
-      where: { id },
+      where,
       data: {
         status: "SENT",
         sentAt: new Date(),

@@ -100,7 +100,7 @@ export async function rejectBooking(req, res, next) {
 
     const booking = await prisma.booking.findUnique({
       where: { id },
-      select: { operatorId: true },
+      select: { operatorId: true, status: true },
     });
 
     if (!booking) {
@@ -113,6 +113,16 @@ export async function rejectBooking(req, res, next) {
       booking.operatorId !== req.user.operatorId
     ) {
       return res.status(403).json({ message: "Forbidden: you can only manage bookings in your organisation" });
+    }
+
+    // Vuln 6 fix: guard against rejecting bookings that are already in a terminal or paid state.
+    // Without this, a PAID booking could be force-set to REJECTED, creating an inconsistent
+    // state where payment.status=PAID but booking.status=REJECTED with no refund triggered.
+    const NON_REJECTABLE = ["PAID", "COMPLETED", "CANCELLED", "REJECTED", "OVERDUE"];
+    if (NON_REJECTABLE.includes(booking.status)) {
+      return res.status(400).json({
+        message: `Cannot reject a booking with status ${booking.status}`,
+      });
     }
 
     const updated = await prisma.booking.update({

@@ -147,21 +147,8 @@ async function generateBookingCode(tx) {
 }
 
 export async function createCustomerBooking(req, res, next) {
-  const parsedBookingDate = parseMalaysiaLocalDateTime(bookingDate);
-  const parsedPickupDate = pickupDate
-    ? parseMalaysiaLocalDateTime(pickupDate)
-    : null;
-  const parsedReturnDate = returnDate
-    ? parseMalaysiaLocalDateTime(returnDate)
-    : null;
-
-  const defaultPaymentDeadline = await calculatePaymentDeadline(
-    resolvedOperatorId,
-    null,
-    parsedPickupDate
-  );
-
   try {
+    // Vuln 2 fix: destructure req.body FIRST inside try before any usage
     const {
       operatorId,
       serviceName,
@@ -173,6 +160,8 @@ export async function createCustomerBooking(req, res, next) {
       totalAmount,
     } = req.body;
 
+    // Vuln 3 fix: Zod middleware (validate(createBookingSchema)) on the route handles
+    // type/bounds validation; keep a lightweight required-field guard as a fallback.
     if (!serviceName || !bookingDate || totalAmount === undefined) {
       return res.status(400).json({
         message: "serviceName, bookingDate and totalAmount are required",
@@ -196,6 +185,21 @@ export async function createCustomerBooking(req, res, next) {
 
       resolvedOperatorId = fallbackOperator.id;
     }
+
+    // Parse dates only after variables are safely in scope
+    const parsedBookingDate = parseMalaysiaLocalDateTime(bookingDate);
+    const parsedPickupDate = pickupDate
+      ? parseMalaysiaLocalDateTime(pickupDate)
+      : null;
+    const parsedReturnDate = returnDate
+      ? parseMalaysiaLocalDateTime(returnDate)
+      : null;
+
+    const defaultPaymentDeadline = await calculatePaymentDeadline(
+      resolvedOperatorId,
+      null,
+      parsedPickupDate
+    );
 
     const booking = await prisma.$transaction(async (tx) => {
       const bookingCode = await generateBookingCode(tx);
@@ -391,25 +395,15 @@ export async function cancelCustomerBooking(req, res, next) {
 
 export async function payCustomerBooking(req, res, next) {
   try {
-    const { method = "STRIPE", transactionId } = req.body;
-    const normalizedMethod = String(method).toUpperCase();
-    const booking = await assertCustomerBooking(req.params.id, req.user.id);
-
-    if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
-      return res.status(400).json({
-        message: "Payment is only available after the booking is accepted.",
-      });
-    }
-
-    if (
-      normalizedMethod.includes("DUITNOW") ||
-      normalizedMethod.includes("SPAY")
-    ) {
-      return res.status(400).json({
-        message:
-          "Please use the receipt upload endpoint for DuitNow/SPay manual payments.",
-      });
-    }
+    // Vuln 1 fix: this endpoint cannot verify any payment without a gateway confirmation.
+    // All card payments must go through /api/stripe/checkout (Stripe webhook confirms PAID).
+    // All manual payments (DuitNow, SPay, bank transfer) must use the receipt upload endpoint.
+    // Accepting a client-supplied transactionId and marking a booking PAID without verification
+    // allowed any customer to fraudulently mark bookings as paid.
+    return res.status(400).json({
+      message:
+        "Use the Stripe checkout endpoint for card payments, or upload a receipt for manual payments (DuitNow, SPay, bank transfer).",
+    });
 
     const result = await prisma.$transaction(async (tx) => {
       const payment = await tx.payment.upsert({

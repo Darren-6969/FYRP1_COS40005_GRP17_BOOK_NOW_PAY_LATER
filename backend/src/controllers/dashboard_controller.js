@@ -2,12 +2,21 @@ import prisma from "../config/db.js";
 
 export async function getDashboardStats(req, res, next) {
   try {
+    const isMaster = req.user.role === "MASTER_SELLER";
+
+    // Vuln 5 fix: NORMAL_SELLER must only see their own operator's data.
+    // Without this filter every operator staff member received platform-wide revenue figures.
+    const bookingFilter  = isMaster ? {} : { operatorId: req.user.operatorId };
+    const paymentFilter  = isMaster ? {} : { booking: { operatorId: req.user.operatorId } };
+
     const [totalBookings, payments, overduePayments, operators] =
       await Promise.all([
-        prisma.booking.count(),
-        prisma.payment.findMany(),
-        prisma.payment.count({ where: { status: "OVERDUE" } }),
-        prisma.operator.count({ where: { status: "ACTIVE" } }),
+        prisma.booking.count({ where: bookingFilter }),
+        prisma.payment.findMany({ where: paymentFilter }),
+        prisma.payment.count({ where: { status: "OVERDUE", ...paymentFilter } }),
+        isMaster
+          ? prisma.operator.count({ where: { status: "ACTIVE" } })
+          : Promise.resolve(1),
       ]);
 
     const revenue = payments
