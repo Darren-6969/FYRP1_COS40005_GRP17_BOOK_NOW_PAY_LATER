@@ -3436,3 +3436,337 @@
     padding: 14px 16px !important;
   }
 }
+
+/* ===== Admin Notification Dropdown Mobile Alignment Fix ===== */
+@media (max-width: 860px) {
+  .master-notification-wrapper {
+    position: static !important;
+  }
+
+  .portal-notification-dropdown.master-notification-dropdown,
+  .master-notification-dropdown {
+    position: fixed !important;
+
+    top: 115px !important;
+    left: 14px !important;
+    right: 14px !important;
+
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: calc(100vw - 28px) !important;
+
+    max-height: 70vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    border-radius: 24px !important;
+    z-index: 7000 !important;
+
+    transform: none !important;
+  }
+
+  .portal-dropdown-head {
+    padding: 18px !important;
+  }
+
+  .portal-dropdown-list {
+    max-height: 52vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  .portal-dropdown-item {
+    width: 100% !important;
+    max-width: 100% !important;
+
+    display: grid !important;
+    grid-template-columns: 10px minmax(0, 1fr) !important;
+    gap: 12px !important;
+
+    padding: 16px !important;
+    border-radius: 18px !important;
+  }
+
+  .portal-dropdown-item span:last-child {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .portal-dropdown-item strong,
+  .portal-dropdown-item small {
+    max-width: 100% !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .portal-dropdown-footer {
+    position: sticky !important;
+    bottom: 0 !important;
+    background: #ffffff !important;
+    z-index: 2 !important;
+    border-radius: 0 0 24px 24px !important;
+  }
+}
+
+/* Operator Analytics Popular Services Scroll */
+.analytics-services-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+}
+
+.analytics-services-scroll .analytics-services-table {
+  min-width: 720px;
+}
+
+.analytics-services-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.analytics-services-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  border-radius: 999px;
+}
+
+.analytics-services-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (max-width: 860px) {
+  .analytics-services-table th,
+  .analytics-services-table td {
+    white-space: nowrap;
+  }
+
+  .analytics-services-table td:nth-child(2) {
+    white-space: normal;
+    min-width: 130px;
+  }
+
+  .analytics-pct-bar {
+    min-width: 120px;
+  }
+}
+
+/* =========================
+   Operator Dashboard SARIMA Mobile Fix
+   ========================= */
+
+@media (max-width: 860px) {
+  .operator-metric-grid.three,
+  .operator-metric-grid.four,
+  .operator-metric-grid.five {
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+  }
+
+  .operator-metric {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .operator-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .operator-card .recharts-responsive-container {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .operator-card h2 {
+    font-size: 18px !important;
+    line-height: 1.35 !important;
+  }
+}
+
+/* Tablet */
+@media (max-width: 860px) {
+  .operator-metric-grid.three {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* Phone */
+@media (max-width: 520px) {
+  .operator-metric-grid.three {
+    grid-template-columns: 1fr !important;
+  }
+
+  .operator-metric {
+    width: 100% !important;
+  }
+}
+
+/* =========================
+   Operator Notification Dropdown Mobile Center Fix
+   ========================= */
+
+@media (max-width: 860px) {
+  .operator-notification-wrapper {
+    position: static !important;
+  }
+
+  .operator-notification-dropdown {
+    position: fixed !important;
+    top: 180px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+
+    width: calc(100vw - 32px) !important;
+    max-width: 420px !important;
+    min-width: 0 !important;
+
+    border-radius: 26px !important;
+    z-index: 3000 !important;
+    overflow: hidden !important;
+  }
+
+  .portal-dropdown-list {
+    max-height: 420px !important;
+    overflow-y: auto !important;
+  }
+
+  .portal-dropdown-item {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* ===== Operator Mobile Topbar: hide on scroll down, show on scroll up ===== */
+@media (max-width: 860px) {
+  .operator-topbar {
+    transition:
+      transform 0.28s ease,
+      opacity 0.28s ease,
+      box-shadow 0.28s ease,
+      background 0.28s ease !important;
+  }
+
+  .operator-topbar.operator-mobile-scroll-mode {
+    position: fixed !important;
+    top: 10px !important;
+    left: 10px !important;
+    right: 10px !important;
+    z-index: 4500 !important;
+
+    width: auto !important;
+    margin: 0 !important;
+
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(18px) !important;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.14) !important;
+  }
+
+  .operator-topbar.operator-mobile-scroll-mode.operator-mobile-show {
+    transform: translateY(0) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .operator-topbar.operator-mobile-scroll-mode.operator-mobile-hide {
+    transform: translateY(-130%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
+
+/* ===== Operator Mobile Notification Dropdown Final Fix ===== */
+@media (max-width: 860px) {
+  .operator-topbar {
+    overflow: visible !important;
+  }
+
+  .operator-notification-wrapper {
+    position: static !important;
+  }
+
+  .operator-notification-dropdown {
+    position: fixed !important;
+
+    top: 150px !important;
+    left: 14px !important;
+    right: 14px !important;
+
+    width: auto !important;
+    max-width: none !important;
+
+    height: auto !important;
+    max-height: calc(100vh - 230px) !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    border-radius: 24px !important;
+    background: rgba(255, 255, 255, 0.96) !important;
+    backdrop-filter: blur(22px) !important;
+
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22) !important;
+
+    overflow: hidden !important;
+    z-index: 9999 !important;
+
+    transform: none !important;
+  }
+
+  .operator-notification-dropdown .portal-dropdown-head {
+    padding: 22px 24px 16px !important;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.9) !important;
+  }
+
+  .operator-notification-dropdown .portal-dropdown-list {
+    max-height: calc(100vh - 385px) !important;
+    overflow-y: auto !important;
+    padding: 14px 14px 0 !important;
+  }
+
+  .operator-notification-dropdown .portal-dropdown-item {
+    border-radius: 20px !important;
+    padding: 18px 18px !important;
+    margin-bottom: 0 !important;
+  }
+
+  .operator-notification-dropdown .portal-dropdown-footer {
+    position: sticky !important;
+    bottom: 0 !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    min-height: 58px !important;
+    padding: 16px !important;
+
+    background: rgba(255, 255, 255, 0.96) !important;
+    border-top: 1px solid rgba(226, 232, 240, 0.9) !important;
+
+    color: #2563eb !important;
+    font-weight: 900 !important;
+    text-align: center !important;
+  }
+}
+
+.pagination-ellipsis {
+  min-width: 28px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-weight: 900;
+}
+
+@media (max-width: 520px) {
+  .pagination-ellipsis {
+    min-width: 18px;
+    font-size: 13px;
+  }
+}

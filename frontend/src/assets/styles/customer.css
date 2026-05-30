@@ -3056,3 +3056,184 @@
   color: #64748b;
   font-weight: 800;
 }
+
+/* ===== Customer mobile topbar: hide when scroll down, show when scroll up ===== */
+@media (max-width: 860px) {
+  .customer-topbar-glass {
+    transition:
+      transform 0.28s ease,
+      opacity 0.28s ease,
+      box-shadow 0.28s ease,
+      background 0.28s ease !important;
+  }
+
+  .customer-topbar-glass.topbar-scroll-mode {
+    position: fixed !important;
+    top: 10px !important;
+    left: 10px !important;
+    right: 10px !important;
+    z-index: 4500 !important;
+
+    width: auto !important;
+    margin-bottom: 0 !important;
+
+    background: rgba(255, 255, 255, 0.9) !important;
+    backdrop-filter: blur(18px) !important;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.14) !important;
+  }
+
+  .customer-topbar-glass.topbar-scroll-mode.topbar-show {
+    transform: translateY(0) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  .customer-topbar-glass.topbar-scroll-mode.topbar-hide {
+    transform: translateY(-130%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  .customer-mobile-menu-btn {
+    display: inline-grid !important;
+  }
+}
+
+/* ===== Customer My Bookings Mobile Alignment Fix ===== */
+@media (max-width: 768px) {
+  .customer-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .customer-table-card.customer-booking-history-section {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    padding: 24px 18px !important;
+    border-radius: 28px !important;
+  }
+
+  .customer-table-head {
+    width: 100% !important;
+  }
+
+  .customer-table-head h2 {
+    font-size: 30px !important;
+    line-height: 1.15 !important;
+    margin-bottom: 14px !important;
+  }
+
+  .customer-table-head p {
+    font-size: 16px !important;
+    line-height: 1.5 !important;
+    max-width: 100% !important;
+    word-break: normal !important;
+  }
+
+  .customer-booking-tabs.customer-history-tabs {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 22px 0 28px !important;
+    overflow: visible !important;
+  }
+
+  .customer-booking-tabs.customer-history-tabs button {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+
+    padding: 15px 18px !important;
+    border-radius: 999px !important;
+
+    white-space: normal !important;
+    text-align: left !important;
+    font-size: 15px !important;
+    line-height: 1.2 !important;
+  }
+
+  .customer-booking-tabs.customer-history-tabs button span {
+    flex-shrink: 0 !important;
+    margin-left: 10px !important;
+  }
+
+  .customer-section-label {
+    margin-top: 8px !important;
+  }
+
+  .customer-section-label h3 {
+    font-size: 26px !important;
+    line-height: 1.2 !important;
+  }
+
+  .customer-section-label p {
+    font-size: 16px !important;
+    line-height: 1.55 !important;
+    max-width: 100% !important;
+  }
+
+  .customer-booking-list {
+    display: grid !important;
+    gap: 16px !important;
+    width: 100% !important;
+  }
+
+  .customer-booking-row-card.customer-booking-history-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+
+    display: grid !important;
+    grid-template-columns: 82px 1fr !important;
+    gap: 14px !important;
+
+    padding: 18px !important;
+    border-radius: 24px !important;
+  }
+
+  .customer-booking-thumb {
+    width: 82px !important;
+    height: 72px !important;
+    border-radius: 18px !important;
+  }
+
+  .customer-booking-main {
+    min-width: 0 !important;
+  }
+
+  .customer-booking-main h3 {
+    font-size: 17px !important;
+    line-height: 1.25 !important;
+    word-break: break-word !important;
+  }
+
+  .customer-booking-main p,
+  .customer-booking-meta span,
+  .customer-booking-meta strong {
+    word-break: break-word !important;
+  }
+
+  .customer-booking-meta,
+  .customer-booking-actions {
+    grid-column: 1 / -1 !important;
+  }
+
+  .customer-booking-actions {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .customer-booking-actions a {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+}

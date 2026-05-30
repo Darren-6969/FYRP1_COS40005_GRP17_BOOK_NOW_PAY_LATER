@@ -20,6 +20,16 @@ export const voidInvoice = (id) => api.patch(`/invoices/${id}/void`);
 
 export const getOperators = () => api.get("/operators");
 /// Create new company with initial admin user (OWNER)
+export const uploadOperatorLogo = (file) => {
+  const formData = new FormData();
+  formData.append("logo", file);
+
+  return api.post("/uploads/operator-logo", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+};
 export const createOperator = (payload) => api.post("/operators", payload);
 export const createOperatorUser = (operatorId, payload) => api.post(`/operators/${operatorId}/users`, payload);
 export const updateOperatorStatus = (id, status) => api.patch(`/operators/${id}/status`, { status });

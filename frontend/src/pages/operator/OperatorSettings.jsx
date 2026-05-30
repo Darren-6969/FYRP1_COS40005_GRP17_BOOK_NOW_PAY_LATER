@@ -197,24 +197,38 @@ export default function OperatorSettings() {
     }));
   };
 
-  const handleLogoUpload = (event) => {
+  const handleLogoUpload = async (event) => {
     const file = event.target.files?.[0];
 
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      setError("Please upload an image file only.");
-      return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      updateField("companyLogo", reader.result);
+    try {
       setError("");
-    };
+      setSuccessMessage("");
 
-    reader.readAsDataURL(file);
+      const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
+
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error("Logo must be a PNG, JPG, JPEG, or WebP image.");
+      }
+
+      if (file.size > 500 * 1024) {
+        throw new Error("Logo file size must be 500KB or below.");
+      }
+
+      const res = await operatorService.uploadOperatorLogo(file);
+
+      updateField("companyLogo", res.data.url);
+
+      setSuccessMessage("Logo uploaded successfully. Click Save Settings to apply it.");
+    } catch (err) {
+      event.target.value = "";
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to upload logo."
+      );
+    }
   };
 
 const handleSave = async () => {

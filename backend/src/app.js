@@ -17,6 +17,7 @@ import stripeRoutes     from "./routes/stripe_routes.js";
 import emailRoutes      from "./routes/email_routes.js";
 import cronRoutes       from "./routes/cron_routes.js";
 import hostRoutes       from "./routes/host_routes.js";
+import uploadRoutes     from "./routes/upload_routes.js";
 
 import { errorHandler }  from "./middlewares/errorHandler.js";
 import { requestLogger } from "./middlewares/logger_middleware.js";
@@ -157,6 +158,7 @@ app.use("/api/payments",  paymentRoutes);
 app.use("/api/receipts",  receiptRoutes);
 app.use("/api/invoices",  invoiceRoutes);
 app.use("/api/operators", operatorRoutes);
+app.use("/api/uploads",   uploadRoutes);
 app.use("/api/config",    configRoutes);
 app.use("/api/logs",      logRoutes);
 app.use("/api/customer",  customerRoutes);

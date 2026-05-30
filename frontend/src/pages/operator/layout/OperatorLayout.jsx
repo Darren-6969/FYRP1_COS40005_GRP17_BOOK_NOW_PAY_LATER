@@ -26,6 +26,8 @@ export default function OperatorLayout() {
 
   const [openNotifications, setOpenNotifications] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [showOperatorHeader, setShowOperatorHeader] = useState(true);
 
   const user = getStoredUser();
   const displayName = user?.name || user?.fullName || "Operator";
@@ -80,6 +82,31 @@ export default function OperatorLayout() {
     };
   }, [mobileMenuOpen]);
 
+  useEffect(() => {
+  let lastScrollY = window.scrollY;
+
+  const handleScroll = () => {
+    const currentScrollY = window.scrollY;
+
+    setIsScrolled(currentScrollY > 80);
+
+    if (openNotifications || currentScrollY <= 80) {
+  setShowOperatorHeader(true);
+    } else if (currentScrollY > lastScrollY) {
+      setShowOperatorHeader(false);
+    } else {
+      setShowOperatorHeader(true);
+    }
+
+    lastScrollY = currentScrollY;
+  };
+
+  window.addEventListener("scroll", handleScroll);
+  handleScroll();
+
+  return () => window.removeEventListener("scroll", handleScroll);
+  }, [openNotifications]);
+
   const handleLogout = () => {
     clearSession();
     navigate("/login", { replace: true });
@@ -127,7 +154,11 @@ export default function OperatorLayout() {
       />
 
       <main className="operator-main">
-        <header className="operator-topbar">
+        <header
+          className={`operator-topbar ${
+            isScrolled ? "operator-mobile-scroll-mode" : ""
+          } ${showOperatorHeader ? "operator-mobile-show" : "operator-mobile-hide"}`}
+        >
           <div className="operator-topbar-title">
             <button
               type="button"
@@ -156,7 +187,16 @@ export default function OperatorLayout() {
                     unreadCount > 0 ? "has-unread" : ""
                   }`}
                   type="button"
-                  onClick={() => navigate("/operator/notifications")}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    if (closeTimerRef.current) {
+                      clearTimeout(closeTimerRef.current);
+                    }
+
+                    setOpenNotifications((prev) => !prev);
+                  }}
                   aria-label="Open notifications"
                 >
                   <span className="portal-bell-icon operator-bell-icon">🔔</span>

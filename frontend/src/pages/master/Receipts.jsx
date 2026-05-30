@@ -28,6 +28,9 @@ export default function Receipts() {
   const [receipts, setReceipts] = useState([]);
   const [selected, setSelected] = useState(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 10;
+
   const [query, setQuery] = useState("");
   const [method, setMethod] = useState("ALL");
   const [operator, setOperator] = useState("ALL");
@@ -39,8 +42,10 @@ export default function Receipts() {
     try {
       setLoading(true);
       setError("");
+
       const res = await getReceipts();
       setReceipts(res.data || []);
+      setCurrentPage(1);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load receipts.");
     } finally {
@@ -81,6 +86,42 @@ export default function Receipts() {
     });
   }, [receipts, query, method, operator]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+
+  const paginatedReceipts = filtered.slice(
+    (currentPage - 1) * rowsPerPage,
+    currentPage * rowsPerPage
+  );
+
+  function goToPage(page) {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+  }
+
+  function getPageNumbers() {
+    const pages = [];
+
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      return pages;
+    }
+
+    pages.push(1);
+
+    if (currentPage > 3) pages.push("...");
+
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+
+    for (let i = start; i <= end; i++) pages.push(i);
+
+    if (currentPage < totalPages - 2) pages.push("...");
+
+    pages.push(totalPages);
+
+    return pages;
+  }
+
   const summary = useMemo(() => {
     return {
       total: receipts.length,
@@ -111,7 +152,9 @@ export default function Receipts() {
             </p>
           </div>
 
-          <button className="btn" onClick={load}>Refresh</button>
+          <button className="btn" onClick={load}>
+            Refresh
+          </button>
         </div>
 
         {error && <div className="alert danger">{error}</div>}
@@ -129,10 +172,19 @@ export default function Receipts() {
           <input
             placeholder="Search receipt no, customer, booking, operator..."
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setCurrentPage(1);
+            }}
           />
 
-          <select value={method} onChange={(event) => setMethod(event.target.value)}>
+          <select
+            value={method}
+            onChange={(event) => {
+              setMethod(event.target.value);
+              setCurrentPage(1);
+            }}
+          >
             <option value="ALL">All Methods</option>
             <option value="STRIPE">Stripe</option>
             <option value="DUITNOW">DuitNow</option>
@@ -142,10 +194,18 @@ export default function Receipts() {
             <option value="CASH">Cash</option>
           </select>
 
-          <select value={operator} onChange={(event) => setOperator(event.target.value)}>
+          <select
+            value={operator}
+            onChange={(event) => {
+              setOperator(event.target.value);
+              setCurrentPage(1);
+            }}
+          >
             <option value="ALL">All Operators</option>
             {operators.map((name) => (
-              <option key={name} value={name}>{name}</option>
+              <option key={name} value={name}>
+                {name}
+              </option>
             ))}
           </select>
         </div>
@@ -153,64 +213,133 @@ export default function Receipts() {
         {loading ? (
           <div className="empty-state">Loading receipts...</div>
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Receipt</th>
-                <th>Customer</th>
-                <th>Operator</th>
-                <th>Booking</th>
-                <th>Payment Date</th>
-                <th>Amount Paid</th>
-                <th>Method</th>
-                <th>Balance</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {filtered.map((receipt) => (
-                <tr key={receipt.id}>
-                  <td><strong>{receipt.receiptNo}</strong></td>
-                  <td>
-                    {receipt.customerName}
-                    <br />
-                    <small>{receipt.customerEmail}</small>
-                  </td>
-                  <td>{receipt.operatorName}</td>
-                  <td>{receipt.bookingCode}</td>
-                  <td>{dateTime(receipt.paymentDate)}</td>
-                  <td>{money(receipt.amountPaid)}</td>
-                  <td>{receipt.method}</td>
-                  <td>{money(receipt.balanceRemaining)}</td>
-                  <td>
-                    <div className="actions">
-                      <button className="btn" onClick={() => setSelected(receipt)}>
-                        View
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-
-              {!filtered.length && (
+          <>
+            <table className="table">
+              <thead>
                 <tr>
-                  <td colSpan="9">No official receipts found.</td>
+                  <th>Receipt</th>
+                  <th>Customer</th>
+                  <th>Operator</th>
+                  <th>Booking</th>
+                  <th>Payment Date</th>
+                  <th>Amount Paid</th>
+                  <th>Method</th>
+                  <th>Balance</th>
+                  <th>Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                {paginatedReceipts.map((receipt) => (
+                  <tr key={receipt.id}>
+                    <td>
+                      <strong>{receipt.receiptNo}</strong>
+                    </td>
+
+                    <td>
+                      {receipt.customerName}
+                      <br />
+                      <small>{receipt.customerEmail}</small>
+                    </td>
+
+                    <td>{receipt.operatorName}</td>
+                    <td>{receipt.bookingCode}</td>
+                    <td>{dateTime(receipt.paymentDate)}</td>
+                    <td>{money(receipt.amountPaid)}</td>
+                    <td>{receipt.method}</td>
+                    <td>{money(receipt.balanceRemaining)}</td>
+
+                    <td>
+                      <div className="actions">
+                        <button
+                          className="btn"
+                          onClick={() => setSelected(receipt)}
+                        >
+                          View
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+
+                {!filtered.length && (
+                  <tr>
+                    <td colSpan="9">No official receipts found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {filtered.length > 0 && (
+              <div className="operator-pagination">
+                <span>
+                  Showing {(currentPage - 1) * rowsPerPage + 1}-
+                  {Math.min(currentPage * rowsPerPage, filtered.length)} of{" "}
+                  {filtered.length}
+                </span>
+
+                <div className="operator-pagination-actions">
+                  <button
+                    type="button"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    Prev
+                  </button>
+
+                  {getPageNumbers().map((page, index) => {
+                    if (page === "...") {
+                      return (
+                        <span
+                          key={`ellipsis-${index}`}
+                          className="pagination-ellipsis"
+                        >
+                          ...
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <button
+                        key={page}
+                        type="button"
+                        className={currentPage === page ? "active" : ""}
+                        onClick={() => goToPage(page)}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </section>
 
       {selected && (
         <div className="admin-modal-backdrop" onClick={() => setSelected(null)}>
-          <div className="admin-document-modal" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="admin-document-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div ref={documentRef} className="pdf-document">
               <div className="document-header">
                 <div>
                   {selected.operatorLogoUrl ? (
-                    <img className="document-logo" src={selected.operatorLogoUrl} alt="Merchant logo" />
+                    <img
+                      className="document-logo"
+                      src={selected.operatorLogoUrl}
+                      alt="Merchant logo"
+                    />
                   ) : (
                     <div className="document-logo-placeholder">BNPL</div>
                   )}
@@ -219,7 +348,9 @@ export default function Receipts() {
                   <p>{selected.operatorName}</p>
                   <p>
                     {selected.operatorEmail}
-                    {selected.operatorPhone ? ` · ${selected.operatorPhone}` : ""}
+                    {selected.operatorPhone
+                      ? ` · ${selected.operatorPhone}`
+                      : ""}
                   </p>
                 </div>
 
@@ -263,15 +394,20 @@ export default function Receipts() {
                       <td>{money(selected.amountPaidToDate)}</td>
                     </tr>
                     <tr>
-                      <td><strong>Balance Remaining</strong></td>
-                      <td><strong>{money(selected.balanceRemaining)}</strong></td>
+                      <td>
+                        <strong>Balance Remaining</strong>
+                      </td>
+                      <td>
+                        <strong>{money(selected.balanceRemaining)}</strong>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
               </section>
 
               <footer className="document-footer">
-                This receipt is computer-generated and is valid without signature.
+                This receipt is computer-generated and is valid without
+                signature.
               </footer>
             </div>
 

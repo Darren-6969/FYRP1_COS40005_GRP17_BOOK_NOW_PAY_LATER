@@ -8,6 +8,7 @@ import {
   getOperators,
   updateOperatorStatus,
   updateOperatorUserStatus,
+  uploadOperatorLogo,
 } from "../../services/admin_service";
 
 const LOGO_MAX_FILE_SIZE = 500 * 1024; // 500KB
@@ -83,10 +84,14 @@ function readinessLabel(op) {
   };
 }
 
-function getOwnerUser(op) {
-  return (op.users || []).find(
+function getOwnerUsers(op) {
+  return (op.users || []).filter(
     (user) => String(user.operatorAccessLevel || "").toUpperCase() === "OWNER"
   );
+}
+
+function getOwnerUser(op) {
+  return getOwnerUsers(op)[0] || null;
 }
 
 function getStaffUsers(op) {
@@ -96,13 +101,14 @@ function getStaffUsers(op) {
 }
 
 function getAccountSummary(op) {
-  const owner = getOwnerUser(op);
+  const ownerUsers = getOwnerUsers(op);
   const staffUsers = getStaffUsers(op);
 
   return {
-    owner,
+    owner: ownerUsers[0] || null,
+    ownerUsers,
     staffUsers,
-    ownerCount: owner ? 1 : 0,
+    ownerCount: ownerUsers.length,
     staffCount: staffUsers.length,
     total: op.users?.length || 0,
   };
@@ -295,27 +301,70 @@ export default function Operators() {
   const handleLogoUpload = async (event) => {
     const file = event.target.files?.[0];
 
+    if (!file) return;
+
     try {
       setError("");
       setMessage("");
 
-      const dataUrl = await readLogoFile(file);
+      const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
+
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error("Logo must be a PNG, JPG, JPEG, or WebP image.");
+      }
+
+      if (file.size > LOGO_MAX_FILE_SIZE) {
+        throw new Error("Logo file size must be 500KB or below.");
+      }
+
+      const image = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      await new Promise((resolve, reject) => {
+        image.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+
+          if (image.width > LOGO_MAX_WIDTH || image.height > LOGO_MAX_HEIGHT) {
+            reject(
+              new Error(
+                `Logo dimension must not exceed ${LOGO_MAX_WIDTH}x${LOGO_MAX_HEIGHT}px. Current image is ${image.width}x${image.height}px.`
+              )
+            );
+            return;
+          }
+
+          resolve();
+        };
+
+        image.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error("Invalid image file. Please upload another logo."));
+        };
+
+        image.src = objectUrl;
+      });
+
+      const res = await uploadOperatorLogo(file);
 
       setCompanyForm((prev) => ({
         ...prev,
-        logoUrl: dataUrl,
+        logoUrl: res.data.url,
       }));
 
-      if (dataUrl) {
-        setMessage("Logo uploaded successfully.");
-      }
+      setMessage("Logo uploaded successfully.");
     } catch (err) {
       event.target.value = "";
+
       setCompanyForm((prev) => ({
         ...prev,
         logoUrl: "",
       }));
-      setError(err.message || "Failed to upload logo.");
+
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to upload logo."
+      );
     }
   };
 
@@ -866,10 +915,11 @@ const toggleUserStatus = async (op, user) => {
 
                       <td>
                         <strong>
-                          {accounts.ownerCount} Owner · {accounts.staffCount} Staff
+                            {accounts.ownerCount} {accounts.ownerCount === 1 ? "Owner" : "Owners"} ·{" "} 
+                            {accounts.staffCount} Staff
                         </strong>
                         <br />
-                        <small>{accounts.total} total login account(s)</small>
+                        <small>{accounts.total} total login {accounts.total === 1 ? "account" : "accounts"}</small>
 
                         <div style={{ marginTop: 8 }}>
                           <button

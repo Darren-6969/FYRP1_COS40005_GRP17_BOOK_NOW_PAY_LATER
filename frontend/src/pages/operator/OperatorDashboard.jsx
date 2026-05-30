@@ -263,10 +263,13 @@ export default function OperatorDashboard() {
       marginBottom: '32px'
     },
     card: {
-      background: 'white',
-      border: '1px solid #e5e7eb',
-      borderRadius: '12px',
-      padding: '20px'
+      background: "white",
+      border: "1px solid #e5e7eb",
+      borderRadius: "12px",
+      padding: "20px",
+      minWidth: 0,
+      boxSizing: "border-box",
+      overflow: "hidden",
     },
     cardHead: {
       display: 'flex',
@@ -325,17 +328,37 @@ export default function OperatorDashboard() {
 
   // Responsive metric grid
   const getMetricColumns = () => {
-    if (typeof window !== 'undefined' && window.innerWidth <= 768) return 'repeat(2, 1fr)';
-    if (typeof window !== 'undefined' && window.innerWidth <= 500) return 'repeat(1, 1fr)';
-    return 'repeat(5, 1fr)';
+    if (typeof window !== "undefined" && window.innerWidth <= 500) return "1fr";
+    if (typeof window !== "undefined" && window.innerWidth <= 768) return "repeat(2, 1fr)";
+    return "repeat(5, 1fr)";
+  };
+
+  const getForecastColumns = () => {
+    if (typeof window !== "undefined" && window.innerWidth <= 520) return "1fr";
+    if (typeof window !== "undefined" && window.innerWidth <= 860) return "repeat(2, 1fr)";
+    return "repeat(4, 1fr)";
+  };
+
+  const getDashboardColumns = () => {
+  if (typeof window !== "undefined" && window.innerWidth <= 860) return "1fr";
+  return "1fr 1fr";
   };
 
   const [metricColumns, setMetricColumns] = useState(getMetricColumns());
+  const [forecastColumns, setForecastColumns] = useState(getForecastColumns());
+  const [dashboardColumns, setDashboardColumns] = useState(getDashboardColumns());
 
   useEffect(() => {
-    const handleResize = () => setMetricColumns(getMetricColumns());
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+  const handleResize = () => {
+    setMetricColumns(getMetricColumns());
+    setForecastColumns(getForecastColumns());
+    setDashboardColumns(getDashboardColumns());
+  };
+
+  window.addEventListener("resize", handleResize);
+  handleResize();
+
+  return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   if (loading) {
@@ -432,7 +455,12 @@ export default function OperatorDashboard() {
           </div>
 
           {/* Forecast Metrics */}
-          <div style={styles.forecastMetricsRow}>
+          <div
+            style={{
+              ...styles.forecastMetricsRow,
+              gridTemplateColumns: forecastColumns,
+            }}
+          >
             <div style={styles.forecastMetricCard}>
               <div style={styles.forecastMetricLabel}>Next 7 Days Bookings</div>
               <div style={styles.forecastMetricValue}>{Math.round(next7DaysBookings)}</div>
@@ -520,7 +548,12 @@ export default function OperatorDashboard() {
       )}
 
       {/* Dashboard Grid - Revenue Overview + Recent Activity */}
-      <div style={styles.dashboardGrid}>
+      <div
+        style={{
+          ...styles.dashboardGrid,
+          gridTemplateColumns: dashboardColumns,
+        }}
+      >
         {/* Revenue Overview Card */}
         <div style={styles.card}>
           <div style={styles.cardHead}>
