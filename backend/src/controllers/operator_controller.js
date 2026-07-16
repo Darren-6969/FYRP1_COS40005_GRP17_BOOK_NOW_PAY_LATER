@@ -1798,6 +1798,15 @@ export async function rejectPayment(req, res, next) {
       return res.status(404).json({ message: "Payment not found" });
     }
 
+    // F3 fix: never reject an already-captured payment. Setting a PAID payment
+    // (e.g. confirmed via Stripe) to FAILED here would leave money captured
+    // while the booking is pushed back to PENDING_PAYMENT with no refund.
+    if (!["UNPAID", "PENDING_VERIFICATION"].includes(payment.status)) {
+      return res.status(400).json({
+        message: `Cannot reject a payment with status ${payment.status}`,
+      });
+    }
+
     const updatedPayment = await prisma.payment.update({
       where: { id: payment.id },
       data: {

@@ -40,11 +40,15 @@ export async function getBookings(req, res, next) {
 // ── Accept booking ────────────────────────────────────────────────────────────
 export async function acceptBooking(req, res, next) {
   try {
-    const { id } = req.params;
+    // Booking.id is an Int – parse the route param instead of passing a raw string.
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid booking id" });
+    }
 
     const booking = await prisma.booking.findUnique({
       where: { id },
-      include: { operator: { include: { configs: true } } },
+      include: { operator: { include: { configs: true } }, payment: true },
     });
 
     if (!booking) {
@@ -57,6 +61,15 @@ export async function acceptBooking(req, res, next) {
       booking.operatorId !== req.user.operatorId
     ) {
       return res.status(403).json({ message: "Forbidden: you can only manage bookings in your organisation" });
+    }
+
+    // F2 fix: only fresh bookings may be accepted. Without this guard, accepting a
+    // PAID/CANCELLED/REJECTED booking reset payment.status back to UNPAID and
+    // booking.status to ACCEPTED, silently destroying a paid/terminal state.
+    if (!["PENDING", "ALTERNATIVE_SUGGESTED"].includes(booking.status)) {
+      return res.status(400).json({
+        message: `Booking cannot be accepted when status is ${booking.status}`,
+      });
     }
 
     const config       = booking.operator.configs[0];
@@ -83,7 +96,7 @@ export async function acceptBooking(req, res, next) {
         userId: req.user.id,
         action: "BOOKING_ACCEPTED",
         entityType: "Booking",
-        entityId: id,
+        entityId: String(id),
       },
     });
 
