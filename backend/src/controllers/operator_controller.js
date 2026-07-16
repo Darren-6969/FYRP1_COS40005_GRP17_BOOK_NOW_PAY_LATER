@@ -2222,7 +2222,7 @@ export async function getOperatorReports(req, res, next) {
     }, {});
 
     // Add this inside getOperatorReports, RIGHT AFTER the paymentMethods calculation
-// Wrap in try-catch so it doesn't break the whole endpoint if something goes wrong
+    // Wrap in try-catch so it doesn't break the whole endpoint if something goes wrong
 
 let topBookedServices = [];
 try {
@@ -2274,48 +2274,6 @@ try {
   console.error("Error calculating topBookedServices:", err);
   topBookedServices = []; // Fallback to empty array
 }
-
-    const serviceBookings = bookings.reduce((acc, booking) => {
-      const serviceName = booking.serviceName || "Unknown Service";
-      
-      if (!acc[serviceName]) {
-        // Detect category from service name
-        let category = 'Service';
-        const name = serviceName.toLowerCase();
-        
-        if (name.includes('gocar') || name.includes('vios') || name.includes('perdana') || 
-            name.includes('honda') || name.includes('toyota') || name.includes('mitsubishi') ||
-            name.includes('car') || name.includes('vehicle') || name.includes('suv') ||
-            name.includes('mpv') || name.includes('sedan')) {
-          category = 'Vehicle';
-        } else if (name.includes('suite') || name.includes('room') || name.includes('deluxe') || 
-                   name.includes('premium') || name.includes('hotel') || name.includes('accommodation') ||
-                   name.includes('executive') || name.includes('standard')) {
-          category = 'Room';
-        } else if (name.includes('transfer') || name.includes('airport') || name.includes('shuttle') ||
-                   name.includes('transport')) {
-          category = 'Transport';
-        } else if (name.includes('package') || name.includes('bundle') || name.includes('promo')) {
-          category = 'Package';
-        }
-        
-        acc[serviceName] = {
-          name: serviceName,
-          bookingCount: 0,
-          revenue: 0,
-          category: category
-        };
-      }
-      
-      acc[serviceName].bookingCount += 1;
-      
-      // Add revenue only if booking is paid
-      if (booking.payment?.status === "PAID" || booking.status === "PAID") {
-        acc[serviceName].revenue += toNumber(booking.totalAmount);
-      }
-      
-      return acc;
-    }, {});
 
     res.json({
       summary: {

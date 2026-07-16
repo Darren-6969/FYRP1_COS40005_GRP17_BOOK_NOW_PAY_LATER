@@ -393,133 +393,14 @@ export async function cancelCustomerBooking(req, res, next) {
   }
 }
 
-export async function payCustomerBooking(req, res, next) {
-  try {
-    // Vuln 1 fix: this endpoint cannot verify any payment without a gateway confirmation.
-    // All card payments must go through /api/stripe/checkout (Stripe webhook confirms PAID).
-    // All manual payments (DuitNow, SPay, bank transfer) must use the receipt upload endpoint.
-    // Accepting a client-supplied transactionId and marking a booking PAID without verification
-    // allowed any customer to fraudulently mark bookings as paid.
-    return res.status(400).json({
-      message:
-        "Use the Stripe checkout endpoint for card payments, or upload a receipt for manual payments (DuitNow, SPay, bank transfer).",
-    });
-
-    const result = await prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.upsert({
-        where: { bookingId: booking.id },
-        create: {
-          bookingId: booking.id,
-          amount: booking.totalAmount,
-          method: normalizedMethod,
-          status: "PAID",
-          paidAt: new Date(),
-          transactionId: transactionId || `${normalizedMethod}-${Date.now()}`,
-        },
-        update: {
-          amount: booking.totalAmount,
-          method: normalizedMethod,
-          status: "PAID",
-          paidAt: new Date(),
-          transactionId: transactionId || `${normalizedMethod}-${Date.now()}`,
-        },
-      });
-
-      const invoice = await generateInvoiceForBooking(
-        booking.id,
-        booking.totalAmount,
-        tx,
-        { status: "PAID" }
-      );
-
-      const paidBooking = await tx.booking.update({
-        where: { id: booking.id },
-        data: { status: "PAID" },
-        include: {
-          customer: {
-            select: {
-              id: true,
-              userCode: true,
-              name: true,
-              email: true,
-            },
-          },
-          operator: true,
-          payment: true,
-          receipt: true,
-          invoice: true,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: req.user.id,
-          action: "CUSTOMER_PAYMENT_COMPLETED",
-          entityType: "Payment",
-          entityId: String(payment.id),
-          details: {
-            method: normalizedMethod,
-            invoiceId: invoice.id,
-            invoiceNo: invoice.invoiceNo,
-          },
-        },
-      });
-
-      return {
-        payment,
-        invoice,
-        booking: paidBooking,
-      };
-    });
-
-    const refreshed = await assertCustomerBooking(result.booking.id, req.user.id);
-
-    const customerBookingUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:5173"
-    }/customer/bookings/${refreshed.id}`;
-
-    await notifyCustomerByBooking({
-      booking: refreshed,
-      title: "E-receipt issued",
-      message: `Your official payment receipt for booking ${
-        refreshed.bookingCode || refreshed.id
-      } has been issued.`,
-      type: "PAYMENT_RECEIPT_ISSUED",
-      emailSubject: `Official Receipt - ${
-        refreshed.bookingCode || refreshed.id
-      }`,
-      emailHtml: paymentReceiptTemplate({
-        booking: refreshed,
-        payment: result.payment,
-        customerUrl: customerBookingUrl,
-      }),
-    });
-
-    const operatorPaymentUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:5173"
-    }/operator/payment-verification`;
-
-    await notifyOperatorUsersByBooking({
-      booking: refreshed,
-      title: "Payment confirmed",
-      message: `Payment for booking ${
-        refreshed.bookingCode || refreshed.id
-      } has been confirmed.`,
-      type: "PAYMENT_CONFIRMED",
-      emailSubject: `Payment Confirmed - ${
-        refreshed.bookingCode || refreshed.id
-      }`,
-      emailHtml: merchantPaymentConfirmedTemplate({
-        booking: refreshed,
-        payment: result.payment,
-        operatorUrl: operatorPaymentUrl,
-      }),
-    });
-
-    res.json(mapBooking(refreshed));
-  } catch (err) {
-    next(err);
-  }
+export async function payCustomerBooking(_req, res) {
+  // This endpoint cannot verify a payment without a gateway confirmation.
+  // Card payments -> /api/stripe/checkout (confirmed by Stripe webhook).
+  // Manual payments (DuitNow, SPay, bank transfer) -> receipt upload endpoint.
+  return res.status(400).json({
+    message:
+      "Use the Stripe checkout endpoint for card payments, or upload a receipt for manual payments (DuitNow, SPay, bank transfer).",
+  });
 }
 
 export async function uploadCustomerReceipt(req, res, next) {
