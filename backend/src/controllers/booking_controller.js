@@ -1,4 +1,5 @@
 import prisma from "../config/db.js";
+import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 
 function addDays(date, days) {
   const result = new Date(date);
@@ -40,7 +41,6 @@ export async function getBookings(req, res, next) {
 // ── Accept booking ────────────────────────────────────────────────────────────
 export async function acceptBooking(req, res, next) {
   try {
-    // Booking.id is an Int – parse the route param instead of passing a raw string.
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
       return res.status(400).json({ message: "Invalid booking id" });
@@ -48,56 +48,18 @@ export async function acceptBooking(req, res, next) {
 
     const booking = await prisma.booking.findUnique({
       where: { id },
-      include: { operator: { include: { configs: true } }, payment: true },
+      include: { operator: true, payment: true, customer: true },
     });
 
-    if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
-    }
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
 
-    // Ownership check – NORMAL_SELLER can only manage their own operator's bookings
-    if (
-      req.user.role === "NORMAL_SELLER" &&
-      booking.operatorId !== req.user.operatorId
-    ) {
+    if (req.user.role === "NORMAL_SELLER" && booking.operatorId !== req.user.operatorId) {
       return res.status(403).json({ message: "Forbidden: you can only manage bookings in your organisation" });
     }
 
-    // F2 fix: only fresh bookings may be accepted. Without this guard, accepting a
-    // PAID/CANCELLED/REJECTED booking reset payment.status back to UNPAID and
-    // booking.status to ACCEPTED, silently destroying a paid/terminal state.
-    if (!["PENDING", "ALTERNATIVE_SUGGESTED"].includes(booking.status)) {
-      return res.status(400).json({
-        message: `Booking cannot be accepted when status is ${booking.status}`,
-      });
-    }
-
-    const config       = booking.operator.configs[0];
-    const deadlineDays = config?.paymentDeadlineDays || 3;
-    const deadline     = addDays(new Date(), deadlineDays);
-
-    const updated = await prisma.booking.update({
-      where: { id },
-      data: {
-        status: "ACCEPTED",
-        paymentDeadline: deadline,
-        payment: {
-          upsert: {
-            create: { amount: booking.totalAmount, method: "DUITNOW", status: "UNPAID" },
-            update: { amount: booking.totalAmount, status: "UNPAID" },
-          },
-        },
-      },
-      include: { customer: true, operator: true, payment: true },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        userId: req.user.id,
-        action: "BOOKING_ACCEPTED",
-        entityType: "Booking",
-        entityId: String(id),
-      },
+    const { booking: updated } = await acceptBookingAndRequestPayment({
+      booking,
+      actorUserId: req.user.id,
     });
 
     res.json(updated);
