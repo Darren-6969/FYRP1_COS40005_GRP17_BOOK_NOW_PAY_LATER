@@ -1,3 +1,5 @@
+import { escapeHtml } from "../utils/escapeHTML.js";
+
 function formatMoney(value) {
   return new Intl.NumberFormat("en-MY", {
     style: "currency",
@@ -46,7 +48,8 @@ function titleCase(value) {
 }
 
 function safe(value, fallback = "-") {
-  return value === null || value === undefined || value === "" ? fallback : value;
+  if (value === null || value === undefined || value === "") return fallback;
+  return escapeHtml(value);
 }
 
 function getBookingRef(booking) {
@@ -101,8 +104,7 @@ function baseTemplate({ title, body, buttonText, buttonUrl, operator }) {
     ? `<img src="${operator.logoUrl}" alt="Company Logo" style="width:72px;height:72px;object-fit:contain;border-radius:18px;background:#ffffff;margin-bottom:12px;" />`
     : `<div style="width:72px;height:72px;border-radius:18px;background:#2563eb;color:white;display:inline-block;text-align:center;line-height:72px;font-weight:900;margin-bottom:12px;">BNPL</div>`;
 
-  const companyName = operator?.companyName || "Book Now Pay Later";
-
+  const companyName = escapeHtml(operator?.companyName || "Book Now Pay Later");
   return `
     <div style="margin:0;padding:0;background:#eef4ff;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
       <div style="max-width:860px;margin:0 auto;padding:34px 18px;">
@@ -116,7 +118,7 @@ function baseTemplate({ title, body, buttonText, buttonUrl, operator }) {
             </p>
 
             <h1 style="margin:0;font-size:28px;line-height:1.2;color:#0f172a;">
-              ${title}
+              ${escapeHtml(title)}
             </h1>
           </div>
 
@@ -181,8 +183,7 @@ function documentHeader({ title, number, dateLabel, dateValue, operator }) {
           </p>
           <p style="margin:4px 0 0;color:#64748b;">
             ${safe(operator?.email, "")}
-            ${operator?.phone ? ` · ${operator.phone}` : ""}
-          </p>
+            ${safe(operator?.phone, "") ? ` · ${escapeHtml(operator.phone)}` : ""}          </p>
         </td>
 
         <td style="vertical-align:top;text-align:right;">
@@ -311,13 +312,12 @@ export function bookingStatusTemplate({
     buttonUrl: customerUrl,
     operator: booking?.operator,
     body: `
-      <p style="margin-top:0;">Dear ${
-        booking?.customer?.name || "Customer"
+      <p style="margin-top:0;">Dear ${safe(booking?.customer?.name, "Customer")
       },</p>
 
       ${
         isRejected && bookingRejectedEmailText
-          ? `<p>${bookingRejectedEmailText}</p>`
+          ? `<p>${escapeHtml(bookingRejectedEmailText)}</p>`
           : `
             <p>Your booking has been updated to:</p>
             <p style="margin:14px 0;">${badge(titleCase(status), "blue")}</p>
@@ -336,7 +336,7 @@ export function paymentRequestTemplate({ booking, customerUrl }) {
     buttonUrl: customerUrl,
     operator: booking?.operator,
     body: `
-      <p style="margin-top:0;">Dear ${booking?.customer?.name || "Customer"},</p>
+      <p style="margin-top:0;">Dear ${safe(booking?.customer?.name, "Customer")},</p>
       <p>Your booking has been accepted. Please complete the payment before the deadline.</p>
       ${bookingTable(booking)}
     `,
@@ -350,7 +350,7 @@ export function alternativeSuggestionTemplate({ booking, customerUrl }) {
     buttonUrl: customerUrl,
     operator: booking?.operator,
     body: `
-      <p style="margin-top:0;">Dear ${booking?.customer?.name || "Customer"},</p>
+      <p style="margin-top:0;">Dear ${safe(booking?.customer?.name, "Customer")},</p>
       <p>The original booking option is unavailable. The operator has suggested an alternative option.</p>
 
       <h3 style="margin:22px 0 10px;color:#0f172a;">Original Booking</h3>
@@ -379,7 +379,7 @@ export function alternativeSuggestionTemplate({ booking, customerUrl }) {
 
       ${
         booking?.alternativeReason
-          ? `<p style="margin-top:18px;"><strong>Reason:</strong> ${booking.alternativeReason}</p>`
+          ? `<p style="margin-top:18px;"><strong>Reason:</strong> ${escapeHtml(booking?.alternativeReason)}</p>`
           : ""
       }
 
@@ -401,7 +401,7 @@ export function customerAlternativeResponseTemplate({
     body: `
       <p style="margin-top:0;">Dear Operator,</p>
       <p>
-        ${booking?.customer?.name || "The customer"} has ${
+        ${safe(booking?.customer?.name, "The customer")} has ${
       accepted ? "accepted" : "rejected"
     } the alternative suggestion for booking <strong>${getBookingRef(
       booking
@@ -486,7 +486,7 @@ export function paymentConfirmedTemplate({ booking, customerUrl }) {
     buttonUrl: customerUrl,
     operator: booking?.operator,
     body: `
-      <p style="margin-top:0;">Dear ${booking?.customer?.name || "Customer"},</p>
+      <p style="margin-top:0;">Dear ${safe(booking?.customer?.name, "Customer")},</p>
       <p>Your payment for booking <strong>${getBookingRef(
         booking
       )}</strong> has been confirmed.</p>
@@ -635,7 +635,7 @@ export function paymentReceiptTemplate({ booking, payment, customerUrl }) {
     operator: booking?.operator,
     body: `
       <p style="margin-top:0;">
-        Dear ${booking?.customer?.name || "Customer"},
+        Dear ${safe(booking?.customer?.name, "Customer")},
       </p>
 
       <p>
@@ -703,8 +703,7 @@ export function paymentReceiptTemplate({ booking, payment, customerUrl }) {
 
       <p style="margin:16px 0 0;color:#64748b;font-size:13px;">
         Operator Contact: ${safe(operator?.email, "-")}
-        ${operator?.phone ? ` · ${operator.phone}` : ""}
-      </p>
+        ${operator?.phone ? ` · ${escapeHtml(operator.phone)}` : ""}
     `,
   });
 }
@@ -720,11 +719,11 @@ export function autoRejectedBookingTemplate({
     buttonUrl: customerUrl,
     operator: booking?.operator,
     body: `
-      <p style="margin-top:0;">Dear ${booking?.customer?.name || "Customer"},</p>
+      <p style="margin-top:0;">Dear ${safe(booking?.customer?.name, "Customer")},</p>
 
       ${
         autoRejectedEmailText
-          ? `<p>${autoRejectedEmailText}</p>`
+          ? `<p>${escapeHtml(autoRejectedEmailText)}</p>`
           : `
             <p>
               Your booking request has been automatically rejected because no operator action

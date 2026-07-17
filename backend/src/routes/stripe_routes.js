@@ -14,6 +14,7 @@ import {
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import { allowRoles } from "../middlewares/rbac_middleware.js";
 import { paymentLimiter } from "../middlewares/rate_limit_middleware.js";
+import { escapeHtml } from "../utils/escapeHTML.js";
 
 const router = express.Router();
 
@@ -329,9 +330,9 @@ router.post(
               type: "PAYMENT_FAILED",
               emailSubject: `Payment Failed - ${failedBooking.bookingCode || failedBooking.id}`,
               emailHtml: `
-                <p>Hi ${failedBooking.customer?.name || "Customer"},</p>
+                <p>Hi ${escapeHtml(failedBooking.customer?.name || "Customer")},</p>
                 <p>Your payment for booking <strong>${failedBooking.bookingCode || failedBooking.id}</strong> failed.</p>
-                <p><strong>Reason:</strong> ${failureMessage}</p>
+                <p><strong>Reason:</strong> ${escapeHtml(failureMessage)}</p>
                 <p>Please <a href="${retryUrl}">try again</a> before your payment deadline.</p>
               `,
             });
@@ -408,7 +409,7 @@ router.post(
               type: "PAYMENT_REFUNDED",
               emailSubject: `Refund Issued - ${refundedBooking.bookingCode || refundedBooking.id}`,
               emailHtml: `
-                <p>Hi ${refundedBooking.customer?.name || "Customer"},</p>
+                <p>Hi ${escapeHtml(refundedBooking.customer?.name || "Customer")},</p>
                 <p>A refund of <strong>MYR ${refundAmount.toFixed(2)}</strong> has been processed for booking <strong>${
                   refundedBooking.bookingCode || refundedBooking.id
                 }</strong>.</p>

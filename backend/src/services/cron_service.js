@@ -6,6 +6,7 @@ import {
   notifyMasterUsers,
 } from "./notification_email_service.js";
 import { bookingStatusTemplate } from "./email_templates.js";
+import { escapeHtml } from "../utils/escapeHTML.js";
 
 let lastOverdueRun = null;
 let lastOverdueResult = null;
@@ -527,7 +528,7 @@ export async function runPaymentReminderCheck({
         emailHtml: `
           <div style="font-family:Arial,sans-serif;line-height:1.6;">
             <h2>${isFinalReminder ? "Final Payment Reminder" : "Payment Reminder"}</h2>
-            <p>Hello ${booking.customer?.name || "Customer"},</p>
+            <p>Hello ${escapeHtml(booking.customer?.name || "Customer")},</p>
             <p>Please complete payment for booking <strong>${
               booking.bookingCode || booking.id
             }</strong>.</p>
