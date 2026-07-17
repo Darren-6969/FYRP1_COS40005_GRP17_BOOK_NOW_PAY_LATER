@@ -2720,23 +2720,53 @@ export async function updateOperatorSettings(req, res, next) {
 
     const config = await getOrCreateOperatorConfig(operatorId);
 
+    // #12 fix: PATCH semantics — only overwrite a field when the request actually
+    // sent it. Previously any omitted field was forced to null (e.g. saving the
+    // reminder settings silently wiped invoiceFooterText and the operator logo).
+    const configData = {
+      bookingResponseDeadlineMinutes: parsedBookingDeadline,
+      autoRejectInactiveBooking: Boolean(autoRejectInactiveBooking),
+      reminderBeforeAutoRejectMinutes: parsedReminderBeforeReject,
+      acceptedPaymentMethods:
+        acceptedPaymentMethods || getDefaultAcceptedPaymentMethods(),
+      operatorReminderBeforeAutoRejectMinutes: parsedOperatorReminder,
+      enableOperatorReminderAlerts: Boolean(enableOperatorReminderAlerts),
+    };
+
+    if (manualPaymentNote !== undefined) {
+      configData.manualPaymentNote = manualPaymentNote || null;
+    }
+    if (companyLogo !== undefined) {
+      configData.invoiceLogoUrl = companyLogo || null;
+    }
+    if (invoiceFooterText !== undefined) {
+      configData.invoiceFooterText = invoiceFooterText || null;
+    }
+    if (bookingRejectedEmailText !== undefined) {
+      configData.bookingRejectedEmailText = bookingRejectedEmailText || null;
+    }
+    if (autoRejectedEmailText !== undefined) {
+      configData.autoRejectedEmailText = autoRejectedEmailText || null;
+    }
+
     const updatedConfig = await prisma.bNPLConfig.update({
       where: { id: config.id },
-      data: {
-        bookingResponseDeadlineMinutes: parsedBookingDeadline,
-        autoRejectInactiveBooking: Boolean(autoRejectInactiveBooking),
-        reminderBeforeAutoRejectMinutes: parsedReminderBeforeReject,
-        acceptedPaymentMethods:
-          acceptedPaymentMethods || getDefaultAcceptedPaymentMethods(),
-        manualPaymentNote: manualPaymentNote || null,
-        operatorReminderBeforeAutoRejectMinutes: parsedOperatorReminder,
-        enableOperatorReminderAlerts: Boolean(enableOperatorReminderAlerts),
-        invoiceLogoUrl: companyLogo || null,
-        invoiceFooterText: invoiceFooterText || null,
-        bookingRejectedEmailText: bookingRejectedEmailText || null,
-        autoRejectedEmailText: autoRejectedEmailText || null,
-      },
+      data: configData,
     });
+
+    // Only touch the operator logo when the client actually sent companyLogo,
+    // otherwise leave the existing operator.logoUrl untouched.
+    let updatedOperator;
+    if (companyLogo !== undefined) {
+      updatedOperator = await prisma.operator.update({
+        where: { id: operatorId },
+        data: { logoUrl: companyLogo || null },
+      });
+    } else {
+      updatedOperator = await prisma.operator.findUnique({
+        where: { id: operatorId },
+      });
+    }
 
     const updatedOperator = await prisma.operator.update({
       where: { id: operatorId },
