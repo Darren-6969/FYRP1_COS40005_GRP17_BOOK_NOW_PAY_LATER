@@ -27,6 +27,10 @@ dotenv.config();
 
 const app = express();
 
+// Vercel/other proxies sit in front of the app; needed for correct client IP
+// (used by express-rate-limit and for accurate logging).
+app.set("trust proxy", 1);
+
 function requiredEnvStatus() {
   const required = ["DATABASE_URL", "JWT_SECRET", "FRONTEND_URL"];
   const missing = required.filter((key) => !process.env[key]);
