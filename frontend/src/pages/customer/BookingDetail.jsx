@@ -8,6 +8,7 @@ import {
   formatMoney,
   statusLabel,
 } from "../../utils/customerUtils";
+import { refreshNotifications } from "../../utils/notifyRefresh";
 
 export default function BookingDetail() {
   const { id } = useParams();
@@ -27,16 +28,19 @@ export default function BookingDetail() {
   const handleCancel = async () => {
     if (!window.confirm("Cancel this booking?")) return;
     await cancelBooking();
+    refreshNotifications();
   };
 
   const handleAcceptAlternative = async () => {
     if (!window.confirm("Accept this alternative booking option?")) return;
     await acceptAlternative();
+    refreshNotifications();
   };
 
   const handleRejectAlternative = async () => {
     if (!window.confirm("Reject this alternative booking option?")) return;
     await rejectAlternative();
+    refreshNotifications();
   };
 
   if (loading) {

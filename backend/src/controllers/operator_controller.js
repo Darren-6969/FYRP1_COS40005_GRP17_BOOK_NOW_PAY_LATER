@@ -2768,13 +2768,6 @@ export async function updateOperatorSettings(req, res, next) {
       });
     }
 
-    const updatedOperator = await prisma.operator.update({
-      where: { id: operatorId },
-      data: {
-        logoUrl: companyLogo || null,
-      },
-    });
-
     await createAuditLog({
       req,
       action: "OPERATOR_SETTINGS_UPDATED",

@@ -818,7 +818,8 @@ export function getCronStatus() {
     lastCompletionRun,
     lastCompletionResult,
 
-    schedule: "Every 30 minutes",
+    schedule:
+      "Every 30 minutes via cron-job.org (Vercel Hobby cron runs daily as a fallback)",
   };
 }
 
