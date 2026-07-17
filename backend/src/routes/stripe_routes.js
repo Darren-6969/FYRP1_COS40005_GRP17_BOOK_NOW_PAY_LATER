@@ -5,6 +5,7 @@ import { generateInvoiceForBooking } from "../services/invoice_service.js";
 import {
   notifyCustomerByBooking,
   notifyOperatorUsersByBooking,
+  notifyMasterUsers,
 } from "../services/notification_email_service.js";
 import {
   merchantPaymentConfirmedTemplate,
@@ -55,6 +56,57 @@ async function applyPaidState(bookingId, transactionId, sessionId) {
   if (booking.status === "PAID" && booking.payment?.status === "PAID") {
     console.log(`[Stripe] Booking ${bookingId} already paid. Skipped.`);
     return { alreadyPaid: true };
+  }
+
+  // F6 fix: the booking may have been cancelled/rejected/completed after the
+  // Stripe session was created. The charge is already captured, so we must not
+  // silently mark it PAID (inconsistent state) nor silently drop it (lost money).
+  // Instead: record the anomaly, auto-refund, and leave the booking untouched.
+  const TERMINAL = ["CANCELLED", "REJECTED", "COMPLETED", "OVERDUE"];
+  if (TERMINAL.includes(booking.status)) {
+    console.error(
+      `[Stripe] Paid webhook for terminal booking ${bookingId} (${booking.status}). Flagging for refund.`
+    );
+
+    await prisma.auditLog.create({
+      data: {
+        userId: null,
+        action: "STRIPE_PAYMENT_ON_TERMINAL_BOOKING",
+        entityType: "Booking",
+        entityId: String(bookingId),
+        details: {
+          bookingStatus: booking.status,
+          transactionId,
+          sessionId,
+          needsRefund: true,
+        },
+      },
+    });
+
+    await notifyMasterUsers({
+      title: "Payment on a closed booking — refund needed",
+      message: `A Stripe payment was received for booking ${
+        booking.bookingCode || bookingId
+      } which is already ${booking.status}. An automatic refund was attempted; please verify in Stripe.`,
+      type: "STRIPE_PAYMENT_ON_TERMINAL_BOOKING",
+      relatedEntityType: "Booking",
+      relatedEntityId: bookingId,
+    });
+
+    // Attempt an automatic refund of the just-captured payment intent.
+    try {
+      if (process.env.STRIPE_SECRET_KEY && transactionId?.startsWith("pi_")) {
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+        await stripe.refunds.create({ payment_intent: transactionId });
+      }
+    } catch (refundErr) {
+      console.error(
+        `[Stripe] Auto-refund failed for booking ${bookingId}:`,
+        refundErr.message
+      );
+    }
+
+    return { skippedTerminal: true, bookingStatus: booking.status };
   }
 
   const payment = await prisma.payment.upsert({
@@ -578,8 +630,18 @@ router.post(
         });
       }
 
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+      // F6 fix: refuse to start a checkout once the payment deadline has passed.
+      // Prevents a customer paying an expired booking before the overdue cron runs.
+      if (
+        booking.paymentDeadline &&
+        new Date(booking.paymentDeadline) <= new Date()
+      ) {
+        return res.status(400).json({
+          message: "The payment deadline for this booking has passed.",
+        });
+      }
 
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
       const totalCents = Math.round(Number(booking.totalAmount) * 100);
 
       // ── Destination Charges split ─────────────────────────────────────────
