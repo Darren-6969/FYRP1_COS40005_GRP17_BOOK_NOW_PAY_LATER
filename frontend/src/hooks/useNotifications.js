@@ -10,21 +10,12 @@ import {
   disconnectUserSocket,
   isRealtimeEnabled,
 } from "../services/socket_service";
+import { getUser as getStoredUser } from "../utils/session";
 
 const POLLING_INTERVAL_MS = 4500;
 
 function normalizeNotifications(payload) {
   return Array.isArray(payload) ? payload : [];
-}
-
-function getStoredUser() {
-  try {
-    const rawUser =
-      localStorage.getItem("user") || sessionStorage.getItem("user");
-    return rawUser ? JSON.parse(rawUser) : null;
-  } catch {
-    return null;
-  }
 }
 
 function mergeNotification(currentNotifications, incomingNotification) {

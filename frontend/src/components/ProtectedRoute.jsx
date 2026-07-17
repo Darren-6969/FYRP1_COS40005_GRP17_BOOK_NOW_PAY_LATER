@@ -1,22 +1,5 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-
-function getStoredUser() {
-  try {
-    const rawUser = localStorage.getItem("user") || sessionStorage.getItem("user");
-    return rawUser ? JSON.parse(rawUser) : null;
-  } catch {
-    return null;
-  }
-}
-
-function getStoredToken() {
-  return (
-    localStorage.getItem("bnpl_token") ||
-    localStorage.getItem("token") ||
-    sessionStorage.getItem("bnpl_token") ||
-    sessionStorage.getItem("token")
-  );
-}
+import { getUser as getStoredUser, getToken as getStoredToken } from "../utils/session";
 
 function defaultPathForRole(role) {
   if (role === "MASTER_SELLER") return "/master/dashboard";

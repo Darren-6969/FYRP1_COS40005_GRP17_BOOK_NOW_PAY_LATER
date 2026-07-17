@@ -1,4 +1,5 @@
 import { Server } from "socket.io";
+import jwt from "jsonwebtoken";
 
 let io;
 
@@ -13,57 +14,53 @@ function getAllowedOrigins() {
 
 export function initSocket(httpServer) {
   io = new Server(httpServer, {
-    cors: {
-      origin: getAllowedOrigins(),
-      methods: ["GET", "POST"],
-      credentials: true,
-    },
+    cors: { origin: getAllowedOrigins(), methods: ["GET", "POST"], credentials: true },
+  });
+
+  // F1: authenticate every connection with the JWT access token.
+  io.use((socket, next) => {
+    try {
+      const raw =
+        socket.handshake.auth?.token ||
+        socket.handshake.headers?.authorization?.replace(/^Bearer\s+/i, "");
+      if (!raw) return next(new Error("Unauthorized: missing token"));
+
+      const decoded = jwt.verify(raw, process.env.JWT_SECRET);
+      socket.userId = decoded.id;
+      return next();
+    } catch {
+      return next(new Error("Unauthorized: invalid token"));
+    }
   });
 
   io.on("connection", (socket) => {
-    console.log(`Socket connected: ${socket.id}`);
+    // Bind strictly to the authenticated user's own room. Client-supplied ids are ignored.
+    const roomName = `user:${socket.userId}`;
+    socket.join(roomName);
+    socket.emit("socket:joined", { room: roomName });
 
-    socket.on("join_user_room", (userId) => {
-      if (!userId) return;
-
-      const roomName = `user:${userId}`;
+    // Kept for frontend compatibility, but the payload is ignored.
+    socket.on("join_user_room", () => {
       socket.join(roomName);
-
-      console.log(`Socket ${socket.id} joined ${roomName}`);
-
-      socket.emit("socket:joined", {
-        room: roomName,
-      });
+      socket.emit("socket:joined", { room: roomName });
     });
 
-    socket.on("leave_user_room", (userId) => {
-      if (!userId) return;
-
-      const roomName = `user:${userId}`;
+    socket.on("leave_user_room", () => {
       socket.leave(roomName);
-
-      console.log(`Socket ${socket.id} left ${roomName}`);
     });
 
-    socket.on("disconnect", () => {
-      console.log(`Socket disconnected: ${socket.id}`);
-    });
+    socket.on("disconnect", () => {});
   });
 
   return io;
 }
 
 export function getIO() {
-  if (!io) {
-    return null;
-  }
-
-  return io;
+  return io || null;
 }
 
 export function emitToUser(userId, eventName, payload) {
   if (!io || !userId) return false;
-
   io.to(`user:${userId}`).emit(eventName, payload);
   return true;
 }

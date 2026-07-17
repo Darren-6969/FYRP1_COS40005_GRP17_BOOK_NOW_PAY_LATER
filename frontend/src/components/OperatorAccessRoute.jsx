@@ -1,14 +1,5 @@
 import { Navigate, Outlet } from "react-router-dom";
-
-function getStoredUser() {
-  try {
-    const rawUser =
-      localStorage.getItem("user") || sessionStorage.getItem("user");
-    return rawUser ? JSON.parse(rawUser) : null;
-  } catch {
-    return null;
-  }
-}
+import { getUser as getStoredUser } from "../utils/session";
 
 export default function OperatorAccessRoute({ allowedAccess = [] }) {
   const user = getStoredUser();

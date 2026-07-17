@@ -15,16 +15,7 @@ import {
   LogOut,
   UserRound,
 } from "lucide-react";
-
-function getStoredUser() {
-  try {
-    const rawUser =
-      localStorage.getItem("user") || sessionStorage.getItem("user");
-    return rawUser ? JSON.parse(rawUser) : null;
-  } catch {
-    return null;
-  }
-}
+import { getUser as getStoredUser } from "../../../utils/session";
 
 const links = [
   {

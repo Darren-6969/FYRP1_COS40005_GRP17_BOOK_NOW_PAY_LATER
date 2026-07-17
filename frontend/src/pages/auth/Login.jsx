@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { claimHostBookingIntent } from "../../services/host_service";
 import { login } from "../../services/auth_service";
 import "../../assets/styles/global.css";
+import { saveSession, clearSession } from "../../utils/session";
 
 function normalizeRole(role) {
   if (!role) return "";
@@ -44,6 +45,10 @@ function getDashboardPathByRole(role) {
   if (operatorRoles.includes(normalizedRole)) return "/operator/dashboard";
 
   return null;
+}
+
+function extractRefreshToken(data) {
+  return data?.refreshToken || data?.refresh_token || data?.data?.refreshToken || null;
 }
 
 function extractToken(data) {
@@ -96,27 +101,6 @@ export default function Login() {
       }));
     }
   }, [emailParam]);
-
-  const clearSession = () => {
-    localStorage.removeItem("bnpl_token");
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("role");
-
-    sessionStorage.removeItem("bnpl_token");
-    sessionStorage.removeItem("token");
-    sessionStorage.removeItem("user");
-    sessionStorage.removeItem("role");
-  };
-
-  const saveSession = ({ token, user, role }) => {
-    const storage = rememberMe ? localStorage : sessionStorage;
-
-    storage.setItem("bnpl_token", token);
-    storage.setItem("token", token);
-    storage.setItem("user", JSON.stringify(user));
-    storage.setItem("role", role);
-  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -179,6 +163,7 @@ export default function Login() {
       const data = response.data;
 
       const token = extractToken(data);
+      const refreshToken = extractRefreshToken(data);
       const user = extractUser(data);
 
       if (!token) {
@@ -215,8 +200,10 @@ export default function Login() {
 
       saveSession({
         token,
+        refreshToken,
         user: normalizedUser,
         role: roleForStorage,
+        remember: rememberMe,
       });
 
       /**

@@ -2,13 +2,8 @@ import { useEffect, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import MasterSidebar from "./MasterSidebar";
 import MasterTopbar from "./MasterTopbar";
-
-function clearSession() {
-  ["bnpl_token", "token", "user", "role"].forEach((key) => {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
-  });
-}
+import { clearSession } from "../../../utils/session";
+import { logout } from "../../../services/auth_service";
 
 export default function MasterLayout() {
   const navigate = useNavigate();
@@ -22,7 +17,8 @@ export default function MasterLayout() {
     };
   }, [mobileMenuOpen]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout().catch(() => {});
     clearSession();
     navigate("/login", { replace: true });
   };

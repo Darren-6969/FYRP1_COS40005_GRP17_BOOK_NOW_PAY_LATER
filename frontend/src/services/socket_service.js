@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import { getToken } from "../utils/session"; 
 
 let socket = null;
 
@@ -67,4 +68,17 @@ export function onSocketEvent(eventName, handler) {
   return () => {
     activeSocket.off(eventName, handler);
   };
+}
+
+export function getSocket() {
+  if (!isRealtimeEnabled()) return null;
+  if (!socket) {
+    socket = io(getApiBaseUrl(), {
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+      autoConnect: false,
+      auth: (cb) => cb({ token: getToken() }),
+    });
+  }
+  return socket;
 }

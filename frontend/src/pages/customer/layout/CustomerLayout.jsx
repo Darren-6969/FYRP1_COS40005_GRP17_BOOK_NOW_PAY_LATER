@@ -3,26 +3,8 @@ import { Link, Outlet, useNavigate } from "react-router-dom";
 import CustomerNavbar from "./CustomerNavbar";
 import { useCustomerNotifications } from "../../../hooks/useNotifications";
 import { Menu } from "lucide-react";
-
-function getStoredUser() {
-  try {
-    const rawUser = localStorage.getItem("user") || sessionStorage.getItem("user");
-    return rawUser ? JSON.parse(rawUser) : null;
-  } catch {
-    return null;
-  }
-}
-
-function clearSession() {
-  localStorage.removeItem("bnpl_token");
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  localStorage.removeItem("role");
-  sessionStorage.removeItem("bnpl_token");
-  sessionStorage.removeItem("token");
-  sessionStorage.removeItem("user");
-  sessionStorage.removeItem("role");
-}
+import { clearSession, getUser as getStoredUser } from "../../../utils/session";
+import { logout } from "../../../services/auth_service";
 
 export default function CustomerLayout() {
   const navigate = useNavigate();
@@ -105,7 +87,8 @@ export default function CustomerLayout() {
   return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout().catch(() => {});
     clearSession();
     navigate("/login", { replace: true });
   };

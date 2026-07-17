@@ -447,43 +447,6 @@ export async function createHostBookingIntent(req, res, next) {
       required: true,
     });
 
-    console.log("[Host Booking Datetime Debug]", {
-      hostBookingRef,
-      rawPickupFields: {
-        pickupDate,
-        pickupTime,
-        pickupDateTime,
-        pickup_date,
-        pickup_time,
-        pickup_datetime,
-        checkInDate,
-        checkInTime,
-        checkInDateTime,
-        startDate,
-        startTime,
-        startDateTime,
-      },
-      rawReturnFields: {
-        returnDate,
-        returnTime,
-        returnDateTime,
-        return_date,
-        return_time,
-        return_datetime,
-        checkOutDate,
-        checkOutTime,
-        checkOutDateTime,
-        dropoffDate,
-        dropoffTime,
-        dropoffDateTime,
-        endDate,
-        endTime,
-        endDateTime,
-      },
-      parsedPickupDate,
-      parsedReturnDate,
-    });
-
     const intent = await prisma.hostBookingIntent.create({
       data: {
         token: generateIntentToken(),
@@ -499,7 +462,12 @@ export async function createHostBookingIntent(req, res, next) {
         returnDate: parsedReturnDate,
         location: location || null,
         totalAmount: totalAmount,
-        payload: req.body,
+        payload: {
+          operatorCode,
+          hostBookingRef,
+          serviceName,
+          serviceType: serviceType || null,
+        },
         status: "PENDING",
         expiresAt,
       },

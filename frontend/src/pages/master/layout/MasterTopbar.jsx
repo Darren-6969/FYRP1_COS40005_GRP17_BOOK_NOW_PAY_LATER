@@ -2,16 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, Menu } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useMasterNotifications } from "../../../hooks/useNotifications";
-
-function getStoredUser() {
-  try {
-    const rawUser =
-      localStorage.getItem("user") || sessionStorage.getItem("user");
-    return rawUser ? JSON.parse(rawUser) : null;
-  } catch {
-    return null;
-  }
-}
+import { getUser as getStoredUser } from "../../../utils/session";
 
 export default function MasterTopbar({ onOpenMobileMenu }) {
   const dropdownRef = useRef(null);
