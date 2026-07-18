@@ -22,21 +22,11 @@ import {
 } from "../services/email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
+import { parseId } from "../utils/parseId.js";
+import { generateUserCode } from "../services/userCode.js";
 
 function toNumber(value) {
   return value == null ? 0 : Number(value);
-}
-
-function parseId(value, label = "id") {
-  const parsed = Number(value);
-
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    const error = new Error(`Invalid ${label}`);
-    error.statusCode = 400;
-    throw error;
-  }
-
-  return parsed;
 }
 
 function canAccessOperator(req) {
@@ -230,48 +220,6 @@ async function generateOperatorCode() {
 
   const nextNumber = (latest?.id || 0) + 1;
   return `OPR${String(nextNumber).padStart(4, "0")}`;
-}
-
-function getRolePrefix(role) {
-  const prefixMap = {
-    CUSTOMER: "CUS",
-    NORMAL_SELLER: "OPR",
-    MASTER_SELLER: "ADN",
-  };
-
-  return prefixMap[role] || "USR";
-}
-
-async function generateUserCode(role) {
-  const prefix = getRolePrefix(role);
-
-  const latestUser = await prisma.user.findFirst({
-    where: {
-      role,
-      userCode: {
-        startsWith: prefix,
-      },
-    },
-    orderBy: {
-      userCode: "desc",
-    },
-    select: {
-      userCode: true,
-    },
-  });
-
-  let nextNumber = 1;
-
-  if (latestUser?.userCode) {
-    const numericPart = latestUser.userCode.replace(prefix, "");
-    const parsed = Number(numericPart);
-
-    if (Number.isInteger(parsed) && parsed > 0) {
-      nextNumber = parsed + 1;
-    }
-  }
-
-  return `${prefix}${String(nextNumber).padStart(4, "0")}`;
 }
 
 /**

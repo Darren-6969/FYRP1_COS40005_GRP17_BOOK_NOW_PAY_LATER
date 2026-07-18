@@ -1,16 +1,6 @@
 import prisma from "../config/db.js";
-
-function parseId(value, label = "id") {
-  const parsed = Number(value);
-
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    const error = new Error(`Invalid ${label}`);
-    error.statusCode = 400;
-    throw error;
-  }
-
-  return parsed;
-}
+import { parseId } from "../utils/parseId.js";
+import { generateUserCode } from "../services/userCode.js";
 
 function canManageOperator(req, operatorId) {
   if (req.user.role === "MASTER_SELLER") return true;
