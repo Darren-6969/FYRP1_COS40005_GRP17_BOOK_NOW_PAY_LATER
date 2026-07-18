@@ -10,21 +10,12 @@ import {
   disconnectUserSocket,
   isRealtimeEnabled,
 } from "../services/socket_service";
+import { getUser as getStoredUser } from "../utils/session";
 
-const POLLING_INTERVAL_MS = 15000;
+const POLLING_INTERVAL_MS = 4500;
 
 function normalizeNotifications(payload) {
   return Array.isArray(payload) ? payload : [];
-}
-
-function getStoredUser() {
-  try {
-    const rawUser =
-      localStorage.getItem("user") || sessionStorage.getItem("user");
-    return rawUser ? JSON.parse(rawUser) : null;
-  } catch {
-    return null;
-  }
 }
 
 function mergeNotification(currentNotifications, incomingNotification) {
@@ -102,7 +93,7 @@ function useNotificationsWithFallback({
     loadNotifications();
   }, [loadNotifications]);
 
-  // Polling fallback for Vercel backend
+  // Polling fallback for Vercel backend (near-real-time without WebSockets)
   useEffect(() => {
     if (isRealtimeEnabled()) return;
 
@@ -110,14 +101,32 @@ function useNotificationsWithFallback({
     setPollingEnabled(true);
 
     const intervalId = window.setInterval(() => {
-      loadNotifications({ silent: true });
+      // Skip polling while the tab is hidden to save API calls.
+      if (document.visibilityState === "visible") {
+        loadNotifications({ silent: true });
+      }
     }, POLLING_INTERVAL_MS);
+
+    // Refetch immediately when the user returns to the tab/window.
+    const refetch = () => loadNotifications({ silent: true });
+    window.addEventListener("focus", refetch);
+    document.addEventListener("visibilitychange", refetch);
 
     return () => {
       window.clearInterval(intervalId);
+      window.removeEventListener("focus", refetch);
+      document.removeEventListener("visibilitychange", refetch);
     };
   }, [loadNotifications]);
 
+  // Let any page request an immediate notification refresh after an action.
+  useEffect(() => {
+    const onManualRefresh = () => loadNotifications({ silent: true });
+    window.addEventListener("bnpl:refresh-notifications", onManualRefresh);
+    return () =>
+      window.removeEventListener("bnpl:refresh-notifications", onManualRefresh);
+  }, [loadNotifications]);
+  
   // Socket.IO mode only when explicitly enabled
   useEffect(() => {
     if (!isRealtimeEnabled()) {

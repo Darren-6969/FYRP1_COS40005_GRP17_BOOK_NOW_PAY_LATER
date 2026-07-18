@@ -7,19 +7,10 @@ import {
 import { bookingSubmittedTemplate } from "../services/email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
+import { tempBookingCode, formatBookingCode } from "../utils/bookingCode.js";
 
 function generateIntentToken() {
   return crypto.randomBytes(32).toString("hex");
-}
-
-async function generateBookingCode(tx) {
-  const latest = await tx.booking.findFirst({
-    orderBy: { id: "desc" },
-    select: { id: true },
-  });
-
-  const nextNumber = (latest?.id || 0) + 1;
-  return `BNPL-${String(nextNumber).padStart(4, "0")}`;
 }
 
 function validateAmount(totalAmount) {
@@ -447,43 +438,6 @@ export async function createHostBookingIntent(req, res, next) {
       required: true,
     });
 
-    console.log("[Host Booking Datetime Debug]", {
-      hostBookingRef,
-      rawPickupFields: {
-        pickupDate,
-        pickupTime,
-        pickupDateTime,
-        pickup_date,
-        pickup_time,
-        pickup_datetime,
-        checkInDate,
-        checkInTime,
-        checkInDateTime,
-        startDate,
-        startTime,
-        startDateTime,
-      },
-      rawReturnFields: {
-        returnDate,
-        returnTime,
-        returnDateTime,
-        return_date,
-        return_time,
-        return_datetime,
-        checkOutDate,
-        checkOutTime,
-        checkOutDateTime,
-        dropoffDate,
-        dropoffTime,
-        dropoffDateTime,
-        endDate,
-        endTime,
-        endDateTime,
-      },
-      parsedPickupDate,
-      parsedReturnDate,
-    });
-
     const intent = await prisma.hostBookingIntent.create({
       data: {
         token: generateIntentToken(),
@@ -499,7 +453,12 @@ export async function createHostBookingIntent(req, res, next) {
         returnDate: parsedReturnDate,
         location: location || null,
         totalAmount: totalAmount,
-        payload: req.body,
+        payload: {
+          operatorCode,
+          hostBookingRef,
+          serviceName,
+          serviceType: serviceType || null,
+        },
         status: "PENDING",
         expiresAt,
       },
@@ -593,11 +552,9 @@ export async function claimHostBookingIntent(req, res, next) {
     );
     
     const result = await prisma.$transaction(async (tx) => {
-      const bookingCode = await generateBookingCode(tx);
-
-      const booking = await tx.booking.create({
+      const created = await tx.booking.create({
         data: {
-          bookingCode,
+          bookingCode: tempBookingCode(),
           hostBookingRef: intent.hostBookingRef,
           customerId: req.user.id,
           operatorId: intent.operatorId,
@@ -611,15 +568,13 @@ export async function claimHostBookingIntent(req, res, next) {
           status: "PENDING",
           paymentDeadline: defaultPaymentDeadline,
         },
+      });
+
+      const booking = await tx.booking.update({
+        where: { id: created.id },
+        data: { bookingCode: formatBookingCode(created.id) },
         include: {
-          customer: {
-            select: {
-              id: true,
-              userCode: true,
-              name: true,
-              email: true,
-            },
-          },
+          customer: { select: { id: true, userCode: true, name: true, email: true } },
           operator: true,
           payment: true,
           receipt: true,

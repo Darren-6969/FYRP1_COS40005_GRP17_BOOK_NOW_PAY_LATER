@@ -2,22 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import OperatorSidebar from "./OperatorSidebar";
 import { useOperatorNotifications } from "../../../hooks/useNotifications";
-
-function getStoredUser() {
-  try {
-    const rawUser = localStorage.getItem("user") || sessionStorage.getItem("user");
-    return rawUser ? JSON.parse(rawUser) : null;
-  } catch {
-    return null;
-  }
-}
-
-function clearSession() {
-  ["bnpl_token", "token", "user", "role"].forEach((key) => {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
-  });
-}
+import { clearSession, getUser as getStoredUser } from "../../../utils/session";
+import { logout } from "../../../services/auth_service";
 
 export default function OperatorLayout() {
   const navigate = useNavigate();
@@ -107,7 +93,8 @@ export default function OperatorLayout() {
   return () => window.removeEventListener("scroll", handleScroll);
   }, [openNotifications]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout().catch(() => {});
     clearSession();
     navigate("/login", { replace: true });
   };

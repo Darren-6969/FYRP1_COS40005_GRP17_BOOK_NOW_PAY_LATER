@@ -21,21 +21,12 @@ import {
   paymentRequestTemplate,
 } from "../services/email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
+import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
+import { parseId } from "../utils/parseId.js";
+import { generateUserCode } from "../services/userCode.js";
 
 function toNumber(value) {
   return value == null ? 0 : Number(value);
-}
-
-function parseId(value, label = "id") {
-  const parsed = Number(value);
-
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    const error = new Error(`Invalid ${label}`);
-    error.statusCode = 400;
-    throw error;
-  }
-
-  return parsed;
 }
 
 function canAccessOperator(req) {
@@ -229,48 +220,6 @@ async function generateOperatorCode() {
 
   const nextNumber = (latest?.id || 0) + 1;
   return `OPR${String(nextNumber).padStart(4, "0")}`;
-}
-
-function getRolePrefix(role) {
-  const prefixMap = {
-    CUSTOMER: "CUS",
-    NORMAL_SELLER: "OPR",
-    MASTER_SELLER: "ADN",
-  };
-
-  return prefixMap[role] || "USR";
-}
-
-async function generateUserCode(role) {
-  const prefix = getRolePrefix(role);
-
-  const latestUser = await prisma.user.findFirst({
-    where: {
-      role,
-      userCode: {
-        startsWith: prefix,
-      },
-    },
-    orderBy: {
-      userCode: "desc",
-    },
-    select: {
-      userCode: true,
-    },
-  });
-
-  let nextNumber = 1;
-
-  if (latestUser?.userCode) {
-    const numericPart = latestUser.userCode.replace(prefix, "");
-    const parsed = Number(numericPart);
-
-    if (Number.isInteger(parsed) && parsed > 0) {
-      nextNumber = parsed + 1;
-    }
-  }
-
-  return `${prefix}${String(nextNumber).padStart(4, "0")}`;
 }
 
 /**
@@ -959,119 +908,15 @@ async function updateBookingStatus(req, res, next, status, action) {
 export async function acceptBooking(req, res, next) {
   try {
     const booking = await findOperatorBooking(req, req.params.id);
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
 
-    if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
-    }
-
-    if (!["PENDING", "ALTERNATIVE_SUGGESTED"].includes(booking.status)) {
-      return res.status(400).json({
-        message: `Booking cannot be accepted when status is ${booking.status}`,
-      });
-    }
-
-    const paymentDeadline = await calculatePaymentDeadline(
-      booking.operatorId,
-      booking.paymentDeadline || null,
-      booking.pickupDate
-    );
-
-    const payment = await prisma.payment.upsert({
-      where: {
-        bookingId: booking.id,
-      },
-      update: {
-        amount: booking.totalAmount,
-        method: booking.payment?.method || "PENDING",
-        status: "UNPAID",
-      },
-      create: {
-        bookingId: booking.id,
-        amount: booking.totalAmount,
-        method: "PENDING",
-        status: "UNPAID",
-      },
-    });
-
-    const invoice = await generateInvoiceForBooking(
-      booking.id,
-      booking.totalAmount,
-      prisma,
-      { status: "SENT" }
-    );
-
-    const updatedBooking = await prisma.booking.update({
-      where: { id: booking.id },
-      data: {
-        status: "PENDING_PAYMENT",
-        paymentDeadline,
-      },
-      include: includeBookingRelations(),
-    });
-
-    await createAuditLog({
-      req,
-      action: "BOOKING_ACCEPTED",
-      entityType: "Booking",
-      entityId: booking.id,
-      details: {
-        previousStatus: booking.status,
-        status: "PENDING_PAYMENT",
-        paymentId: payment.id,
-        paymentDeadline,
-        deadlineSource: booking.paymentDeadline
-          ? "EXISTING"
-          : "DEFAULT_CONFIG",
-        invoiceId: invoice.id,
-        invoiceNo: invoice.invoiceNo,
-      },
-    });
-
-    await createAuditLog({
-      req,
-      action: "PAYMENT_REQUEST_AUTO_SENT",
-      entityType: "Booking",
-      entityId: booking.id,
-      details: {
-        paymentId: payment.id,
-        paymentDeadline,
-        invoiceId: invoice.id,
-        invoiceNo: invoice.invoiceNo,
-        source: "BOOKING_ACCEPTED",
-      },
-    });
-
-    const customerPaymentUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:5173"
-    }/customer/checkout/${booking.id}`;
-
-    await notifyCustomerByBooking({
-      booking: updatedBooking,
-      title: "Booking accepted - payment available",
-      message: `Your booking ${
-        updatedBooking.bookingCode || updatedBooking.id
-      } has been accepted. Please complete payment before the deadline.`,
-      type: "BOOKING_ACCEPTED_PAYMENT_AVAILABLE",
-      emailSubject: `Booking Accepted - ${
-        updatedBooking.bookingCode || updatedBooking.id
-      }`,
-      emailHtml: invoiceSentTemplate({
-        invoice,
-        booking: updatedBooking,
-        customerUrl: customerPaymentUrl,
-      }),
-    });
+    const { booking: updatedBooking, payment, invoice } =
+      await acceptBookingAndRequestPayment({ booking, actorUserId: req.user.id });
 
     res.json({
       booking: mapBooking(updatedBooking),
-      payment: {
-        ...payment,
-        amount: toNumber(payment.amount),
-      },
-      invoice: {
-        ...invoice,
-        amount: toNumber(invoice.amount),
-      },
+      payment: { ...payment, amount: toNumber(payment.amount) },
+      invoice: { ...invoice, amount: toNumber(invoice.amount) },
     });
   } catch (err) {
     next(err);
@@ -1798,6 +1643,15 @@ export async function rejectPayment(req, res, next) {
       return res.status(404).json({ message: "Payment not found" });
     }
 
+    // F3 fix: never reject an already-captured payment. Setting a PAID payment
+    // (e.g. confirmed via Stripe) to FAILED here would leave money captured
+    // while the booking is pushed back to PENDING_PAYMENT with no refund.
+    if (!["UNPAID", "PENDING_VERIFICATION"].includes(payment.status)) {
+      return res.status(400).json({
+        message: `Cannot reject a payment with status ${payment.status}`,
+      });
+    }
+
     const updatedPayment = await prisma.payment.update({
       where: { id: payment.id },
       data: {
@@ -2222,7 +2076,7 @@ export async function getOperatorReports(req, res, next) {
     }, {});
 
     // Add this inside getOperatorReports, RIGHT AFTER the paymentMethods calculation
-// Wrap in try-catch so it doesn't break the whole endpoint if something goes wrong
+    // Wrap in try-catch so it doesn't break the whole endpoint if something goes wrong
 
 let topBookedServices = [];
 try {
@@ -2274,48 +2128,6 @@ try {
   console.error("Error calculating topBookedServices:", err);
   topBookedServices = []; // Fallback to empty array
 }
-
-    const serviceBookings = bookings.reduce((acc, booking) => {
-      const serviceName = booking.serviceName || "Unknown Service";
-      
-      if (!acc[serviceName]) {
-        // Detect category from service name
-        let category = 'Service';
-        const name = serviceName.toLowerCase();
-        
-        if (name.includes('gocar') || name.includes('vios') || name.includes('perdana') || 
-            name.includes('honda') || name.includes('toyota') || name.includes('mitsubishi') ||
-            name.includes('car') || name.includes('vehicle') || name.includes('suv') ||
-            name.includes('mpv') || name.includes('sedan')) {
-          category = 'Vehicle';
-        } else if (name.includes('suite') || name.includes('room') || name.includes('deluxe') || 
-                   name.includes('premium') || name.includes('hotel') || name.includes('accommodation') ||
-                   name.includes('executive') || name.includes('standard')) {
-          category = 'Room';
-        } else if (name.includes('transfer') || name.includes('airport') || name.includes('shuttle') ||
-                   name.includes('transport')) {
-          category = 'Transport';
-        } else if (name.includes('package') || name.includes('bundle') || name.includes('promo')) {
-          category = 'Package';
-        }
-        
-        acc[serviceName] = {
-          name: serviceName,
-          bookingCount: 0,
-          revenue: 0,
-          category: category
-        };
-      }
-      
-      acc[serviceName].bookingCount += 1;
-      
-      // Add revenue only if booking is paid
-      if (booking.payment?.status === "PAID" || booking.status === "PAID") {
-        acc[serviceName].revenue += toNumber(booking.totalAmount);
-      }
-      
-      return acc;
-    }, {});
 
     res.json({
       summary: {
@@ -2856,30 +2668,53 @@ export async function updateOperatorSettings(req, res, next) {
 
     const config = await getOrCreateOperatorConfig(operatorId);
 
+    // #12 fix: PATCH semantics — only overwrite a field when the request actually
+    // sent it. Previously any omitted field was forced to null (e.g. saving the
+    // reminder settings silently wiped invoiceFooterText and the operator logo).
+    const configData = {
+      bookingResponseDeadlineMinutes: parsedBookingDeadline,
+      autoRejectInactiveBooking: Boolean(autoRejectInactiveBooking),
+      reminderBeforeAutoRejectMinutes: parsedReminderBeforeReject,
+      acceptedPaymentMethods:
+        acceptedPaymentMethods || getDefaultAcceptedPaymentMethods(),
+      operatorReminderBeforeAutoRejectMinutes: parsedOperatorReminder,
+      enableOperatorReminderAlerts: Boolean(enableOperatorReminderAlerts),
+    };
+
+    if (manualPaymentNote !== undefined) {
+      configData.manualPaymentNote = manualPaymentNote || null;
+    }
+    if (companyLogo !== undefined) {
+      configData.invoiceLogoUrl = companyLogo || null;
+    }
+    if (invoiceFooterText !== undefined) {
+      configData.invoiceFooterText = invoiceFooterText || null;
+    }
+    if (bookingRejectedEmailText !== undefined) {
+      configData.bookingRejectedEmailText = bookingRejectedEmailText || null;
+    }
+    if (autoRejectedEmailText !== undefined) {
+      configData.autoRejectedEmailText = autoRejectedEmailText || null;
+    }
+
     const updatedConfig = await prisma.bNPLConfig.update({
       where: { id: config.id },
-      data: {
-        bookingResponseDeadlineMinutes: parsedBookingDeadline,
-        autoRejectInactiveBooking: Boolean(autoRejectInactiveBooking),
-        reminderBeforeAutoRejectMinutes: parsedReminderBeforeReject,
-        acceptedPaymentMethods:
-          acceptedPaymentMethods || getDefaultAcceptedPaymentMethods(),
-        manualPaymentNote: manualPaymentNote || null,
-        operatorReminderBeforeAutoRejectMinutes: parsedOperatorReminder,
-        enableOperatorReminderAlerts: Boolean(enableOperatorReminderAlerts),
-        invoiceLogoUrl: companyLogo || null,
-        invoiceFooterText: invoiceFooterText || null,
-        bookingRejectedEmailText: bookingRejectedEmailText || null,
-        autoRejectedEmailText: autoRejectedEmailText || null,
-      },
+      data: configData,
     });
 
-    const updatedOperator = await prisma.operator.update({
-      where: { id: operatorId },
-      data: {
-        logoUrl: companyLogo || null,
-      },
-    });
+    // Only touch the operator logo when the client actually sent companyLogo,
+    // otherwise leave the existing operator.logoUrl untouched.
+    let updatedOperator;
+    if (companyLogo !== undefined) {
+      updatedOperator = await prisma.operator.update({
+        where: { id: operatorId },
+        data: { logoUrl: companyLogo || null },
+      });
+    } else {
+      updatedOperator = await prisma.operator.findUnique({
+        where: { id: operatorId },
+      });
+    }
 
     await createAuditLog({
       req,

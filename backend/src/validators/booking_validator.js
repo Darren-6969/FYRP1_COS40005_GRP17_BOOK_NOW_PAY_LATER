@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// NOTE: the client sends a strict ISO-8601 UTC string, but the controllers then
+// reinterpret the calendar Y/M/D/H/M as Malaysia local time via
+// parseMalaysiaLocalDateTime(). So "…T02:00:00Z" is treated as 02:00 MYT, not UTC.
+// Keep this double-interpretation in mind when changing either side.
 // ISO 8601 datetime string coerced to a Date object
 const isoDate = z
   .string()

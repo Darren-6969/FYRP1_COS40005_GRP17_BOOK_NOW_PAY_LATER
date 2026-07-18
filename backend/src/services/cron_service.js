@@ -6,6 +6,8 @@ import {
   notifyMasterUsers,
 } from "./notification_email_service.js";
 import { bookingStatusTemplate } from "./email_templates.js";
+import { escapeHtml } from "../utils/escapeHTML.js";
+import { withDbRetry, ensureDbConnection } from "../utils/dbRetry.js"; // <-- add
 
 let lastOverdueRun = null;
 let lastOverdueResult = null;
@@ -22,15 +24,19 @@ let lastNoResponseResult = null;
 let cronStarted = false;
 
 async function createCronRun({ jobType, triggeredByUserId = null, triggerSource = "MANUAL" }) {
-  return prisma.cronJobRun.create({
-    data: {
-      jobType,
-      status: "RUNNING",
-      triggeredByUserId,
-      triggerSource,
-      startedAt: new Date(),
-    },
-  });
+  return withDbRetry(
+    () =>
+      prisma.cronJobRun.create({
+        data: {
+          jobType,
+          status: "RUNNING",
+          triggeredByUserId,
+          triggerSource,
+          startedAt: new Date(),
+        },
+      }),
+    { label: `createCronRun:${jobType}` }
+  );
 }
 
 async function finishCronRunSuccess(cronRunId, { affectedCount = 0, result = null } = {}) {
@@ -527,7 +533,7 @@ export async function runPaymentReminderCheck({
         emailHtml: `
           <div style="font-family:Arial,sans-serif;line-height:1.6;">
             <h2>${isFinalReminder ? "Final Payment Reminder" : "Payment Reminder"}</h2>
-            <p>Hello ${booking.customer?.name || "Customer"},</p>
+            <p>Hello ${escapeHtml(booking.customer?.name || "Customer")},</p>
             <p>Please complete payment for booking <strong>${
               booking.bookingCode || booking.id
             }</strong>.</p>
@@ -745,6 +751,10 @@ export async function runBookingMaintenanceChecks({
   let cronRun = null;
 
   try {
+    // Wake a suspended (scale-to-zero) database compute before doing any work,
+    // so the first write below doesn't fail on a cold start.
+    await ensureDbConnection();
+
     cronRun = await createCronRun({
       jobType: "MAINTENANCE_CHECK",
       triggeredByUserId,
@@ -817,7 +827,8 @@ export function getCronStatus() {
     lastCompletionRun,
     lastCompletionResult,
 
-    schedule: "Every 30 minutes",
+    schedule:
+      "Every 30 minutes via cron-job.org (Vercel Hobby cron runs daily as a fallback)",
   };
 }
 

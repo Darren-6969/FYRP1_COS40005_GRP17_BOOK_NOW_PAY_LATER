@@ -1,18 +1,7 @@
 import prisma from "../config/db.js";
 import { sendEmail } from "../services/email_service.js";
 import { invoiceSentTemplate } from "../services/email_templates.js";
-
-function parseId(value, label = "id") {
-  const parsed = Number(value);
-
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    const error = new Error(`Invalid ${label}`);
-    error.statusCode = 400;
-    throw error;
-  }
-
-  return parsed;
-}
+import { parseId } from "../utils/parseId.js";
 
 function mapInvoiceStatus(invoice) {
   if (invoice.status === "CANCELLED") return "VOID";

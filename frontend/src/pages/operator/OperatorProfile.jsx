@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import {
   changePassword,
   getMe,
+  logout,
   updateNotificationPreferences,
   updateProfile,
 } from "../../services/auth_service";
+import { clearSession, getUser as getStoredUser } from "../../utils/session";
 import "../../assets/styles/operator.css";
 import {
   UserRound,
@@ -15,35 +17,12 @@ import {
   LogOut,
 } from "lucide-react";
 
-function getStoredUser() {
-  try {
-    const rawUser =
-      localStorage.getItem("user") || sessionStorage.getItem("user");
-
-    return rawUser ? JSON.parse(rawUser) : null;
-  } catch {
-    return null;
-  }
-}
-
 function updateStoredUser(user) {
   const storedInLocal = Boolean(localStorage.getItem("user"));
   const storage = storedInLocal ? localStorage : sessionStorage;
 
   storage.setItem("user", JSON.stringify(user));
   storage.setItem("role", user.role);
-}
-
-function clearSession() {
-  localStorage.removeItem("bnpl_token");
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  localStorage.removeItem("role");
-
-  sessionStorage.removeItem("bnpl_token");
-  sessionStorage.removeItem("token");
-  sessionStorage.removeItem("user");
-  sessionStorage.removeItem("role");
 }
 
 function formatDate(value) {
@@ -174,7 +153,8 @@ export default function OperatorProfile() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout().catch(() => {});
     clearSession();
     navigate("/login", { replace: true });
   };

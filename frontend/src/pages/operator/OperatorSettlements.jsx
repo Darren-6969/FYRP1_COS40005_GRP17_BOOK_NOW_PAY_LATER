@@ -6,21 +6,13 @@ import {
   Wallet,
   Percent,
 } from "lucide-react";
+import { getToken } from "../../utils/session";
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
   "http://localhost:5000/api"
 ).replace(/\/$/, "");
-
-function getToken() {
-  return (
-    localStorage.getItem("bnpl_token") ||
-    localStorage.getItem("token") ||
-    sessionStorage.getItem("bnpl_token") ||
-    sessionStorage.getItem("token")
-  );
-}
 
 function formatMoney(value) {
   return `RM ${Number(value || 0).toFixed(2)}`;

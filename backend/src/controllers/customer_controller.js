@@ -15,10 +15,18 @@ import {
   receiptUploadedTemplate,
 } from "../services/email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
+import { tempBookingCode, formatBookingCode } from "../utils/bookingCode.js";
+import { parseId } from "../utils/parseId.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
   return Number(value);
+}
+
+function isValidReceiptImage(value) {
+  if (typeof value !== "string" || !value) return false;
+  // Accept an uploaded image (data URL) or an https link only.
+  return value.startsWith("data:image/") || value.startsWith("https://");
 }
 
 function mapBooking(booking) {
@@ -87,18 +95,6 @@ async function createCustomerNotification(tx, userId, title, message, type = "IN
   });
 }
 
-function parseId(value, label = "id") {
-  const parsed = Number(value);
-
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    const error = new Error(`Invalid ${label}`);
-    error.statusCode = 400;
-    throw error;
-  }
-
-  return parsed;
-}
-
 async function assertCustomerBooking(bookingId, customerId) {
   const id = parseId(bookingId, "booking id");
 
@@ -139,11 +135,6 @@ async function assertCustomerBooking(bookingId, customerId) {
   }
 
   return booking;
-}
-
-async function generateBookingCode(tx) {
-  const count = await tx.booking.count();
-  return `BNPL-${String(count + 1).padStart(4, "0")}`;
 }
 
 export async function createCustomerBooking(req, res, next) {
@@ -202,11 +193,9 @@ export async function createCustomerBooking(req, res, next) {
     );
 
     const booking = await prisma.$transaction(async (tx) => {
-      const bookingCode = await generateBookingCode(tx);
-
       const created = await tx.booking.create({
         data: {
-          bookingCode,
+          bookingCode: tempBookingCode(),
           customerId: req.user.id,
           operatorId: resolvedOperatorId,
           serviceName,
@@ -219,15 +208,14 @@ export async function createCustomerBooking(req, res, next) {
           totalAmount,
           status: "PENDING",
         },
+      });
+
+      // Derive the final code from the row's own autoincrement id (unique + sequential).
+      const withCode = await tx.booking.update({
+        where: { id: created.id },
+        data: { bookingCode: formatBookingCode(created.id) },
         include: {
-          customer: {
-            select: {
-              id: true,
-              userCode: true,
-              name: true,
-              email: true,
-            },
-          },
+          customer: { select: { id: true, userCode: true, name: true, email: true } },
           operator: true,
           payment: true,
           receipt: true,
@@ -240,15 +228,15 @@ export async function createCustomerBooking(req, res, next) {
           userId: req.user.id,
           action: "CUSTOMER_BOOKING_CREATED",
           entityType: "Booking",
-          entityId: String(created.id),
+          entityId: String(withCode.id),
           details: {
-            bookingCode: created.bookingCode,
+            bookingCode: withCode.bookingCode,
             source: "customer_bnpl_web_app",
           },
         },
       });
 
-      return created;
+      return withCode;
     });
 
     await notifyCustomerByBooking({
@@ -393,133 +381,14 @@ export async function cancelCustomerBooking(req, res, next) {
   }
 }
 
-export async function payCustomerBooking(req, res, next) {
-  try {
-    // Vuln 1 fix: this endpoint cannot verify any payment without a gateway confirmation.
-    // All card payments must go through /api/stripe/checkout (Stripe webhook confirms PAID).
-    // All manual payments (DuitNow, SPay, bank transfer) must use the receipt upload endpoint.
-    // Accepting a client-supplied transactionId and marking a booking PAID without verification
-    // allowed any customer to fraudulently mark bookings as paid.
-    return res.status(400).json({
-      message:
-        "Use the Stripe checkout endpoint for card payments, or upload a receipt for manual payments (DuitNow, SPay, bank transfer).",
-    });
-
-    const result = await prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.upsert({
-        where: { bookingId: booking.id },
-        create: {
-          bookingId: booking.id,
-          amount: booking.totalAmount,
-          method: normalizedMethod,
-          status: "PAID",
-          paidAt: new Date(),
-          transactionId: transactionId || `${normalizedMethod}-${Date.now()}`,
-        },
-        update: {
-          amount: booking.totalAmount,
-          method: normalizedMethod,
-          status: "PAID",
-          paidAt: new Date(),
-          transactionId: transactionId || `${normalizedMethod}-${Date.now()}`,
-        },
-      });
-
-      const invoice = await generateInvoiceForBooking(
-        booking.id,
-        booking.totalAmount,
-        tx,
-        { status: "PAID" }
-      );
-
-      const paidBooking = await tx.booking.update({
-        where: { id: booking.id },
-        data: { status: "PAID" },
-        include: {
-          customer: {
-            select: {
-              id: true,
-              userCode: true,
-              name: true,
-              email: true,
-            },
-          },
-          operator: true,
-          payment: true,
-          receipt: true,
-          invoice: true,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: req.user.id,
-          action: "CUSTOMER_PAYMENT_COMPLETED",
-          entityType: "Payment",
-          entityId: String(payment.id),
-          details: {
-            method: normalizedMethod,
-            invoiceId: invoice.id,
-            invoiceNo: invoice.invoiceNo,
-          },
-        },
-      });
-
-      return {
-        payment,
-        invoice,
-        booking: paidBooking,
-      };
-    });
-
-    const refreshed = await assertCustomerBooking(result.booking.id, req.user.id);
-
-    const customerBookingUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:5173"
-    }/customer/bookings/${refreshed.id}`;
-
-    await notifyCustomerByBooking({
-      booking: refreshed,
-      title: "E-receipt issued",
-      message: `Your official payment receipt for booking ${
-        refreshed.bookingCode || refreshed.id
-      } has been issued.`,
-      type: "PAYMENT_RECEIPT_ISSUED",
-      emailSubject: `Official Receipt - ${
-        refreshed.bookingCode || refreshed.id
-      }`,
-      emailHtml: paymentReceiptTemplate({
-        booking: refreshed,
-        payment: result.payment,
-        customerUrl: customerBookingUrl,
-      }),
-    });
-
-    const operatorPaymentUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:5173"
-    }/operator/payment-verification`;
-
-    await notifyOperatorUsersByBooking({
-      booking: refreshed,
-      title: "Payment confirmed",
-      message: `Payment for booking ${
-        refreshed.bookingCode || refreshed.id
-      } has been confirmed.`,
-      type: "PAYMENT_CONFIRMED",
-      emailSubject: `Payment Confirmed - ${
-        refreshed.bookingCode || refreshed.id
-      }`,
-      emailHtml: merchantPaymentConfirmedTemplate({
-        booking: refreshed,
-        payment: result.payment,
-        operatorUrl: operatorPaymentUrl,
-      }),
-    });
-
-    res.json(mapBooking(refreshed));
-  } catch (err) {
-    next(err);
-  }
+export async function payCustomerBooking(_req, res) {
+  // This endpoint cannot verify a payment without a gateway confirmation.
+  // Card payments -> /api/stripe/checkout (confirmed by Stripe webhook).
+  // Manual payments (DuitNow, SPay, bank transfer) -> receipt upload endpoint.
+  return res.status(400).json({
+    message:
+      "Use the Stripe checkout endpoint for card payments, or upload a receipt for manual payments (DuitNow, SPay, bank transfer).",
+  });
 }
 
 export async function uploadCustomerReceipt(req, res, next) {
@@ -529,6 +398,21 @@ export async function uploadCustomerReceipt(req, res, next) {
 
     if (!imageUrl) {
       return res.status(400).json({ message: "Receipt image is required" });
+    }
+
+    // #18: reject anything that isn't an uploaded image or an https link,
+    // and cap the size (~5 MB base64) to match the frontend's compressed output.
+    if (!isValidReceiptImage(imageUrl)) {
+      return res.status(400).json({
+        message:
+          "Invalid receipt image. Upload an image file or provide an https link.",
+      });
+    }
+
+    if (imageUrl.length > 7_000_000) {
+      return res.status(400).json({
+        message: "Receipt image is too large. Please upload a smaller image.",
+      });
     }
 
     if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { submitCustomerReceipt } from "../../hooks/useReceipts";
+import { refreshNotifications } from "../../utils/notifyRefresh";
 
 function compressImageToDataUrl(file, maxWidth = 900, quality = 0.72) {
   return new Promise((resolve, reject) => {
@@ -98,6 +99,7 @@ const handleFileChange = async (event) => {
       }
 
       await submitCustomerReceipt(id, form);
+      refreshNotifications();
       navigate(`/customer/payment-status/${id}`);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to upload receipt");

@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import { getToken } from "../utils/session";
 
 let socket = null;
 
@@ -16,18 +17,15 @@ function getApiBaseUrl() {
 }
 
 export function getSocket() {
-  if (!isRealtimeEnabled()) {
-    return null;
-  }
-
+  if (!isRealtimeEnabled()) return null;
   if (!socket) {
     socket = io(getApiBaseUrl(), {
       transports: ["websocket", "polling"],
       withCredentials: true,
       autoConnect: false,
-      });
+      auth: (cb) => cb({ token: getToken() }),
+    });
   }
-
   return socket;
 }
 
@@ -43,7 +41,7 @@ export function connectUserSocket(userId) {
   }
 
   activeSocket.emit("join_user_room", userId);
-   return activeSocket;
+  return activeSocket;
 }
 
 export function disconnectUserSocket(userId) {

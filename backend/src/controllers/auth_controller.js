@@ -2,39 +2,13 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import prisma from "../config/db.js";
+import { generateUserCode } from "../services/userCode.js";
 
 // ── Token configuration ───────────────────────────────────────────────────────
 // Access token: short-lived (OWASP 2025 A07 / NIST SP 800-63B)
 const ACCESS_TOKEN_EXPIRY  = "1h";
 // Refresh token: longer-lived but stored in DB and revocable
 const REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-function getRolePrefix(role) {
-  const prefixMap = {
-    CUSTOMER: "CUS",
-    NORMAL_SELLER: "OPR",
-    MASTER_SELLER: "ADN",
-  };
-  return prefixMap[role] || "USR";
-}
-
-async function generateUserCode(role) {
-  const prefix = getRolePrefix(role);
-
-  const latestUser = await prisma.user.findFirst({
-    where: { role, userCode: { startsWith: prefix } },
-    orderBy: { userCode: "desc" },
-    select: { userCode: true },
-  });
-
-  let nextNumber = 1;
-  if (latestUser?.userCode) {
-    const parsed = Number(latestUser.userCode.replace(prefix, ""));
-    if (Number.isInteger(parsed) && parsed > 0) nextNumber = parsed + 1;
-  }
-
-  return `${prefix}${String(nextNumber).padStart(4, "0")}`;
-}
 
 function sanitizeUser(user) {
   if (!user) return null;

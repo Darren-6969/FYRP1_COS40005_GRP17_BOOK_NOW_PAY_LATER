@@ -6,6 +6,7 @@ import {
   operatorStatusClass,
   operatorStatusLabel,
 } from "../../services/operator_service";
+import { refreshNotifications } from "../../utils/notifyRefresh";
 
 const STATUS_TABS = [
   { key: "PENDING_VERIFICATION", label: "Pending Review" },
@@ -47,6 +48,7 @@ export default function OperatorPaymentVerification() {
     try {
       setActionLoading(`approve-${id}`);
       await operatorService.approvePayment(id);
+      refreshNotifications();
       await loadPayments();
     } catch (err) {
       alert(err.response?.data?.message || "Failed to approve payment");
