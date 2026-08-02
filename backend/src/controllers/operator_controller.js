@@ -24,6 +24,7 @@ import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 import { parseId } from "../utils/parseId.js";
 import { generateUserCode } from "../services/userCode.js";
+import { generateApiKey } from "../utils/apiKey.js";
 
 function toNumber(value) {
   return value == null ? 0 : Number(value);
@@ -285,6 +286,7 @@ export async function createOperator(req, res, next) {
     const operatorCode = await generateOperatorCode();
     const userCode = await generateUserCode("NORMAL_SELLER");
     const hashedPassword = await bcrypt.hash(loginPassword, 10);
+    const apiKey = generateApiKey(); 
 
     const result = await prisma.$transaction(
       async (tx) => {
@@ -296,6 +298,9 @@ export async function createOperator(req, res, next) {
             phone: phone || null,
             logoUrl: logoUrl || null,
             status: "ACTIVE",
+            apiKeyHash: apiKey.hash,          
+            apiKeyPrefix: apiKey.prefix,     
+            apiKeyRotatedAt: new Date(),
           },
         });
 
@@ -414,6 +419,8 @@ export async function createOperator(req, res, next) {
       message: "Operator and login account created successfully",
       operator: result.operator,
       user: result.user,
+      apiKey: apiKey.key,
+      apiKeyNotice: "Store this API key now. It will not be shown again.",
     });
   } catch (err) {
     if (err.code === "P2002") {
@@ -2781,6 +2788,195 @@ export async function updateOperatorSettings(req, res, next) {
           updatedConfig.acceptedPaymentMethods || getDefaultAcceptedPaymentMethods(),
       },
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ── Integration / API keys (owner self-serve) ───────────────────────────────
+
+function normalizeOrigin(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  // An origin has no path/query/hash.
+  if ((url.pathname && url.pathname !== "/") || url.search || url.hash) return null;
+
+  return url.origin;
+}
+
+function buildEmbedSnippet(operator) {
+  const frontendBase = process.env.FRONTEND_URL || "https://YOUR-BNPL-FRONTEND";
+  return [
+    `<!-- 1) Server-side: POST to /api/host/bookings with your x-bnpl-api-key -->`,
+    `<!--    to obtain a single-use handoffToken (operatorCode: ${operator.operatorCode}). -->`,
+    `<script src="${frontendBase}/embed/v1/bnpl-embed.js"></script>`,
+    `<script>`,
+    `  BNPL.open({`,
+    `    handoffToken: HANDOFF_TOKEN_FROM_YOUR_SERVER,`,
+    `    onSuccess: function (b) { /* booking submitted: b.bookingCode */ },`,
+    `    onClose:   function () { /* customer closed the modal */ }`,
+    `  });`,
+    `</script>`,
+  ].join("\n");
+}
+
+export async function getOperatorIntegration(req, res, next) {
+  try {
+    if (!canAccessOperator(req)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const operatorId = getOperatorIdFromRequest(req);
+    if (!operatorId) {
+      return res.status(400).json({ message: "No operator profile is linked to this account." });
+    }
+
+    const operator = await prisma.operator.findUnique({ where: { id: operatorId } });
+    if (!operator) {
+      return res.status(404).json({ message: "Operator not found" });
+    }
+
+    res.json({
+      operatorCode: operator.operatorCode,
+      hasApiKey: Boolean(operator.apiKeyHash),
+      apiKeyPrefix: operator.apiKeyPrefix || null,
+      apiKeyRotatedAt: operator.apiKeyRotatedAt || null,
+      allowedOrigins: operator.allowedOrigins || [],
+      embedSnippet: buildEmbedSnippet(operator),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function rotateOperatorApiKey(req, res, next) {
+  try {
+    if (!canAccessOperator(req)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const operatorId = getOperatorIdFromRequest(req);
+    if (!operatorId) {
+      return res.status(400).json({ message: "No operator profile is linked to this account." });
+    }
+
+    const apiKey = generateApiKey();
+
+    await prisma.operator.update({
+      where: { id: operatorId },
+      data: {
+        apiKeyHash: apiKey.hash,
+        apiKeyPrefix: apiKey.prefix,
+        apiKeyRotatedAt: new Date(),
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: "OPERATOR_API_KEY_ROTATED",
+        entityType: "Operator",
+        entityId: String(operatorId),
+      },
+    });
+
+    res.json({
+      message: "API key rotated. Store it now — it will not be shown again.",
+      apiKey: apiKey.key, // shown once
+      apiKeyPrefix: apiKey.prefix,
+      apiKeyRotatedAt: new Date(),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function revokeOperatorApiKey(req, res, next) {
+  try {
+    if (!canAccessOperator(req)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const operatorId = getOperatorIdFromRequest(req);
+    if (!operatorId) {
+      return res.status(400).json({ message: "No operator profile is linked to this account." });
+    }
+
+    await prisma.operator.update({
+      where: { id: operatorId },
+      data: { apiKeyHash: null, apiKeyPrefix: null, apiKeyRotatedAt: null },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: "OPERATOR_API_KEY_REVOKED",
+        entityType: "Operator",
+        entityId: String(operatorId),
+      },
+    });
+
+    res.json({ message: "API key revoked. Host calls using it will now be rejected." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateOperatorAllowedOrigins(req, res, next) {
+  try {
+    if (!canAccessOperator(req)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const operatorId = getOperatorIdFromRequest(req);
+    if (!operatorId) {
+      return res.status(400).json({ message: "No operator profile is linked to this account." });
+    }
+
+    const input = Array.isArray(req.body?.allowedOrigins) ? req.body.allowedOrigins : null;
+    if (!input) {
+      return res.status(400).json({ message: "allowedOrigins must be an array" });
+    }
+    if (input.length > 20) {
+      return res.status(400).json({ message: "Too many origins (max 20)" });
+    }
+
+    const normalized = [];
+    for (const raw of input) {
+      const origin = normalizeOrigin(raw);
+      if (!origin) {
+        return res.status(400).json({
+          message: `Invalid origin: "${raw}". Use scheme + host only, e.g. https://example.com`,
+        });
+      }
+      if (!normalized.includes(origin)) normalized.push(origin);
+    }
+
+    const operator = await prisma.operator.update({
+      where: { id: operatorId },
+      data: { allowedOrigins: normalized },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: "OPERATOR_ORIGINS_UPDATED",
+        entityType: "Operator",
+        entityId: String(operatorId),
+        details: { allowedOrigins: normalized },
+      },
+    });
+
+    res.json({ message: "Allowed origins updated", allowedOrigins: operator.allowedOrigins });
   } catch (err) {
     next(err);
   }

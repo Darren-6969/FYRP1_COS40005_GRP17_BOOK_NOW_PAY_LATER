@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { getUser as getStoredUser, getToken as getStoredToken } from "../utils/session";
+import { getMemoryUser, getMemoryToken } from "../utils/memorySession";
 
 function defaultPathForRole(role) {
   if (role === "MASTER_SELLER") return "/master/dashboard";
@@ -10,8 +11,8 @@ function defaultPathForRole(role) {
 
 export default function ProtectedRoute({ allowedRoles = [] }) {
   const location = useLocation();
-  const user = getStoredUser();
-  const token = getStoredToken();
+  const user = getMemoryUser() || getStoredUser();
+  const token = getMemoryToken() || getStoredToken();
 
   if (!token || !user) {
     const redirectPath = `${location.pathname}${location.search || ""}`;

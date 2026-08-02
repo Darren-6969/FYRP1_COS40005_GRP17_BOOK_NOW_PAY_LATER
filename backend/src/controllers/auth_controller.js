@@ -10,7 +10,7 @@ const ACCESS_TOKEN_EXPIRY  = "1h";
 // Refresh token: longer-lived but stored in DB and revocable
 const REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-function sanitizeUser(user) {
+ export function sanitizeUser(user) {
   if (!user) return null;
 
   return {
@@ -45,7 +45,7 @@ function hashToken(plain) {
   return crypto.createHash("sha256").update(plain).digest("hex");
 }
 
-async function issueTokenPair(userId, role, operatorAccessLevel = null) {
+export async function issueTokenPair(userId, role, operatorAccessLevel = null) {
   const secret = process.env.JWT_SECRET;
 
   // Short-lived access token

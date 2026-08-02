@@ -16,7 +16,7 @@ import {
   rejectAlternativeBooking,
   uploadCustomerReceipt,
 } from "../controllers/customer_controller.js";
-import { verifyToken } from "../middlewares/auth_middleware.js";
+import { verifyToken, requireVerifiedCustomer } from "../middlewares/auth_middleware.js";
 import { allowRoles } from "../middlewares/rbac_middleware.js";
 import { validate } from "../middlewares/validate_middleware.js";
 import { createBookingSchema } from "../validators/booking_validator.js";
@@ -35,7 +35,7 @@ router.patch("/bookings/:id/reject-alternative", rejectAlternativeBooking);
 router.patch("/bookings/:id/cancel", cancelCustomerBooking);
 router.get("/bookings/:id/activity", getCustomerBookingActivity);
 
-router.post("/bookings/:id/pay", payCustomerBooking);
+router.post("/bookings/:id/pay", requireVerifiedCustomer, payCustomerBooking);
 router.post("/bookings/:id/receipt", uploadCustomerReceipt);
 
 router.get("/payments", getCustomerPayments);

@@ -8,6 +8,24 @@ import { bookingSubmittedTemplate } from "../services/email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
 import { tempBookingCode, formatBookingCode } from "../utils/bookingCode.js";
+import { hashApiKey } from "../utils/apiKey.js";
+import bcrypt from "bcryptjs";
+import { generateUserCode } from "../services/userCode.js";
+import { issueTokenPair, sanitizeUser } from "./auth_controller.js";
+import { sendEmail } from "../services/email_service.js";
+
+async function mintHandoff(intentId) {
+  const raw = crypto.randomBytes(32).toString("hex");
+  const handoffTokenHash = crypto.createHash("sha256").update(raw).digest("hex");
+  const handoffExpiresAt = new Date(Date.now() + 3 * 60 * 1000); // 3 minutes
+
+  await prisma.hostBookingIntent.update({
+    where: { id: intentId },
+    data: { handoffTokenHash, handoffExpiresAt, handoffUsedAt: null },
+  });
+
+  return raw;
+}
 
 function generateIntentToken() {
   return crypto.randomBytes(32).toString("hex");
@@ -161,6 +179,7 @@ function buildIntentUrls(intent) {
 
 async function buildIntentResponse(intent) {
   const urls = buildIntentUrls(intent);
+  const handoffToken = await mintHandoff(intent.id);
 
   const existingCustomer = await prisma.user.findUnique({
     where: {
@@ -183,6 +202,8 @@ async function buildIntentResponse(intent) {
     loginUrl: urls.loginUrl,
     redirectUrl: shouldLogin ? urls.loginUrl : urls.registerUrl,
     suggestedAction: shouldLogin ? "LOGIN" : "REGISTER",
+    handoffToken,                          
+    handoffExpiresInSeconds: 180,          
   };
 }
 
@@ -194,20 +215,157 @@ async function buildIntentResponse(intent) {
  * This does NOT create a customer account.
  * It only creates a temporary booking intent.
  */
+// Delegated identity: provision or load the customer the host vouched for.
+async function provisionCustomerForIntent(intent) {
+  const email = normalizeEmail(intent.customerEmail);
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    if (existing.role !== "CUSTOMER") {
+      const err = new Error("This email is registered as a non-customer account.");
+      err.statusCode = 409;
+      throw err;
+    }
+    return { user: existing, provisioned: false };
+  }
+
+  // New customer: unusable random password, RESTRICTED until OTP step-up.
+  const randomPassword = crypto.randomBytes(32).toString("hex");
+  const hashedPassword = await bcrypt.hash(randomPassword, 12);
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const userCode = await generateUserCode("CUSTOMER");
+      const user = await prisma.user.create({
+        data: {
+          userCode,
+          name: intent.customerName,
+          email,
+          password: hashedPassword,
+          role: "CUSTOMER",
+          provisionedVia: "HOST",
+          customerStatus: "RESTRICTED",
+        },
+      });
+      return { user, provisioned: true };
+    } catch (e) {
+      if (e.code !== "P2002") throw e;
+      const target = Array.isArray(e.meta?.target)
+        ? e.meta.target.join(",")
+        : String(e.meta?.target || "");
+      if (!target.includes("userCode")) throw e;
+    }
+  }
+
+  throw new Error("Failed to provision customer");
+}
+
+// Shared booking creation used by both claim (tab flow) and exchange (modal flow).
+async function createBookingFromIntent(intent, user) {
+  const defaultPaymentDeadline = await calculatePaymentDeadline(
+    intent.operatorId,
+    null,
+    intent.pickupDate
+  );
+
+  const booking = await prisma.$transaction(async (tx) => {
+    const created = await tx.booking.create({
+      data: {
+        bookingCode: tempBookingCode(),
+        hostBookingRef: intent.hostBookingRef,
+        customerId: user.id,
+        operatorId: intent.operatorId,
+        serviceName: intent.serviceName,
+        serviceType: intent.serviceType,
+        bookingDate: intent.bookingDate,
+        pickupDate: intent.pickupDate,
+        returnDate: intent.returnDate,
+        location: intent.location,
+        totalAmount: intent.totalAmount,
+        status: "PENDING",
+        paymentDeadline: defaultPaymentDeadline,
+      },
+    });
+
+    const full = await tx.booking.update({
+      where: { id: created.id },
+      data: { bookingCode: formatBookingCode(created.id) },
+      include: {
+        customer: { select: { id: true, userCode: true, name: true, email: true } },
+        operator: true,
+        payment: true,
+        receipt: true,
+        invoice: true,
+      },
+    });
+
+    await tx.hostBookingIntent.update({
+      where: { id: intent.id },
+      data: {
+        status: "CLAIMED",
+        claimedByUserId: user.id,
+        claimedBookingId: full.id,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "HOST_BOOKING_CLAIMED",
+        entityType: "Booking",
+        entityId: String(full.id),
+        details: {
+          hostBookingRef: intent.hostBookingRef,
+          operatorCode: intent.operatorCode,
+          intentToken: intent.token,
+        },
+      },
+    });
+
+    return full;
+  }, { timeout: 15000 });
+
+  const operatorUrl = frontendUrl(`/operator/bookings/${booking.id}`);
+
+  await notifyCustomerByBooking({
+    booking,
+    title: "Booking submitted",
+    message: `Your BNPL booking ${booking.bookingCode} has been submitted.`,
+    type: "BOOKING_SUBMITTED",
+  });
+
+  await notifyOperatorUsersByBooking({
+    booking,
+    title: "New booking request",
+    message: `${booking.bookingCode} requires review.`,
+    type: "BOOKING_SUBMITTED",
+    emailSubject: `New BNPL Booking Request - ${booking.bookingCode}`,
+    emailHtml: bookingSubmittedTemplate({ booking, operatorUrl }),
+  });
+
+  return booking;
+}
+
 export async function createHostBookingIntent(req, res, next) {
   try {
     const apiKey = req.headers["x-bnpl-api-key"];
 
-    if (!process.env.HOST_API_KEY) {
-      return res.status(500).json({
-        message: "Host API key is not configured",
-      });
+    if (!apiKey) {
+      return res.status(401).json({ message: "Missing host API key" });
     }
 
-    if (!apiKey || apiKey !== process.env.HOST_API_KEY) {
-      return res.status(401).json({
-        message: "Invalid host API key",
-      });
+    // Per-operator key lookup (Phase 1). The key authoritatively identifies
+    // the operator. Falls back to the legacy global HOST_API_KEY during
+    // migration so existing hosts keep working until they switch keys.
+    const keyedOperator = await prisma.operator.findUnique({
+      where: { apiKeyHash: hashApiKey(apiKey) },
+    });
+
+    const legacyKeyValid =
+      Boolean(process.env.HOST_API_KEY) && apiKey === process.env.HOST_API_KEY;
+
+    if (!keyedOperator && !legacyKeyValid) {
+      return res.status(401).json({ message: "Invalid host API key" });
     }
 
   const {
@@ -288,9 +446,22 @@ export async function createHostBookingIntent(req, res, next) {
 
     const amount = validateAmount(totalAmount);
     
-    const operator = await prisma.operator.findUnique({
-      where: { operatorCode },
-    });
+    // When a per-operator key was used, that key decides the operator and the
+    // body operatorCode must match it (prevents booking under another operator).
+    let operator;
+
+    if (keyedOperator) {
+      if (operatorCode && operatorCode !== keyedOperator.operatorCode) {
+        return res.status(403).json({
+          message: "operatorCode does not match the API key's operator",
+        });
+      }
+      operator = keyedOperator;
+    } else {
+      operator = await prisma.operator.findUnique({
+        where: { operatorCode },
+      });
+    }
 
     if (!operator) {
       return res.status(404).json({
@@ -545,90 +716,7 @@ export async function claimHostBookingIntent(req, res, next) {
       });
     }
 
-    const defaultPaymentDeadline = await calculatePaymentDeadline(
-      intent.operatorId,
-      null,
-      intent.pickupDate
-    );
-    
-    const result = await prisma.$transaction(async (tx) => {
-      const created = await tx.booking.create({
-        data: {
-          bookingCode: tempBookingCode(),
-          hostBookingRef: intent.hostBookingRef,
-          customerId: req.user.id,
-          operatorId: intent.operatorId,
-          serviceName: intent.serviceName,
-          serviceType: intent.serviceType,
-          bookingDate: intent.bookingDate,
-          pickupDate: intent.pickupDate,
-          returnDate: intent.returnDate,
-          location: intent.location,
-          totalAmount: intent.totalAmount,
-          status: "PENDING",
-          paymentDeadline: defaultPaymentDeadline,
-        },
-      });
-
-      const booking = await tx.booking.update({
-        where: { id: created.id },
-        data: { bookingCode: formatBookingCode(created.id) },
-        include: {
-          customer: { select: { id: true, userCode: true, name: true, email: true } },
-          operator: true,
-          payment: true,
-          receipt: true,
-          invoice: true,
-        },
-      });
-
-      await tx.hostBookingIntent.update({
-        where: { id: intent.id },
-        data: {
-          status: "CLAIMED",
-          claimedByUserId: req.user.id,
-          claimedBookingId: booking.id,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: req.user.id,
-          action: "HOST_BOOKING_CLAIMED",
-          entityType: "Booking",
-          entityId: String(booking.id),
-          details: {
-            hostBookingRef: intent.hostBookingRef,
-            operatorCode: intent.operatorCode,
-            intentToken: intent.token,
-            source: "GoCar vehicle details page",
-          },
-        },
-      });
-
-      return booking;
-    });
-
-    const operatorUrl = frontendUrl(`/operator/bookings/${result.id}`);
-
-    await notifyCustomerByBooking({
-      booking: result,
-      title: "Booking submitted",
-      message: `Your BNPL booking ${result.bookingCode} has been submitted.`,
-      type: "BOOKING_SUBMITTED",
-    });
-
-    await notifyOperatorUsersByBooking({
-      booking: result,
-      title: "New booking request",
-      message: `${result.bookingCode} requires review.`,
-      type: "BOOKING_SUBMITTED",
-      emailSubject: `New BNPL Booking Request - ${result.bookingCode}`,
-      emailHtml: bookingSubmittedTemplate({
-        booking: result,
-        operatorUrl,
-      }),
-    });
+    const result = await createBookingFromIntent(intent, req.user);
 
     return res.status(201).json({
       message: "BNPL booking created successfully",
@@ -636,6 +724,203 @@ export async function claimHostBookingIntent(req, res, next) {
       bookingCode: result.bookingCode,
       bookingDetailUrl: frontendUrl(`/customer/bookings/${result.id}`),
       checkoutUrl: frontendUrl(`/customer/checkout/${result.id}`),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Model B — embedded modal session.
+ * The single-use handoff token is the credential (no Authorization header).
+ * Provisions/loads the customer, claims the intent, and issues a JWT.
+ */
+export async function exchangeHostSession(req, res, next) {
+  try {
+    const { handoffToken } = req.body;
+
+    if (!handoffToken) {
+      return res.status(400).json({ message: "handoffToken is required" });
+    }
+
+    const handoffTokenHash = crypto
+      .createHash("sha256")
+      .update(String(handoffToken))
+      .digest("hex");
+
+    const intent = await prisma.hostBookingIntent.findUnique({
+      where: { handoffTokenHash },
+    });
+
+    if (!intent) {
+      return res.status(404).json({ message: "Invalid handoff token" });
+    }
+    if (intent.handoffUsedAt) {
+      return res.status(400).json({ message: "This session link has already been used" });
+    }
+    if (!intent.handoffExpiresAt || intent.handoffExpiresAt < new Date()) {
+      return res.status(400).json({ message: "This session link has expired" });
+    }
+
+    const operator = await prisma.operator.findUnique({
+      where: { id: intent.operatorId },
+    });
+    if (!operator || operator.status !== "ACTIVE") {
+      return res.status(403).json({ message: "Operator is not active" });
+    }
+
+    // Single-use: burn the token before doing anything else.
+    await prisma.hostBookingIntent.update({
+      where: { id: intent.id },
+      data: { handoffUsedAt: new Date() },
+    });
+
+    const { user } = await provisionCustomerForIntent(intent);
+
+    let booking;
+    if (intent.status === "CLAIMED" && intent.claimedBookingId) {
+      booking = await prisma.booking.findFirst({
+        where: { id: intent.claimedBookingId, customerId: user.id },
+      });
+      if (!booking) {
+        return res.status(403).json({ message: "This booking belongs to a different account" });
+      }
+    } else if (intent.status === "PENDING") {
+      if (intent.expiresAt < new Date()) {
+        await prisma.hostBookingIntent.update({
+          where: { id: intent.id },
+          data: { status: "EXPIRED" },
+        });
+        return res.status(400).json({ message: "Booking intent has expired" });
+      }
+      booking = await createBookingFromIntent(intent, user);
+    } else {
+      return res.status(400).json({ message: `Booking intent is ${intent.status}` });
+    }
+
+    const { accessToken, refreshToken } = await issueTokenPair(
+      user.id,
+      user.role,
+      user.operatorAccessLevel || null
+    );
+
+    return res.status(200).json({
+      message: "Session established",
+      authToken: accessToken,
+      refreshToken,
+      needsOtp: user.customerStatus === "RESTRICTED",
+      user: sanitizeUser(user),
+      bookingId: booking.id,
+      bookingCode: booking.bookingCode,
+      bookingDetailUrl: frontendUrl(`/customer/bookings/${booking.id}`),
+      checkoutUrl: frontendUrl(`/customer/checkout/${booking.id}`),
+    });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ message: err.message });
+    }
+    next(err);
+  }
+}
+
+/**
+ * OTP step-up: send a code to a RESTRICTED (host-provisioned) customer.
+ * Called with the restricted JWT from exchange.
+ */
+export async function requestHostOtp(req, res, next) {
+  try {
+    if (req.user.customerStatus !== "RESTRICTED") {
+      return res.status(400).json({ message: "Your account is already verified" });
+    }
+
+    const otp = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[DEV] OTP for", req.user.email, "=", otp);
+    }
+    const otpCodeHash = crypto.createHash("sha256").update(otp).digest("hex");
+
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        otpCodeHash,
+        otpExpiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 min
+        otpAttempts: 0,
+      },
+    });
+
+    await sendEmail({
+      to: req.user.email,
+      subject: "Your BNPL verification code",
+      type: "OTP_VERIFICATION",
+      userId: req.user.id,
+      text: `Your BNPL verification code is ${otp}. It expires in 10 minutes.`,
+      html: `<div style="font-family:Arial,sans-serif;line-height:1.6;">
+        <h2>Verification code</h2>
+        <p>Use this code to continue your BNPL booking:</p>
+        <p style="font-size:28px;font-weight:bold;letter-spacing:4px;">${otp}</p>
+        <p>This code expires in 10 minutes.</p>
+      </div>`,
+    });
+
+    return res.json({ message: "Verification code sent" });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * OTP step-up: verify the code, promote the customer to ACTIVE,
+ * and issue a fresh (unrestricted) token pair.
+ */
+export async function verifyHostOtp(req, res, next) {
+  try {
+    const { otp } = req.body;
+    if (!otp) {
+      return res.status(400).json({ message: "otp is required" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+
+    if (user.customerStatus !== "RESTRICTED") {
+      return res.status(400).json({ message: "Your account is already verified" });
+    }
+    if (!user.otpCodeHash || !user.otpExpiresAt || user.otpExpiresAt < new Date()) {
+      return res.status(400).json({ message: "Code expired. Please request a new one." });
+    }
+    if (user.otpAttempts >= 5) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { otpCodeHash: null, otpExpiresAt: null, otpAttempts: 0 },
+      });
+      return res.status(429).json({ message: "Too many attempts. Please request a new code." });
+    }
+
+    const hash = crypto.createHash("sha256").update(String(otp)).digest("hex");
+    if (hash !== user.otpCodeHash) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { otpAttempts: { increment: 1 } },
+      });
+      return res.status(400).json({ message: "Invalid code" });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { customerStatus: "ACTIVE", otpCodeHash: null, otpExpiresAt: null, otpAttempts: 0 },
+      include: { operator: true },
+    });
+
+    const { accessToken, refreshToken } = await issueTokenPair(
+      updated.id,
+      updated.role,
+      updated.operatorAccessLevel || null
+    );
+
+    return res.json({
+      message: "Verified",
+      token: accessToken,
+      refreshToken,
+      user: sanitizeUser(updated),
     });
   } catch (err) {
     next(err);

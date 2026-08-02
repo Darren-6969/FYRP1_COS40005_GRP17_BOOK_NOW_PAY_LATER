@@ -98,6 +98,12 @@ model User {
   operatorAccessLevel OperatorAccessLevel?
   operatorUserStatus OperatorUserStatus @default(ACTIVE)
 
+  provisionedVia String?                        // "HOST" for auto-provisioned customers
+  customerStatus String   @default("ACTIVE")   // "RESTRICTED" until OTP step-up
+  otpCodeHash    String?
+  otpExpiresAt   DateTime?
+  otpAttempts    Int      @default(0)
+
   operatorId Int?
   operator   Operator? @relation(fields: [operatorId], references: [id])
 
@@ -136,6 +142,12 @@ model Operator {
   logoUrl      String?
   status       CompanyStatus @default(ACTIVE)
   stripeAccountId String?
+
+  // ── Phase 1: per-operator host integration ──────────────────────────
+  apiKeyHash      String?   @unique   // sha-256 of the active host API key
+  apiKeyPrefix    String?             // masked label for dashboard display
+  apiKeyRotatedAt DateTime?           // when the active key was last issued
+  allowedOrigins  String[]  @default([]) // embed frame-ancestors + postMessage allowlist
 
   users    User[]
   bookings Booking[]
@@ -378,6 +390,10 @@ model HostBookingIntent {
   claimedByUserId  Int?
   claimedBookingId Int?
   expiresAt        DateTime
+
+  handoffTokenHash String?   @unique   // single-use token handed to the browser
+  handoffExpiresAt DateTime?            // ~3 min TTL
+  handoffUsedAt    DateTime?            // burned on first exchange
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
