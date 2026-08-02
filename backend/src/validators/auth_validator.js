@@ -15,7 +15,7 @@ export const registerSchema = z.object({
     .trim()
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name is too long")
-    .regex(/^[\p{L}\p{M}\s'\-]+$/u, "Name contains invalid characters"),
+    .regex(/^[\p{L}\p{M}\p{N}\s'\-.]+$/u, "Name contains invalid characters"),
   email: z
     .string()
     .trim()

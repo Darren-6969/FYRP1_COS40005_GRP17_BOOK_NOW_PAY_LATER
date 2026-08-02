@@ -99,8 +99,7 @@ function isPublicImageUrl(url) {
   return typeof url === "string" && /^https:\/\/.+/i.test(url);
 }
 
-function baseTemplate({ title, body, buttonText, buttonUrl, operator }) {
-  const logoHtml = isPublicImageUrl(operator?.logoUrl)
+function baseTemplate({ title, body, buttonText, buttonUrl, operator, footerText }) {  const logoHtml = isPublicImageUrl(operator?.logoUrl)
     ? `<img src="${operator.logoUrl}" alt="Company Logo" style="width:72px;height:72px;object-fit:contain;border-radius:18px;background:#ffffff;margin-bottom:12px;" />`
     : `<div style="width:72px;height:72px;border-radius:18px;background:#2563eb;color:white;display:inline-block;text-align:center;line-height:72px;font-weight:900;margin-bottom:12px;">BNPL</div>`;
 
@@ -139,6 +138,12 @@ function baseTemplate({ title, body, buttonText, buttonUrl, operator }) {
           </div>
 
           <div style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+          <div style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+            ${
+              footerText
+                ? `<p style="margin:0 0 8px;color:#475569;font-size:13px;line-height:1.6;">${escapeHtml(footerText)}</p>`
+                : ""
+            }
             <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;">
               This is an automated email from ${companyName}.
             </p>
@@ -303,21 +308,33 @@ export function bookingStatusTemplate({
   status,
   customerUrl,
   bookingRejectedEmailText,
+  bookingCancelledEmailText,
+  bookingCompletedEmailText,
+  emailFooterText,
 }) {
   const isRejected = status === "REJECTED";
+  const isCancelled = status === "CANCELLED";
+  const isCompleted = status === "COMPLETED";
+
+  const customText =
+    (isRejected && bookingRejectedEmailText) ||
+    (isCancelled && bookingCancelledEmailText) ||
+    (isCompleted && bookingCompletedEmailText) ||
+    null;
 
   return baseTemplate({
     title: `Booking ${titleCase(status)}`,
     buttonText: "View Booking",
     buttonUrl: customerUrl,
     operator: booking?.operator,
+    footerText: emailFooterText,
     body: `
       <p style="margin-top:0;">Dear ${safe(booking?.customer?.name, "Customer")
       },</p>
 
       ${
-        isRejected && bookingRejectedEmailText
-          ? `<p>${escapeHtml(bookingRejectedEmailText)}</p>`
+        customText
+          ? `<p>${escapeHtml(customText)}</p>`
           : `
             <p>Your booking has been updated to:</p>
             <p style="margin:14px 0;">${badge(titleCase(status), "blue")}</p>
@@ -329,29 +346,53 @@ export function bookingStatusTemplate({
   });
 }
 
-export function paymentRequestTemplate({ booking, customerUrl }) {
+export function paymentRequestTemplate({
+  booking,
+  customerUrl,
+  paymentRequestEmailText,
+  paymentInstructions,
+  emailFooterText,
+}) {
   return baseTemplate({
     title: "Payment Required",
     buttonText: "Proceed to Payment",
     buttonUrl: customerUrl,
     operator: booking?.operator,
+    footerText: emailFooterText,
     body: `
       <p style="margin-top:0;">Dear ${safe(booking?.customer?.name, "Customer")},</p>
-      <p>Your booking has been accepted. Please complete the payment before the deadline.</p>
+      ${
+        paymentRequestEmailText
+          ? `<p>${escapeHtml(paymentRequestEmailText)}</p>`
+          : `<p>Your booking has been accepted. Please complete the payment before the deadline.</p>`
+      }
       ${bookingTable(booking)}
+      ${
+        paymentInstructions
+          ? `
+            <h3 style="margin:22px 0 10px;color:#0f172a;">How to Pay</h3>
+            <div style="background:#eff6ff;border:1px solid #dbeafe;border-radius:16px;padding:16px;color:#1e3a8a;white-space:pre-line;">${escapeHtml(paymentInstructions)}</div>
+          `
+          : ""
+      }
     `,
   });
 }
 
-export function alternativeSuggestionTemplate({ booking, customerUrl }) {
+export function alternativeSuggestionTemplate({ booking, customerUrl, introText, emailFooterText }) {
   return baseTemplate({
     title: "Alternative Booking Suggested",
     buttonText: "Review Alternative",
     buttonUrl: customerUrl,
     operator: booking?.operator,
+    footerText: emailFooterText,
     body: `
       <p style="margin-top:0;">Dear ${safe(booking?.customer?.name, "Customer")},</p>
-      <p>The original booking option is unavailable. The operator has suggested an alternative option.</p>
+      ${
+        introText
+          ? `<p>${escapeHtml(introText)}</p>`
+          : `<p>The original booking option is unavailable. The operator has suggested an alternative option.</p>`
+      }
 
       <h3 style="margin:22px 0 10px;color:#0f172a;">Original Booking</h3>
       ${bookingTable(booking)}
@@ -495,8 +536,7 @@ export function paymentConfirmedTemplate({ booking, customerUrl }) {
   });
 }
 
-export function invoiceSentTemplate({ invoice, booking, customerUrl }) {
-  const operator = booking?.operator || {};
+export function invoiceSentTemplate({ invoice, booking, customerUrl, paymentInstructions, emailFooterText }) {  const operator = booking?.operator || {};
   const status = getInvoiceStatus(invoice, booking);
 
   const subtotal = Number(invoice?.amount || booking?.totalAmount || 0);
@@ -509,6 +549,7 @@ export function invoiceSentTemplate({ invoice, booking, customerUrl }) {
     title: "Invoice Issued",
     buttonText: "View Invoice",
     buttonUrl: customerUrl,
+    footerText: emailFooterText,
     operator: booking?.operator,
     body: `
       ${documentHeader({
@@ -619,6 +660,15 @@ export function invoiceSentTemplate({ invoice, booking, customerUrl }) {
           }
         </table>
       </div>
+
+      ${
+        paymentInstructions && status !== "PAID"
+          ? `
+            <h3 style="margin:24px 0 10px;color:#0f172a;">How to Pay</h3>
+            <div style="background:#eff6ff;border:1px solid #dbeafe;border-radius:16px;padding:16px;color:#1e3a8a;white-space:pre-line;">${escapeHtml(paymentInstructions)}</div>
+          `
+          : ""
+      }
     `,
   });
 }

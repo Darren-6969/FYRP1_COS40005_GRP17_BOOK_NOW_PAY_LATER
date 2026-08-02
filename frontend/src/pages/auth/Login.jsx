@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { claimHostBookingIntent } from "../../services/host_service";
 import { login } from "../../services/auth_service";
 import "../../assets/styles/global.css";
-import { saveSession, clearSession } from "../../utils/session";
+import { saveSession, unbindTab } from "../../utils/session";
 
 function normalizeRole(role) {
   if (!role) return "";
@@ -156,7 +156,7 @@ export default function Login() {
 
     setLoading(true);
     setError("");
-    clearSession();
+    unbindTab();
 
     try {
       const response = await login({ email, password });

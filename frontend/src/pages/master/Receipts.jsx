@@ -190,7 +190,6 @@ export default function Receipts() {
             <option value="DUITNOW">DuitNow</option>
             <option value="SPAY">SPay</option>
             <option value="BANK_TRANSFER">Bank Transfer</option>
-            <option value="PAYPAL">PayPal</option>
             <option value="CASH">Cash</option>
           </select>
 

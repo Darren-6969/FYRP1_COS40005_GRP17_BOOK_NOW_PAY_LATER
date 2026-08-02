@@ -121,9 +121,9 @@ uploadOperatorLogo(file) {
   });
 },
 
-previewEmailTemplate(template) {
+previewEmailTemplate(template, overrides = {}) {
   return api.get("/operators/settings/email-preview", {
-    params: { template },
+    params: { template, ...overrides },
   });
 },
   // Fetch live Stripe Connect account status (charges enabled, restrictions, etc.)

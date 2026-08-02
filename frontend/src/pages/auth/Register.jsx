@@ -96,8 +96,10 @@ export default function Register() {
         replace: true,
       });
     } catch (err) {
+      const fieldError = err.response?.data?.errors?.[0]?.message;
       setError(
-        err.response?.data?.message ||
+        fieldError ||
+          err.response?.data?.message ||
           err.response?.data?.error ||
           "Register failed. Please try again."
       );

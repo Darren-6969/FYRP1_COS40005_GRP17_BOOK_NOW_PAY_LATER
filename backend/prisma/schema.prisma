@@ -295,6 +295,15 @@ model BNPLConfig {
   bookingRejectedEmailText String?
   autoRejectedEmailText    String?
 
+  // Customer email custom text (operator-configurable)
+  bookingCancelledEmailText     String?
+  bookingCompletedEmailText     String?
+  paymentRequestEmailText       String?
+  alternativeSuggestedEmailText String?
+
+  // Per-company footer shown on customer emails
+  emailFooterText String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
