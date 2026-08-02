@@ -68,13 +68,24 @@ export async function acceptBookingAndRequestPayment({ booking, actorUserId }) {
 
   const customerPaymentUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/checkout/${booking.id}`;
 
+  const emailConfig = await prisma.bNPLConfig.findFirst({
+    where: { operatorId: booking.operatorId },
+    orderBy: { createdAt: "desc" },
+  });
+
   await notifyCustomerByBooking({
     booking: updatedBooking,
     title: "Booking accepted - payment available",
     message: `Your booking ${updatedBooking.bookingCode || updatedBooking.id} has been accepted. Please complete payment before the deadline.`,
     type: "BOOKING_ACCEPTED_PAYMENT_AVAILABLE",
     emailSubject: `Booking Accepted - ${updatedBooking.bookingCode || updatedBooking.id}`,
-    emailHtml: invoiceSentTemplate({ invoice, booking: updatedBooking, customerUrl: customerPaymentUrl }),
+    emailHtml: invoiceSentTemplate({
+      invoice,
+      booking: updatedBooking,
+      customerUrl: customerPaymentUrl,
+      paymentInstructions: emailConfig?.manualPaymentNote,
+      emailFooterText: emailConfig?.emailFooterText,
+    }),
   });
 
   return { booking: updatedBooking, payment, invoice };

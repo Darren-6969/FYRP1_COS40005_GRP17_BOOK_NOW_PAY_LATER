@@ -34,7 +34,7 @@ export default function CustomerPayments() {
         <div>
           <p className="customer-eyebrow">Payment History</p>
           <h1>All customer payment records</h1>
-          <p>Shows Stripe, PayPal and manual DuitNow/SPay payment status.</p>
+          <p>Shows Stripe and manual DuitNow/SPay payment status.</p>
         </div>
       </section>
 

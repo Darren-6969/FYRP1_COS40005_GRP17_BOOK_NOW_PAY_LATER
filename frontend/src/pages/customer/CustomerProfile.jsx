@@ -7,7 +7,7 @@ import {
   updateNotificationPreferences,
   updateProfile,
 } from "../../services/auth_service";
-import { clearSession, getUser as getStoredUser } from "../../utils/session";
+import { clearSession, getUser as getStoredUser, saveUser } from "../../utils/session";
 import "../../assets/styles/customer.css";
 import {
   UserRound,
@@ -18,11 +18,7 @@ import {
 } from "lucide-react";
 
 function updateStoredUser(user) {
-  const storedInLocal = Boolean(localStorage.getItem("user"));
-  const storage = storedInLocal ? localStorage : sessionStorage;
-
-  storage.setItem("user", JSON.stringify(user));
-  storage.setItem("role", user.role);
+  saveUser(user);
 }
 
 function formatDate(value) {

@@ -19,11 +19,6 @@ const SETTINGS_STORAGE_KEY = "bnpl_operator_settings_v1";
 
 const EMAIL_TEMPLATES = [
   {
-    value: "booking_received",
-    label: "Booking Received",
-    subject: "We have received your booking request",
-  },
-  {
     value: "booking_accepted",
     label: "Booking Accepted",
     subject: "Your booking has been accepted",
@@ -34,19 +29,24 @@ const EMAIL_TEMPLATES = [
     subject: "Your booking request was rejected",
   },
   {
+    value: "booking_cancelled",
+    label: "Booking Cancelled",
+    subject: "Your booking has been cancelled",
+  },
+  {
+    value: "booking_completed",
+    label: "Booking Completed",
+    subject: "Your booking is complete",
+  },
+  {
     value: "alternative_suggested",
     label: "Alternative Suggested",
     subject: "An alternative option is available for your booking",
   },
   {
-    value: "payment_confirmed",
-    label: "Payment Confirmed",
-    subject: "Your payment has been confirmed",
-  },
-  {
-  value: "payment_receipt",
-  label: "Booking Confirmed & Official Receipt",
-  subject: "Your booking is confirmed and your receipt is ready",
+    value: "payment_receipt",
+    label: "Booking Confirmed & Official Receipt",
+    subject: "Your booking is confirmed and your receipt is ready",
   },
   {
     value: "auto_rejected",
@@ -73,6 +73,12 @@ const DEFAULT_SETTINGS = {
 
   bookingRejectedEmailText: "",
   autoRejectedEmailText: "",
+  bookingCancelledEmailText: "",
+  bookingCompletedEmailText: "",
+  paymentRequestEmailText: "",
+  alternativeSuggestedEmailText: "",
+  emailFooterText: "",
+  manualPaymentInstructions: "",
 
   mfaEnabled: false,
   apiKeyVisible: false,
@@ -144,6 +150,21 @@ export default function OperatorSettings() {
 
           autoRejectedEmailText:
             config?.autoRejectedEmailText || "",
+
+          bookingCancelledEmailText:
+            config?.bookingCancelledEmailText || "",
+
+          bookingCompletedEmailText:
+            config?.bookingCompletedEmailText || "",
+
+          paymentRequestEmailText:
+            config?.paymentRequestEmailText || "",
+
+          alternativeSuggestedEmailText:
+            config?.alternativeSuggestedEmailText || "",
+
+          emailFooterText:
+            config?.emailFooterText || "",
         }));
     } catch (err) {
       setError(
@@ -250,6 +271,11 @@ const handleSave = async () => {
       invoiceFooterText: form.invoiceFooterText || null,
       bookingRejectedEmailText: form.bookingRejectedEmailText,
       autoRejectedEmailText: form.autoRejectedEmailText,
+      bookingCancelledEmailText: form.bookingCancelledEmailText,
+      bookingCompletedEmailText: form.bookingCompletedEmailText,
+      paymentRequestEmailText: form.paymentRequestEmailText,
+      alternativeSuggestedEmailText: form.alternativeSuggestedEmailText,
+      emailFooterText: form.emailFooterText || null,
     });
 
     setSettings((prev) => ({
@@ -564,9 +590,100 @@ const handleSave = async () => {
                     />
                   </FormField>
                 )}
+
+                {form.selectedEmailTemplate === "booking_accepted" && (
+                  <FormField
+                    label="Custom payment request message"
+                    helper="Shown in the 'Payment Required' email. Manual payment instructions are set in the Payment section above."
+                  >
+                    <textarea
+                      rows={5}
+                      value={form.paymentRequestEmailText}
+                      onChange={(event) =>
+                        updateField("paymentRequestEmailText", event.target.value)
+                      }
+                      placeholder="Example: Your booking is accepted. Please complete payment before the deadline to secure it."
+                    />
+                  </FormField>
+                )}
+
+                {form.selectedEmailTemplate === "booking_cancelled" && (
+                  <FormField
+                    label="Custom booking cancelled message"
+                    helper="Used when you cancel an accepted booking before payment is completed."
+                  >
+                    <textarea
+                      rows={5}
+                      value={form.bookingCancelledEmailText}
+                      onChange={(event) =>
+                        updateField("bookingCancelledEmailText", event.target.value)
+                      }
+                      placeholder="Example: We regret to inform you that your booking has been cancelled. Please contact us for assistance."
+                    />
+                  </FormField>
+                )}
+
+                {form.selectedEmailTemplate === "booking_completed" && (
+                  <FormField
+                    label="Custom booking completed message"
+                    helper="Used when a booking is marked as completed."
+                  >
+                    <textarea
+                      rows={5}
+                      value={form.bookingCompletedEmailText}
+                      onChange={(event) =>
+                        updateField("bookingCompletedEmailText", event.target.value)
+                      }
+                      placeholder="Example: Thank you for choosing us! Your booking is now complete. We hope to serve you again."
+                    />
+                  </FormField>
+                )}
+
+                {form.selectedEmailTemplate === "alternative_suggested" && (
+                  <FormField
+                    label="Custom alternative suggestion intro"
+                    helper="Replaces the default intro line. The specific alternative details still come from each booking."
+                  >
+                    <textarea
+                      rows={5}
+                      value={form.alternativeSuggestedEmailText}
+                      onChange={(event) =>
+                        updateField("alternativeSuggestedEmailText", event.target.value)
+                      }
+                      placeholder="Example: The option you selected is unavailable, but we'd like to offer you the following alternative."
+                    />
+                  </FormField>
+                )}
+
+                <FormField
+                  label="Email footer (all customer emails)"
+                  helper="Appears at the bottom of every email your customers receive. Applies only to your company."
+                >
+                  <textarea
+                    rows={3}
+                    value={form.emailFooterText}
+                    onChange={(event) =>
+                      updateField("emailFooterText", event.target.value)
+                    }
+                    placeholder="Example: Golden Car Rental · +60 12-345 6789 · support@goldenrental.com"
+                  />
+                </FormField>
               </div>
 
-              <BackendEmailPreview template={form.selectedEmailTemplate} />
+              <BackendEmailPreview
+                template={form.selectedEmailTemplate}
+                overrides={{
+                  paymentRequestEmailText: form.paymentRequestEmailText,
+                  bookingRejectedEmailText: form.bookingRejectedEmailText,
+                  bookingCancelledEmailText: form.bookingCancelledEmailText,
+                  bookingCompletedEmailText: form.bookingCompletedEmailText,
+                  alternativeSuggestedEmailText: form.alternativeSuggestedEmailText,
+                  autoRejectedEmailText: form.autoRejectedEmailText,
+                  emailFooterText: form.emailFooterText,
+                  manualPaymentNote: form.manualPaymentInstructions,
+                  companyLogo: form.companyLogo,
+                }}
+              />
             </div>
           </SettingsSection>
 
@@ -717,18 +834,21 @@ function CheckboxField({ label, checked, onChange }) {
   );
 }
 
-function BackendEmailPreview({ template }) {
+function BackendEmailPreview({ template, overrides = {} }) {
   const [preview, setPreview] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [previewError, setPreviewError] = useState("");
 
+  // Re-run whenever the template OR any customization field changes.
+  const overridesKey = JSON.stringify({ template, ...overrides });
+
   useEffect(() => {
-    const loadPreview = async () => {
+    const handle = setTimeout(async () => {
       setLoadingPreview(true);
       setPreviewError("");
 
       try {
-        const res = await operatorService.previewEmailTemplate(template);
+        const res = await operatorService.previewEmailTemplate(template, overrides);
         setPreview(res.data);
       } catch (err) {
         setPreviewError(
@@ -737,10 +857,11 @@ function BackendEmailPreview({ template }) {
       } finally {
         setLoadingPreview(false);
       }
-    };
+    }, 400);
 
-    loadPreview();
-  }, [template]);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overridesKey]);
 
   return (
     <div className="operator-email-preview">

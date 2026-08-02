@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye } from "lucide-react";
 import {
@@ -12,6 +12,8 @@ import {
   operatorStatusClass,
   operatorStatusLabel,
 } from "../../services/operator_service";
+
+const POLL_INTERVAL_MS = 8000;
 
 export default function OperatorDashboard() {
   const [summary, setSummary] = useState(null);
@@ -65,6 +67,41 @@ export default function OperatorDashboard() {
     loadDashboard();
   }, []);
 
+  // Bug #1: poll only the dashboard payload. The SARIMA report call inside
+  // loadDashboard() is expensive, so it stays on the initial load only.
+  const refreshDashboardSilently = async () => {
+    try {
+      const dashboardRes = await operatorService.getDashboard();
+
+      setSummary(dashboardRes.data.summary || {});
+      setRecentBookings(dashboardRes.data.recentBookings || []);
+      setNotifications(dashboardRes.data.notifications || []);
+    } catch {
+      // Ignore transient poll failures; the next tick retries.
+    }
+  };
+
+  const refreshRef = useRef(refreshDashboardSilently);
+  useEffect(() => {
+    refreshRef.current = refreshDashboardSilently;
+  });
+
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      refreshRef.current();
+    };
+
+    const intervalId = window.setInterval(tick, POLL_INTERVAL_MS);
+    window.addEventListener("focus", tick);
+    document.addEventListener("visibilitychange", tick);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", tick);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, []);
 
 
   // ========== PREPARE FORECAST CHART DATA ==========

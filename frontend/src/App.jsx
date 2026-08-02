@@ -54,12 +54,13 @@ import OperatorSettings from "./pages/operator/OperatorSettings";
 import OperatorHelp from "./pages/operator/OperatorHelp";
 import OperatorAccessRoute from "./components/OperatorAccessRoute";
 
+import RootRedirect from "./components/RootRedirect";
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-
+        <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         {/* Protected Routes */}
@@ -131,7 +132,7 @@ export default function App() {
             </Route>
           </Route>
 
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<RootRedirect />} />
       </Routes>
     </BrowserRouter>
   );

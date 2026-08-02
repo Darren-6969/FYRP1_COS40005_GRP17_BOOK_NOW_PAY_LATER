@@ -15,14 +15,10 @@ import {
   CircleHelp,
   LogOut
 } from "lucide-react";
-import { clearSession, getUser as getStoredUser } from "../../utils/session";
+import { clearSession, getUser as getStoredUser, saveUser } from "../../utils/session";
 
 function updateStoredUser(user) {
-  const storedInLocal = Boolean(localStorage.getItem("user"));
-  const storage = storedInLocal ? localStorage : sessionStorage;
-
-  storage.setItem("user", JSON.stringify(user));
-  storage.setItem("role", user.role);
+  saveUser(user);
 }
 
 function formatDate(value) {

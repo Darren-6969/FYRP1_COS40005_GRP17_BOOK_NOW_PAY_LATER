@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   operatorService,
@@ -20,6 +20,8 @@ const tabs = [
   { label: "Overdue", value: "OVERDUE" },
 ];
 
+const POLL_INTERVAL_MS = 8000;
+
 export default function OperatorBookingRequests() {
   const [bookings, setBookings] = useState([]);
   const [activeStatus, setActiveStatus] = useState("ALL");
@@ -31,10 +33,12 @@ export default function OperatorBookingRequests() {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 
-  const loadBookings = async () => {
+  const loadBookings = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
-      setError("");
+      if (!silent) {
+        setLoading(true);
+        setError("");
+      }
 
       const res = await operatorService.getBookings({
         status: activeStatus,
@@ -42,17 +46,47 @@ export default function OperatorBookingRequests() {
       });
 
       setBookings(res.data.bookings || []);
-      setCurrentPage(1);
+
+      // Only jump back to page 1 on a user-triggered load, never on a poll.
+      if (!silent) setCurrentPage(1);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to load bookings");
+      // Stay quiet on poll failures so a transient blip does not flash an error.
+      if (!silent) {
+        setError(err.response?.data?.message || "Failed to load bookings");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
+
+  // Let the interval always call the newest closure (current tab + search text).
+  const loadBookingsRef = useRef(loadBookings);
+  useEffect(() => {
+    loadBookingsRef.current = loadBookings;
+  });
 
   useEffect(() => {
     loadBookings();
   }, [activeStatus]);
+
+  // Bug #1: keeps the booking list near-real-time without WebSockets.
+  // Mirrors the notification-bell polling in useNotifications.js.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      loadBookingsRef.current({ silent: true });
+    };
+
+    const intervalId = window.setInterval(tick, POLL_INTERVAL_MS);
+    window.addEventListener("focus", tick);
+    document.addEventListener("visibilitychange", tick);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", tick);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, []);
 
   const handleAction = async (bookingId, action) => {
     try {
@@ -152,7 +186,7 @@ export default function OperatorBookingRequests() {
       {error && (
         <div className="operator-alert danger">
           {error}
-          <button type="button" onClick={loadBookings}>Retry</button>
+          <button type="button" onClick={() => loadBookings()}>Retry</button>
         </div>
       )}
 

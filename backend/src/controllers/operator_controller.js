@@ -208,6 +208,16 @@ async function createCustomerNotification({
   });
 }
 
+// Loads the operator's latest BNPL config for customer-email customization.
+// Returns {} when none exists so callers can safely read optional fields.
+async function getOperatorEmailConfig(operatorId) {
+  const config = await prisma.bNPLConfig.findFirst({
+    where: { operatorId },
+    orderBy: { createdAt: "desc" },
+  });
+  return config || {};
+}
+
 async function generateOperatorCode() {
   const latest = await prisma.operator.findFirst({
     orderBy: {
@@ -869,13 +879,7 @@ async function updateBookingStatus(req, res, next, status, action) {
 
     const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;
 
-    const config =
-      status === "REJECTED"
-        ? await prisma.bNPLConfig.findFirst({
-            where: { operatorId: updatedBooking.operatorId },
-            orderBy: { createdAt: "desc" },
-          })
-        : null;
+    const config = await getOperatorEmailConfig(updatedBooking.operatorId);
 
     await createCustomerNotification({
       booking: updatedBooking,
@@ -894,6 +898,7 @@ async function updateBookingStatus(req, res, next, status, action) {
         customerUrl,
         bookingRejectedEmailText:
           status === "REJECTED" ? config?.bookingRejectedEmailText : null,
+        emailFooterText: config?.emailFooterText,
       }),
     });
 
@@ -974,6 +979,8 @@ export async function cancelOperatorBooking(req, res, next) {
       process.env.FRONTEND_URL || "http://localhost:5173"
     }/customer/bookings/${booking.id}`;
 
+    const config = await getOperatorEmailConfig(updatedBooking.operatorId);
+
     await createCustomerNotification({
       booking: updatedBooking,
       title: "Booking cancelled by merchant",
@@ -988,6 +995,8 @@ export async function cancelOperatorBooking(req, res, next) {
         booking: updatedBooking,
         status: "CANCELLED",
         customerUrl,
+        bookingCancelledEmailText: config?.bookingCancelledEmailText,
+        emailFooterText: config?.emailFooterText,
       }),
     });
 
@@ -1040,6 +1049,8 @@ export async function confirmBooking(req, res, next) {
       process.env.FRONTEND_URL || "http://localhost:5173"
     }/customer/bookings/${booking.id}`;
 
+    const config = await getOperatorEmailConfig(updatedBooking.operatorId);
+
     await createCustomerNotification({
       booking: updatedBooking,
       title: "Booking completed",
@@ -1052,6 +1063,8 @@ export async function confirmBooking(req, res, next) {
         booking: updatedBooking,
         status: "COMPLETED",
         customerUrl,
+        bookingCompletedEmailText: config?.bookingCompletedEmailText,
+        emailFooterText: config?.emailFooterText,
       }),
     });
 
@@ -1161,6 +1174,8 @@ export async function suggestAlternative(req, res, next) {
 
     const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;
 
+    const config = await getOperatorEmailConfig(updatedBooking.operatorId);
+
     await createCustomerNotification({
       booking: updatedBooking,
       title: "Alternative booking suggested",
@@ -1170,6 +1185,8 @@ export async function suggestAlternative(req, res, next) {
       emailHtml: alternativeSuggestionTemplate({
         booking: updatedBooking,
         customerUrl,
+        introText: config?.alternativeSuggestedEmailText,
+        emailFooterText: config?.emailFooterText,
       }),
     });
 
@@ -1256,6 +1273,8 @@ export async function sendPaymentRequest(req, res, next) {
       process.env.FRONTEND_URL || "http://localhost:5173"
     }/customer/checkout/${booking.id}`;
 
+    const config = await getOperatorEmailConfig(updatedBooking.operatorId);
+
     await notifyCustomerByBooking({
       booking: updatedBooking,
       title: "Payment deadline updated",
@@ -1268,8 +1287,10 @@ export async function sendPaymentRequest(req, res, next) {
       }`,
       emailHtml: paymentRequestTemplate({
         booking: updatedBooking,
-        payment,
         customerUrl: customerPaymentUrl,
+        paymentRequestEmailText: config?.paymentRequestEmailText,
+        paymentInstructions: config?.manualPaymentNote,
+        emailFooterText: config?.emailFooterText,
       }),
     });
 
@@ -2371,7 +2392,6 @@ function getOperatorIdFromRequest(req) {
 function getDefaultAcceptedPaymentMethods() {
   return {
     stripe: true,
-    paypal: false,
     duitnow: true,
     spay: false,
     bankTransfer: true,
@@ -2628,6 +2648,11 @@ export async function updateOperatorSettings(req, res, next) {
       invoiceFooterText,
       bookingRejectedEmailText,
       autoRejectedEmailText,
+      bookingCancelledEmailText,
+      bookingCompletedEmailText,
+      paymentRequestEmailText,
+      alternativeSuggestedEmailText,
+      emailFooterText,
     } = req.body || {};
 
     const parsedBookingDeadline = Number(bookingResponseDeadlineMinutes);
@@ -2696,6 +2721,21 @@ export async function updateOperatorSettings(req, res, next) {
     if (autoRejectedEmailText !== undefined) {
       configData.autoRejectedEmailText = autoRejectedEmailText || null;
     }
+    if (bookingCancelledEmailText !== undefined) {
+      configData.bookingCancelledEmailText = bookingCancelledEmailText || null;
+    }
+    if (bookingCompletedEmailText !== undefined) {
+      configData.bookingCompletedEmailText = bookingCompletedEmailText || null;
+    }
+    if (paymentRequestEmailText !== undefined) {
+      configData.paymentRequestEmailText = paymentRequestEmailText || null;
+    }
+    if (alternativeSuggestedEmailText !== undefined) {
+      configData.alternativeSuggestedEmailText = alternativeSuggestedEmailText || null;
+    }
+    if (emailFooterText !== undefined) {
+      configData.emailFooterText = emailFooterText || null;
+    }
 
     const updatedConfig = await prisma.bNPLConfig.update({
       where: { id: config.id },
@@ -2744,6 +2784,26 @@ export async function updateOperatorSettings(req, res, next) {
   } catch (err) {
     next(err);
   }
+}
+
+// Preview overrides let the settings page show unsaved edits without saving first.
+// Only known email-customization keys are accepted; everything else is ignored.
+function pickEmailPreviewOverrides(source = {}) {
+  const keys = [
+    "paymentRequestEmailText",
+    "bookingRejectedEmailText",
+    "bookingCancelledEmailText",
+    "bookingCompletedEmailText",
+    "alternativeSuggestedEmailText",
+    "autoRejectedEmailText",
+    "emailFooterText",
+    "manualPaymentNote",
+  ];
+  const out = {};
+  for (const key of keys) {
+    if (source[key] !== undefined) out[key] = source[key];
+  }
+  return out;
 }
 
 function buildSampleBooking({ operator, config }) {
@@ -2815,8 +2875,15 @@ export async function previewOperatorEmailTemplate(req, res, next) {
       return res.status(404).json({ message: "Operator not found" });
     }
 
-    const config = await getOrCreateOperatorConfig(operatorId);
-    const booking = buildSampleBooking({ operator, config });
+    const storedConfig = await getOrCreateOperatorConfig(operatorId);
+    const config = { ...storedConfig, ...pickEmailPreviewOverrides(req.query) };
+
+    // Allow previewing an unsaved logo too.
+    const previewOperator = req.query.companyLogo
+      ? { ...operator, logoUrl: req.query.companyLogo }
+      : operator;
+
+    const booking = buildSampleBooking({ operator: previewOperator, config });
 
     const customerUrl = `${
       process.env.FRONTEND_URL || "http://localhost:5173"
@@ -2850,43 +2917,55 @@ export async function previewOperatorEmailTemplate(req, res, next) {
     let subject;
 
     switch (template) {
-      case "booking_received":
-        subject = `Booking Received - ${booking.bookingCode}`;
-        html = bookingSubmittedTemplate({
-          booking,
-          operatorUrl,
-        });
-        break;
-
       case "booking_accepted":
       case "payment_request":
         subject = `Booking Accepted - ${booking.bookingCode}`;
         html = paymentRequestTemplate({
           booking,
           customerUrl,
+          paymentRequestEmailText: config?.paymentRequestEmailText,
+          paymentInstructions: config?.manualPaymentNote,
+          emailFooterText: config?.emailFooterText,
         });
         break;
 
       case "booking_rejected":
         subject = `Booking Rejected - ${booking.bookingCode}`;
         html = bookingStatusTemplate({
-          booking: {
-            ...booking,
-            status: "REJECTED",
-          },
+          booking: { ...booking, status: "REJECTED" },
           status: "REJECTED",
           customerUrl,
           bookingRejectedEmailText: config?.bookingRejectedEmailText,
+          emailFooterText: config?.emailFooterText,
+        });
+        break;
+
+      case "booking_cancelled":
+        subject = `Booking Cancelled - ${booking.bookingCode}`;
+        html = bookingStatusTemplate({
+          booking: { ...booking, status: "CANCELLED" },
+          status: "CANCELLED",
+          customerUrl,
+          bookingCancelledEmailText: config?.bookingCancelledEmailText,
+          emailFooterText: config?.emailFooterText,
+        });
+        break;
+
+      case "booking_completed":
+        subject = `Booking Completed - ${booking.bookingCode}`;
+        html = bookingStatusTemplate({
+          booking: { ...booking, status: "COMPLETED" },
+          status: "COMPLETED",
+          customerUrl,
+          bookingCompletedEmailText: config?.bookingCompletedEmailText,
+          emailFooterText: config?.emailFooterText,
         });
         break;
 
       case "auto_rejected":
         subject = `Booking Auto-Rejected - ${booking.bookingCode}`;
         html = autoRejectedBookingTemplate({
-          booking: {
-            ...booking,
-            status: "REJECTED",
-          },
+          booking: { ...booking, status: "REJECTED" },
           customerUrl,
           autoRejectedEmailText: config?.autoRejectedEmailText,
         });
@@ -2897,30 +2976,15 @@ export async function previewOperatorEmailTemplate(req, res, next) {
         html = alternativeSuggestionTemplate({
           booking,
           customerUrl,
-        });
-        break;
-
-      case "payment_confirmed":
-        subject = `Payment Confirmed - ${booking.bookingCode}`;
-        html = merchantPaymentConfirmedTemplate({
-          booking: {
-            ...booking,
-            payment,
-            status: "PAID",
-          },
-          payment,
-          operatorUrl,
+          introText: config?.alternativeSuggestedEmailText,
+          emailFooterText: config?.emailFooterText,
         });
         break;
 
       case "payment_receipt":
         subject = `Booking Confirmed & Official Receipt - ${booking.bookingCode}`;
         html = paymentReceiptTemplate({
-          booking: {
-            ...booking,
-            payment,
-            status: "PAID",
-          },
+          booking: { ...booking, payment, status: "PAID" },
           payment,
           customerUrl,
         });
