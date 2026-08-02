@@ -14,6 +14,7 @@ import {
   Upload,
 } from "lucide-react";
 import { operatorService } from "../../services/operator_service";
+import IntegrationSettings from "../../components/operator/IntegrationSettings";
 
 const SETTINGS_STORAGE_KEY = "bnpl_operator_settings_v1";
 
@@ -81,7 +82,6 @@ const DEFAULT_SETTINGS = {
   manualPaymentInstructions: "",
 
   mfaEnabled: false,
-  apiKeyVisible: false,
 };
 
 export default function OperatorSettings() {
@@ -714,40 +714,12 @@ const handleSave = async () => {
                 value="Latest login shown here"
                 description="Login audit history can be displayed when backend records are available."
               />
-
-              <div className="operator-security-card">
-                <div className="operator-security-card-head">
-                  <KeyRound size={18} />
-                  <div>
-                    <h3>API key visibility / request</h3>
-                    <p>
-                      Allow operator to view or request an API key for future
-                      host integration.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="operator-api-key-row">
-                  <code>
-                    {form.apiKeyVisible
-                      ? "bnpl_test_operator_123456789"
-                      : "••••••••••••••••••••••••"}
-                  </code>
-
-                  <button
-                    type="button"
-                    className="operator-secondary-btn"
-                    onClick={() =>
-                      updateField("apiKeyVisible", !form.apiKeyVisible)
-                    }
-                  >
-                    <Eye size={15} />
-                    {form.apiKeyVisible ? "Hide" : "Show"}
-                  </button>
-                </div>
-              </div>
             </div>
           </SettingsSection>
+
+          <div id="integration-settings">
+            <IntegrationSettings />
+          </div>
 
           {/*
             SANDBOX BYPASS — Stripe Express Onboarding Card
@@ -769,6 +741,7 @@ const handleSave = async () => {
           <a href="#notification-settings">Notification Settings</a>
           <a href="#email-template-settings">Email Templates</a>
           <a href="#security-settings">Security</a>
+          <a href="#integration-settings">Integration / API Keys</a>
         </aside>
       </div>
     </div>

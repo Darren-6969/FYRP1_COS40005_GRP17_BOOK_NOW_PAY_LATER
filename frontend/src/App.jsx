@@ -54,6 +54,7 @@ import OperatorSettings from "./pages/operator/OperatorSettings";
 import OperatorHelp from "./pages/operator/OperatorHelp";
 import OperatorAccessRoute from "./components/OperatorAccessRoute";
 
+import EmbedEntry from "./pages/embed/EmbedEntry";
 import RootRedirect from "./components/RootRedirect";
 
 export default function App() {
@@ -63,6 +64,7 @@ export default function App() {
         <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/embed" element={<EmbedEntry />} />
         {/* Protected Routes */}
           {/* Master Routes */}
           <Route element={<ProtectedRoute allowedRoles={["MASTER_SELLER"]} />}>

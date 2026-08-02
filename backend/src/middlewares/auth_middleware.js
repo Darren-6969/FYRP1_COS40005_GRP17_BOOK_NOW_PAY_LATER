@@ -38,3 +38,15 @@ export async function verifyToken(req, res, next) {
     return res.status(401).json({ message: "Invalid or expired token" });
   }
 }
+
+// Blocks host-provisioned customers who haven't completed OTP step-up from
+// credit-committing actions. Verified customers (customerStatus ACTIVE) pass.
+export function requireVerifiedCustomer(req, res, next) {
+  if (req.user?.role === "CUSTOMER" && req.user.customerStatus === "RESTRICTED") {
+    return res.status(403).json({
+      message: "Please verify your identity with the emailed code to continue.",
+      code: "OTP_REQUIRED",
+    });
+  }
+  next();
+}

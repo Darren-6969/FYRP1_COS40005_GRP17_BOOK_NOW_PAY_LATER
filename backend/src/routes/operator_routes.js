@@ -36,6 +36,11 @@ import {
   getOperatorSettings,
   updateOperatorSettings,
   previewOperatorEmailTemplate,
+
+  getOperatorIntegration,
+  rotateOperatorApiKey,
+  revokeOperatorApiKey,
+  updateOperatorAllowedOrigins,
 } from "../controllers/operator_controller.js";
 
 import { verifyToken } from "../middlewares/auth_middleware.js";
@@ -222,5 +227,9 @@ router.get(
   ...ownerOnlyAccess,
   previewOperatorEmailTemplate
 );
+router.get("/integration", ...ownerOnlyAccess, getOperatorIntegration);
+router.post("/integration/api-key/rotate", ...ownerOnlyAccess, rotateOperatorApiKey);
+router.delete("/integration/api-key", ...ownerOnlyAccess, revokeOperatorApiKey);
+router.put("/integration/origins", ...ownerOnlyAccess, updateOperatorAllowedOrigins);
 
 export default router;

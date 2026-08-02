@@ -23,6 +23,7 @@ import { errorHandler }  from "./middlewares/errorHandler.js";
 import { requestLogger } from "./middlewares/logger_middleware.js";
 import { generalLimiter } from "./middlewares/rate_limit_middleware.js";
 
+import { getOperatorOrigins } from "./config/originCache.js";
 dotenv.config();
 
 const app = express();
@@ -91,7 +92,7 @@ const allowedOrigins = [
   "https://newfrontbnplplatform.vercel.app",
 ].filter(Boolean);
 
-function isAllowedOrigin(origin) {
+async function isAllowedOrigin(origin) {
   if (!origin) return true;
   if (allowedOrigins.includes(origin)) return true;
 
@@ -103,13 +104,22 @@ function isAllowedOrigin(origin) {
     return true;
   }
 
+  // DB-driven: any active operator's registered embed origin (cached).
+  const operatorOrigins = await getOperatorOrigins();
+  if (operatorOrigins.has(origin)) return true;
+
   return false;
 }
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (isAllowedOrigin(origin)) return callback(null, true);
-    callback(new Error(`CORS: origin ${origin} not allowed`));
+    isAllowedOrigin(origin)
+      .then((ok) =>
+        ok
+          ? callback(null, true)
+          : callback(new Error(`CORS: origin ${origin} not allowed`))
+      )
+      .catch((err) => callback(err));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
