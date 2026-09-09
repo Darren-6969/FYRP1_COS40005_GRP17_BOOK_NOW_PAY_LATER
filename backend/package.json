@@ -10,7 +10,12 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "node prisma/seed.js",
-    "cron:test-report": "node scripts/generate-cron-report.mjs"
+    "lint": "eslint .",
+    "test": "node --test \"tests/unit/**/*.test.js\"",
+    "test:integration": "node --test \"tests/integration/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20.11"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
@@ -34,6 +39,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.2.1",
+    "globals": "^17.5.0",
     "jest": "^29.7.0",
     "nodemon": "^3.1.0",
     "puppeteer": "^25.0.4",

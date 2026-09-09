@@ -1,6 +1,5 @@
 import prisma from "../config/db.js";
 import { parseId } from "../utils/parseId.js";
-import { generateUserCode } from "../services/userCode.js";
 
 function canManageOperator(req, operatorId) {
   if (req.user.role === "MASTER_SELLER") return true;

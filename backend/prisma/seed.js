@@ -62,7 +62,7 @@ async function main() {
     },
   });
 
-  const staff = await prisma.user.create({
+  await prisma.user.create({
   data: {
     userCode: userCode("OPR", 2),
     name: "GoCar Staff",

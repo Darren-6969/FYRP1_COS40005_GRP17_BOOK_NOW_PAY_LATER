@@ -1,5 +1,4 @@
 import prisma from "../config/db.js";
-import { generateInvoiceForBooking } from "../services/invoice_service.js";
 import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
 import {
   notifyCustomerByBooking,
@@ -7,11 +6,7 @@ import {
 } from "../services/notification_email_service.js";
 import {
   bookingSubmittedTemplate,
-  bookingStatusTemplate,
   customerAlternativeResponseTemplate,
-  invoiceSentTemplate,
-  merchantPaymentConfirmedTemplate,
-  paymentReceiptTemplate,
   receiptUploadedTemplate,
 } from "../services/email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
@@ -82,17 +77,6 @@ function mapBooking(booking) {
         }
       : null,
   };
-}
-
-async function createCustomerNotification(tx, userId, title, message, type = "INFO") {
-  return tx.notification.create({
-    data: {
-      userId,
-      title,
-      message,
-      type,
-    },
-  });
 }
 
 async function assertCustomerBooking(bookingId, customerId) {

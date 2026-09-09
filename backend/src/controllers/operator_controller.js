@@ -14,7 +14,6 @@ import {
   alternativeSuggestionTemplate,
   autoRejectedBookingTemplate,
   bookingStatusTemplate,
-  bookingSubmittedTemplate,
   invoiceSentTemplate,
   merchantPaymentConfirmedTemplate,
   paymentReceiptTemplate,
@@ -3084,10 +3083,6 @@ export async function previewOperatorEmailTemplate(req, res, next) {
     const customerUrl = `${
       process.env.FRONTEND_URL || "http://localhost:5173"
     }/customer/bookings/${booking.id}`;
-
-    const operatorUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:5173"
-    }/operator/bookings/${booking.id}`;
 
     const invoice = {
       id: 1,

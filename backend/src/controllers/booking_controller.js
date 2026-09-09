@@ -1,12 +1,6 @@
 import prisma from "../config/db.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 
-function addDays(date, days) {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
 // Shared include spec for full booking relations
 const bookingInclude = {
   customer: { select: { id: true, name: true, email: true } },
