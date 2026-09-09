@@ -444,7 +444,7 @@ export async function createHostBookingIntent(req, res, next) {
       });
     }
 
-    const amount = validateAmount(totalAmount);
+    validateAmount(totalAmount);
     
     // When a per-operator key was used, that key decides the operator and the
     // body operatorCode must match it (prevents booking under another operator).
