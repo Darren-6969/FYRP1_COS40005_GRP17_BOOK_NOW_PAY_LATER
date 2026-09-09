@@ -3,5 +3,8 @@ node_modules
 .env
 
 /src/generated/prisma
-.claude
-scripts
+/scripts
+
+dist/
+CLAUDE.local.md
+.claude/settings.local.json
