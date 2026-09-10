@@ -23,6 +23,63 @@
   backdrop-filter: blur(26px);
 }
 
+.operator-register-shell {
+  width: min(720px, 100%);
+  min-height: auto;
+  display: block;
+}
+
+.operator-register-shell .bnpl-auth-panel {
+  min-height: auto;
+  padding: 48px 56px;
+}
+
+.operator-register-shell .bnpl-auth-form {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.operator-register-shell .bnpl-auth-form h1,
+.operator-register-shell .bnpl-auth-subtitle {
+  text-align: center;
+}
+
+.operator-register-shell .bnpl-auth-subtitle {
+  max-width: 360px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.operator-register-shell .bnpl-auth-form textarea {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-radius: 14px;
+  padding: 13px 15px;
+  margin-bottom: 14px;
+  background: rgba(255, 255, 255, 0.84);
+  color: #0f172a;
+  font-size: 14px;
+  outline: none;
+}
+
+.operator-register-shell .bnpl-auth-form label {
+  display: block;
+  margin-bottom: 14px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.operator-register-shell .bnpl-auth-form label input[type="file"] {
+  height: auto;
+  margin-top: 6px;
+  margin-bottom: 0;
+  padding: 10px;
+  background: rgba(248, 250, 252, 0.9);
+}
+
 .bnpl-auth-panel {
   min-height: 560px;
   display: flex;
@@ -275,5 +332,9 @@
   .bnpl-auth-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .operator-register-shell .bnpl-auth-panel {
+    padding: 34px 22px;
   }
 }

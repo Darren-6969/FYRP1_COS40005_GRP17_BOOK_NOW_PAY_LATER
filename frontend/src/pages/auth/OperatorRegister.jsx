@@ -49,8 +49,8 @@ export default function OperatorRegister() {
 
   if (submitted) {
     return (
-      <div className="bnpl-auth-page">
-        <section className="bnpl-auth-shell">
+      <div className="bnpl-auth-page operator-register-page">
+        <section className="bnpl-auth-shell operator-register-shell">
           <div className="bnpl-auth-panel">
             <div className="bnpl-auth-form">
               <h1>Application<br />submitted</h1>
@@ -64,8 +64,8 @@ export default function OperatorRegister() {
   }
 
   return (
-    <div className="bnpl-auth-page">
-      <section className="bnpl-auth-shell">
+    <div className="bnpl-auth-page operator-register-page">
+      <section className="bnpl-auth-shell operator-register-shell">
         <div className="bnpl-auth-panel">
           <form onSubmit={handleSubmit} className="bnpl-auth-form">
             <h1>Apply to<br />sell</h1>

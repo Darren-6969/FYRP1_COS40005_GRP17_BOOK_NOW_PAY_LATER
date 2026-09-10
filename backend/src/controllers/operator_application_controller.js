@@ -140,7 +140,25 @@ export async function getOperatorApplications(req, res, next) {
       orderBy: { submittedAt: "desc" },
       include: {
         operator: { select: { id: true, operatorCode: true, companyName: true, email: true, phone: true, status: true } },
-        documents: true,
+        documents: {
+          select: {
+            id: true,
+            operatorId: true,
+            applicationId: true,
+            documentType: true,
+            originalName: true,
+            storageKey: true,
+            mimeType: true,
+            sizeBytes: true,
+            status: true,
+            expiresAt: true,
+            rejectionReason: true,
+            reviewedAt: true,
+            reviewedById: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
         reviews: { orderBy: { createdAt: "desc" }, include: { reviewer: { select: { id: true, name: true, email: true } } } },
       },
     });
