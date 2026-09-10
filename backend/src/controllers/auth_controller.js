@@ -185,6 +185,17 @@ export async function login(req, res, next) {
       });
     }
 
+    if (user.role === "NORMAL_SELLER" && user.operator?.status !== "ACTIVE") {
+      return res.status(403).json({
+        message: user.operator?.status === "PENDING"
+          ? "Your operator application is awaiting administrator approval."
+          : "Your operator account is not active. Please contact the administrator.",
+        code: user.operator?.status === "PENDING"
+          ? "OPERATOR_APPLICATION_PENDING"
+          : "OPERATOR_ACCOUNT_INACTIVE",
+      });
+    }
+
     const { accessToken, refreshToken } = await issueTokenPair(
       user.id,
       user.role,
@@ -239,6 +250,14 @@ export async function refreshAccessToken(req, res, next) {
       return res.status(403).json({
         message:
           "Your operator account has been suspended. Please contact the administrator.",
+      });
+    }
+
+    if (stored.user.role === "NORMAL_SELLER" && stored.user.operator?.status !== "ACTIVE") {
+      await prisma.refreshToken.deleteMany({ where: { userId: stored.userId } });
+      return res.status(403).json({
+        message: "Your operator account is not active. Please contact the administrator.",
+        code: "OPERATOR_ACCOUNT_INACTIVE",
       });
     }
 

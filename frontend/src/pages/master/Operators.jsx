@@ -6,6 +6,8 @@ import {
   deleteOperator,
   deleteOperatorUser,
   getOperators,
+  getOperatorApplications,
+  reviewOperatorApplication,
   updateOperatorStatus,
   updateOperatorUserStatus,
   uploadOperatorLogo,
@@ -192,6 +194,7 @@ function readLogoFile(file) {
 
 export default function Operators() {
   const [operators, setOperators] = useState([]);
+  const [applications, setApplications] = useState([]);
 
   const [companyForm, setCompanyForm] = useState(initialCompanyForm);
   const [staffForm, setStaffForm] = useState(initialStaffForm);
@@ -223,9 +226,36 @@ export default function Operators() {
     }
   };
 
+  const loadApplications = async () => {
+    try {
+      const res = await getOperatorApplications();
+      setApplications(res.data || []);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to load operator applications");
+    }
+  };
+
   useEffect(() => {
     load();
+    loadApplications();
   }, []);
+
+  const handleApplicationReview = async (application, decision) => {
+    const reason = window.prompt(
+      `${decision === "APPROVED" ? "Approval" : decision === "REJECTED" ? "Rejection" : "Information request"} reason (required):`
+    );
+    if (!reason || reason.trim().length < 5) return;
+
+    try {
+      setError("");
+      setMessage("");
+      await reviewOperatorApplication(application.id, decision, reason.trim());
+      setMessage(`Application ${decision.toLowerCase()} successfully.`);
+      await Promise.all([load(), loadApplications()]);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to review operator application");
+    }
+  };
 
   const summary = useMemo(() => {
     const ownerCount = operators.reduce(
@@ -447,11 +477,13 @@ export default function Operators() {
     const nextStatus = op.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
 
     if (!window.confirm(`Change ${op.companyName} to ${nextStatus}?`)) return;
+    const reason = window.prompt("Status change reason (required):");
+    if (!reason || reason.trim().length < 5) return;
 
     try {
       setError("");
       setMessage("");
-      await updateOperatorStatus(op.id, nextStatus);
+      await updateOperatorStatus(op.id, nextStatus, reason.trim());
       setMessage(`${op.companyName} updated to ${nextStatus}.`);
       await load();
     } catch (err) {
@@ -535,6 +567,36 @@ const toggleUserStatus = async (op, user) => {
       <section className="card">
         <div className="section-header">
           <div>
+            <h3>Operator Applications</h3>
+            <p>Review submitted business information and documents before activating an operator.</p>
+          </div>
+        </div>
+        {applications.length === 0 && <p>No operator applications are waiting for review.</p>}
+        {applications.map((application) => (
+          <div className="list-row" key={application.id}>
+            <div>
+              <strong>{application.operator?.companyName}</strong>
+              <p>{application.operator?.email} · {application.businessRegistrationNumber}</p>
+              <p>Status: {application.status} · Documents: {(application.documents || []).length}</p>
+              {(application.documents || []).map((document) => (
+                <a key={document.id} href={`/api/operators/applications/documents/${document.id}`} target="_blank" rel="noreferrer">
+                  {document.documentType}: {document.originalName}
+                </a>
+              ))}
+            </div>
+            {!['APPROVED', 'REJECTED'].includes(application.status) && (
+              <div className="actions">
+                <button className="btn primary" type="button" onClick={() => handleApplicationReview(application, "APPROVED")}>Approve</button>
+                <button className="btn" type="button" onClick={() => handleApplicationReview(application, "NEEDS_INFORMATION")}>Request information</button>
+                <button className="btn danger" type="button" onClick={() => handleApplicationReview(application, "REJECTED")}>Reject</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </section>
+      <section className="card">
+        <div className="section-header">
+          <div>
             <h3>Operator Companies</h3>
             <p>
               Create company/operator profiles, add staff accounts, and manage
@@ -543,17 +605,6 @@ const toggleUserStatus = async (op, user) => {
           </div>
 
           <div className="actions">
-            <button
-              className="btn primary"
-              type="button"
-              onClick={() => {
-                setShowCompanyForm((prev) => !prev);
-                setShowStaffForm(false);
-              }}
-            >
-              {showCompanyForm ? "Close Company Form" : "Create Company"}
-            </button>
-
             <button
               className="btn"
               type="button"

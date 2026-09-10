@@ -19,6 +19,21 @@ enum CompanyStatus {
   PENDING
 }
 
+enum OperatorApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  NEEDS_INFORMATION
+  APPROVED
+  REJECTED
+}
+
+enum OperatorDocumentStatus {
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
 enum OperatorUserStatus {
   ACTIVE
   SUSPENDED
@@ -111,6 +126,10 @@ model User {
   notifications Notification[]
   auditLogs     AuditLog[]
   refreshTokens RefreshToken[]
+  passwordSetupTokens PasswordSetupToken[]
+  applicationReviews OperatorApplicationReview[] @relation("ApplicationReviewer")
+  documentReviews OperatorDocument[] @relation("DocumentReviewer")
+  reviewedApplications OperatorApplication[] @relation("ApplicationReviewerUser")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -127,6 +146,19 @@ model RefreshToken {
   userId    Int
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordSetupToken {
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
   createdAt DateTime @default(now())
 
   @@index([userId])
@@ -152,12 +184,76 @@ model Operator {
   users    User[]
   bookings Booking[]
   configs  BNPLConfig[]
+  applications OperatorApplication[]
+  documents OperatorDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([operatorCode])
   @@index([status])
+}
+
+model OperatorApplication {
+  id                          Int                       @id @default(autoincrement())
+  operatorId                  Int                       @unique
+  operator                    Operator                  @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  status                      OperatorApplicationStatus @default(SUBMITTED)
+  businessRegistrationNumber  String
+  businessAddress             String                    @db.Text
+  submittedAt                 DateTime                  @default(now())
+  reviewedAt                  DateTime?
+  reviewedById                Int?
+  reviewedBy                  User?                     @relation("ApplicationReviewerUser", fields: [reviewedById], references: [id], onDelete: SetNull)
+  rejectionReason             String?                   @db.Text
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+
+  documents OperatorDocument[]
+  reviews   OperatorApplicationReview[]
+
+  @@index([status])
+  @@index([reviewedById])
+}
+
+model OperatorDocument {
+  id              Int                   @id @default(autoincrement())
+  operatorId      Int
+  operator        Operator              @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  applicationId   Int
+  application     OperatorApplication   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  documentType    String
+  originalName    String
+  storageKey      String                @unique
+  mimeType        String
+  sizeBytes       Int
+  status          OperatorDocumentStatus @default(UNDER_REVIEW)
+  expiresAt       DateTime?
+  rejectionReason String?               @db.Text
+  reviewedAt      DateTime?
+  reviewedById    Int?
+  reviewedBy      User?                 @relation("DocumentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([operatorId])
+  @@index([applicationId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model OperatorApplicationReview {
+  id            Int                       @id @default(autoincrement())
+  applicationId Int
+  application   OperatorApplication       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  reviewerId    Int
+  reviewer      User                      @relation("ApplicationReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  decision      OperatorApplicationStatus
+  reason        String                    @db.Text
+  createdAt     DateTime                  @default(now())
+
+  @@index([applicationId])
+  @@index([reviewerId])
 }
 
 model Booking {
@@ -186,6 +282,7 @@ model Booking {
 
   alternativeServiceName String?
   alternativePrice       Decimal? @db.Decimal(10, 2)
+
   alternativePickupDate  DateTime?
   alternativeReturnDate  DateTime?
   alternativeReason      String?

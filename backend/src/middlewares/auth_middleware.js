@@ -32,6 +32,18 @@ export async function verifyToken(req, res, next) {
       return res.status(401).json({ message: "Invalid token user" });
     }
 
+    if (user.role === "NORMAL_SELLER" && user.operator?.status !== "ACTIVE") {
+      await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+      return res.status(403).json({
+        message: user.operator?.status === "PENDING"
+          ? "Your operator application is awaiting administrator approval."
+          : "Your operator account is not active. Please contact the administrator.",
+        code: user.operator?.status === "PENDING"
+          ? "OPERATOR_APPLICATION_PENDING"
+          : "OPERATOR_ACCOUNT_INACTIVE",
+      });
+    }
+
     req.user = user;
     next();
   } catch {

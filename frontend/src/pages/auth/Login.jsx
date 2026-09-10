@@ -342,6 +342,12 @@ export default function Login() {
                 Register
               </button>
             </p>
+            <p className="bnpl-auth-switch">
+              Are you a business?{" "}
+              <button type="button" onClick={() => navigate("/operator-register")}>
+                Apply to sell
+              </button>
+            </p>
           </form>
         </div>
 

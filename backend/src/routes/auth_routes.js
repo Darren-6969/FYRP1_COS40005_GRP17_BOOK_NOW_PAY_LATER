@@ -13,6 +13,7 @@ import {
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import { authLimiter, refreshLimiter } from "../middlewares/rate_limit_middleware.js";
 import { validate } from "../middlewares/validate_middleware.js";
+import { setOperatorPassword } from "../controllers/operator_application_controller.js";
 import {
   changePasswordSchema,
   loginSchema,
@@ -26,6 +27,7 @@ const router = express.Router();
 router.post("/register", authLimiter, validate(registerSchema),    register);
 router.post("/login",    authLimiter, validate(loginSchema),       login);
 router.post("/refresh",  refreshLimiter, validate(refreshTokenSchema), refreshAccessToken);
+router.post("/setup-operator-password", authLimiter, setOperatorPassword);
 
 // Protected
 router.get("/me",               verifyToken, me);

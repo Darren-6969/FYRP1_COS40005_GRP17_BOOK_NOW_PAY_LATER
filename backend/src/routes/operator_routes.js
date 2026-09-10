@@ -42,6 +42,11 @@ import {
   revokeOperatorApiKey,
   updateOperatorAllowedOrigins,
 } from "../controllers/operator_controller.js";
+import {
+  getOperatorApplications,
+  reviewOperatorApplication,
+  downloadOperatorDocument,
+} from "../controllers/operator_application_controller.js";
 
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import {
@@ -103,6 +108,9 @@ router.patch("/:operatorId/users/:userId/status", ...masterOnly, updateOperatorU
 router.delete("/:operatorId/users/:userId", ...masterOnly, deleteOperatorUser);
 
 router.get("/", ...masterOnly, getOperators);
+router.get("/applications", ...masterOnly, getOperatorApplications);
+router.patch("/applications/:id/review", ...masterOnly, reviewOperatorApplication);
+router.get("/applications/documents/:documentId", ...masterOnly, downloadOperatorDocument);
 router.patch("/:id/status", ...masterOnly, updateOperatorStatus);
 router.delete("/:id", ...masterOnly, deleteOperator);
 

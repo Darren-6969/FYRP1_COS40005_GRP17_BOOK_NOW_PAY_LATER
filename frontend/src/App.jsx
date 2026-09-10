@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
+import OperatorRegister from "./pages/auth/OperatorRegister";
+import SetupPassword from "./pages/auth/SetupPassword";
 
 // Master Pages
 import MasterLayout from "./pages/master/layout/MasterLayout";
@@ -64,6 +66,8 @@ export default function App() {
         <Route path="/" element={<RootRedirect />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/operator-register" element={<OperatorRegister />} />
+        <Route path="/setup-password" element={<SetupPassword />} />
         <Route path="/embed" element={<EmbedEntry />} />
         {/* Protected Routes */}
           {/* Master Routes */}

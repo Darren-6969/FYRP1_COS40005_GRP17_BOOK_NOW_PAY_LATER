@@ -18,6 +18,7 @@ import emailRoutes      from "./routes/email_routes.js";
 import cronRoutes       from "./routes/cron_routes.js";
 import hostRoutes       from "./routes/host_routes.js";
 import uploadRoutes     from "./routes/upload_routes.js";
+import operatorApplicationRoutes from "./routes/operator_application_routes.js";
 
 import { errorHandler }  from "./middlewares/errorHandler.js";
 import { requestLogger } from "./middlewares/logger_middleware.js";
@@ -166,6 +167,7 @@ app.get("/health", (_req, res) => {
 
 // ── API routes ───────────────────────────────────────────────────────────────
 app.use("/api/auth",      authRoutes);
+app.use("/api/operator-applications", operatorApplicationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/bookings",  bookingRoutes);
 app.use("/api/payments",  paymentRoutes);

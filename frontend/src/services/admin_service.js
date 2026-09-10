@@ -19,6 +19,10 @@ export const sendInvoice = (id) => api.post(`/invoices/${id}/send`);
 export const voidInvoice = (id) => api.patch(`/invoices/${id}/void`);
 
 export const getOperators = () => api.get("/operators");
+export const getOperatorApplications = () => api.get("/operators/applications");
+export const reviewOperatorApplication = (id, decision, reason) =>
+  api.patch(`/operators/applications/${id}/review`, { decision, reason });
+export const getOperatorDocument = (id) => api.get(`/operators/applications/documents/${id}`, { responseType: "blob" });
 /// Create new company with initial admin user (OWNER)
 export const uploadOperatorLogo = (file) => {
   const formData = new FormData();
@@ -32,7 +36,7 @@ export const uploadOperatorLogo = (file) => {
 };
 export const createOperator = (payload) => api.post("/operators", payload);
 export const createOperatorUser = (operatorId, payload) => api.post(`/operators/${operatorId}/users`, payload);
-export const updateOperatorStatus = (id, status) => api.patch(`/operators/${id}/status`, { status });
+export const updateOperatorStatus = (id, status, reason) => api.patch(`/operators/${id}/status`, { status, reason });
 export const deleteOperator = (id) => api.delete(`/operators/${id}`);
 /// Update operator user status (ACTIVE, SUSPENDED)
 export const updateOperatorUserStatus = (operatorId, userId, status) => api.patch(`/operators/${operatorId}/users/${userId}/status`, { status });

@@ -238,6 +238,13 @@ async function generateOperatorCode() {
 
 export async function createOperator(req, res, next) {
   try {
+    if (process.env.ALLOW_LEGACY_OPERATOR_PROVISIONING !== "true") {
+      return res.status(410).json({
+        message: "Direct operator creation is disabled. Operators must submit an application for administrator review.",
+        code: "OPERATOR_APPLICATION_REQUIRED",
+      });
+    }
+
     const {
       companyName,
       email,
@@ -474,9 +481,14 @@ export async function updateOperatorStatus(req, res, next) {
   try {
     const id = parseId(req.params.id, "operator id");
     const { status } = req.body;
+    const reason = String(req.body.reason || "").trim();
 
     if (!["ACTIVE", "SUSPENDED", "PENDING"].includes(status)) {
       return res.status(400).json({ message: "Invalid company status" });
+    }
+
+    if (reason.length < 5) {
+      return res.status(400).json({ message: "A status change reason of at least 5 characters is required." });
     }
 
     const operator = await prisma.operator.update({
@@ -489,7 +501,7 @@ export async function updateOperatorStatus(req, res, next) {
       action: "COMPANY_STATUS_UPDATED",
       entityType: "Operator",
       entityId: id,
-      details: { status },
+      details: { status, reason },
     });
 
     res.json(operator);
