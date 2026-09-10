@@ -29,6 +29,24 @@ function applicationResponse(application) {
   };
 }
 
+const documentPublicSelect = {
+  id: true,
+  operatorId: true,
+  applicationId: true,
+  documentType: true,
+  originalName: true,
+  storageKey: true,
+  mimeType: true,
+  sizeBytes: true,
+  status: true,
+  expiresAt: true,
+  rejectionReason: true,
+  reviewedAt: true,
+  reviewedById: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
 export async function submitOperatorApplication(req, res, next) {
   try {
     const { companyName, applicantName, email, phone, businessRegistrationNumber, businessAddress } = req.body;
@@ -112,7 +130,7 @@ export async function submitOperatorApplication(req, res, next) {
 
       return tx.operatorApplication.findUnique({
         where: { id: createdApplication.id },
-        include: { documents: true },
+        include: { documents: { select: documentPublicSelect } },
       });
     });
 

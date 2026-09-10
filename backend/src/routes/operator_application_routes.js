@@ -9,7 +9,7 @@ const router = express.Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024, files: 5 },
+  limits: { fileSize: 3 * 1024 * 1024, files: 5 },
   fileFilter: (_req, file, cb) => {
     const allowedTypes = ["application/pdf", "image/png", "image/jpeg"];
     if (!allowedTypes.includes(file.mimetype)) {
