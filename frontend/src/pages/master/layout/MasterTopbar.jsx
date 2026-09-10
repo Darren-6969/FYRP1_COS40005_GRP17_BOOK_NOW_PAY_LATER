@@ -14,7 +14,7 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
   const [isScrolled, setIsScrolled] = useState(false);
 
   const user = getStoredUser();
-  const displayName = user?.name || "Master Seller";
+  const displayName = user?.name || "Administrator";
   const initial = displayName.charAt(0).toUpperCase();
 
   const {
@@ -265,7 +265,7 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
 
           <div>
             <strong>{displayName}</strong>
-            <small>Master Seller</small>
+            <small>Administrator</small>
           </div>
         </Link>
       </div>

@@ -1,7 +1,7 @@
 import api from "./api";
 
 /**
- * Master seller operator management
+ * Administrator operator management
  * Used by: frontend/src/pages/master/Operators.jsx
  */
 export const getOperators = () => api.get("/operators");

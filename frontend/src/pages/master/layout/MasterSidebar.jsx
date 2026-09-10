@@ -59,7 +59,7 @@ export default function MasterSidebar({
 
           <div className="master-brand-text">
             <strong>BNPL</strong>
-            <span>Master Seller Console</span>
+            <span>Administrator Console</span>
         </div>
 
           <button

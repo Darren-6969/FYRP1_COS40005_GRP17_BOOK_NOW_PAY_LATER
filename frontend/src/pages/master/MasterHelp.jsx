@@ -3,7 +3,7 @@ export default function MasterHelp() {
     <div className="page-stack">
       <div className="card">
         <h1>Help & Support</h1>
-        <p>This page provides support information for the Master Seller Console.</p>
+        <p>This page provides support information for the Administrator Console.</p>
       </div>
     </div>
   );

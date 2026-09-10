@@ -75,7 +75,7 @@ export default function MasterProfile() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const displayName = user?.name || "Master Seller";
+  const displayName = user?.name || "Administrator";
   const displayEmail = user?.email || "-";
   const avatarInitial = displayName?.[0]?.toUpperCase() || "M";
 
