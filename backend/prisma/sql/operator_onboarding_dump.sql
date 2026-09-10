@@ -39,6 +39,7 @@ CREATE TABLE "OperatorDocument" (
   "documentType" TEXT NOT NULL,
   "originalName" TEXT NOT NULL,
   "storageKey" TEXT NOT NULL UNIQUE,
+  "content" BYTEA NOT NULL,
   "mimeType" TEXT NOT NULL,
   "sizeBytes" INTEGER NOT NULL,
   "status" "OperatorDocumentStatus" NOT NULL DEFAULT 'UNDER_REVIEW',

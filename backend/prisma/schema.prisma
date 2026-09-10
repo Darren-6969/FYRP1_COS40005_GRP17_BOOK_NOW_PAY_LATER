@@ -225,6 +225,7 @@ model OperatorDocument {
   documentType    String
   originalName    String
   storageKey      String                @unique
+  content         Bytes                 @db.ByteA
   mimeType        String
   sizeBytes       Int
   status          OperatorDocumentStatus @default(UNDER_REVIEW)

@@ -1,7 +1,5 @@
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
-import fs from "fs/promises";
-import path from "path";
 import prisma from "../config/db.js";
 import { sendEmail } from "../services/email_service.js";
 import { generateUserCode } from "../services/userCode.js";
@@ -9,7 +7,6 @@ import { generateUserCode } from "../services/userCode.js";
 const DOCUMENT_TYPES = new Set(["BUSINESS_REGISTRATION", "BUSINESS_LICENSE", "OWNER_IDENTITY"]);
 const APPLICATION_DECISIONS = new Set(["APPROVED", "REJECTED", "NEEDS_INFORMATION"]);
 const SETUP_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
-const PRIVATE_DOCUMENT_ROOT = process.env.OPERATOR_DOCUMENT_DIR || path.join(process.cwd(), "uploads", "private", "operator-documents");
 
 function hashToken(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -59,8 +56,6 @@ export async function submitOperatorApplication(req, res, next) {
     const userCode = await generateUserCode("NORMAL_SELLER");
     const unusablePassword = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 12);
 
-    await fs.mkdir(PRIVATE_DOCUMENT_ROOT, { recursive: true });
-
     const application = await prisma.$transaction(async (tx) => {
       const operator = await tx.operator.create({
         data: {
@@ -101,7 +96,6 @@ export async function submitOperatorApplication(req, res, next) {
         }
 
         const storageKey = `${operator.id}/${crypto.randomUUID()}-${safeDocumentName(file.originalname)}`;
-        await fs.writeFile(path.join(PRIVATE_DOCUMENT_ROOT, storageKey), file.buffer, { flag: "wx" });
         await tx.operatorDocument.create({
           data: {
             operatorId: operator.id,
@@ -109,6 +103,7 @@ export async function submitOperatorApplication(req, res, next) {
             documentType,
             originalName: safeDocumentName(file.originalname),
             storageKey,
+            content: file.buffer,
             mimeType: file.mimetype,
             sizeBytes: file.size,
           },
@@ -250,8 +245,12 @@ export async function downloadOperatorDocument(req, res, next) {
     const documentId = Number(req.params.documentId);
     const document = await prisma.operatorDocument.findUnique({ where: { id: documentId } });
     if (!document) return res.status(404).json({ message: "Document not found." });
-    const filePath = path.join(PRIVATE_DOCUMENT_ROOT, document.storageKey);
-    res.download(filePath, document.originalName);
+    res.set({
+      "Content-Type": document.mimeType,
+      "Content-Disposition": `attachment; filename="${document.originalName.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,
+      "Content-Length": String(document.content.length),
+    });
+    res.send(document.content);
   } catch (err) {
     next(err);
   }
