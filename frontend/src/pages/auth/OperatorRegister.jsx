@@ -79,7 +79,7 @@ export default function OperatorRegister() {
             <textarea name="businessAddress" placeholder="Business address" value={form.businessAddress} onChange={handleChange} required disabled={loading} rows={3} />
             <label>Business registration document<input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => setDocuments((current) => ({ ...current, BUSINESS_REGISTRATION: event.target.files[0] }))} required disabled={loading} /></label>
             <label>Business licence, if applicable<input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => setDocuments((current) => ({ ...current, BUSINESS_LICENSE: event.target.files[0] }))} disabled={loading} /></label>
-            <label>Owner identity document<input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => setDocuments((current) => ({ ...current, OWNER_IDENTITY: event.target.files[0] }))} disabled={loading} /></label>
+            <label>Owner identity document<input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => setDocuments((current) => ({ ...current, OWNER_IDENTITY: event.target.files[0] }))} required disabled={loading} /></label>
             <button className="bnpl-auth-submit" disabled={loading}>{loading ? "Submitting..." : "Submit application"}</button>
             <p className="bnpl-auth-switch"><button type="button" onClick={() => navigate("/login")}>Return to sign in</button></p>
           </form>

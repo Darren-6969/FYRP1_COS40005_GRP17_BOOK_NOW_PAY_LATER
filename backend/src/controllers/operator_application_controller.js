@@ -198,7 +198,11 @@ export async function reviewOperatorApplication(req, res, next) {
 
     const application = await prisma.operatorApplication.findUnique({
       where: { id: applicationId },
-      include: { operator: true, documents: true, reviews: true },
+      include: {
+        operator: true,
+        documents: { select: { id: true, status: true } },
+        reviews: true,
+      },
     });
 
     if (!application) return res.status(404).json({ message: "Operator application not found." });

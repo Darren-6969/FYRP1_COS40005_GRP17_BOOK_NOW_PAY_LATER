@@ -491,9 +491,19 @@ export async function updateOperatorStatus(req, res, next) {
       return res.status(400).json({ message: "A status change reason of at least 5 characters is required." });
     }
 
-    const operator = await prisma.operator.update({
-      where: { id },
-      data: { status },
+    const operator = await prisma.$transaction(async (tx) => {
+      const updatedOperator = await tx.operator.update({
+        where: { id },
+        data: { status },
+      });
+
+      if (status === "SUSPENDED" || status === "PENDING") {
+        await tx.refreshToken.deleteMany({
+          where: { user: { operatorId: id } },
+        });
+      }
+
+      return updatedOperator;
     });
 
     await createAuditLog({

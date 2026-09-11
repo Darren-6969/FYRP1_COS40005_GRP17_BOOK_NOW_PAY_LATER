@@ -22,7 +22,8 @@ export const getOperators = () => api.get("/operators");
 export const getOperatorApplications = () => api.get("/operators/applications");
 export const reviewOperatorApplication = (id, decision, reason) =>
   api.patch(`/operators/applications/${id}/review`, { decision, reason });
-export const getOperatorDocument = (id) => api.get(`/operators/applications/documents/${id}`, { responseType: "blob" });
+export const getOperatorDocument = (id) =>
+  api.get(`/operators/applications/documents/${id}`, { responseType: "blob" });
 /// Create new company with initial admin user (OWNER)
 export const uploadOperatorLogo = (file) => {
   const formData = new FormData();

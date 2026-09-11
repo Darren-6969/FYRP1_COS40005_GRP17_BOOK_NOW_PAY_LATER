@@ -7,6 +7,7 @@ import {
   deleteOperatorUser,
   getOperators,
   getOperatorApplications,
+  getOperatorDocument,
   reviewOperatorApplication,
   updateOperatorStatus,
   updateOperatorUserStatus,
@@ -254,6 +255,17 @@ export default function Operators() {
       await Promise.all([load(), loadApplications()]);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to review operator application");
+    }
+  };
+
+  const handleViewDocument = async (document) => {
+    try {
+      const response = await getOperatorDocument(document.id);
+      const url = URL.createObjectURL(response.data);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to open operator document");
     }
   };
 
@@ -579,9 +591,9 @@ const toggleUserStatus = async (op, user) => {
               <p>{application.operator?.email} · {application.businessRegistrationNumber}</p>
               <p>Status: {application.status} · Documents: {(application.documents || []).length}</p>
               {(application.documents || []).map((document) => (
-                <a key={document.id} href={`/api/operators/applications/documents/${document.id}`} target="_blank" rel="noreferrer">
+                <button className="btn link" key={document.id} type="button" onClick={() => handleViewDocument(document)}>
                   {document.documentType}: {document.originalName}
-                </a>
+                </button>
               ))}
             </div>
             {!['APPROVED', 'REJECTED'].includes(application.status) && (
