@@ -59,9 +59,17 @@ export async function acceptBookingAndRequestPayment({
   const downDue = downPaymentDueDate
     ? parseMalaysiaLocalDateTime(downPaymentDueDate)
     : defaultDownDueDate;
-  const finalDue = finalPaymentDueDate
+  const requestedFinalDue = finalPaymentDueDate
     ? parseMalaysiaLocalDateTime(finalPaymentDueDate)
     : defaultFinalDueDate;
+
+  // When pickup is within 48 hours, pickup minus one day can fall before the
+  // default down-payment deadline. Both stages must then share one deadline.
+  const shortLeadBooking = booking.pickupDate &&
+    new Date(booking.pickupDate).getTime() - Date.now() <= 2 * 24 * 60 * 60 * 1000;
+  const finalDue = shortLeadBooking || (requestedFinalDue && downDue && requestedFinalDue < downDue)
+    ? downDue
+    : requestedFinalDue;
 
   if (!downDue || !finalDue || downDue <= new Date() || finalDue <= new Date()) {
     const error = new Error("Payment due dates must be valid future dates");

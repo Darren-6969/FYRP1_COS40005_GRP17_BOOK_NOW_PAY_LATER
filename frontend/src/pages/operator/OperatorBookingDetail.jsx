@@ -475,16 +475,26 @@ function formatDatetimeLocal(date) {
   )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function getDefaultFinalDueDate(booking, downDueDate) {
+  if (!booking.pickupDate) return downDueDate;
+
+  const pickupDate = new Date(booking.pickupDate);
+  const isShortLead = pickupDate.getTime() - Date.now() <= 2 * 24 * 60 * 60 * 1000;
+
+  return isShortLead
+    ? downDueDate
+    : toDatetimeLocalValue(new Date(pickupDate.getTime() - 24 * 60 * 60 * 1000));
+}
+
 function PaymentScheduleModal({ booking, onClose, onDone }) {
   const [percent, setPercent] = useState("10");
   const [downDueDate, setDownDueDate] = useState(() =>
     toDatetimeLocalValue(new Date(Date.now() + 24 * 60 * 60 * 1000))
   );
   const [finalDueDate, setFinalDueDate] = useState(() =>
-    toDatetimeLocalValue(
-      booking.pickupDate
-        ? new Date(new Date(booking.pickupDate).getTime() - 24 * 60 * 60 * 1000)
-        : null
+    getDefaultFinalDueDate(
+      booking,
+      toDatetimeLocalValue(new Date(Date.now() + 24 * 60 * 60 * 1000))
     )
   );
   const [loading, setLoading] = useState(false);
@@ -497,10 +507,13 @@ function PaymentScheduleModal({ booking, onClose, onDone }) {
 
     try {
       setLoading(true);
+      const normalizedFinalDueDate = new Date(finalDueDate) < new Date(downDueDate)
+        ? downDueDate
+        : finalDueDate;
       await operatorService.acceptBooking(booking.id, {
         downPaymentPercent: Number(percent),
         downPaymentDueDate: datetimeLocalToMalaysiaLocalString(downDueDate),
-        finalPaymentDueDate: datetimeLocalToMalaysiaLocalString(finalDueDate),
+        finalPaymentDueDate: datetimeLocalToMalaysiaLocalString(normalizedFinalDueDate),
       });
       await onDone();
     } catch (err) {
