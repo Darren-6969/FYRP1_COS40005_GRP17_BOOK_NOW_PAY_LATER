@@ -26,8 +26,8 @@ export const operatorService = {
     return api.get(`/operators/bookings/${id}`);
   },
 
-  acceptBooking(id) {
-    return api.patch(`/operators/bookings/${id}/accept`);
+  acceptBooking(id, payload = {}) {
+    return api.patch(`/operators/bookings/${id}/accept`, payload);
   },
 
   rejectBooking(id) {

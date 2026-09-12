@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { submitCustomerReceipt } from "../../hooks/useReceipts";
 import { refreshNotifications } from "../../utils/notifyRefresh";
 
@@ -35,10 +35,12 @@ function compressImageToDataUrl(file, maxWidth = 900, quality = 0.72) {
 
 export default function UploadReceipt() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
     method: "DUITNOW",
+    paymentType: searchParams.get("paymentType") || "FULL_PAYMENT",
     imageUrl: "",
     remarks: "",
   });

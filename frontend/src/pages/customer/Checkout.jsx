@@ -6,16 +6,42 @@ import { createStripeCheckoutSession } from "../../services/customer_service";
 import { formatCustomerDate, formatMoney } from "../../utils/customerUtils";
 import duitnowQr from "../../assets/images/duitnow-qr.png";
 
+const PAYMENT_TYPES = {
+  DOWN_PAYMENT: "DOWN_PAYMENT",
+  FINAL_PAYMENT: "FINAL_PAYMENT",
+  FULL_PAYMENT: "FULL_PAYMENT",
+};
+
+function PaymentChoice({ label, description, selected, disabled, onClick }) {
+  return (
+    <button
+      type="button"
+      className={`customer-payment-option ${selected ? "selected" : ""}`}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <span>{selected ? "●" : "○"}</span>
+      <div>
+        <strong>{label}</strong>
+        <small>{disabled ? "Already paid or unavailable" : description}</small>
+      </div>
+    </button>
+  );
+}
+
 export default function Checkout() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { booking, loading, error } = useCustomerBooking(id);
 
   const [method, setMethod] = useState("");
+  const [paymentType, setPaymentType] = useState(PAYMENT_TYPES.DOWN_PAYMENT);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
   const isManualPayment = method === "DUITNOW_SPAY";
+  const downPaymentPaid = booking?.payment?.downPaymentStatus === "PAID";
+  const finalPaymentPaid = booking?.payment?.finalPaymentStatus === "PAID";
 
 const acceptedPaymentMethods = useMemo(() => {
   return booking?.operator?.config?.acceptedPaymentMethods || {};
@@ -54,7 +80,7 @@ useEffect(() => {
     setSubmitError("");
 
     if (isManualPayment) {
-      navigate(`/customer/upload-receipt/${id}?method=DUITNOW_SPAY`);
+      navigate(`/customer/upload-receipt/${id}?method=DUITNOW_SPAY&paymentType=${paymentType}`);
       return;
     }
 
@@ -62,7 +88,7 @@ useEffect(() => {
       setSubmitting(true);
 
       try {
-        const res = await createStripeCheckoutSession(id);
+        const res = await createStripeCheckoutSession(id, paymentType);
         window.location.href = res.data.url;
       } catch (err) {
         setSubmitError(
@@ -138,17 +164,54 @@ useEffect(() => {
 
             <div>
               <span>Payment Deadline</span>
-              <strong>{formatCustomerDate(booking.paymentDeadline)}</strong>
+              <strong>
+                {paymentType === PAYMENT_TYPES.DOWN_PAYMENT
+                  ? formatCustomerDate(booking.payment?.downPaymentDueDate)
+                  : formatCustomerDate(booking.payment?.finalPaymentDueDate)}
+              </strong>
             </div>
 
             <div>
               <span>Amount to Pay</span>
-              <strong>{formatMoney(booking.totalAmount)}</strong>
+              <strong>
+                {formatMoney(
+                  paymentType === PAYMENT_TYPES.DOWN_PAYMENT
+                    ? booking.payment?.downPaymentAmount
+                    : paymentType === PAYMENT_TYPES.FINAL_PAYMENT
+                      ? booking.payment?.finalPaymentAmount
+                      : booking.totalAmount
+                )}
+              </strong>
             </div>
           </div>
         </article>
 
         <article className="customer-glass-card">
+          <h2>Payment Plan</h2>
+          <div className="customer-payment-options">
+            <PaymentChoice
+              label="Pay down-payment"
+              description={`${formatMoney(booking.payment?.downPaymentAmount)} due ${formatCustomerDate(booking.payment?.downPaymentDueDate)}`}
+              selected={paymentType === PAYMENT_TYPES.DOWN_PAYMENT}
+              disabled={downPaymentPaid || finalPaymentPaid}
+              onClick={() => setPaymentType(PAYMENT_TYPES.DOWN_PAYMENT)}
+            />
+            <PaymentChoice
+              label="Pay final payment"
+              description={`${formatMoney(booking.payment?.finalPaymentAmount)} due ${formatCustomerDate(booking.payment?.finalPaymentDueDate)}`}
+              selected={paymentType === PAYMENT_TYPES.FINAL_PAYMENT}
+              disabled={!downPaymentPaid || finalPaymentPaid}
+              onClick={() => setPaymentType(PAYMENT_TYPES.FINAL_PAYMENT)}
+            />
+            <PaymentChoice
+              label="Pay full amount"
+              description={formatMoney(booking.totalAmount)}
+              selected={paymentType === PAYMENT_TYPES.FULL_PAYMENT}
+              disabled={downPaymentPaid || finalPaymentPaid}
+              onClick={() => setPaymentType(PAYMENT_TYPES.FULL_PAYMENT)}
+            />
+          </div>
+
           <h2>Payment Method</h2>
 
           <div className="customer-payment-options">
@@ -212,7 +275,15 @@ useEffect(() => {
                   <div className="customer-info-list compact">
                     <div>
                       <span>Amount</span>
-                      <strong>{formatMoney(booking.totalAmount)}</strong>
+                      <strong>
+                        {formatMoney(
+                          paymentType === PAYMENT_TYPES.DOWN_PAYMENT
+                            ? booking.payment?.downPaymentAmount
+                            : paymentType === PAYMENT_TYPES.FINAL_PAYMENT
+                              ? booking.payment?.finalPaymentAmount
+                              : booking.totalAmount
+                        )}
+                      </strong>
                     </div>
 
                     <div>
@@ -224,7 +295,13 @@ useEffect(() => {
 
                     <div>
                       <span>Deadline</span>
-                      <strong>{formatCustomerDate(booking.paymentDeadline)}</strong>
+                      <strong>
+                        {formatCustomerDate(
+                          paymentType === PAYMENT_TYPES.DOWN_PAYMENT
+                            ? booking.payment?.downPaymentDueDate
+                            : booking.payment?.finalPaymentDueDate
+                        )}
+                      </strong>
                     </div>
                   </div>
 
@@ -253,7 +330,13 @@ useEffect(() => {
               ? "Continue to Receipt Upload"
               : submitting
               ? "Processing..."
-              : `Pay ${formatMoney(booking.totalAmount)}`}
+              : `Pay ${formatMoney(
+                  paymentType === PAYMENT_TYPES.DOWN_PAYMENT
+                    ? booking.payment?.downPaymentAmount
+                    : paymentType === PAYMENT_TYPES.FINAL_PAYMENT
+                      ? booking.payment?.finalPaymentAmount
+                      : booking.totalAmount
+                )}`}
           </button>
         </article>
       </section>

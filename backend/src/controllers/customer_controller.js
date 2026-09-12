@@ -12,6 +12,10 @@ import {
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 import { tempBookingCode, formatBookingCode } from "../utils/bookingCode.js";
 import { parseId } from "../utils/parseId.js";
+import {
+  getPaymentPendingData,
+  PAYMENT_TYPES,
+} from "../services/payment_schedule_service.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -67,6 +71,15 @@ function mapBooking(booking) {
       ? {
           ...booking.payment,
           amount: toNumber(booking.payment.amount),
+          downPaymentAmount: toNumber(booking.payment.downPaymentAmount),
+          finalPaymentAmount: toNumber(booking.payment.finalPaymentAmount),
+          paidAmount:
+            (booking.payment.downPaymentStatus === "PAID"
+              ? toNumber(booking.payment.downPaymentAmount)
+              : 0) +
+            (booking.payment.finalPaymentStatus === "PAID"
+              ? toNumber(booking.payment.finalPaymentAmount)
+              : 0),
         }
       : null,
     receipt: booking.receipt,
@@ -377,7 +390,12 @@ export async function payCustomerBooking(_req, res) {
 
 export async function uploadCustomerReceipt(req, res, next) {
   try {
-    const { imageUrl, remarks, method = "DUITNOW" } = req.body;
+    const {
+      imageUrl,
+      remarks,
+      method = "DUITNOW",
+      paymentType = PAYMENT_TYPES.FULL_PAYMENT,
+    } = req.body;
     const booking = await assertCustomerBooking(req.params.id, req.user.id);
 
     if (!imageUrl) {
@@ -406,18 +424,18 @@ export async function uploadCustomerReceipt(req, res, next) {
       });
     }
 
-    await prisma.payment.upsert({
+    if (!Object.values(PAYMENT_TYPES).includes(paymentType)) {
+      return res.status(400).json({ message: "Invalid payment type" });
+    }
+
+    if (!booking.payment) {
+      return res.status(400).json({ message: "Payment schedule has not been created yet" });
+    }
+
+    const pendingPayment = getPaymentPendingData(booking.payment, paymentType);
+    await prisma.payment.update({
       where: { bookingId: booking.id },
-      create: {
-        bookingId: booking.id,
-        amount: booking.totalAmount,
-        method,
-        status: "PENDING_VERIFICATION",
-      },
-      update: {
-        method,
-        status: "PENDING_VERIFICATION",
-      },
+      data: { method, ...pendingPayment },
     });
 
     await prisma.receipt.upsert({

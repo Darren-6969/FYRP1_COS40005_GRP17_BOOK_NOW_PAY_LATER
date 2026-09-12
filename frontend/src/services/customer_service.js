@@ -23,8 +23,11 @@ export const getCustomerBookingActivity = (id) =>
 export const payCustomerBooking = (id, payload) =>
   api.post(`/customer/bookings/${id}/pay`, payload);
 
-export const createStripeCheckoutSession = (bookingId) =>
-  api.post("/stripe/checkout", { bookingId: Number(bookingId) });
+export const createStripeCheckoutSession = (bookingId, paymentType) =>
+  api.post("/stripe/checkout", {
+    bookingId: Number(bookingId),
+    paymentType,
+  });
 
 export const confirmStripeCheckoutSession = (sessionId) =>
   api.post("/stripe/confirm-session", { sessionId });

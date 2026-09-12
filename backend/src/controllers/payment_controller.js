@@ -1,5 +1,17 @@
 import prisma from "../config/db.js";
 
+function mapPayment(payment) {
+  return {
+    ...payment,
+    amount: Number(payment.amount || 0),
+    downPaymentAmount: Number(payment.downPaymentAmount || 0),
+    finalPaymentAmount: Number(payment.finalPaymentAmount || 0),
+    paidAmount:
+      (payment.downPaymentStatus === "PAID" ? Number(payment.downPaymentAmount || 0) : 0) +
+      (payment.finalPaymentStatus === "PAID" ? Number(payment.finalPaymentAmount || 0) : 0),
+  };
+}
+
 export async function getPayments(req, res, next) {
   try {
     const where = {};
@@ -34,7 +46,7 @@ export async function getPayments(req, res, next) {
       },
     });
 
-    res.json(payments);
+    res.json(payments.map(mapPayment));
   } catch (err) {
     next(err);
   }
@@ -74,7 +86,7 @@ export async function getOverduePayments(req, res, next) {
       },
     });
 
-    res.json(payments);
+    res.json(payments.map(mapPayment));
   } catch (err) {
     next(err);
   }

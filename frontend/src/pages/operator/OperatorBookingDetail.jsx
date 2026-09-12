@@ -15,6 +15,7 @@ export default function OperatorBookingDetail() {
   const [timeline, setTimeline] = useState([]);
   const [showAlternative, setShowAlternative] = useState(false);
   const [showPaymentDeadline, setShowPaymentDeadline] = useState(false);
+  const [showPaymentSchedule, setShowPaymentSchedule] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
@@ -201,7 +202,13 @@ export default function OperatorBookingDetail() {
           <h2>Payment Status</h2>
 
           <InfoRow label="Amount" value={formatOperatorMoney(booking.payment?.amount || booking.totalAmount)} strong />
+          <InfoRow label="Paid to date" value={formatOperatorMoney(
+            (booking.payment?.downPaymentStatus === "PAID" ? Number(booking.payment?.downPaymentAmount || 0) : 0) +
+            (booking.payment?.finalPaymentStatus === "PAID" ? Number(booking.payment?.finalPaymentAmount || 0) : 0)
+          )} strong />
           <InfoRow label="Payment Status" value={operatorStatusLabel(booking.payment?.status || "UNPAID")} />
+          <InfoRow label="Down-payment" value={`${operatorStatusLabel(booking.payment?.downPaymentStatus || "UNPAID")} · ${formatOperatorMoney(booking.payment?.downPaymentAmount)}`} />
+          <InfoRow label="Final payment" value={`${operatorStatusLabel(booking.payment?.finalPaymentStatus || "UNPAID")} · ${formatOperatorMoney(booking.payment?.finalPaymentAmount)}`} />
           <InfoRow label="Payment Method" value={booking.payment?.method || "-"} />
           <InfoRow label="Transaction ID" value={booking.payment?.transactionId || "-"} />
 
@@ -213,7 +220,7 @@ export default function OperatorBookingDetail() {
                 <button
                   className="operator-primary-btn"
                   disabled={!!actionLoading}
-                  onClick={() => runAction("accept")}
+                  onClick={() => setShowPaymentSchedule(true)}
                 >
                   Accept Booking
                 </button>
@@ -299,6 +306,17 @@ export default function OperatorBookingDetail() {
           booking={booking}
           onClose={() => setShowPaymentDeadline(false)}
           onDone={loadBooking}
+        />
+      )}
+
+      {showPaymentSchedule && (
+        <PaymentScheduleModal
+          booking={booking}
+          onClose={() => setShowPaymentSchedule(false)}
+          onDone={async () => {
+            setShowPaymentSchedule(false);
+            await loadBooking();
+          }}
         />
       )}
 
@@ -455,6 +473,76 @@ function formatDatetimeLocal(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
     date.getDate()
   )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function PaymentScheduleModal({ booking, onClose, onDone }) {
+  const [percent, setPercent] = useState("10");
+  const [downDueDate, setDownDueDate] = useState(() =>
+    toDatetimeLocalValue(new Date(Date.now() + 24 * 60 * 60 * 1000))
+  );
+  const [finalDueDate, setFinalDueDate] = useState(() =>
+    toDatetimeLocalValue(
+      booking.pickupDate
+        ? new Date(new Date(booking.pickupDate).getTime() - 24 * 60 * 60 * 1000)
+        : null
+    )
+  );
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!downDueDate || !finalDueDate) {
+      alert("Both payment due dates are required.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await operatorService.acceptBooking(booking.id, {
+        downPaymentPercent: Number(percent),
+        downPaymentDueDate: datetimeLocalToMalaysiaLocalString(downDueDate),
+        finalPaymentDueDate: datetimeLocalToMalaysiaLocalString(finalDueDate),
+      });
+      await onDone();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to accept booking");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="operator-modal-backdrop">
+      <div className="operator-modal">
+        <div className="operator-card-head">
+          <div>
+            <h2>Set Payment Schedule</h2>
+            <p>Choose the down-payment percentage and both due dates.</p>
+          </div>
+          <button type="button" onClick={onClose}>×</button>
+        </div>
+
+        <label className="operator-field">
+          Down-payment percentage
+          <input type="number" min="1" max="99" value={percent} onChange={(e) => setPercent(e.target.value)} />
+        </label>
+        <label className="operator-field">
+          Down-payment due date
+          <input type="datetime-local" value={downDueDate} onChange={(e) => setDownDueDate(e.target.value)} />
+        </label>
+        <label className="operator-field">
+          Final payment due date
+          <input type="datetime-local" value={finalDueDate} onChange={(e) => setFinalDueDate(e.target.value)} />
+        </label>
+
+        <div className="operator-modal-actions">
+          <button type="button" className="operator-secondary-btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="operator-primary-btn" onClick={handleSubmit} disabled={loading}>
+            {loading ? "Accepting..." : "Accept Booking"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function datetimeLocalToMalaysiaLocalString(value) {

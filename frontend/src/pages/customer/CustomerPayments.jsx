@@ -72,7 +72,11 @@ export default function CustomerPayments() {
               </div>
 
               <div className="customer-row-right">
-                <strong>{formatMoney(payment.amount)}</strong>
+                <strong>
+                  {formatMoney(payment.paidAmount || 0)} / {formatMoney(payment.amount)}
+                </strong>
+
+                <small>{statusLabel(payment.status)}</small>
 
                 <Link
                   to={`/customer/bookings/${payment.booking?.id || payment.bookingId}`}

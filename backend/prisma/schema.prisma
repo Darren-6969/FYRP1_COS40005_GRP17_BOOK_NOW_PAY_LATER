@@ -54,6 +54,9 @@ enum BookingStatus {
 enum PaymentStatus {
   UNPAID
   PENDING_VERIFICATION
+  DOWN_PAYMENT_PENDING_VERIFICATION
+  PARTIALLY_PAID
+  FINAL_PAYMENT_PENDING_VERIFICATION
   PAID
   FAILED
   OVERDUE
@@ -315,6 +318,17 @@ model Payment {
   status        PaymentStatus @default(UNPAID)
   paidAt        DateTime?
   transactionId String?
+
+  downPaymentAmount       Decimal       @default(0) @db.Decimal(10, 2)
+  finalPaymentAmount      Decimal       @default(0) @db.Decimal(10, 2)
+  downPaymentDueDate      DateTime?
+  finalPaymentDueDate     DateTime?
+  downPaymentStatus       PaymentStatus @default(UNPAID)
+  finalPaymentStatus      PaymentStatus @default(UNPAID)
+  downPaymentPaidAt       DateTime?
+  finalPaymentPaidAt      DateTime?
+  downPaymentTransactionId String?
+  finalPaymentTransactionId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

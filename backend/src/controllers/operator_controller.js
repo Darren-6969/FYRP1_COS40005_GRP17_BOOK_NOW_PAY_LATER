@@ -24,6 +24,10 @@ import { acceptBookingAndRequestPayment } from "../services/booking_accept_servi
 import { parseId } from "../utils/parseId.js";
 import { generateUserCode } from "../services/userCode.js";
 import { generateApiKey } from "../utils/apiKey.js";
+import {
+  getPaymentConfirmationData,
+  PAYMENT_TYPES,
+} from "../services/payment_schedule_service.js";
 
 function toNumber(value) {
   return value == null ? 0 : Number(value);
@@ -74,6 +78,8 @@ function mapPayment(payment) {
   return {
     ...payment,
     amount: toNumber(payment.amount),
+    downPaymentAmount: toNumber(payment.downPaymentAmount),
+    finalPaymentAmount: toNumber(payment.finalPaymentAmount),
   };
 }
 
@@ -944,7 +950,13 @@ export async function acceptBooking(req, res, next) {
     if (!booking) return res.status(404).json({ message: "Booking not found" });
 
     const { booking: updatedBooking, payment, invoice } =
-      await acceptBookingAndRequestPayment({ booking, actorUserId: req.user.id });
+      await acceptBookingAndRequestPayment({
+        booking,
+        actorUserId: req.user.id,
+        downPaymentPercent: req.body?.downPaymentPercent,
+        downPaymentDueDate: req.body?.downPaymentDueDate,
+        finalPaymentDueDate: req.body?.finalPaymentDueDate,
+      });
 
     res.json({
       booking: mapBooking(updatedBooking),
@@ -1553,12 +1565,21 @@ export async function approvePayment(req, res, next) {
       });
     }
 
+    const paymentType =
+      payment.downPaymentStatus === "PENDING_VERIFICATION" &&
+      payment.finalPaymentStatus === "PENDING_VERIFICATION"
+        ? PAYMENT_TYPES.FULL_PAYMENT
+        : payment.downPaymentStatus === "PENDING_VERIFICATION"
+          ? PAYMENT_TYPES.DOWN_PAYMENT
+          : PAYMENT_TYPES.FINAL_PAYMENT;
+
     const updatedPayment = await prisma.payment.update({
       where: { id: payment.id },
-      data: {
-        status: "PAID",
-        paidAt: new Date(),
-      },
+      data: getPaymentConfirmationData(
+        payment,
+        paymentType,
+        `MANUAL-${payment.id}-${Date.now()}`
+      ),
     });
 
     const existingReceipt = await prisma.receipt.findUnique({
@@ -1579,17 +1600,14 @@ export async function approvePayment(req, res, next) {
       });
     }
 
-    const invoice = await generateInvoiceForBooking(
-      payment.bookingId,
-      payment.amount,
-      prisma,
-      { status: "PAID" }
-    );
+    const invoice = updatedPayment.status === "PAID"
+      ? await generateInvoiceForBooking(payment.bookingId, payment.amount, prisma, { status: "PAID" })
+      : null;
 
     const updatedBooking = await prisma.booking.update({
       where: { id: payment.bookingId },
       data: {
-        status: "PAID",
+        status: updatedPayment.status === "PAID" ? "PAID" : "PENDING_PAYMENT",
       },
       include: includeBookingRelations(),
     });
@@ -1602,23 +1620,25 @@ export async function approvePayment(req, res, next) {
       details: {
         bookingId: payment.bookingId,
         bookingCode: updatedBooking.bookingCode,
-        invoiceId: invoice.id,
-        invoiceNo: invoice.invoiceNo,
+        invoiceId: invoice?.id || null,
+        invoiceNo: invoice?.invoiceNo || null,
         receiptApproved: Boolean(existingReceipt),
       },
     });
 
-    await createAuditLog({
-      req,
-      action: "INVOICE_GENERATED",
-      entityType: "Invoice",
-      entityId: invoice.id,
-      details: {
-        bookingId: payment.bookingId,
-        bookingCode: updatedBooking.bookingCode,
-        invoiceNo: invoice.invoiceNo,
-      },
-    });
+    if (invoice) {
+      await createAuditLog({
+        req,
+        action: "INVOICE_GENERATED",
+        entityType: "Invoice",
+        entityId: invoice.id,
+        details: {
+          bookingId: payment.bookingId,
+          bookingCode: updatedBooking.bookingCode,
+          invoiceNo: invoice.invoiceNo,
+        },
+      });
+    }
 
     const customerBookingUrl = `${
       process.env.FRONTEND_URL || "http://localhost:5173"
@@ -1695,17 +1715,23 @@ export async function rejectPayment(req, res, next) {
     // F3 fix: never reject an already-captured payment. Setting a PAID payment
     // (e.g. confirmed via Stripe) to FAILED here would leave money captured
     // while the booking is pushed back to PENDING_PAYMENT with no refund.
-    if (!["UNPAID", "PENDING_VERIFICATION"].includes(payment.status)) {
+    if (!["UNPAID", "PENDING_VERIFICATION", "DOWN_PAYMENT_PENDING_VERIFICATION", "FINAL_PAYMENT_PENDING_VERIFICATION"].includes(payment.status)) {
       return res.status(400).json({
         message: `Cannot reject a payment with status ${payment.status}`,
       });
     }
 
+    const rejectionData = { status: "FAILED" };
+    if (payment.downPaymentStatus === "PENDING_VERIFICATION") {
+      rejectionData.downPaymentStatus = "FAILED";
+    }
+    if (payment.finalPaymentStatus === "PENDING_VERIFICATION") {
+      rejectionData.finalPaymentStatus = "FAILED";
+    }
+
     const updatedPayment = await prisma.payment.update({
       where: { id: payment.id },
-      data: {
-        status: "FAILED",
-      },
+      data: rejectionData,
     });
 
     const existingReceipt = await prisma.receipt.findUnique({

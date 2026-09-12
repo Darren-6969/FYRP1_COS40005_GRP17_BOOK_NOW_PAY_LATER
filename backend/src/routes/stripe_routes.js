@@ -15,6 +15,11 @@ import { verifyToken } from "../middlewares/auth_middleware.js";
 import { allowRoles } from "../middlewares/rbac_middleware.js";
 import { paymentLimiter } from "../middlewares/rate_limit_middleware.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
+import {
+  getPaymentConfirmationData,
+  getPaymentSpec,
+  PAYMENT_TYPES,
+} from "../services/payment_schedule_service.js";
 
 const router = express.Router();
 
@@ -43,7 +48,12 @@ function includeBookingRelations() {
 // Called from both the webhook handler and the /confirm-session fallback.
 // With Destination Charges the split is already settled by Stripe at charge time,
 // so this function only needs to update our DB, generate the invoice, and notify.
-async function applyPaidState(bookingId, transactionId, sessionId) {
+async function applyPaidState(
+  bookingId,
+  transactionId,
+  sessionId,
+  paymentType = PAYMENT_TYPES.FULL_PAYMENT
+) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: includeBookingRelations(),
@@ -54,7 +64,7 @@ async function applyPaidState(bookingId, transactionId, sessionId) {
     return null;
   }
 
-  if (booking.status === "PAID" && booking.payment?.status === "PAID") {
+  if (booking.payment?.status === "PAID") {
     console.log(`[Stripe] Booking ${bookingId} already paid. Skipped.`);
     return { alreadyPaid: true };
   }
@@ -110,35 +120,24 @@ async function applyPaidState(bookingId, transactionId, sessionId) {
     return { skippedTerminal: true, bookingStatus: booking.status };
   }
 
-  const payment = await prisma.payment.upsert({
+  if (!booking.payment) {
+    console.error(`[Stripe] Payment schedule missing for booking ${bookingId}`);
+    return null;
+  }
+
+  getPaymentSpec(booking.payment, paymentType);
+  const payment = await prisma.payment.update({
     where: { bookingId },
-    create: {
-      bookingId,
-      amount: booking.totalAmount,
-      method: "STRIPE",
-      status: "PAID",
-      paidAt: new Date(),
-      transactionId,
-    },
-    update: {
-      amount: booking.totalAmount,
-      method: "STRIPE",
-      status: "PAID",
-      paidAt: new Date(),
-      transactionId,
-    },
+    data: getPaymentConfirmationData(booking.payment, paymentType, transactionId),
   });
 
-  const invoice = await generateInvoiceForBooking(
-    bookingId,
-    booking.totalAmount,
-    prisma,
-    { status: "PAID" }
-  );
+  const invoice = payment.status === "PAID"
+    ? await generateInvoiceForBooking(bookingId, booking.totalAmount, prisma, { status: "PAID" })
+    : null;
 
   const updatedBooking = await prisma.booking.update({
     where: { id: bookingId },
-    data: { status: "PAID" },
+    data: { status: payment.status === "PAID" ? "PAID" : "PENDING_PAYMENT" },
     include: includeBookingRelations(),
   });
 
@@ -152,8 +151,8 @@ async function applyPaidState(bookingId, transactionId, sessionId) {
         sessionId,
         paymentIntent: transactionId,
         paymentId: payment.id,
-        invoiceId: invoice.id,
-        invoiceNo: invoice.invoiceNo,
+        invoiceId: invoice?.id || null,
+        invoiceNo: invoice?.invoiceNo || null,
         platformFeePercent: PLATFORM_FEE_PERCENT,
       },
     },
@@ -236,7 +235,12 @@ router.post(
           }
 
           const transactionId = session.payment_intent || session.id || `STRIPE-${Date.now()}`;
-          await applyPaidState(bookingId, transactionId, session.id);
+          await applyPaidState(
+            bookingId,
+            transactionId,
+            session.id,
+            session.metadata?.paymentType || PAYMENT_TYPES.FULL_PAYMENT
+          );
           break;
         }
 
@@ -254,7 +258,12 @@ router.post(
               include: includeBookingRelations(),
             });
             if (booking && !(booking.status === "PAID" && booking.payment?.status === "PAID")) {
-              await applyPaidState(existingPayment.bookingId, paymentIntent.id, null);
+              await applyPaidState(
+                existingPayment.bookingId,
+                paymentIntent.id,
+                null,
+                PAYMENT_TYPES.FULL_PAYMENT
+              );
             }
             break;
           }
@@ -268,7 +277,12 @@ router.post(
           const bookingId = parseBookingId(linkedSession?.metadata?.bookingId);
 
           if (bookingId) {
-            await applyPaidState(bookingId, paymentIntent.id, linkedSession.id);
+            await applyPaidState(
+              bookingId,
+              paymentIntent.id,
+              linkedSession.id,
+              linkedSession.metadata?.paymentType || PAYMENT_TYPES.FULL_PAYMENT
+            );
           } else {
             console.log(`[Stripe] payment_intent.succeeded: no matching booking for PI ${paymentIntent.id}`);
           }
@@ -621,7 +635,7 @@ router.post(
         return res.status(404).json({ message: "Booking not found" });
       }
 
-      if (booking.status === "PAID" || booking.payment?.status === "PAID") {
+      if (booking.payment?.status === "PAID") {
         return res.status(400).json({ message: "This booking is already paid" });
       }
 
@@ -642,8 +656,18 @@ router.post(
         });
       }
 
+      const paymentType = req.body.paymentType || PAYMENT_TYPES.FULL_PAYMENT;
+      if (!Object.values(PAYMENT_TYPES).includes(paymentType)) {
+        return res.status(400).json({ message: "Invalid payment type" });
+      }
+
+      if (!booking.payment) {
+        return res.status(400).json({ message: "Payment schedule has not been created yet" });
+      }
+
+      const paymentSpec = getPaymentSpec(booking.payment, paymentType);
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-      const totalCents = Math.round(Number(booking.totalAmount) * 100);
+      const totalCents = Math.round(paymentSpec.amount * 100);
 
       // ── Destination Charges split ─────────────────────────────────────────
       // Platform fee: 10% of gross, retained by the platform account.
@@ -693,6 +717,7 @@ router.post(
         metadata: {
           bookingId: String(booking.id),
           customerId: String(req.user.id),
+          paymentType,
         },
         success_url: `${
           process.env.FRONTEND_URL || "http://localhost:5173"
@@ -751,7 +776,12 @@ router.post(
       }
 
       const transactionId = session.payment_intent || session.id || `STRIPE-${Date.now()}`;
-      const result = await applyPaidState(bookingId, transactionId, session.id);
+      const result = await applyPaidState(
+        bookingId,
+        transactionId,
+        session.id,
+        session.metadata?.paymentType || PAYMENT_TYPES.FULL_PAYMENT
+      );
 
       const refreshed = await prisma.booking.findUnique({
         where: { id: bookingId },

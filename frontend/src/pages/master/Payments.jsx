@@ -213,6 +213,9 @@ export default function Payments() {
             <option value="ALL">All Status</option>
             <option value="UNPAID">Unpaid</option>
             <option value="PENDING_VERIFICATION">Pending Verification</option>
+            <option value="DOWN_PAYMENT_PENDING_VERIFICATION">Down-payment Pending</option>
+            <option value="FINAL_PAYMENT_PENDING_VERIFICATION">Final Payment Pending</option>
+            <option value="PARTIALLY_PAID">Partially Paid</option>
             <option value="PAID">Paid</option>
             <option value="OVERDUE">Overdue</option>
             <option value="FAILED">Failed</option>
@@ -262,7 +265,8 @@ export default function Payments() {
                   <th>Customer</th>
                   <th>Operator</th>
                   <th>Method</th>
-                  <th>Amount</th>
+                  <th>Paid / Total</th>
+                  <th>Payment Status</th>
                   <th>Status</th>
                   <th>Paid At</th>
                   <th>Receipt</th>
@@ -289,7 +293,8 @@ export default function Payments() {
 
                     <td>{payment.booking?.operator?.companyName || "-"}</td>
                     <td>{payment.method || "-"}</td>
-                    <td>{money(payment.amount)}</td>
+                    <td>{money(payment.paidAmount)} / {money(payment.amount)}</td>
+                    <td>{label(payment.status)}</td>
 
                     <td>
                       <span className={`badge ${statusClass(payment.status)}`}>

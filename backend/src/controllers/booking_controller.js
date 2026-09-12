@@ -54,6 +54,9 @@ export async function acceptBooking(req, res, next) {
     const { booking: updated } = await acceptBookingAndRequestPayment({
       booking,
       actorUserId: req.user.id,
+      downPaymentPercent: req.body?.downPaymentPercent,
+      downPaymentDueDate: req.body?.downPaymentDueDate,
+      finalPaymentDueDate: req.body?.finalPaymentDueDate,
     });
 
     res.json(updated);

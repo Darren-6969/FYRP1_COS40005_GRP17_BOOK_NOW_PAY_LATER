@@ -119,7 +119,7 @@ export default function OperatorPaymentVerification() {
     const status = String(payment.status || "").toUpperCase();
     const isLoading = actionLoading.includes(String(payment.id));
 
-    if (status === "PENDING_VERIFICATION") {
+    if (["PENDING_VERIFICATION", "DOWN_PAYMENT_PENDING_VERIFICATION", "FINAL_PAYMENT_PENDING_VERIFICATION"].includes(status)) {
       return (
         <div className="operator-table-actions">
           <button
@@ -174,14 +174,20 @@ export default function OperatorPaymentVerification() {
     return <span className="operator-muted-text">No action</span>;
   };
 
-  const pendingCount = payments.filter(
-    (p) => String(p.status).toUpperCase() === "PENDING_VERIFICATION"
+  const pendingCount = payments.filter((p) =>
+    ["PENDING_VERIFICATION", "DOWN_PAYMENT_PENDING_VERIFICATION", "FINAL_PAYMENT_PENDING_VERIFICATION"].includes(
+      String(p.status).toUpperCase()
+    )
   ).length;
 
   const visiblePayments =
     activeTab === "ALL"
       ? payments
-      : payments.filter((p) => String(p.status).toUpperCase() === activeTab);
+      : payments.filter((p) =>
+          activeTab === "PENDING_VERIFICATION"
+            ? ["PENDING_VERIFICATION", "DOWN_PAYMENT_PENDING_VERIFICATION", "FINAL_PAYMENT_PENDING_VERIFICATION"].includes(String(p.status).toUpperCase())
+            : String(p.status).toUpperCase() === activeTab
+        );
 
   const totalPages = Math.max(1, Math.ceil(visiblePayments.length / rowsPerPage));
 
@@ -322,6 +328,7 @@ export default function OperatorPaymentVerification() {
                   <th>Customer</th>
                   <th>Method</th>
                   <th>Amount</th>
+                  <th>Paid to date</th>
                   <th>Receipt</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -342,6 +349,12 @@ export default function OperatorPaymentVerification() {
                     <td>{payment.booking?.customer?.name || "-"}</td>
                     <td>{payment.method || "-"}</td>
                     <td>{formatOperatorMoney(payment.amount)}</td>
+                    <td>
+                      {formatOperatorMoney(
+                        (payment.downPaymentStatus === "PAID" ? Number(payment.downPaymentAmount || 0) : 0) +
+                        (payment.finalPaymentStatus === "PAID" ? Number(payment.finalPaymentAmount || 0) : 0)
+                      )}
+                    </td>
 
                     <td>
                       {payment.booking?.receipt?.imageUrl ? (

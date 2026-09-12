@@ -16,8 +16,21 @@ export function startPaymentExpiryJob() {
       const expired = await prisma.booking.findMany({
         where: {
           status: { in: ["ACCEPTED", "PENDING_PAYMENT"] },
-          paymentDeadline: { lt: now },
-          payment: { status: { in: ["UNPAID", "PENDING_VERIFICATION"] } },
+          payment: {
+            is: {
+              OR: [
+                {
+                  downPaymentStatus: { in: ["UNPAID", "PENDING_VERIFICATION"] },
+                  downPaymentDueDate: { lt: now },
+                },
+                {
+                  downPaymentStatus: "PAID",
+                  finalPaymentStatus: { in: ["UNPAID", "PENDING_VERIFICATION"] },
+                  finalPaymentDueDate: { lt: now },
+                },
+              ],
+            },
+          },
         },
         include: {
           customer: { select: { id: true, name: true, email: true } },
@@ -31,7 +44,12 @@ export function startPaymentExpiryJob() {
         await prisma.$transaction([
           prisma.booking.update({
             where: { id: booking.id },
-            data: { status: "OVERDUE" },
+            data: {
+              status: "OVERDUE",
+              ...(booking.payment.downPaymentStatus !== "PAID"
+                ? { downPaymentStatus: "OVERDUE" }
+                : { finalPaymentStatus: "OVERDUE" }),
+            },
           }),
           prisma.payment.update({
             where: { bookingId: booking.id },
