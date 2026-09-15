@@ -122,3 +122,79 @@ export async function getOperatorDashboard(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * Operator booking log without automatic return completion.
+ * Returned vehicles stay PAID until the operator confirms the return using
+ * PATCH /operators/bookings/:id/confirm.
+ */
+export async function getOperatorBookings(req, res, next) {
+  try {
+    if (!canAccessOperator(req)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const { status, paymentStatus, q } = req.query;
+    const where = { ...bookingWhere(req) };
+
+    if (status && status !== "ALL") {
+      where.status = status;
+    }
+
+    if (q) {
+      const numericQuery = Number(q);
+      const searchableFields = [
+        { bookingCode: { contains: q, mode: "insensitive" } },
+        { serviceName: { contains: q, mode: "insensitive" } },
+        { serviceType: { contains: q, mode: "insensitive" } },
+        { location: { contains: q, mode: "insensitive" } },
+        {
+          customer: {
+            name: {
+              contains: q,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          customer: {
+            email: {
+              contains: q,
+              mode: "insensitive",
+            },
+          },
+        },
+      ];
+
+      if (Number.isInteger(numericQuery) && numericQuery > 0) {
+        searchableFields.unshift({ id: numericQuery });
+      }
+
+      where.OR = searchableFields;
+    }
+
+    const finalWhere =
+      paymentStatus && paymentStatus !== "ALL"
+        ? {
+            ...where,
+            payment: {
+              is: {
+                status: paymentStatus,
+              },
+            },
+          }
+        : where;
+
+    const bookings = await prisma.booking.findMany({
+      where: finalWhere,
+      include: includeBookingRelations(),
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json({
+      bookings: bookings.map(mapBooking),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
