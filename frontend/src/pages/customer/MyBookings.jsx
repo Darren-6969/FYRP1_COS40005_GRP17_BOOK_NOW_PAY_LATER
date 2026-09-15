@@ -44,7 +44,7 @@ function isPaymentRequired(booking) {
   }
 
   return (
-    ["ACCEPTED", "PENDING_PAYMENT"].includes(status) &&
+    status === "PENDING_PAYMENT" &&
     ["", "UNPAID", "PENDING"].includes(paymentStatus)
   );
 }

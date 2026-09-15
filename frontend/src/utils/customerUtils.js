@@ -1,5 +1,6 @@
 export function formatMoney(value) {
   const number = Number(value || 0);
+
   return new Intl.NumberFormat("en-MY", {
     style: "currency",
     currency: "MYR",
@@ -18,34 +19,71 @@ export function formatCustomerDate(value) {
 
 export function statusLabel(status) {
   const labels = {
-    PENDING: "Pending",
-    ACCEPTED: "Accepted",
+    PENDING: "Processing",
+    ACCEPTED: "Confirmed",
     REJECTED: "Rejected",
-    PENDING_PAYMENT: "Payment Pending",
+    PENDING_PAYMENT: "Awaiting Payment",
     PAID: "Paid",
     OVERDUE: "Expired",
     CANCELLED: "Cancelled",
     COMPLETED: "Completed",
+
     UNPAID: "Unpaid",
     PENDING_VERIFICATION: "Pending Verification",
     FAILED: "Failed",
   };
+
   return labels[status] || status || "-";
 }
 
 export function customerStatusClass(status) {
   const s = String(status || "").toLowerCase();
-  if (["paid", "completed", "approved", "sent"].includes(s)) return "success";
-  if (["accepted", "pending_payment"].includes(s)) return "info";
-  if (["pending", "unpaid", "pending_verification"].includes(s)) return "warning";
-  if (["rejected", "overdue", "cancelled", "failed"].includes(s)) return "danger";
+
+  if (
+    ["paid", "completed", "approved", "sent"].includes(s)
+  ) {
+    return "success";
+  }
+
+  if (
+    ["accepted", "pending_payment"].includes(s)
+  ) {
+    return "info";
+  }
+
+  if (
+    ["pending", "unpaid", "pending_verification"].includes(s)
+  ) {
+    return "warning";
+  }
+
+  if (
+    ["rejected", "overdue", "cancelled", "failed"].includes(s)
+  ) {
+    return "danger";
+  }
+
   return "neutral";
 }
 
 export function canCustomerPay(booking) {
-  return ["ACCEPTED", "PENDING_PAYMENT"].includes(booking?.status);
+  const bookingStatus = String(
+    booking?.status || ""
+  ).toUpperCase();
+
+  const paymentStatus = String(
+    booking?.payment?.status || ""
+  ).toUpperCase();
+
+  return (
+    bookingStatus === "PENDING_PAYMENT" &&
+    ["", "UNPAID", "PENDING"].includes(paymentStatus)
+  );
 }
 
 export function canCustomerCancel(booking) {
-  return ["PENDING", "ACCEPTED", "PENDING_PAYMENT"].includes(booking?.status);
+  return [
+    "PENDING",
+    "PENDING_PAYMENT",
+  ].includes(booking?.status);
 }

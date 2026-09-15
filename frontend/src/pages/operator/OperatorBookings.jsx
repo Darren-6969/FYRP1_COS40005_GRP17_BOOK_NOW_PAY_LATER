@@ -18,8 +18,6 @@ const tabs = [
 ];
 
 const CONFIRMED_STATUSES = new Set([
-  "ACCEPTED",
-  "PENDING_PAYMENT",
   "PAID",
 ]);
 
@@ -107,9 +105,7 @@ setBookings(res.data.bookings || []);
 
     // Only confirmed / active bookings
     const activeStatuses = [
-      "ACCEPTED",
-      "PENDING_PAYMENT",
-      "PAID",
+        "PAID",
     ];
 
     if (!activeStatuses.includes(status)) {

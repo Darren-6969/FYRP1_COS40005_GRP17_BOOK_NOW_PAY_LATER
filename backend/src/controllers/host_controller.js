@@ -342,28 +342,62 @@ async function createBookingFromIntent(intent, user) {
     return full;
   }, { timeout: 15000 });
 
-  const operatorUrl = frontendUrl(`/operator/bookings/${booking.id}`);
+  // Automatically accept the booking.
+// This performs the same payment/invoice setup that previously
+// happened when the operator clicked Accept.
+console.log("🚀 AUTO ACCEPT START", {
+  bookingId: booking.id,
+  bookingCode: booking.bookingCode,
+  status: booking.status,
+});
 
-  await notifyCustomerByBooking({
+let acceptedBooking;
+let payment;
+let invoice;
+
+try {
+  const result = await acceptBookingAndRequestPayment({
     booking,
-    title: "Booking confirmed",
-    message: `Your BNPL booking ${booking.bookingCode} has been confirmed and is awaiting payment.`,
-    type: "BOOKING_CONFIRMED",
+    actorUserId: user.id,
   });
 
-  await notifyOperatorUsersByBooking({
-  booking,
+  acceptedBooking = result.booking;
+  payment = result.payment;
+  invoice = result.invoice;
+
+  console.log("✅ AUTO ACCEPT SUCCESS", {
+    bookingId: acceptedBooking.id,
+    bookingCode: acceptedBooking.bookingCode,
+    status: acceptedBooking.status,
+    paymentStatus: payment?.status,
+    invoiceId: invoice?.id,
+  });
+} catch (error) {
+  console.error("❌ AUTO ACCEPT FAILED", {
+    message: error.message,
+    stack: error.stack,
+  });
+
+  throw error;
+}
+
+const operatorUrl = frontendUrl(
+  `/operator/bookings/${acceptedBooking.id}`
+);
+
+await notifyOperatorUsersByBooking({
+  booking: acceptedBooking,
   title: "New booking",
-  message: `${booking.bookingCode} has been confirmed and is awaiting payment.`,
-  type: "BOOKING_SUBMITTED",
-  emailSubject: `New BNPL Booking - ${booking.bookingCode}`,
+  message: `${acceptedBooking.bookingCode} has been automatically confirmed and is awaiting payment.`,
+  type: "BOOKING_CONFIRMED",
+  emailSubject: `New BNPL Booking - ${acceptedBooking.bookingCode}`,
   emailHtml: bookingSubmittedTemplate({
-    booking,
+    booking: acceptedBooking,
     operatorUrl,
   }),
 });
 
-  return booking;
+return acceptedBooking;
 }
 
 export async function createHostBookingIntent(req, res, next) {
