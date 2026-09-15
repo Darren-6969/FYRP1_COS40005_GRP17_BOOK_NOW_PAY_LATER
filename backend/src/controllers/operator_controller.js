@@ -162,14 +162,12 @@ async function findOperatorBooking(req, bookingId) {
 }
 
 async function autoCompletePaidBookings(req) {
-  // Intentionally disabled.
+  // V2.6:
+  // Booking completion is now handled manually by the
+  // operator using the Return action.
   //
-  // A paid booking should remain PAID after its return date
-  // until the operator manually confirms that the vehicle
-  // has been returned.
-  //
-  // This allows the dashboard to show:
-  // "Vehicles awaiting return confirmation".
+  // Keep this function temporarily because existing
+  // dashboard/bookings code still calls it.
   return;
 }
 
@@ -983,7 +981,23 @@ export async function cancelOperatorBooking(req, res, next) {
       });
     }
 
-    const { reason } = req.body || {};
+    const reason = String(
+  req.body?.reason || ""
+).trim();
+
+if (!reason) {
+  return res.status(400).json({
+    message:
+      "Cancellation reason is required.",
+  });
+}
+
+if (reason.length < 5) {
+  return res.status(400).json({
+    message:
+      "Cancellation reason must be at least 5 characters.",
+  });
+}
 
     const updatedBooking = await prisma.booking.update({
       where: { id: booking.id },
@@ -1000,7 +1014,7 @@ export async function cancelOperatorBooking(req, res, next) {
       entityId: booking.id,
       details: {
         previousStatus: booking.status,
-        reason: reason || null,
+        reason,
       },
     });
 
@@ -1016,7 +1030,7 @@ export async function cancelOperatorBooking(req, res, next) {
       message: `Your booking ${
         booking.bookingCode || booking.id
       } has been cancelled by the merchant.${
-        reason ? ` Reason: ${reason}` : ""
+        ` Reason: ${reason}`
       }`,
       type: "OPERATOR_BOOKING_CANCELLED",
       emailSubject: `Booking Cancelled - ${booking.bookingCode || booking.id}`,
@@ -1031,6 +1045,251 @@ export async function cancelOperatorBooking(req, res, next) {
 
     res.json({
       booking: mapBooking(updatedBooking),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handoverBooking(req, res, next) {
+  try {
+    const booking = await findOperatorBooking(
+      req,
+      req.params.id
+    );
+
+    if (!booking) {
+      return res.status(404).json({
+        message: "Booking not found",
+      });
+    }
+
+    /*
+     * Handover is only allowed after full payment.
+     */
+    const isPaid =
+      booking.status === "PAID" ||
+      booking.payment?.status === "PAID";
+
+    if (!isPaid) {
+      return res.status(400).json({
+        message:
+          "The booking must be fully paid before handover.",
+      });
+    }
+
+    if (booking.status === "IN_PROGRESS") {
+      return res.status(400).json({
+        message:
+          "This booking has already been handed over.",
+      });
+    }
+
+    if (
+      [
+        "COMPLETED",
+        "CANCELLED",
+        "REJECTED",
+        "OVERDUE",
+      ].includes(booking.status)
+    ) {
+      return res.status(400).json({
+        message: `Handover is not available when booking status is ${booking.status}.`,
+      });
+    }
+
+    const updatedBooking =
+      await prisma.booking.update({
+        where: {
+          id: booking.id,
+        },
+
+        data: {
+          status: "IN_PROGRESS",
+        },
+
+        include: includeBookingRelations(),
+      });
+
+    await createAuditLog({
+      req,
+      action: "BOOKING_HANDED_OVER",
+      entityType: "Booking",
+      entityId: booking.id,
+
+      details: {
+        previousStatus: booking.status,
+        status: "IN_PROGRESS",
+        handedOverAt: new Date(),
+      },
+    });
+
+    const customerUrl = `${
+      process.env.FRONTEND_URL ||
+      "http://localhost:5173"
+    }/customer/bookings/${booking.id}`;
+
+    const config =
+      await getOperatorEmailConfig(
+        updatedBooking.operatorId
+      );
+
+    await createCustomerNotification({
+      booking: updatedBooking,
+
+      title: "Booking handover completed",
+
+      message: `Your booking ${
+        updatedBooking.bookingCode ||
+        updatedBooking.id
+      } has been handed over and is now in progress.`,
+
+      type: "BOOKING_HANDED_OVER",
+
+      emailSubject: `Booking In Progress - ${
+        updatedBooking.bookingCode ||
+        updatedBooking.id
+      }`,
+
+      emailHtml: bookingStatusTemplate({
+        booking: updatedBooking,
+        status: "IN_PROGRESS",
+        customerUrl,
+        emailFooterText:
+          config?.emailFooterText,
+      }),
+    });
+
+    res.json({
+      message:
+        "Booking handed over successfully",
+      booking: mapBooking(updatedBooking),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function returnBooking(
+  req,
+  res,
+  next
+) {
+  try {
+    const booking =
+      await findOperatorBooking(
+        req,
+        req.params.id
+      );
+
+    if (!booking) {
+      return res.status(404).json({
+        message: "Booking not found",
+      });
+    }
+
+    /*
+     * Return is only available after handover.
+     */
+    if (
+      booking.status !== "IN_PROGRESS"
+    ) {
+      return res.status(400).json({
+        message:
+          "Only an in-progress booking can be returned.",
+      });
+    }
+
+    const updatedBooking =
+      await prisma.booking.update({
+        where: {
+          id: booking.id,
+        },
+
+        data: {
+          status: "COMPLETED",
+        },
+
+        include: includeBookingRelations(),
+      });
+
+    await createAuditLog({
+      req,
+
+      action:
+        "BOOKING_RETURN_COMPLETED",
+
+      entityType: "Booking",
+
+      entityId:
+        booking.id,
+
+      details: {
+        previousStatus:
+          booking.status,
+
+        status:
+          "COMPLETED",
+
+        returnedAt:
+          new Date(),
+      },
+    });
+
+    const customerUrl = `${
+      process.env.FRONTEND_URL ||
+      "http://localhost:5173"
+    }/customer/bookings/${booking.id}`;
+
+    const config =
+      await getOperatorEmailConfig(
+        updatedBooking.operatorId
+      );
+
+    await createCustomerNotification({
+      booking:
+        updatedBooking,
+
+      title:
+        "Booking completed",
+
+      message: `Your booking ${
+        updatedBooking.bookingCode ||
+        updatedBooking.id
+      } has been returned and completed.`,
+
+      type:
+        "BOOKING_COMPLETED",
+
+      emailSubject: `Booking Completed - ${
+        updatedBooking.bookingCode ||
+        updatedBooking.id
+      }`,
+
+      emailHtml:
+        bookingStatusTemplate({
+          booking:
+            updatedBooking,
+
+          status:
+            "COMPLETED",
+
+          customerUrl,
+
+          bookingCompletedEmailText:
+            config?.bookingCompletedEmailText,
+
+          emailFooterText:
+            config?.emailFooterText,
+        }),
+    });
+
+    res.json({
+      message:
+        "Booking return completed successfully",
+
+      booking:
+        mapBooking(updatedBooking),
     });
   } catch (err) {
     next(err);

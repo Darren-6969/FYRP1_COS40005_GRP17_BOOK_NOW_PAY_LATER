@@ -18,6 +18,9 @@ import {
   suggestAlternative,
   sendPaymentRequest,
 
+  handoverBooking,
+  returnBooking,
+
   getOperatorPaymentVerifications,
   approvePayment,
   rejectPayment,
@@ -136,6 +139,18 @@ router.get("/dashboard", ...ownerOrStaffAccess, getOperatorDashboard);
 router.get("/bookings", ...ownerOrStaffAccess, getOperatorBookings);
 router.get("/bookings/:id", ...ownerOrStaffAccess, getOperatorBookingById);
 
+router.patch(
+  "/bookings/:id/handover",
+  ...ownerOrStaffAccess,
+  handoverBooking
+);
+
+router.patch(
+  "/bookings/:id/return",
+  ...ownerOrStaffAccess,
+  returnBooking
+);
+
 router.patch("/bookings/:id/accept", ...ownerOrStaffAccess, acceptBooking);
 router.patch("/bookings/:id/reject", ...ownerOrStaffAccess, rejectBooking);
 router.patch(
@@ -154,7 +169,11 @@ router.patch(
  *
  * If you want STAFF to do these too, change ownerOnlyAccess to ownerOrStaffAccess.
  */
-router.patch("/bookings/:id/cancel", ...ownerOnlyAccess, cancelOperatorBooking);
+router.patch(
+  "/bookings/:id/cancel",
+  ...ownerOrStaffAccess,
+  cancelOperatorBooking
+);
 router.patch("/bookings/:id/confirm", ...ownerOnlyAccess, confirmBooking);
 router.patch(
   "/bookings/:id/send-payment-request",

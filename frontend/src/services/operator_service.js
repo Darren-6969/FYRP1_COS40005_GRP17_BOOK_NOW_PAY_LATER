@@ -26,164 +26,339 @@ export const operatorService = {
     return api.get(`/operators/bookings/${id}`);
   },
 
+  /**
+   * Old booking approval APIs.
+   * Keep these for now in case another page still uses them.
+   * OperatorBookingDetail.jsx no longer uses them.
+   */
   acceptBooking(id, payload = {}) {
-    return api.patch(`/operators/bookings/${id}/accept`, payload);
+    return api.patch(
+      `/operators/bookings/${id}/accept`,
+      payload
+    );
   },
 
   rejectBooking(id) {
-    return api.patch(`/operators/bookings/${id}/reject`);
-  },
-
-  cancelBooking(id, payload = {}) {
-    return api.patch(`/operators/bookings/${id}/cancel`, payload);
-  },
-  
-  confirmBooking(id) {
-    return api.patch(`/operators/bookings/${id}/confirm`);
+    return api.patch(
+      `/operators/bookings/${id}/reject`
+    );
   },
 
   suggestAlternative(id, payload) {
-    return api.patch(`/operators/bookings/${id}/suggest-alternative`, payload);
+    return api.patch(
+      `/operators/bookings/${id}/suggest-alternative`,
+      payload
+    );
   },
 
+  confirmBooking(id) {
+    return api.patch(
+      `/operators/bookings/${id}/confirm`
+    );
+  },
+
+  /**
+   * V2.6 Booking Lifecycle
+   *
+   * PAID
+   * → Handover
+   * → IN_PROGRESS / HANDED_OVER
+   * → Return
+   * → COMPLETED
+   */
+
+  handoverBooking(id) {
+    return api.patch(
+      `/operators/bookings/${id}/handover`
+    );
+  },
+
+  returnBooking(id) {
+    return api.patch(
+      `/operators/bookings/${id}/return`
+    );
+  },
+
+  /**
+   * Operator safety valve.
+   * Cancellation reason must be supplied.
+   */
+  cancelBooking(id, payload = {}) {
+    return api.patch(
+      `/operators/bookings/${id}/cancel`,
+      payload
+    );
+  },
+
+  /**
+   * Payment request / deadline
+   */
   sendPaymentRequest(id, payload = {}) {
-    return api.patch(`/operators/bookings/${id}/send-payment-request`, payload);
+    return api.patch(
+      `/operators/bookings/${id}/send-payment-request`,
+      payload
+    );
   },
 
+  /**
+   * Payments
+   */
   getPayments(params = {}) {
-    return api.get("/operators/payments", { params });
+    return api.get(
+      "/operators/payments",
+      { params }
+    );
   },
 
   approvePayment(id) {
-    return api.patch(`/operators/payments/${id}/approve`);
+    return api.patch(
+      `/operators/payments/${id}/approve`
+    );
   },
 
   rejectPayment(id, payload = {}) {
-    return api.patch(`/operators/payments/${id}/reject`, payload);
+    return api.patch(
+      `/operators/payments/${id}/reject`,
+      payload
+    );
   },
 
   sendPaymentInvoice(id) {
-    return api.patch(`/operators/payments/${id}/send-invoice`);
+    return api.patch(
+      `/operators/payments/${id}/send-invoice`
+    );
   },
 
   sendPaymentReceipt(id) {
-    return api.patch(`/operators/payments/${id}/send-receipt`);
+    return api.patch(
+      `/operators/payments/${id}/send-receipt`
+    );
   },
 
+  /**
+   * Invoices
+   */
   getInvoices(params = {}) {
-    return api.get("/invoices", { params });
+    return api.get("/invoices", {
+      params,
+    });
   },
 
   sendInvoice(id) {
-    return api.post(`/invoices/${id}/send`);
+    return api.post(
+      `/invoices/${id}/send`
+    );
   },
 
   voidInvoice(id) {
-    return api.patch(`/invoices/${id}/void`);
+    return api.patch(
+      `/invoices/${id}/void`
+    );
   },
 
+  /**
+   * Notifications
+   */
   getNotifications() {
-    return api.get("/operators/notifications");
+    return api.get(
+      "/operators/notifications"
+    );
   },
 
   markNotificationRead(id) {
-    return api.patch(`/operators/notifications/${id}/read`);
+    return api.patch(
+      `/operators/notifications/${id}/read`
+    );
   },
 
   markAllNotificationsRead() {
-    return api.patch("/operators/notifications/read-all");
+    return api.patch(
+      "/operators/notifications/read-all"
+    );
   },
 
+  /**
+   * Reports / analytics
+   */
   getReports(params = {}) {
-    return api.get("/operators/reports", { params });
+    return api.get(
+      "/operators/reports",
+      { params }
+    );
   },
 
   getAnalytics(params = {}) {
-    return api.get("/operators/analytics", { params });
+    return api.get(
+      "/operators/analytics",
+      { params }
+    );
   },
 
+  /**
+   * Settings
+   */
   getSettings() {
-    return api.get("/operators/settings");
+    return api.get(
+      "/operators/settings"
+    );
   },
 
   updateSettings(payload) {
-  return api.patch("/operators/settings", payload);
-},
-
-uploadOperatorLogo(file) {
-  const formData = new FormData();
-  formData.append("logo", file);
-
-  return api.post("/uploads/operator-logo", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
-},
-
-previewEmailTemplate(template, overrides = {}) {
-  return api.get("/operators/settings/email-preview", {
-    params: { template, ...overrides },
-  });
-},
-  // Fetch live Stripe Connect account status (charges enabled, restrictions, etc.)
-  getStripeAccountStatus() {
-    return api.get("/stripe/account-status");
+    return api.patch(
+      "/operators/settings",
+      payload
+    );
   },
 
-  // Generate a Stripe Express onboarding link.
-  // SANDBOX BYPASS: the link leads to a Stripe-hosted form that accepts fake
-  // test data (SSN 000-00-0000, any address) to lift the RESTRICTED status
-  // without real KYC — for sandbox testing only.
+  uploadOperatorLogo(file) {
+    const formData = new FormData();
+
+    formData.append(
+      "logo",
+      file
+    );
+
+    return api.post(
+      "/uploads/operator-logo",
+      formData,
+      {
+        headers: {
+          "Content-Type":
+            "multipart/form-data",
+        },
+      }
+    );
+  },
+
+  previewEmailTemplate(
+    template,
+    overrides = {}
+  ) {
+    return api.get(
+      "/operators/settings/email-preview",
+      {
+        params: {
+          template,
+          ...overrides,
+        },
+      }
+    );
+  },
+
+  /**
+   * Stripe Connect
+   */
+  getStripeAccountStatus() {
+    return api.get(
+      "/stripe/account-status"
+    );
+  },
+
   createStripeOnboardingLink() {
-    return api.post("/stripe/onboarding-link");
+    return api.post(
+      "/stripe/onboarding-link"
+    );
   },
 };
 
+/**
+ * Format money
+ */
 export function formatOperatorMoney(value) {
-  return new Intl.NumberFormat("en-MY", {
-    style: "currency",
-    currency: "MYR",
-  }).format(Number(value || 0));
+  return new Intl.NumberFormat(
+    "en-MY",
+    {
+      style: "currency",
+      currency: "MYR",
+    }
+  ).format(Number(value || 0));
 }
 
+/**
+ * Format date only
+ */
 export function formatOperatorDate(value) {
-  if (!value) return "-";
-
-  return new Intl.DateTimeFormat("en-MY", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
-export function formatOperatorDateTime(value) {
   if (!value) return "-";
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "-";
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
 
-  return new Intl.DateTimeFormat("en-MY", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: "Asia/Kuala_Lumpur",
-  }).format(date);
+  return new Intl.DateTimeFormat(
+    "en-MY",
+    {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      timeZone:
+        "Asia/Kuala_Lumpur",
+    }
+  ).format(date);
 }
 
-export function operatorStatusClass(status) {
-  const normalized = String(status || "").toUpperCase();
+/**
+ * Format date + time
+ */
+export function formatOperatorDateTime(
+  value
+) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat(
+    "en-MY",
+    {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+      timeZone:
+        "Asia/Kuala_Lumpur",
+    }
+  ).format(date);
+}
+
+/**
+ * CSS class for booking/payment statuses
+ */
+export function operatorStatusClass(
+  status
+) {
+  const normalized = String(
+    status || ""
+  ).toUpperCase();
 
   if (
-    ["PAID", "APPROVED", "ACCEPTED", "COMPLETED", "SENT", "ACTIVE"].includes(
-      normalized
-    )
+    [
+      "PAID",
+      "APPROVED",
+      "ACCEPTED",
+      "COMPLETED",
+      "SENT",
+      "ACTIVE",
+      "VERIFIED",
+    ].includes(normalized)
   ) {
     return "success";
+  }
+
+  if (
+    [
+      "IN_PROGRESS",
+      "HANDED_OVER",
+      "NEW",
+    ].includes(normalized)
+  ) {
+    return "info";
   }
 
   if (
@@ -191,6 +366,8 @@ export function operatorStatusClass(status) {
       "PENDING",
       "PENDING_PAYMENT",
       "PENDING_VERIFICATION",
+      "DOWN_PAYMENT_PENDING_VERIFICATION",
+      "FINAL_PAYMENT_PENDING_VERIFICATION",
       "UNPAID",
       "GENERATED",
     ].includes(normalized)
@@ -198,14 +375,14 @@ export function operatorStatusClass(status) {
     return "warning";
   }
 
-  if (["NEW"].includes(normalized)) {
-    return "info";
-  }
-
   if (
-    ["FAILED", "OVERDUE", "CANCELLED", "REJECTED", "SUSPENDED"].includes(
-      normalized
-    )
+    [
+      "FAILED",
+      "OVERDUE",
+      "CANCELLED",
+      "REJECTED",
+      "SUSPENDED",
+    ].includes(normalized)
   ) {
     return "danger";
   }
@@ -213,11 +390,92 @@ export function operatorStatusClass(status) {
   return "neutral";
 }
 
-export function operatorStatusLabel(status) {
+/**
+ * Human readable status label
+ */
+export function operatorStatusLabel(
+  status
+) {
   if (!status) return "-";
 
-  return String(status)
-    .replaceAll("_", " ")
-    .toLowerCase()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  const normalized = String(
+    status
+  ).toUpperCase();
+
+  const labels = {
+    PENDING:
+      "Pending",
+
+    PENDING_PAYMENT:
+      "Awaiting Payment",
+
+    PENDING_VERIFICATION:
+      "Pending Verification",
+
+    DOWN_PAYMENT_PENDING_VERIFICATION:
+      "Down Payment Pending Verification",
+
+    FINAL_PAYMENT_PENDING_VERIFICATION:
+      "Final Payment Pending Verification",
+
+    ACCEPTED:
+      "Accepted",
+
+    PAID:
+      "Paid",
+
+    IN_PROGRESS:
+      "In Progress",
+
+    HANDED_OVER:
+      "Handed Over",
+
+    COMPLETED:
+      "Completed",
+
+    CANCELLED:
+      "Cancelled",
+
+    REJECTED:
+      "Rejected",
+
+    OVERDUE:
+      "Overdue",
+
+    UNPAID:
+      "Unpaid",
+
+    APPROVED:
+      "Approved",
+
+    VERIFIED:
+      "Verified",
+
+    FAILED:
+      "Failed",
+
+    SENT:
+      "Sent",
+
+    GENERATED:
+      "Generated",
+
+    ACTIVE:
+      "Active",
+
+    SUSPENDED:
+      "Suspended",
+  };
+
+  return (
+    labels[normalized] ||
+    normalized
+      .replaceAll("_", " ")
+      .toLowerCase()
+      .replace(
+        /\b\w/g,
+        (char) =>
+          char.toUpperCase()
+      )
+  );
 }
