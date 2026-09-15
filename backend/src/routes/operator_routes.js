@@ -7,7 +7,6 @@ import {
   getOperators,
   updateOperatorStatus,
   deleteOperator,
-  getOperatorBookings,
   getOperatorSettlements, /* Getting Settlements for STRIPE */
   getOperatorBookingById,
   acceptBooking,
@@ -41,7 +40,10 @@ import {
   revokeOperatorApiKey,
   updateOperatorAllowedOrigins,
 } from "../controllers/operator_controller.js";
-import { getOperatorDashboard } from "../controllers/operator_dashboard_controller.js";
+import {
+  getOperatorDashboard,
+  getOperatorBookings,
+} from "../controllers/operator_dashboard_controller.js";
 import {
   getOperatorApplications,
   reviewOperatorApplication,
