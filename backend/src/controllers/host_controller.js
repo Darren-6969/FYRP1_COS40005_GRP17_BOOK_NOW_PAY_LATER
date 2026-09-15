@@ -1,3 +1,5 @@
+console.log("✅ NEW HOST CONTROLLER LOADED - V2.6");
+
 import crypto from "crypto";
 import prisma from "../config/db.js";
 import {
@@ -13,6 +15,7 @@ import bcrypt from "bcryptjs";
 import { generateUserCode } from "../services/userCode.js";
 import { issueTokenPair, sanitizeUser } from "./auth_controller.js";
 import { sendEmail } from "../services/email_service.js";
+import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 
 async function mintHandoff(intentId) {
   const raw = crypto.randomBytes(32).toString("hex");
@@ -268,6 +271,11 @@ async function createBookingFromIntent(intent, user) {
     intent.pickupDate
   );
 
+  console.log("✅ createBookingFromIntent V2.6 RUNNING", {
+  intentId: intent.id,
+  hostBookingRef: intent.hostBookingRef,
+});
+
   const booking = await prisma.$transaction(async (tx) => {
     const created = await tx.booking.create({
       data: {
@@ -282,9 +290,18 @@ async function createBookingFromIntent(intent, user) {
         returnDate: intent.returnDate,
         location: intent.location,
         totalAmount: intent.totalAmount,
+        // No operator acceptance queue.
+      // Once the customer claims the host booking,
+      // the booking is confirmed and awaits payment.
         status: "PENDING",
         paymentDeadline: defaultPaymentDeadline,
       },
+    });
+
+    console.log("✅ BOOKING CREATED V2.6", {
+      id: created.id,
+      bookingCode: created.bookingCode,
+      status: created.status,
     });
 
     const full = await tx.booking.update({
@@ -329,19 +346,22 @@ async function createBookingFromIntent(intent, user) {
 
   await notifyCustomerByBooking({
     booking,
-    title: "Booking submitted",
-    message: `Your BNPL booking ${booking.bookingCode} has been submitted.`,
-    type: "BOOKING_SUBMITTED",
+    title: "Booking confirmed",
+    message: `Your BNPL booking ${booking.bookingCode} has been confirmed and is awaiting payment.`,
+    type: "BOOKING_CONFIRMED",
   });
 
   await notifyOperatorUsersByBooking({
+  booking,
+  title: "New booking",
+  message: `${booking.bookingCode} has been confirmed and is awaiting payment.`,
+  type: "BOOKING_SUBMITTED",
+  emailSubject: `New BNPL Booking - ${booking.bookingCode}`,
+  emailHtml: bookingSubmittedTemplate({
     booking,
-    title: "New booking request",
-    message: `${booking.bookingCode} requires review.`,
-    type: "BOOKING_SUBMITTED",
-    emailSubject: `New BNPL Booking Request - ${booking.bookingCode}`,
-    emailHtml: bookingSubmittedTemplate({ booking, operatorUrl }),
-  });
+    operatorUrl,
+  }),
+});
 
   return booking;
 }

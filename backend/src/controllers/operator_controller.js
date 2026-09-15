@@ -162,26 +162,15 @@ async function findOperatorBooking(req, bookingId) {
 }
 
 async function autoCompletePaidBookings(req) {
-  await prisma.booking.updateMany({
-    where: {
-      ...bookingWhere(req),
-
-      status: "PAID",
-
-      payment: {
-        is: {
-          status: "PAID",
-        },
-      },
-
-      returnDate: {
-        lte: new Date(),
-      },
-    },
-    data: {
-      status: "COMPLETED",
-    },
-  });
+  // Intentionally disabled.
+  //
+  // A paid booking should remain PAID after its return date
+  // until the operator manually confirms that the vehicle
+  // has been returned.
+  //
+  // This allows the dashboard to show:
+  // "Vehicles awaiting return confirmation".
+  return;
 }
 
 async function createAuditLog({ req, action, entityType, entityId, details = {} }) {

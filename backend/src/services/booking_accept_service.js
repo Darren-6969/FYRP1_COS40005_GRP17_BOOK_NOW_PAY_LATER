@@ -5,6 +5,7 @@ import { notifyCustomerByBooking } from "./notification_email_service.js";
 import { invoiceSentTemplate } from "./email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 
+
 const ACCEPTABLE_STATUSES = ["PENDING", "ALTERNATIVE_SUGGESTED"];
 
 function includeBookingRelations() {

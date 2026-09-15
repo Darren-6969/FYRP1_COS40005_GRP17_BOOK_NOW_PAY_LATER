@@ -117,7 +117,7 @@ export default function OperatorLayout() {
         text.toLowerCase().includes("booking") ||
         text.match(/BNPL-\d+/i)
       ) {
-        return "/operator/booking-requests";
+        return "/operator/bookings";
       }
 
       return "/operator/notifications";

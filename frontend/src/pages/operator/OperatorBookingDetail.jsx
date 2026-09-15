@@ -126,7 +126,7 @@ export default function OperatorBookingDetail() {
   return (
     <div className="operator-page">
       <div className="operator-detail-top">
-        <Link to="/operator/booking-requests">‹ Back to Requests</Link>
+        <Link to="/operator/bookings">‹ Back to Bookings</Link>
       </div>
 
       <section className="operator-detail-grid">

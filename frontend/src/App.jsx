@@ -43,7 +43,7 @@ import CustomerHelp from "./pages/customer/CustomerHelp";
 import OperatorLayout from "./pages/operator/layout/OperatorLayout";
 import OperatorDashboard from "./pages/operator/OperatorDashboard";
 import OperatorProfile from "./pages/operator/OperatorProfile";
-import OperatorBookingRequests from "./pages/operator/OperatorBookingRequests";
+import OperatorBookings from "./pages/operator/OperatorBookings";
 import OperatorBookingDetail from "./pages/operator/OperatorBookingDetail";
 import OperatorPaymentVerification from "./pages/operator/OperatorPaymentVerification";
 import OperatorBookingLog from "./pages/operator/OperatorBookingLog";
@@ -98,17 +98,58 @@ export default function App() {
               <Route index element={<Navigate to="dashboard" replace />} />
 
               {/* OWNER + STAFF */}
-              <Route element={<OperatorAccessRoute allowedAccess={["OWNER", "STAFF"]} />}>
-                <Route path="dashboard" element={<OperatorDashboard />} />
-                <Route path="profile" element={<OperatorProfile />} />
-                <Route path="booking-requests" element={<OperatorBookingRequests />} />
-                <Route path="bookings/:id" element={<OperatorBookingDetail />} />
-                <Route path="payments" element={<OperatorPaymentVerification />} />
-                <Route path="booking-log" element={<OperatorBookingLog />} />
-                <Route path="invoices" element={<OperatorInvoices />} />
-                <Route path="notifications" element={<OperatorNotifications />} />
-                <Route path="help" element={<OperatorHelp />} />
-              </Route>
+              <Route
+                  element={
+                    <OperatorAccessRoute
+                      allowedAccess={["OWNER", "STAFF"]}
+                    />
+                  }
+                >
+                  <Route
+                    path="dashboard"
+                    element={<OperatorDashboard />}
+                  />
+
+                  <Route
+                    path="profile"
+                    element={<OperatorProfile />}
+                  />
+
+                  <Route
+                    path="bookings"
+                    element={<OperatorBookings />}
+                  />
+
+                  <Route
+                    path="bookings/:id"
+                    element={<OperatorBookingDetail />}
+                  />
+
+                  <Route
+                    path="payments"
+                    element={<OperatorPaymentVerification />}
+                  />
+
+                  <Route
+                    path="booking-log"
+                    element={<OperatorBookingLog />}
+                  />
+
+                  <Route
+                    path="invoices"
+                    element={<OperatorInvoices />}
+                  />
+
+                  <Route
+                    path="notifications"
+                    element={<OperatorNotifications />}
+                  />
+
+                  <Route
+                    path="help"
+                    element={<OperatorHelp />}
+                  />
+                </Route>
 
               {/* OWNER ONLY */}
               <Route element={<OperatorAccessRoute allowedAccess={["OWNER"]} />}>

@@ -25,8 +25,8 @@ const links = [
     allowedAccess: ["OWNER", "STAFF"],
   },
   {
-    to: "/operator/booking-requests",
-    label: "Booking Requests",
+    to: "/operator/bookings",
+    label: "Bookings",
     icon: <ClipboardList size={20} />,
     allowedAccess: ["OWNER", "STAFF"],
   },

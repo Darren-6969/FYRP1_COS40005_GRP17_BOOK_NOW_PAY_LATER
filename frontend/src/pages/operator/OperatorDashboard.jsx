@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye } from "lucide-react";
 import {
@@ -17,6 +17,7 @@ const POLL_INTERVAL_MS = 8000;
 
 export default function OperatorDashboard() {
   const [summary, setSummary] = useState(null);
+  const [bookings, setBookings] = useState([]);
   const [recentBookings, setRecentBookings] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [forecastData, setForecastData] = useState(null);
@@ -47,12 +48,14 @@ export default function OperatorDashboard() {
       setLoading(true);
       setError("");
 
-      const [dashboardRes, reportsRes] = await Promise.all([
+      const [dashboardRes, bookingsRes, reportsRes] = await Promise.all([
         operatorService.getDashboard(),
+        operatorService.getBookings(),
         operatorService.getReports().catch(() => ({ data: null }))
       ]);
 
       setSummary(dashboardRes.data.summary || {});
+      setBookings(bookingsRes.data.bookings || []);
       setRecentBookings(dashboardRes.data.recentBookings || []);
       setNotifications(dashboardRes.data.notifications || []);
       setForecastData(reportsRes.data);
@@ -71,11 +74,15 @@ export default function OperatorDashboard() {
   // loadDashboard() is expensive, so it stays on the initial load only.
   const refreshDashboardSilently = async () => {
     try {
-      const dashboardRes = await operatorService.getDashboard();
+      const [dashboardRes, bookingsRes] = await Promise.all([
+        operatorService.getDashboard(),
+        operatorService.getBookings(),
+      ]);
 
-      setSummary(dashboardRes.data.summary || {});
-      setRecentBookings(dashboardRes.data.recentBookings || []);
-      setNotifications(dashboardRes.data.notifications || []);
+    setSummary(dashboardRes.data.summary || {});
+    setBookings(bookingsRes.data.bookings || []);
+    setRecentBookings(dashboardRes.data.recentBookings || []);
+    setNotifications(dashboardRes.data.notifications || []);
     } catch {
       // Ignore transient poll failures; the next tick retries.
     }
@@ -154,6 +161,105 @@ export default function OperatorDashboard() {
   const peakDay = forecastChartData.length > 0 ? 
     forecastChartData.reduce((max, d) => (d.predictedBookings > max.predictedBookings) ? d : max, forecastChartData[0]) : null;
 
+  const getMalaysiaDate = (dateValue = new Date()) => {
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kuala_Lumpur",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+};
+
+const addDays = (dateString, days) => {
+  const [year, month, day] = dateString.split("-").map(Number);
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return date.toISOString().slice(0, 10);
+};
+
+const operationalMetrics = useMemo(() => {
+  const today = getMalaysiaDate();
+  const sevenDaysLater = addDays(today, 6);
+  const currentMonth = today.slice(0, 7);
+
+  const activeBookings = bookings.filter(
+    (booking) =>
+      !["REJECTED", "CANCELLED", "OVERDUE"].includes(
+        String(booking.status || "").toUpperCase()
+      )
+  );
+
+  // Today's pickups
+  const todayPickups = activeBookings.filter(
+    (booking) => getMalaysiaDate(booking.pickupDate) === today
+  );
+
+  // Today's returns
+  const todayReturns = activeBookings.filter(
+    (booking) => getMalaysiaDate(booking.returnDate) === today
+  );
+
+  // Next 7 days
+  const next7DaysBookings = activeBookings.filter((booking) => {
+    const pickupDate = getMalaysiaDate(booking.pickupDate);
+
+    return (
+      pickupDate &&
+      pickupDate >= today &&
+      pickupDate <= sevenDaysLater
+    );
+  });
+
+  // Allocated means booking has already been accepted/confirmed
+  const allocatedBookings = next7DaysBookings.filter((booking) =>
+    ["ACCEPTED", "PENDING_PAYMENT", "PAID", "COMPLETED"].includes(
+      String(booking.status || "").toUpperCase()
+    )
+  );
+
+  const remainingBookings =
+    next7DaysBookings.length - allocatedBookings.length;
+
+  // Return date passed/today but operator has not completed booking
+  const awaitingReturnConfirmation = activeBookings.filter((booking) => {
+    const returnDate = getMalaysiaDate(booking.returnDate);
+
+    return (
+      returnDate &&
+      returnDate <= today &&
+      booking.status !== "COMPLETED"
+    );
+  });
+
+  // Month-to-date booking volume
+  const monthToDateVolume = bookings.filter((booking) => {
+    const createdDate = getMalaysiaDate(
+      booking.createdAt || booking.bookingDate
+    );
+
+    return createdDate.startsWith(currentMonth);
+  }).length;
+
+  return {
+    todayPickups,
+    todayReturns,
+    next7DaysBookings,
+    allocatedBookings,
+    remainingBookings,
+    awaitingReturnConfirmation,
+    monthToDateVolume,
+  };
+}, [bookings]);
+
   // ========== INLINE STYLES ==========
   const styles = {
     container: { padding: '24px', maxWidth: '1400px', margin: '0 auto' },
@@ -184,7 +290,7 @@ export default function OperatorDashboard() {
     // Metric grid
     metricGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(5, 1fr)',
+      gridTemplateColumns: 'repeat(4, 1fr)',
       gap: '16px',
       marginBottom: '32px'
     },
@@ -247,6 +353,93 @@ export default function OperatorDashboard() {
       opacity: 0,
       visibility: 'hidden',
       pointerEvents: 'none',
+    },
+
+    allocationSummary: {
+      display: "grid",
+      gridTemplateColumns: "repeat(3, 1fr)",
+      gap: "16px",
+      marginBottom: "20px",
+    },
+
+    allocationValue: {
+      fontSize: "26px",
+      fontWeight: "700",
+      color: "#1f2937",
+    },
+
+    allocationLabel: {
+      fontSize: "12px",
+      color: "#6b7280",
+      marginTop: "4px",
+    },
+
+    progressLabel: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: "10px",
+      fontSize: "12px",
+      color: "#4b5563",
+      marginBottom: "8px",
+    },
+
+    progressTrack: {
+      width: "100%",
+      height: "10px",
+      background: "#e5e7eb",
+      borderRadius: "999px",
+      overflow: "hidden",
+    },
+
+    progressFill: {
+      height: "100%",
+      background: "#3b82f6",
+      borderRadius: "999px",
+      transition: "width 0.3s ease",
+    },
+
+    outstandingList: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+    },
+
+    outstandingItem: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "16px",
+      padding: "14px",
+      background: "#f9fafb",
+      border: "1px solid #e5e7eb",
+      borderRadius: "10px",
+    },
+
+    outstandingTitle: {
+      fontSize: "13px",
+      fontWeight: "600",
+      color: "#1f2937",
+    },
+
+    outstandingDescription: {
+      fontSize: "11px",
+      color: "#6b7280",
+      marginTop: "4px",
+    },
+
+    outstandingNumber: {
+      minWidth: "38px",
+      height: "38px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: "10px",
+      background: "#ffffff",
+      border: "1px solid #e5e7eb",
+      fontSize: "17px",
+      fontWeight: "700",
+      color: "#1f2937",
     },
 
     metricValue: { fontSize: '28px', fontWeight: '700', color: '#1f2937' },
@@ -357,7 +550,7 @@ export default function OperatorDashboard() {
     // Responsive
     responsiveMetricGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(5, 1fr)',
+      gridTemplateColumns: 'repeat(4, 1fr)',
       gap: '16px',
       marginBottom: '32px'
     }
@@ -367,7 +560,7 @@ export default function OperatorDashboard() {
   const getMetricColumns = () => {
     if (typeof window !== "undefined" && window.innerWidth <= 500) return "1fr";
     if (typeof window !== "undefined" && window.innerWidth <= 768) return "repeat(2, 1fr)";
-    return "repeat(5, 1fr)";
+    return "repeat(4, 1fr)";
   };
 
   const getForecastColumns = () => {
@@ -435,51 +628,224 @@ export default function OperatorDashboard() {
         <button type="button" style={styles.searchButton}>Filter</button>
       </div>
 
-      {/* 5 Metrics */}
-<div style={{ ...styles.responsiveMetricGrid, gridTemplateColumns: metricColumns }}>
+      {/* Main Operational Metrics */}
+<div
+  style={{
+    ...styles.responsiveMetricGrid,
+    gridTemplateColumns: metricColumns,
+  }}
+>
+  {/* Today's Pickups */}
   <div style={styles.metricCard}>
     <MetricTitle
-      title="Total Bookings"
-      description="Total number of bookings recorded in the system, including pending, paid, and expired bookings."
+      title="Today's Pickups"
+      description="Number of bookings scheduled for vehicle pickup today."
     />
-    <div style={styles.metricValue}>{summary?.totalBookings || 0}</div>
-    <div style={styles.metricSub}>Live backend data</div>
+
+    <div style={styles.metricValue}>
+      {operationalMetrics.todayPickups.length}
+    </div>
+
+    <div style={styles.metricSub}>
+      Vehicles scheduled for pickup
+    </div>
   </div>
 
+  {/* Today's Returns */}
   <div style={styles.metricCard}>
     <MetricTitle
-      title="Pending Requests"
-      description="Bookings submitted by customers that are waiting for operator review or approval."
+      title="Today's Returns"
+      description="Number of vehicles scheduled to be returned today."
     />
-    <div style={styles.metricValue}>{summary?.pendingRequests || 0}</div>
-    <div style={styles.metricSub}>Awaiting approval</div>
+
+    <div style={styles.metricValue}>
+      {operationalMetrics.todayReturns.length}
+    </div>
+
+    <div style={styles.metricSub}>
+      Vehicles due for return
+    </div>
   </div>
 
+  {/* Month-to-Date Volume */}
   <div style={styles.metricCard}>
     <MetricTitle
-      title="Payment Pending"
-      description="Approved bookings where the customer has not completed payment yet."
+      title="Month-to-Date Volume"
+      description="Total number of bookings created during the current month."
     />
-    <div style={styles.metricValue}>{summary?.paymentPending || 0}</div>
-    <div style={styles.metricSub}>Awaiting payment</div>
+
+    <div style={styles.metricValue}>
+      {operationalMetrics.monthToDateVolume}
+    </div>
+
+    <div style={styles.metricSub}>
+      Bookings this month
+    </div>
   </div>
 
+  {/* Revenue */}
   <div style={styles.metricCard}>
     <MetricTitle
-      title="Paid Bookings"
-      description="Bookings that have been successfully paid and confirmed."
+      title="Revenue"
+      description="Revenue generated from paid and completed bookings."
     />
-    <div style={styles.metricValue}>{summary?.paidBookings || 0}</div>
-    <div style={styles.metricSub}>Completed</div>
+
+    <div
+      style={{
+        ...styles.metricValue,
+        fontSize: "22px",
+      }}
+    >
+      {formatOperatorMoney(summary?.totalRevenue || 0)}
+    </div>
+
+    <div style={styles.metricSub}>
+      Confirmed paid revenue
+    </div>
+  </div>
+</div>
+
+      {/* Allocation + Outstanding Actions */}
+<div
+  style={{
+    ...styles.dashboardGrid,
+    gridTemplateColumns: dashboardColumns,
+  }}
+>
+  {/* 7-Day Allocation */}
+  <div style={styles.card}>
+    <div style={styles.cardHead}>
+      <div>
+        <h3 style={styles.cardTitle}>
+          7-Day Allocation Status
+        </h3>
+
+        <p style={styles.cardSub}>
+          Booking allocation for the next seven days
+        </p>
+      </div>
+    </div>
+
+    <div style={styles.allocationSummary}>
+      <div>
+        <div style={styles.allocationValue}>
+          {operationalMetrics.allocatedBookings.length}
+        </div>
+
+        <div style={styles.allocationLabel}>
+          Allocated
+        </div>
+      </div>
+
+      <div>
+        <div style={styles.allocationValue}>
+          {operationalMetrics.remainingBookings}
+        </div>
+
+        <div style={styles.allocationLabel}>
+          Remaining
+        </div>
+      </div>
+
+      <div>
+        <div style={styles.allocationValue}>
+          {operationalMetrics.next7DaysBookings.length}
+        </div>
+
+        <div style={styles.allocationLabel}>
+          Scheduled
+        </div>
+      </div>
+    </div>
+
+    <div style={styles.progressLabel}>
+      <span>
+        {operationalMetrics.allocatedBookings.length} allocated
+        {" / "}
+        {operationalMetrics.next7DaysBookings.length} scheduled
+      </span>
+
+      <strong>
+        {operationalMetrics.next7DaysBookings.length > 0
+          ? Math.round(
+              (operationalMetrics.allocatedBookings.length /
+                operationalMetrics.next7DaysBookings.length) *
+                100
+            )
+          : 0}
+        %
+      </strong>
+    </div>
+
+    <div style={styles.progressTrack}>
+      <div
+        style={{
+          ...styles.progressFill,
+          width: `${
+            operationalMetrics.next7DaysBookings.length > 0
+              ? Math.min(
+                  (operationalMetrics.allocatedBookings.length /
+                    operationalMetrics.next7DaysBookings.length) *
+                    100,
+                  100
+                )
+              : 0
+          }%`,
+        }}
+      />
+    </div>
   </div>
 
-  <div style={styles.metricCard}>
-    <MetricTitle
-      title="Expired"
-      description="Bookings that are overdue, cancelled, expired, or no longer valid."
-    />
-    <div style={styles.metricValue}>{summary?.expiredBookings || 0}</div>
-    <div style={styles.metricSub}>Overdue/Cancelled</div>
+  {/* Outstanding Actions */}
+  <div style={styles.card}>
+    <div style={styles.cardHead}>
+      <div>
+        <h3 style={styles.cardTitle}>
+          Outstanding Actions
+        </h3>
+
+        <p style={styles.cardSub}>
+          Operational items requiring attention
+        </p>
+      </div>
+    </div>
+
+    <div style={styles.outstandingList}>
+      <div style={styles.outstandingItem}>
+        <div>
+          <div style={styles.outstandingTitle}>
+            Vehicles awaiting return confirmation
+          </div>
+
+          <div style={styles.outstandingDescription}>
+            Return date has arrived but booking is not completed.
+          </div>
+        </div>
+
+        <div style={styles.outstandingNumber}>
+          {operationalMetrics.awaitingReturnConfirmation.length}
+        </div>
+      </div>
+
+      <div style={styles.outstandingItem}>
+        <div>
+          <div style={styles.outstandingTitle}>
+            Exhausted allocations
+          </div>
+
+          <div style={styles.outstandingDescription}>
+            No remaining unallocated bookings in the next seven days.
+          </div>
+        </div>
+
+        <div style={styles.outstandingNumber}>
+          {operationalMetrics.next7DaysBookings.length > 0 &&
+          operationalMetrics.remainingBookings === 0
+            ? 1
+            : 0}
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
