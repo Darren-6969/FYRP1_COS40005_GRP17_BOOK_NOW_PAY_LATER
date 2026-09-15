@@ -7,7 +7,6 @@ import {
   getOperators,
   updateOperatorStatus,
   deleteOperator,
-  getOperatorDashboard,
   getOperatorBookings,
   getOperatorSettlements, /* Getting Settlements for STRIPE */
   getOperatorBookingById,
@@ -42,6 +41,7 @@ import {
   revokeOperatorApiKey,
   updateOperatorAllowedOrigins,
 } from "../controllers/operator_controller.js";
+import { getOperatorDashboard } from "../controllers/operator_dashboard_controller.js";
 import {
   getOperatorApplications,
   reviewOperatorApplication,
@@ -119,7 +119,9 @@ router.delete("/:id", ...masterOnly, deleteOperator);
  * DASHBOARD
  *
  * OWNER: allowed
- * STAFF: allowed, but dashboard data should ideally be limited in controller/frontend
+ * STAFF: allowed.
+ * The dedicated dashboard controller keeps returned vehicles visible until
+ * the operator explicitly confirms/completes the booking.
  */
 router.get("/dashboard", ...ownerOrStaffAccess, getOperatorDashboard);
 
