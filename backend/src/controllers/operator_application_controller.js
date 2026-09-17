@@ -2,7 +2,9 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import prisma from "../config/db.js";
 import { sendEmail } from "../services/email_service.js";
+import { createInAppNotification, notifyMasterUsers } from "../services/notification_email_service.js";
 import { generateUserCode } from "../services/userCode.js";
+import { escapeHtml } from "../utils/escapeHTML.js";
 
 const DOCUMENT_TYPES = new Set(["BUSINESS_REGISTRATION", "BUSINESS_LICENSE", "OWNER_IDENTITY"]);
 const APPLICATION_DECISIONS = new Set(["APPROVED", "REJECTED", "NEEDS_INFORMATION"]);
@@ -85,7 +87,7 @@ export async function submitOperatorApplication(req, res, next) {
         },
       });
 
-      const user = await tx.user.create({
+      await tx.user.create({
         data: {
           userCode,
           name: String(applicantName).trim(),
@@ -141,6 +143,17 @@ export async function submitOperatorApplication(req, res, next) {
         entityId: String(application.id),
         details: { operatorCode, email: normalizedEmail },
       },
+    });
+
+    await notifyMasterUsers({
+      title: "New operator application submitted",
+      message: `${companyName} submitted an operator application for review.`,
+      type: "OPERATOR_APPLICATION_SUBMITTED",
+      emailSubject: `New Operator Application - ${companyName}`,
+      emailText: `${companyName} submitted an operator application for administrator review.`,
+      emailHtml: `<p><strong>${escapeHtml(companyName)}</strong> submitted an operator application for administrator review.</p><p>Applicant: ${escapeHtml(applicantName)}<br>Email: ${escapeHtml(normalizedEmail)}<br>Documents: ${files.length}</p>`,
+      relatedEntityType: "OperatorApplication",
+      relatedEntityId: application.id,
     });
 
     res.status(201).json({
@@ -206,7 +219,7 @@ export async function reviewOperatorApplication(req, res, next) {
     });
 
     if (!application) return res.status(404).json({ message: "Operator application not found." });
-    if (["APPROVED", "REJECTED"].includes(application.status)) {
+    if (application.status === "APPROVED") {
       return res.status(409).json({ message: "This application has already reached a final decision." });
     }
 
@@ -236,6 +249,17 @@ export async function reviewOperatorApplication(req, res, next) {
       } else if (decision === "REJECTED") {
         await tx.operator.update({ where: { id: application.operatorId }, data: { status: "SUSPENDED" } });
         await tx.user.updateMany({ where: { operatorId: application.operatorId }, data: { operatorUserStatus: "SUSPENDED" } });
+        await tx.operatorDocument.updateMany({
+          where: { applicationId },
+          data: { status: "REJECTED", rejectionReason: reason, reviewedAt: new Date(), reviewedById: req.user.id },
+        });
+      } else if (decision === "NEEDS_INFORMATION") {
+        await tx.operator.update({ where: { id: application.operatorId }, data: { status: "PENDING" } });
+        await tx.user.updateMany({ where: { operatorId: application.operatorId }, data: { operatorUserStatus: "SUSPENDED" } });
+        await tx.operatorDocument.updateMany({
+          where: { applicationId },
+          data: { status: "REJECTED", rejectionReason: reason, reviewedAt: new Date(), reviewedById: req.user.id },
+        });
       }
 
       return updated;
@@ -262,6 +286,27 @@ export async function reviewOperatorApplication(req, res, next) {
         text: `Your account has been approved. Set your password here: ${setupUrl}`,
         html: `<p>Your operator account for <strong>${application.operator.companyName}</strong> has been approved.</p><p><a href="${setupUrl}">Set up your password</a>. This link expires in 24 hours.</p>`,
       });
+    } else {
+      const owner = await prisma.user.findFirst({
+        where: { operatorId: application.operatorId, operatorAccessLevel: "OWNER" },
+        select: { id: true, email: true, name: true },
+      });
+      const title = decision === "REJECTED" ? "Operator application rejected" : "Operator documents need attention";
+      const message = `Your operator application was ${decision === "REJECTED" ? "rejected" : "returned for more information"}. Please re-upload the required documents. Reason: ${reason}`;
+
+      if (owner) {
+        await createInAppNotification({ userId: owner.id, title, message, type: "OPERATOR_APPLICATION_REJECTED" });
+        await sendEmail({
+          to: owner.email,
+          subject: title,
+          type: "OPERATOR_APPLICATION_REJECTED",
+          relatedEntityType: "OperatorApplication",
+          relatedEntityId: applicationId,
+          userId: owner.id,
+          text: message,
+          html: `<p>Hello ${escapeHtml(owner.name)},</p><p>${escapeHtml(message)}</p><p>Administrator message: ${escapeHtml(reason)}</p>`,
+        });
+      }
     }
 
     await prisma.auditLog.create({
@@ -285,12 +330,13 @@ export async function downloadOperatorDocument(req, res, next) {
     const documentId = Number(req.params.documentId);
     const document = await prisma.operatorDocument.findUnique({ where: { id: documentId } });
     if (!document) return res.status(404).json({ message: "Document not found." });
+    const content = Buffer.from(document.content);
     res.set({
       "Content-Type": document.mimeType,
-      "Content-Disposition": `attachment; filename="${document.originalName.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,
-      "Content-Length": String(document.content.length),
+      "Content-Disposition": `inline; filename="${document.originalName.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,
+      "Content-Length": String(content.length),
     });
-    res.send(document.content);
+    res.send(content);
   } catch (err) {
     next(err);
   }
