@@ -8,3 +8,7 @@ node_modules
 dist/
 CLAUDE.local.md
 .claude/settings.local.json
+
+.claude/
+CLAUDE.md
+docs/
