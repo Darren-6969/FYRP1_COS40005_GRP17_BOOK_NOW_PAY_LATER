@@ -2659,10 +2659,15 @@ export async function deleteOperator(req, res, next) {
       await tx.hostBookingIntent.deleteMany({
         where: {
           operatorId: operator.id,
-          status: {
-            in: ["PENDING", "EXPIRED"],
-          },
         },
+      });
+
+      await tx.listing.deleteMany({
+        where: { operatorId: operator.id },
+      });
+
+      await tx.branch.deleteMany({
+        where: { operatorId: operator.id },
       });
 
       await tx.operator.delete({

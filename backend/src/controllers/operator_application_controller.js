@@ -168,6 +168,7 @@ export async function submitOperatorApplication(req, res, next) {
 export async function getOperatorApplications(req, res, next) {
   try {
     const applications = await prisma.operatorApplication.findMany({
+      where: { status: { in: ["SUBMITTED", "UNDER_REVIEW", "NEEDS_INFORMATION"] } },
       orderBy: { submittedAt: "desc" },
       include: {
         operator: { select: { id: true, operatorCode: true, companyName: true, email: true, phone: true, status: true } },
