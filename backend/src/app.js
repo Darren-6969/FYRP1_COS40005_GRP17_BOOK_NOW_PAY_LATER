@@ -6,6 +6,8 @@ import dotenv from "dotenv";
 import authRoutes       from "./routes/auth_routes.js";
 import dashboardRoutes  from "./routes/dashboard_routes.js";
 import bookingRoutes    from "./routes/booking_routes.js";
+import listingRoutes    from "./routes/listing_routes.js";
+import branchRoutes     from "./routes/branch_routes.js";
 import paymentRoutes    from "./routes/payment_routes.js";
 import receiptRoutes    from "./routes/receipt_routes.js";
 import invoiceRoutes    from "./routes/invoice_routes.js";
@@ -19,6 +21,7 @@ import cronRoutes       from "./routes/cron_routes.js";
 import hostRoutes       from "./routes/host_routes.js";
 import uploadRoutes     from "./routes/upload_routes.js";
 import operatorApplicationRoutes from "./routes/operator_application_routes.js";
+import carsxeRoutes from "./routes/carsxe_routes.js";
 
 import { errorHandler }  from "./middlewares/errorHandler.js";
 import { requestLogger } from "./middlewares/logger_middleware.js";
@@ -170,6 +173,8 @@ app.use("/api/auth",      authRoutes);
 app.use("/api/operator-applications", operatorApplicationRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/bookings",  bookingRoutes);
+app.use("/api/operators/listings", listingRoutes);
+app.use("/api/operators/branches", branchRoutes);
 app.use("/api/payments",  paymentRoutes);
 app.use("/api/receipts",  receiptRoutes);
 app.use("/api/invoices",  invoiceRoutes);
@@ -181,6 +186,7 @@ app.use("/api/customer",  customerRoutes);
 app.use("/api/emails",    emailRoutes);
 app.use("/api/cron",      cronRoutes);
 app.use("/api/host",      hostRoutes);
+app.use("/api/carsxe",    carsxeRoutes);
 
 // ── Error handler ────────────────────────────────────────────────────────────
 app.use(errorHandler);

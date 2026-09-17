@@ -44,7 +44,10 @@ import OperatorLayout from "./pages/operator/layout/OperatorLayout";
 import OperatorDashboard from "./pages/operator/OperatorDashboard";
 import OperatorProfile from "./pages/operator/OperatorProfile";
 import OperatorBookings from "./pages/operator/OperatorBookings";
+import OperatorListings from "./pages/operator/OperatorListings";
+import OperatorListingForm from "./pages/operator/OperatorListingForm";
 import OperatorBookingDetail from "./pages/operator/OperatorBookingDetail";
+import OperatorBranches from "./pages/operator/OperatorBranches";
 import OperatorPaymentVerification from "./pages/operator/OperatorPaymentVerification";
 import OperatorBookingLog from "./pages/operator/OperatorBookingLog";
 import OperatorInvoices from "./pages/operator/OperatorInvoices";
@@ -118,6 +121,26 @@ export default function App() {
                   <Route
                     path="bookings"
                     element={<OperatorBookings />}
+                  />
+
+                  <Route
+                    path="listings"
+                    element={<OperatorListings />}
+                  />
+
+                  <Route
+                    path="/operator/listings/new"
+                    element={<OperatorListingForm />}
+                  />
+
+                  <Route
+                    path="/operator/listings/:id/edit"
+                    element={<OperatorListingForm />}
+                  />
+
+                  <Route
+                    path="/operator/branches"
+                    element={<OperatorBranches />}
                   />
 
                   <Route

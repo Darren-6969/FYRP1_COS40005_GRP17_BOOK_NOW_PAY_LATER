@@ -4,6 +4,8 @@ import {
   LayoutDashboard,
   ClipboardList,
   ListChecks,
+  MapPin,
+  PackageSearch,
   CreditCard,
   FileText,
   BarChart3,
@@ -30,6 +32,18 @@ const links = [
     icon: <ClipboardList size={20} />,
     allowedAccess: ["OWNER", "STAFF"],
   },
+  {
+    to: "/operator/listings",
+    label: "Listings",
+    icon: <PackageSearch size={20} />,
+    allowedAccess: ["OWNER", "STAFF"],
+  },
+  {
+  to: "/operator/branches",
+  label: "Branches",
+  icon: <MapPin size={20} />,
+  allowedAccess: ["OWNER", "STAFF"],
+  },  
   {
     to: "/operator/booking-log",
     label: "Booking Log",

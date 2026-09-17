@@ -26,6 +26,84 @@ export const operatorService = {
     return api.get(`/operators/bookings/${id}`);
   },
 
+  /**New Listings function */
+  getListings(params = {}) {
+    return api.get("/operators/listings", {
+      params,
+    });
+  },
+
+  getListingById(id) {
+    return api.get(`/operators/listings/${id}`);
+  },
+
+  getVehicleImages(params) {
+    return api.get(
+      "/carsxe/images",
+      {
+        params,
+     }
+   );
+  },
+
+  createListing(payload) {
+    return api.post("/operators/listings", payload);
+  },
+
+  updateListing(id, payload) {
+    return api.patch(
+      `/operators/listings/${id}`,
+      payload
+    );
+  },
+
+  publishListing(id) {
+    return api.patch(
+      `/operators/listings/${id}/publish`
+    );
+  },
+
+  withdrawListing(id) {
+    return api.patch(
+      `/operators/listings/${id}/withdraw`
+    );
+  },
+
+  quickEditListing(id, payload) {
+    return api.patch(
+      `/operators/listings/${id}/quick-edit`,
+      payload
+    );
+  },
+
+  bulkUpdateListingStatus(payload) {
+    return api.patch(
+      "/operators/listings/bulk-status",
+      payload
+    );
+  },
+
+  /** New Branch functions */
+getBranches() {
+  return api.get(
+    "/operators/branches"
+  );
+},
+
+createBranch(payload) {
+  return api.post(
+    "/operators/branches",
+    payload
+  );
+},
+
+updateBranch(id, payload) {
+  return api.patch(
+    `/operators/branches/${id}`,
+    payload
+  );
+},
+
   /**
    * Old booking approval APIs.
    * Keep these for now in case another page still uses them.

@@ -52,6 +52,22 @@ enum BookingStatus {
   COMPLETED
 }
 
+enum ListingCategory {
+  CAR_RENTAL
+  TOUR
+}
+
+enum ListingStatus {
+  DRAFT
+  PUBLISHED
+  WITHDRAWN
+}
+
+enum TransmissionType {
+  AUTOMATIC
+  MANUAL
+}
+
 enum PaymentStatus {
   UNPAID
   PENDING_VERIFICATION
@@ -188,6 +204,10 @@ model Operator {
   users    User[]
   bookings Booking[]
   configs  BNPLConfig[]
+
+  branches Branch[]
+  listings Listing[]
+
   applications OperatorApplication[]
   documents OperatorDocument[]
 
@@ -516,6 +536,116 @@ model HostBookingIntent {
   @@index([customerEmail])
   @@index([status])
   @@index([expiresAt])
+}
+
+model Branch {
+  id Int @id @default(autoincrement())
+
+  operatorId Int
+  operator   Operator @relation(fields: [operatorId], references: [id])
+
+  name    String
+  address String
+
+  city    String?
+  state   String?
+  country String @default("Malaysia")
+
+  phone String?
+
+  isActive Boolean @default(true)
+
+  listings Listing[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([operatorId])
+  @@index([isActive])
+}
+
+model Listing {
+  id Int @id @default(autoincrement())
+
+  operatorId Int
+  operator   Operator @relation(fields: [operatorId], references: [id])
+
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id])
+
+  category ListingCategory
+  status   ListingStatus @default(DRAFT)
+
+  name        String
+  description String? @db.Text
+
+  price    Decimal @db.Decimal(10, 2)
+  quantity Int     @default(1)
+
+  // Car rental fields
+  vehicleMake  String?
+  vehicleModel String?
+
+  modelYear Int?
+  seats     Int?
+
+  transmission TransmissionType?
+
+  luggageCapacity Int?
+
+  pickupRules   String? @db.Text
+  returnRules   String? @db.Text
+  insuranceInfo String? @db.Text
+
+  // Tour fields
+  durationDays Int?
+
+  highlights Json?
+  itinerary  Json?
+  inclusions Json?
+  exclusions Json?
+
+  cancellationPolicy String? @db.Text
+  meetingPoint       String?
+  maxGroupSize       Int?
+
+  // Common policies
+  refundPolicy       String? @db.Text
+  termsAndConditions String? @db.Text
+
+  images ListingImage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([operatorId])
+  @@index([branchId])
+  @@index([category])
+  @@index([status])
+
+  @@index([vehicleMake])
+  @@index([vehicleModel])
+  @@index([transmission])
+}
+
+model ListingImage {
+  id Int @id @default(autoincrement())
+
+  listingId Int
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  imageUrl   String
+  storageKey String?
+
+  sortOrder Int @default(0)
+  isPrimary Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listingId])
+  @@index([sortOrder])
+  @@index([isPrimary])
 }
 
 model CronJobRun {
