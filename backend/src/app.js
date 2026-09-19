@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
+import licenceRoutes from "./routes/licence_routes.js";
 
 import authRoutes       from "./routes/auth_routes.js";
 import dashboardRoutes  from "./routes/dashboard_routes.js";
@@ -171,6 +172,7 @@ app.get("/health", (_req, res) => {
 // ── API routes ───────────────────────────────────────────────────────────────
 app.use("/api/auth",      authRoutes);
 app.use("/api/operator-applications", operatorApplicationRoutes);
+app.use("/api/licence-verification", licenceRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/bookings",  bookingRoutes);
 app.use("/api/operators/listings", listingRoutes);

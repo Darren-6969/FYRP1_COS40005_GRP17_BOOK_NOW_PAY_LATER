@@ -14,6 +14,8 @@ import Payments from "./pages/master/Payments";
 import Receipts from "./pages/master/Receipts";
 import Invoices from "./pages/master/Invoices";
 import Operators from "./pages/master/Operators";
+import OperatorApplicationReview from "./pages/master/OperatorApplicationReview";
+import LicenceVerification from "./pages/master/LicenceVerification";
 import SalesReport from "./pages/master/SalesReport";
 import MasterAnalytics from "./pages/master/MasterAnalytics";
 import MasterSettlements from "./pages/master/MasterSettlements";
@@ -35,6 +37,7 @@ import CustomerPayments from "./pages/customer/CustomerPayments";
 import CustomerInvoices from "./pages/customer/CustomerInvoices";
 import CustomerNotifications from "./pages/customer/CustomerNotifications";
 import CustomerProfile from "./pages/customer/CustomerProfile";
+import CustomerLicence from "./pages/customer/CustomerLicence";
 import CustomerInvoiceDetail from "./pages/customer/CustomerInvoiceDetail";
 import CustomerHelp from "./pages/customer/CustomerHelp";
 
@@ -84,6 +87,8 @@ export default function App() {
               <Route path="receipts" element={<Receipts />} />
               <Route path="invoices" element={<Invoices />} />
               <Route path="operators" element={<Operators />} />
+              <Route path="operator-applications" element={<OperatorApplicationReview />} />
+              <Route path="licence-verification" element={<LicenceVerification />} />
               <Route path="sales-report" element={<SalesReport />} />
               <Route path="analytics" element={<MasterAnalytics />} />
               <Route path="settlements" element={<MasterSettlements />} />
@@ -198,6 +203,7 @@ export default function App() {
               <Route path="invoices/:id" element={<CustomerInvoiceDetail />} />
               <Route path="notifications" element={<CustomerNotifications />} />
               <Route path="profile" element={<CustomerProfile />} />
+              <Route path="licence" element={<CustomerLicence />} />
               <Route path="help" element={<CustomerHelp />} />
             </Route>
           </Route>

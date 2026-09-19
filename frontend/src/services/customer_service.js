@@ -50,3 +50,12 @@ export const markCustomerNotificationRead = (id) =>
 
 export const markAllCustomerNotificationsRead = () =>
   api.patch("/customer/notifications/read-all");
+
+export const getMyLicenceDocument = () => api.get("/licence-verification/me");
+export const submitLicenceDocument = (file) => {
+  const formData = new FormData();
+  formData.append("licence", file);
+  return api.post("/licence-verification/me", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};

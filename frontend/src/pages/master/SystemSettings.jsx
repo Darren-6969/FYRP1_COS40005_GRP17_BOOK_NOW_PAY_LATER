@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   getBNPLConfigs,
   updateBNPLConfig,
+  getPeakDates,
+  createPeakDate,
+  deletePeakDate,
 } from "../../services/admin_service";
 
 function dateTime(value) {
@@ -32,6 +35,8 @@ export default function SystemSettings() {
   const [configs, setConfigs] = useState([]);
   const [selectedOperatorId, setSelectedOperatorId] = useState("");
   const [form, setForm] = useState(null);
+  const [peakDates, setPeakDates] = useState([]);
+  const [peakForm, setPeakForm] = useState({ date: "", label: "" });
 
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -45,9 +50,11 @@ export default function SystemSettings() {
       setLoading(true);
       setError("");
       const res = await getBNPLConfigs();
+      const peakRes = await getPeakDates();
       const items = res.data?.configs || [];
 
       setConfigs(items);
+      setPeakDates(peakRes.data || []);
 
       if (items.length && !selectedOperatorId) {
         setSelectedOperatorId(String(items[0].operatorId));
@@ -65,7 +72,29 @@ export default function SystemSettings() {
     }
   };
 
+  const addPeakDate = async (event) => {
+    event.preventDefault();
+    try {
+      await createPeakDate(peakForm);
+      setPeakForm({ date: "", label: "" });
+      setMessage("Peak date added.");
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to add peak date.");
+    }
+  };
+
+  const removePeakDate = async (id) => {
+    try {
+      await deletePeakDate(id);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to remove peak date.");
+    }
+  };
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -188,6 +217,25 @@ export default function SystemSettings() {
           <Stat title="Auto Overdue Enabled" value={configs.filter((c) => c.autoCancelOverdue).length} />
           <Stat title="Average Deadline Days" value={averageDeadline(configs)} />
         </div>
+      </section>
+      <section className="card">
+        <div className="section-header">
+          <div>
+            <h3>Peak Calendar</h3>
+            <p>Platform-maintained dates when operators cannot elect the partial refund rule.</p>
+          </div>
+        </div>
+        <form className="admin-form-grid" onSubmit={addPeakDate}>
+          <label><span>Date</span><input type="date" value={peakForm.date} onChange={(event) => setPeakForm((prev) => ({ ...prev, date: event.target.value }))} required /></label>
+          <label><span>Label</span><input value={peakForm.label} onChange={(event) => setPeakForm((prev) => ({ ...prev, label: event.target.value }))} placeholder="Public holiday" required /></label>
+          <button className="btn primary" type="submit">Add peak date</button>
+        </form>
+        {peakDates.length === 0 ? <p>No platform peak dates configured.</p> : (
+          <div className="list-row">
+            <div>{peakDates.map((date) => <p key={date.id}><strong>{String(date.peakDate).slice(0, 10)}</strong> · {date.label}</p>)}</div>
+            <div className="actions">{peakDates.map((date) => <button className="btn danger" type="button" key={date.id} onClick={() => removePeakDate(date.id)}>Remove {String(date.peakDate).slice(0, 10)}</button>)}</div>
+          </div>
+        )}
       </section>
 
       <section className="card">

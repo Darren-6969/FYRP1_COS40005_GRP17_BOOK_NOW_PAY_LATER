@@ -34,6 +34,13 @@ enum OperatorDocumentStatus {
   EXPIRED
 }
 
+enum LicenceVerificationStatus {
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  REUPLOAD_REQUIRED
+}
+
 enum OperatorUserStatus {
   ACTIVE
   SUSPENDED
@@ -150,6 +157,8 @@ model User {
   applicationReviews OperatorApplicationReview[] @relation("ApplicationReviewer")
   documentReviews OperatorDocument[] @relation("DocumentReviewer")
   reviewedApplications OperatorApplication[] @relation("ApplicationReviewerUser")
+  licenceDocuments CustomerLicenceDocument[]
+  reviewedLicenceDocuments CustomerLicenceDocument[] @relation("LicenceReviewer")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -279,6 +288,40 @@ model OperatorApplicationReview {
 
   @@index([applicationId])
   @@index([reviewerId])
+}
+
+model CustomerLicenceDocument {
+  id              Int                      @id @default(autoincrement())
+  customerId      Int
+  customer        User                     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  originalName    String
+  mimeType        String
+  sizeBytes       Int
+  content         Bytes                    @db.ByteA
+  status          LicenceVerificationStatus @default(UNDER_REVIEW)
+  rejectionReason String?                  @db.Text
+  submittedAt     DateTime                 @default(now())
+  reviewDueAt     DateTime
+  reviewedAt      DateTime?
+  reviewedById    Int?
+  reviewedBy      User?                    @relation("LicenceReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([status])
+  @@index([reviewDueAt])
+  @@index([customerId])
+}
+
+model PlatformPeakDate {
+  id        Int      @id @default(autoincrement())
+  peakDate  DateTime @db.Date
+  label     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([peakDate])
+  @@index([peakDate])
 }
 
 model Booking {

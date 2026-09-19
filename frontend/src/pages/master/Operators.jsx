@@ -6,9 +6,6 @@ import {
   deleteOperator,
   deleteOperatorUser,
   getOperators,
-  getOperatorApplications,
-  getOperatorDocument,
-  reviewOperatorApplication,
   updateOperatorStatus,
   updateOperatorUserStatus,
   uploadOperatorLogo,
@@ -140,62 +137,8 @@ function accessLevelDescription(level) {
   return "No access level assigned";
 }
 
-function readLogoFile(file) {
-  return new Promise((resolve, reject) => {
-    if (!file) {
-      resolve("");
-      return;
-    }
-
-    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
-
-    if (!allowedTypes.includes(file.type)) {
-      reject(new Error("Logo must be a PNG, JPG, JPEG, or WebP image."));
-      return;
-    }
-
-    if (file.size > LOGO_MAX_FILE_SIZE) {
-      reject(new Error("Logo file size must be 500KB or below."));
-      return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      const image = new Image();
-
-      image.onload = () => {
-        if (image.width > LOGO_MAX_WIDTH || image.height > LOGO_MAX_HEIGHT) {
-          reject(
-            new Error(
-              `Logo dimension must not exceed ${LOGO_MAX_WIDTH}x${LOGO_MAX_HEIGHT}px. Current image is ${image.width}x${image.height}px.`
-            )
-          );
-          return;
-        }
-
-        resolve(dataUrl);
-      };
-
-      image.onerror = () => {
-        reject(new Error("Invalid image file. Please upload another logo."));
-      };
-
-      image.src = dataUrl;
-    };
-
-    reader.onerror = () => {
-      reject(new Error("Failed to read logo file."));
-    };
-
-    reader.readAsDataURL(file);
-  });
-}
-
 export default function Operators() {
   const [operators, setOperators] = useState([]);
-  const [applications, setApplications] = useState([]);
 
   const [companyForm, setCompanyForm] = useState(initialCompanyForm);
   const [staffForm, setStaffForm] = useState(initialStaffForm);
@@ -227,47 +170,10 @@ export default function Operators() {
     }
   };
 
-  const loadApplications = async () => {
-    try {
-      const res = await getOperatorApplications();
-      setApplications(res.data || []);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to load operator applications");
-    }
-  };
-
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
-    loadApplications();
   }, []);
-
-  const handleApplicationReview = async (application, decision) => {
-    const reason = window.prompt(
-      `${decision === "APPROVED" ? "Approval" : decision === "REJECTED" ? "Rejection" : "Information request"} reason (required):`
-    );
-    if (!reason || reason.trim().length < 5) return;
-
-    try {
-      setError("");
-      setMessage("");
-      await reviewOperatorApplication(application.id, decision, reason.trim());
-      setMessage(`Application ${decision.toLowerCase()} successfully.`);
-      await Promise.all([load(), loadApplications()]);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to review operator application");
-    }
-  };
-
-  const handleViewDocument = async (document) => {
-    try {
-      const response = await getOperatorDocument(document.id);
-      const url = URL.createObjectURL(response.data);
-      window.open(url, "_blank", "noopener,noreferrer");
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to open operator document");
-    }
-  };
 
   const summary = useMemo(() => {
     const ownerCount = operators.reduce(
@@ -576,36 +482,6 @@ const toggleUserStatus = async (op, user) => {
 
   return (
     <div className="page-stack">
-      <section className="card">
-        <div className="section-header">
-          <div>
-            <h3>Operator Applications</h3>
-            <p>Review submitted business information and documents before activating an operator.</p>
-          </div>
-        </div>
-        {applications.length === 0 && <p>No operator applications are waiting for review.</p>}
-        {applications.map((application) => (
-          <div className="list-row" key={application.id}>
-            <div>
-              <strong>{application.operator?.companyName}</strong>
-              <p>{application.operator?.email} · {application.businessRegistrationNumber}</p>
-              <p>Status: {application.status} · Documents: {(application.documents || []).length}</p>
-              {(application.documents || []).map((document) => (
-                <button className="btn link" key={document.id} type="button" onClick={() => handleViewDocument(document)}>
-                  {document.documentType}: {document.originalName}
-                </button>
-              ))}
-            </div>
-            {!['APPROVED', 'REJECTED'].includes(application.status) && (
-              <div className="actions">
-                <button className="btn primary" type="button" onClick={() => handleApplicationReview(application, "APPROVED")}>Approve</button>
-                <button className="btn" type="button" onClick={() => handleApplicationReview(application, "NEEDS_INFORMATION")}>Request information</button>
-                <button className="btn danger" type="button" onClick={() => handleApplicationReview(application, "REJECTED")}>Reject</button>
-              </div>
-            )}
-          </div>
-        ))}
-      </section>
       <section className="card">
         <div className="section-header">
           <div>

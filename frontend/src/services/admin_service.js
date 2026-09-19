@@ -24,6 +24,14 @@ export const reviewOperatorApplication = (id, decision, reason) =>
   api.patch(`/operators/applications/${id}/review`, { decision, reason });
 export const getOperatorDocument = (id) =>
   api.get(`/operators/applications/documents/${id}`, { responseType: "blob" });
+export const getLicenceQueue = () => api.get("/licence-verification/queue");
+export const downloadLicenceDocument = (id) =>
+  api.get(`/licence-verification/queue/${id}/document`, { responseType: "blob" });
+export const reviewLicenceDocument = (id, decision, reason) =>
+  api.patch(`/licence-verification/queue/${id}/review`, { decision, reason });
+export const getPeakDates = () => api.get("/licence-verification/peak-dates");
+export const createPeakDate = (payload) => api.post("/licence-verification/peak-dates", payload);
+export const deletePeakDate = (id) => api.delete(`/licence-verification/peak-dates/${id}`);
 /// Create new company with initial admin user (OWNER)
 export const uploadOperatorLogo = (file) => {
   const formData = new FormData();

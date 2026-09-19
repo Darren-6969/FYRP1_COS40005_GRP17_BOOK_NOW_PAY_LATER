@@ -16,6 +16,8 @@ import {
   HelpCircle,
   Wallet,
   UserRound,
+  ClipboardCheck,
+  ScanLine,
 } from "lucide-react";
 
 const links = [
@@ -25,6 +27,8 @@ const links = [
   { to: "/master/receipts", label: "Receipts", icon: Receipt },
   { to: "/master/invoices", label: "Invoices", icon: FileText },
   { to: "/master/operators", label: "Operators", icon: Users },
+  { to: "/master/operator-applications", label: "Application Review", icon: ClipboardCheck },
+  { to: "/master/licence-verification", label: "Licence Queue", icon: ScanLine },
   { to: "/master/sales-report", label: "Sales Report", icon: BarChart2 },
   { to: "/master/analytics", label: "Analytics & Demand Forecast", icon: TrendingUp },
   { to: "/master/settlements", label: "Settlements", icon: Wallet },
