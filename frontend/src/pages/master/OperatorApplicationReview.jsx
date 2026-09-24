@@ -62,7 +62,8 @@ export default function OperatorApplicationReview() {
         <div className="section-header">
           <div>
             <h3>Operator Application Review</h3>
-            <p>Check the submitted business licence and company information before approval creates the organisation and first manager account.</p>
+            <p>Check the business licence and every submitted document before approval creates the organisation and first manager account.</p>
+            <p className="text-danger">Approval publishes every listing this operator holds.</p>
           </div>
           <button className="btn" type="button" onClick={load}>Refresh</button>
         </div>
@@ -76,9 +77,12 @@ export default function OperatorApplicationReview() {
               <p>{application.operator?.email} · {application.businessRegistrationNumber}</p>
               <p>Status: {application.status} · Submitted: {new Date(application.submittedAt).toLocaleString()}</p>
               {(application.documents || []).map((document) => (
-                <button className="btn link" key={document.id} type="button" onClick={() => viewDocument(document)}>
-                  {document.documentType}: {document.originalName}
-                </button>
+                <div key={document.id}>
+                  <button className="btn link" type="button" onClick={() => viewDocument(document)}>
+                    {document.documentType}: {document.originalName}
+                  </button>
+                  <span> ({document.status})</span>
+                </div>
               ))}
             </div>
             <div className="actions">

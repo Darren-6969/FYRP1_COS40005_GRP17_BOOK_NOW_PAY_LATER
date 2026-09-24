@@ -4,6 +4,7 @@ import {
   parseUtcDate,
   subtractMinutes,
 } from "../utils/datetime.js";
+import { getPlatformDeadlinePolicy, validatePublishedDeadline } from "./platform_policy_service.js";
 
 const MALAYSIA_TIMEZONE_OFFSET_HOURS = 8;
 const DEFAULT_PICKUP_BUFFER_MINUTES = 60;
@@ -126,6 +127,12 @@ export async function calculatePaymentDeadline(
     });
 
     const paymentDeadlineDays = config?.paymentDeadlineDays || 3;
+    const policy = await getPlatformDeadlinePolicy();
+    if (!validatePublishedDeadline(policy, paymentDeadlineDays)) {
+      const error = new Error("The operator payment deadline is no longer published by the platform.");
+      error.statusCode = 400;
+      throw error;
+    }
     selectedDeadline = calculateDefaultDeadlineInMalaysia(paymentDeadlineDays);
   }
 

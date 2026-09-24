@@ -224,8 +224,14 @@ export async function reviewOperatorApplication(req, res, next) {
       return res.status(409).json({ message: "This application has already reached a final decision." });
     }
 
-    if (decision === "APPROVED" && application.documents.some((document) => document.status !== "UNDER_REVIEW" && document.status !== "APPROVED")) {
-      return res.status(400).json({ message: "All submitted documents must be reviewable before approval." });
+    if (decision === "APPROVED") {
+      const businessLicence = application.documents.find((document) => document.documentType === "BUSINESS_LICENSE");
+      if (!businessLicence) {
+        return res.status(400).json({ message: "A business licence must be submitted and checked before approval." });
+      }
+      if (application.documents.some((document) => document.status !== "UNDER_REVIEW" && document.status !== "APPROVED")) {
+        return res.status(400).json({ message: "All submitted documents must be reviewable before approval." });
+      }
     }
 
     const result = await prisma.$transaction(async (tx) => {

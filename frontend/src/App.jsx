@@ -14,6 +14,7 @@ import Payments from "./pages/master/Payments";
 import Receipts from "./pages/master/Receipts";
 import Invoices from "./pages/master/Invoices";
 import Operators from "./pages/master/Operators";
+import Listings from "./pages/master/Listings";
 import OperatorApplicationReview from "./pages/master/OperatorApplicationReview";
 import LicenceVerification from "./pages/master/LicenceVerification";
 import SalesReport from "./pages/master/SalesReport";
@@ -87,6 +88,7 @@ export default function App() {
               <Route path="receipts" element={<Receipts />} />
               <Route path="invoices" element={<Invoices />} />
               <Route path="operators" element={<Operators />} />
+              <Route path="listings" element={<Listings />} />
               <Route path="operator-applications" element={<OperatorApplicationReview />} />
               <Route path="licence-verification" element={<LicenceVerification />} />
               <Route path="sales-report" element={<SalesReport />} />

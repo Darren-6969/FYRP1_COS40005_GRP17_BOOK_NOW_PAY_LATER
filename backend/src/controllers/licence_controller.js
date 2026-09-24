@@ -81,17 +81,49 @@ export async function getLicenceQueue(req, res, next) {
   try {
     const documents = await prisma.customerLicenceDocument.findMany({
       where: { status: "UNDER_REVIEW" },
-      orderBy: [{ reviewDueAt: "asc" }, { submittedAt: "asc" }],
-      include: { customer: { select: { id: true, name: true, email: true, phone: true } } },
+      orderBy: [{ submittedAt: "asc" }, { id: "asc" }],
+      include: {
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            bookings: {
+              where: {
+                status: { notIn: ["REJECTED", "CANCELLED", "COMPLETED"] },
+                paymentDeadline: { not: null },
+              },
+              orderBy: [{ paymentDeadline: "asc" }, { createdAt: "asc" }],
+              take: 1,
+              select: { id: true, bookingCode: true, paymentDeadline: true },
+            },
+          },
+        },
+      },
     });
     const now = Date.now();
-    res.json(documents.map((document) => ({
-      ...publicDocument(document),
-      sla: {
-        overdue: document.reviewDueAt.getTime() < now,
-        hoursRemaining: Math.ceil((document.reviewDueAt.getTime() - now) / (60 * 60 * 1000)),
-      },
-    })));
+    const queue = documents.map((document) => {
+      const { bookings, ...customer } = document.customer;
+      const booking = bookings[0] || null;
+      return {
+        ...publicDocument({ ...document, customer }),
+        booking,
+        sla: {
+          overdue: document.reviewDueAt.getTime() < now,
+          hoursRemaining: Math.ceil((document.reviewDueAt.getTime() - now) / (60 * 60 * 1000)),
+        },
+      };
+    });
+
+    res.json({
+      documents: queue,
+      queueDepth: queue.length,
+      oldestSubmittedAt: queue[0]?.submittedAt || null,
+      oldestItemAgeHours: queue.length
+        ? Math.floor((now - new Date(queue[0].submittedAt).getTime()) / (60 * 60 * 1000))
+        : 0,
+    });
   } catch (err) {
     next(err);
   }
@@ -190,6 +222,15 @@ export async function createPeakDate(req, res, next) {
       return res.status(400).json({ message: "A valid date and label are required." });
     }
     const date = await prisma.platformPeakDate.create({ data: { peakDate, label } });
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: "PLATFORM_PEAK_DATE_CREATED",
+        entityType: "PlatformPeakDate",
+        entityId: String(date.id),
+        details: { before: null, after: { peakDate: date.peakDate, label: date.label } },
+      },
+    });
     res.status(201).json(date);
   } catch (err) {
     if (err.code === "P2002") return res.status(409).json({ message: "That peak date already exists." });
@@ -199,7 +240,19 @@ export async function createPeakDate(req, res, next) {
 
 export async function deletePeakDate(req, res, next) {
   try {
-    await prisma.platformPeakDate.delete({ where: { id: Number(req.params.id) } });
+    const id = Number(req.params.id);
+    const existing = await prisma.platformPeakDate.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ message: "Peak date not found." });
+    await prisma.platformPeakDate.delete({ where: { id } });
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: "PLATFORM_PEAK_DATE_DELETED",
+        entityType: "PlatformPeakDate",
+        entityId: String(id),
+        details: { before: { peakDate: existing.peakDate, label: existing.label }, after: null },
+      },
+    });
     res.status(204).end();
   } catch (err) {
     next(err);

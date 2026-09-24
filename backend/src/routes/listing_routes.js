@@ -8,6 +8,8 @@ import {
   quickEditListing,
   publishListing,
   withdrawListing,
+  suspendListing,
+  reactivateListing,
   bulkUpdateListingStatus,
 } from "../controllers/listing_controller.js";
 
@@ -29,6 +31,7 @@ const ownerOrStaffAccess = [
   ...operatorBaseAccess,
   allowMasterOrOperatorAccess("OWNER", "STAFF"),
 ];
+const masterAccess = [verifyToken, allowRoles("MASTER_SELLER")];
 
 // ==========================================================
 // LISTINGS
@@ -81,5 +84,8 @@ router.patch(
   ...ownerOrStaffAccess,
   withdrawListing
 );
+
+router.patch("/admin/:id/suspend", ...masterAccess, suspendListing);
+router.patch("/admin/:id/reactivate", ...masterAccess, reactivateListing);
 
 export default router;

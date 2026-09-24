@@ -13,6 +13,9 @@ function listingWhere(req) {
 
 function includeListingRelations() {
   return {
+    operator: {
+      select: { id: true, companyName: true, operatorCode: true },
+    },
     branch: true,
     images: {
       orderBy: {
@@ -814,6 +817,42 @@ export async function withdrawListing(
       listing:
         mapListing(updated),
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function suspendListing(req, res, next) {
+  try {
+    const id = parseId(req.params.id, "listing id");
+    const reason = String(req.body.reason || "").trim();
+    if (reason.length < 5) return res.status(400).json({ message: "A suspension reason of at least 5 characters is required." });
+
+    const listing = await prisma.listing.findUnique({ where: { id } });
+    if (!listing) return res.status(404).json({ message: "Listing not found" });
+    const updated = await prisma.listing.update({ where: { id }, data: { status: "SUSPENDED" }, include: includeListingRelations() });
+    await prisma.auditLog.create({
+      data: { userId: req.user.id, action: "LISTING_SUSPENDED", entityType: "Listing", entityId: String(id), details: { reason, operatorId: listing.operatorId } },
+    });
+    res.json({ message: "Listing suspended successfully", listing: mapListing(updated) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function reactivateListing(req, res, next) {
+  try {
+    const id = parseId(req.params.id, "listing id");
+    const reason = String(req.body.reason || "").trim();
+    if (reason.length < 5) return res.status(400).json({ message: "A reactivation reason of at least 5 characters is required." });
+
+    const listing = await prisma.listing.findUnique({ where: { id } });
+    if (!listing) return res.status(404).json({ message: "Listing not found" });
+    const updated = await prisma.listing.update({ where: { id }, data: { status: "PUBLISHED" }, include: includeListingRelations() });
+    await prisma.auditLog.create({
+      data: { userId: req.user.id, action: "LISTING_REACTIVATED", entityType: "Listing", entityId: String(id), details: { reason, operatorId: listing.operatorId } },
+    });
+    res.json({ message: "Listing reactivated successfully", listing: mapListing(updated) });
   } catch (err) {
     next(err);
   }

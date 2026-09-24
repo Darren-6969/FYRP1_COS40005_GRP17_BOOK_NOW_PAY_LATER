@@ -6,6 +6,7 @@ import {
   deleteOperator,
   deleteOperatorUser,
   getOperators,
+  resetOperatorUser,
   updateOperatorStatus,
   updateOperatorUserStatus,
   uploadOperatorLogo,
@@ -446,12 +447,14 @@ const toggleUserStatus = async (op, user) => {
   const nextStatus = currentStatus === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
 
   if (!window.confirm(`Change ${user.name} to ${nextStatus}?`)) return;
+  const reason = window.prompt("Status change reason (required):");
+  if (!reason || reason.trim().length < 5) return;
 
   try {
     setError("");
     setMessage("");
 
-    await updateOperatorUserStatus(op.id, user.id, nextStatus);
+    await updateOperatorUserStatus(op.id, user.id, nextStatus, reason.trim());
 
     setMessage(`${user.name} updated to ${nextStatus}.`);
     await load();
@@ -461,6 +464,19 @@ const toggleUserStatus = async (op, user) => {
     );
   }
 };
+
+  const resetStaffPassword = async (op, user) => {
+    const reason = window.prompt("Password reset reason (required):");
+    if (!reason || reason.trim().length < 5) return;
+    try {
+      setError("");
+      setMessage("");
+      await resetOperatorUser(op.id, user.id, reason.trim());
+      setMessage(`Password reset link sent to ${user.email}.`);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to reset staff password");
+    }
+  };
 
   const handleDeleteUser = async (op, user) => {
     const typed = window.prompt(
@@ -1012,13 +1028,14 @@ const toggleUserStatus = async (op, user) => {
                                         </button>
 
                                         {String(user.operatorAccessLevel || "").toUpperCase() === "STAFF" && (
-                                          <button
-                                            className="btn danger"
-                                            type="button"
-                                            onClick={() => handleDeleteUser(op, user)}
-                                          >
-                                            Delete
-                                          </button>
+                                          <>
+                                            <button className="btn" type="button" onClick={() => resetStaffPassword(op, user)}>
+                                              Reset Password
+                                            </button>
+                                            <button className="btn danger" type="button" onClick={() => handleDeleteUser(op, user)}>
+                                              Delete
+                                            </button>
+                                          </>
                                         )}
                                       </div>
                                     </div>

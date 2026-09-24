@@ -1,5 +1,6 @@
 import prisma from "../config/db.js";
 import { parseId } from "../utils/parseId.js";
+import { getPlatformDeadlinePolicy, isPlatformPeakDate, validatePublishedDeadline } from "../services/platform_policy_service.js";
 
 function canManageOperator(req, operatorId) {
   if (req.user.role === "MASTER_SELLER") return true;
@@ -127,6 +128,7 @@ export async function updateBNPLConfig(req, res, next) {
     }
 
     const existing = await ensureConfig(operatorId);
+    const deadlinePolicy = await getPlatformDeadlinePolicy();
 
     const data = {
       paymentDeadlineDays:
@@ -155,6 +157,12 @@ export async function updateBNPLConfig(req, res, next) {
           : req.body.manualPaymentNote || null,
     };
 
+    if (!validatePublishedDeadline(deadlinePolicy, data.paymentDeadlineDays)) {
+      return res.status(400).json({
+        message: `Payment deadline must be one of the published tiers: ${deadlinePolicy.publishedTiers.join(", ")} days.`,
+      });
+    }
+
     if (!Number.isInteger(data.paymentDeadlineDays) || data.paymentDeadlineDays < 1) {
       return res.status(400).json({
         message: "paymentDeadlineDays must be at least 1",
@@ -177,12 +185,68 @@ export async function updateBNPLConfig(req, res, next) {
         entityId: String(config.id),
         details: {
           operatorId,
+          before: { paymentDeadlineDays: existing.paymentDeadlineDays },
+          after: { paymentDeadlineDays: config.paymentDeadlineDays },
           ...data,
         },
       },
     });
 
     res.json(config);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getPlatformDeadlineSettings(req, res, next) {
+  try {
+    res.json(await getPlatformDeadlinePolicy());
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updatePlatformDeadlineSettings(req, res, next) {
+  try {
+    const tiers = [...new Set((Array.isArray(req.body.publishedTiers) ? req.body.publishedTiers : []).map(Number))]
+      .filter((value) => Number.isInteger(value) && value > 0)
+      .sort((a, b) => a - b);
+    const mostLenientDays = Number(req.body.mostLenientDays);
+    if (!tiers.length || !Number.isInteger(mostLenientDays) || !tiers.includes(mostLenientDays) || Math.max(...tiers) !== mostLenientDays) {
+      return res.status(400).json({ message: "Published tiers must be positive integers, and mostLenientDays must be the largest published tier." });
+    }
+
+    const before = await getPlatformDeadlinePolicy();
+    const after = await prisma.platformDeadlinePolicy.update({
+      where: { id: 1 },
+      data: { publishedTiers: tiers, mostLenientDays },
+    });
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: "PLATFORM_DEADLINE_POLICY_UPDATED",
+        entityType: "PlatformDeadlinePolicy",
+        entityId: "1",
+        details: {
+          before: { publishedTiers: before.publishedTiers, mostLenientDays: before.mostLenientDays },
+          after: { publishedTiers: after.publishedTiers, mostLenientDays: after.mostLenientDays },
+        },
+      },
+    });
+    res.json(after);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getPartialRefundEligibility(req, res, next) {
+  try {
+    const date = String(req.query.date || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ message: "A valid date is required." });
+    }
+    const peak = await isPlatformPeakDate(`${date}T00:00:00.000Z`);
+    res.json({ date, available: !peak, reason: peak ? "Partial refund election is unavailable on platform peak dates." : null });
   } catch (err) {
     next(err);
   }

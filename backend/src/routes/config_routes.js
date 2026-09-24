@@ -3,11 +3,18 @@ import {
   getBNPLConfig,
   getBNPLConfigs,
   updateBNPLConfig,
+  getPlatformDeadlineSettings,
+  updatePlatformDeadlineSettings,
+  getPartialRefundEligibility,
 } from "../controllers/config_controller.js";
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import { allowRoles } from "../middlewares/rbac_middleware.js";
 
 const router = express.Router();
+
+router.get("/platform-deadlines", verifyToken, allowRoles("MASTER_SELLER"), getPlatformDeadlineSettings);
+router.patch("/platform-deadlines", verifyToken, allowRoles("MASTER_SELLER"), updatePlatformDeadlineSettings);
+router.get("/partial-refund-eligibility", verifyToken, allowRoles("MASTER_SELLER", "NORMAL_SELLER", "CUSTOMER"), getPartialRefundEligibility);
 
 router.get(
   "/bnpl",

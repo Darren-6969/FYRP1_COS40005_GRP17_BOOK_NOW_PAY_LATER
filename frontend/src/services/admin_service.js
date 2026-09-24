@@ -32,6 +32,9 @@ export const reviewLicenceDocument = (id, decision, reason) =>
 export const getPeakDates = () => api.get("/licence-verification/peak-dates");
 export const createPeakDate = (payload) => api.post("/licence-verification/peak-dates", payload);
 export const deletePeakDate = (id) => api.delete(`/licence-verification/peak-dates/${id}`);
+export const getPlatformDeadlineSettings = () => api.get("/config/platform-deadlines");
+export const updatePlatformDeadlineSettings = (payload) => api.patch("/config/platform-deadlines", payload);
+export const getPartialRefundEligibility = (date) => api.get("/config/partial-refund-eligibility", { params: { date } });
 /// Create new company with initial admin user (OWNER)
 export const uploadOperatorLogo = (file) => {
   const formData = new FormData();
@@ -48,8 +51,12 @@ export const createOperatorUser = (operatorId, payload) => api.post(`/operators/
 export const updateOperatorStatus = (id, status, reason) => api.patch(`/operators/${id}/status`, { status, reason });
 export const deleteOperator = (id) => api.delete(`/operators/${id}`);
 /// Update operator user status (ACTIVE, SUSPENDED)
-export const updateOperatorUserStatus = (operatorId, userId, status) => api.patch(`/operators/${operatorId}/users/${userId}/status`, { status });
+export const updateOperatorUserStatus = (operatorId, userId, status, reason) => api.patch(`/operators/${operatorId}/users/${userId}/status`, { status, reason });
+export const resetOperatorUser = (operatorId, userId, reason) => api.post(`/operators/${operatorId}/users/${userId}/reset`, { reason });
 export const deleteOperatorUser = (operatorId, userId) => api.delete(`/operators/${operatorId}/users/${userId}`);
+export const getAdminListings = (params = {}) => api.get("/operators/listings", { params });
+export const suspendAdminListing = (id, reason) => api.patch(`/operators/listings/admin/${id}/suspend`, { reason });
+export const reactivateAdminListing = (id, reason) => api.patch(`/operators/listings/admin/${id}/reactivate`, { reason });
 
 export const getBNPLConfigs = () => api.get("/config/bnpl");
 export const getBNPLConfig = (operatorId) => api.get(`/config/bnpl/${operatorId}`);

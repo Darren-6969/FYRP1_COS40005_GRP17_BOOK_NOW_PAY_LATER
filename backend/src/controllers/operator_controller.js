@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import prisma from "../config/db.js";
 import bcrypt from "bcryptjs";
 import Stripe from "stripe";
@@ -28,6 +29,13 @@ import {
   getPaymentConfirmationData,
   PAYMENT_TYPES,
 } from "../services/payment_schedule_service.js";
+import { getPlatformDeadlinePolicy, validatePublishedDeadline } from "../services/platform_policy_service.js";
+
+const SETUP_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
+
+function hashSetupToken(value) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
 
 function toNumber(value) {
   return value == null ? 0 : Number(value);
@@ -520,11 +528,16 @@ export async function updateOperatorUserStatus(req, res, next) {
     const userId = parseId(req.params.userId, "user id");
 
     const nextStatus = req.body.operatorUserStatus || req.body.status;
+    const reason = String(req.body.reason || "").trim();
 
     if (!["ACTIVE", "SUSPENDED"].includes(nextStatus)) {
       return res.status(400).json({
         message: "Invalid operator user status",
       });
+    }
+
+    if (reason.length < 5) {
+      return res.status(400).json({ message: "A status change reason of at least 5 characters is required." });
     }
 
     const user = await prisma.user.findFirst({
@@ -602,6 +615,7 @@ export async function updateOperatorUserStatus(req, res, next) {
         details: {
           operatorId,
           operatorUserStatus: nextStatus,
+          reason,
         },
       },
     });
@@ -2960,11 +2974,20 @@ export async function updateOperatorSettings(req, res, next) {
       paymentRequestEmailText,
       alternativeSuggestedEmailText,
       emailFooterText,
+      paymentDeadlineDays,
     } = req.body || {};
 
     const parsedBookingDeadline = Number(bookingResponseDeadlineMinutes);
     const parsedReminderBeforeReject = Number(reminderBeforeAutoRejectMinutes);
     const parsedOperatorReminder = Number(operatorReminderBeforeAutoRejectMinutes);
+    const configForValidation = await getOrCreateOperatorConfig(operatorId);
+    const deadlinePolicy = await getPlatformDeadlinePolicy();
+    const parsedPaymentDeadlineDays = paymentDeadlineDays === undefined
+      ? configForValidation.paymentDeadlineDays
+      : Number(paymentDeadlineDays);
+    if (!validatePublishedDeadline(deadlinePolicy, parsedPaymentDeadlineDays)) {
+      return res.status(400).json({ message: `Payment deadline must be one of the published tiers: ${deadlinePolicy.publishedTiers.join(", ")} days.` });
+    }
 
     if (
       !Number.isInteger(parsedBookingDeadline) ||
@@ -2998,7 +3021,7 @@ export async function updateOperatorSettings(req, res, next) {
       });
     }
 
-    const config = await getOrCreateOperatorConfig(operatorId);
+    const config = configForValidation;
 
     // #12 fix: PATCH semantics — only overwrite a field when the request actually
     // sent it. Previously any omitted field was forced to null (e.g. saving the
@@ -3011,6 +3034,7 @@ export async function updateOperatorSettings(req, res, next) {
         acceptedPaymentMethods || getDefaultAcceptedPaymentMethods(),
       operatorReminderBeforeAutoRejectMinutes: parsedOperatorReminder,
       enableOperatorReminderAlerts: Boolean(enableOperatorReminderAlerts),
+      paymentDeadlineDays: parsedPaymentDeadlineDays,
     };
 
     if (manualPaymentNote !== undefined) {
@@ -3498,6 +3522,46 @@ export async function previewOperatorEmailTemplate(req, res, next) {
       subject,
       html,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resetOperatorUser(req, res, next) {
+  try {
+    const operatorId = parseId(req.params.operatorId, "operator id");
+    const userId = parseId(req.params.userId, "user id");
+    const reason = String(req.body.reason || "").trim();
+    if (reason.length < 5) return res.status(400).json({ message: "A reset reason of at least 5 characters is required." });
+
+    const user = await prisma.user.findFirst({
+      where: { id: userId, operatorId, role: "NORMAL_SELLER", operatorAccessLevel: "STAFF" },
+      include: { operator: { select: { companyName: true } } },
+    });
+    if (!user) return res.status(404).json({ message: "Operator staff account not found." });
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    await prisma.passwordSetupToken.deleteMany({ where: { userId } });
+    await prisma.passwordSetupToken.create({
+      data: { tokenHash: hashSetupToken(rawToken), userId, expiresAt: new Date(Date.now() + SETUP_TOKEN_EXPIRY_MS) },
+    });
+    await prisma.refreshToken.deleteMany({ where: { userId } });
+
+    const setupUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/setup-password?token=${rawToken}`;
+    await sendEmail({
+      to: user.email,
+      subject: "Your operator password has been reset",
+      type: "OPERATOR_PASSWORD_RESET",
+      relatedEntityType: "User",
+      relatedEntityId: userId,
+      userId,
+      text: `An administrator reset your password for ${user.operator.companyName}. Set a new password here: ${setupUrl}`,
+      html: `<p>An administrator reset your password for <strong>${user.operator.companyName}</strong>.</p><p><a href="${setupUrl}">Set a new password</a>. This link expires in 24 hours.</p>`,
+    });
+    await prisma.auditLog.create({
+      data: { userId: req.user?.id || null, action: "OPERATOR_USER_PASSWORD_RESET", entityType: "User", entityId: String(userId), details: { operatorId, reason } },
+    });
+    res.json({ message: "Password reset link sent to the staff account email." });
   } catch (err) {
     next(err);
   }

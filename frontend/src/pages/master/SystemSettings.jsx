@@ -5,6 +5,8 @@ import {
   getPeakDates,
   createPeakDate,
   deletePeakDate,
+  getPlatformDeadlineSettings,
+  updatePlatformDeadlineSettings,
 } from "../../services/admin_service";
 
 function dateTime(value) {
@@ -37,6 +39,8 @@ export default function SystemSettings() {
   const [form, setForm] = useState(null);
   const [peakDates, setPeakDates] = useState([]);
   const [peakForm, setPeakForm] = useState({ date: "", label: "" });
+  const [deadlinePolicy, setDeadlinePolicy] = useState({ publishedTiers: [1, 3, 7], mostLenientDays: 7 });
+  const [tierInput, setTierInput] = useState("1, 3, 7");
 
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -51,10 +55,13 @@ export default function SystemSettings() {
       setError("");
       const res = await getBNPLConfigs();
       const peakRes = await getPeakDates();
+      const policyRes = await getPlatformDeadlineSettings();
       const items = res.data?.configs || [];
 
       setConfigs(items);
       setPeakDates(peakRes.data || []);
+      setDeadlinePolicy(policyRes.data);
+      setTierInput((policyRes.data?.publishedTiers || []).join(", "));
 
       if (items.length && !selectedOperatorId) {
         setSelectedOperatorId(String(items[0].operatorId));
@@ -90,6 +97,23 @@ export default function SystemSettings() {
       await load();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to remove peak date.");
+    }
+  };
+
+  const saveDeadlinePolicy = async (event) => {
+    event.preventDefault();
+    const publishedTiers = [...new Set(tierInput.split(",").map((value) => Number(value.trim())).filter((value) => Number.isInteger(value) && value > 0))].sort((a, b) => a - b);
+    const mostLenientDays = Number(deadlinePolicy.mostLenientDays);
+    if (!publishedTiers.length || publishedTiers[publishedTiers.length - 1] !== mostLenientDays) {
+      setError("The most lenient value must be the largest published tier.");
+      return;
+    }
+    try {
+      await updatePlatformDeadlineSettings({ publishedTiers, mostLenientDays });
+      setMessage("Platform deadline tiers published.");
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to update platform deadline tiers.");
     }
   };
 
@@ -195,6 +219,19 @@ export default function SystemSettings() {
 
   return (
     <div className="page-stack">
+      <section className="card">
+        <div className="section-header">
+          <div>
+            <h3>Published Deadline Tiers</h3>
+            <p>Operators may select only these payment deadline values. The largest value is the most lenient term allowed.</p>
+          </div>
+        </div>
+        <form className="admin-form-grid" onSubmit={saveDeadlinePolicy}>
+          <label><span>Published tiers (days)</span><input value={tierInput} onChange={(event) => setTierInput(event.target.value)} placeholder="1, 3, 7" /></label>
+          <label><span>Most lenient selectable value</span><input type="number" min="1" value={deadlinePolicy.mostLenientDays} onChange={(event) => setDeadlinePolicy((prev) => ({ ...prev, mostLenientDays: event.target.value }))} /></label>
+          <button className="btn primary" type="submit">Publish tiers</button>
+        </form>
+      </section>
       <section className="card">
         <div className="section-header">
           <div>

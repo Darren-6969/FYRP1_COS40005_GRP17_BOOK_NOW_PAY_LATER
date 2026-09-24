@@ -3,6 +3,7 @@ import {
   createOperator,
   createOperatorUser,
   updateOperatorUserStatus,
+  resetOperatorUser,
   deleteOperatorUser,
   getOperators,
   updateOperatorStatus,
@@ -107,6 +108,7 @@ router.post("/", ...masterOnly, createOperator);
 router.post("/:id/users", ...masterOnly, createOperatorUser);
 
 router.patch("/:operatorId/users/:userId/status", ...masterOnly, updateOperatorUserStatus);
+router.post("/:operatorId/users/:userId/reset", ...masterOnly, resetOperatorUser);
 
 router.delete("/:operatorId/users/:userId", ...masterOnly, deleteOperatorUser);
 

@@ -13,6 +13,7 @@ const reasons = [
 
 export default function LicenceVerification() {
   const [documents, setDocuments] = useState([]);
+  const [queueStats, setQueueStats] = useState({ queueDepth: 0, oldestItemAgeHours: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -22,7 +23,11 @@ export default function LicenceVerification() {
       setLoading(true);
       setError("");
       const res = await getLicenceQueue();
-      setDocuments(res.data || []);
+      setDocuments(res.data?.documents || []);
+      setQueueStats({
+        queueDepth: res.data?.queueDepth || 0,
+        oldestItemAgeHours: res.data?.oldestItemAgeHours || 0,
+      });
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load licence queue.");
     } finally {
@@ -71,9 +76,15 @@ export default function LicenceVerification() {
         <div className="section-header">
           <div>
             <h3>Licence Verification Queue</h3>
-            <p>Preliminary review only. Staff verify the original licence at pickup. Review the oldest SLA deadline first.</p>
+            <p>Preliminary review only. Staff verify the original licence at pickup. Review oldest submissions first.</p>
           </div>
           <button className="btn" type="button" onClick={load}>Refresh</button>
+        </div>
+        <div className="list-row">
+          <div>
+            <strong>{queueStats.queueDepth} pending licence{queueStats.queueDepth === 1 ? "" : "s"}</strong>
+            <p>Oldest item age: {queueStats.oldestItemAgeHours} hour{queueStats.oldestItemAgeHours === 1 ? "" : "s"}</p>
+          </div>
         </div>
         {error && <div className="alert danger">{error}</div>}
         {message && <div className="alert">{message}</div>}
@@ -86,6 +97,7 @@ export default function LicenceVerification() {
               <p className={document.sla?.overdue ? "text-danger" : ""}>
                 SLA: {document.sla?.overdue ? "OVERDUE" : `${document.sla?.hoursRemaining}h remaining`} · Due {new Date(document.reviewDueAt).toLocaleString()}
               </p>
+              <p>Booking deadline: {document.booking?.paymentDeadline ? new Date(document.booking.paymentDeadline).toLocaleString() : "No active booking deadline"}</p>
               <button className="btn link" type="button" onClick={() => viewDocument(document)}>Open document</button>
             </div>
             <div className="actions">
