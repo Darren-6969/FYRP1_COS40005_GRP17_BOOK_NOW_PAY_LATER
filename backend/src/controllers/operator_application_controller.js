@@ -214,7 +214,7 @@ export async function reviewOperatorApplication(req, res, next) {
       where: { id: applicationId },
       include: {
         operator: true,
-        documents: { select: { id: true, status: true } },
+        documents: { select: { id: true, documentType: true, status: true } },
         reviews: true,
       },
     });

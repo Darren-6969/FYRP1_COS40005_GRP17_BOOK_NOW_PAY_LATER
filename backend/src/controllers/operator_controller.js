@@ -492,6 +492,12 @@ export async function updateOperatorStatus(req, res, next) {
       return res.status(400).json({ message: "A status change reason of at least 5 characters is required." });
     }
 
+    const currentOperator = await prisma.operator.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!currentOperator) return res.status(404).json({ message: "Operator/company not found" });
+
     const operator = await prisma.$transaction(async (tx) => {
       const updatedOperator = await tx.operator.update({
         where: { id },
@@ -515,7 +521,55 @@ export async function updateOperatorStatus(req, res, next) {
       details: { status, reason },
     });
 
-    res.json(operator);
+    let emailStatus;
+    if (status === "ACTIVE" && currentOperator.status !== "ACTIVE") {
+      const [application, owner] = await Promise.all([
+        prisma.operatorApplication.findUnique({
+          where: { operatorId: id },
+          select: { status: true },
+        }),
+        prisma.user.findFirst({
+          where: { operatorId: id, role: "NORMAL_SELLER", operatorAccessLevel: "OWNER" },
+          select: { id: true, name: true, email: true },
+        }),
+      ]);
+
+      if (application && application.status !== "APPROVED" && owner) {
+        const rawToken = crypto.randomBytes(32).toString("hex");
+        await prisma.passwordSetupToken.deleteMany({ where: { userId: owner.id } });
+        await prisma.passwordSetupToken.create({
+          data: {
+            tokenHash: hashSetupToken(rawToken),
+            userId: owner.id,
+            expiresAt: new Date(Date.now() + SETUP_TOKEN_EXPIRY_MS),
+          },
+        });
+        await prisma.user.update({ where: { id: owner.id }, data: { operatorUserStatus: "ACTIVE" } });
+
+        const setupUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/setup-password?token=${rawToken}`;
+        const emailResult = await sendEmail({
+          to: owner.email,
+          subject: "Your operator account is ready",
+          type: "OPERATOR_ACCOUNT_APPROVED",
+          relatedEntityType: "Operator",
+          relatedEntityId: id,
+          userId: owner.id,
+          text: `Your operator account has been activated. Set your password here: ${setupUrl}`,
+          html: `<p>Hello ${owner.name},</p><p>Your operator account has been activated.</p><p><a href="${setupUrl}">Set up your password</a>. This link expires in 24 hours.</p>`,
+        });
+        emailStatus = emailResult.skipped ? "SKIPPED" : emailResult.sent ? "SENT" : "FAILED";
+      }
+    }
+
+    res.json({
+      ...operator,
+      ...(emailStatus ? {
+        emailStatus,
+        message: emailStatus === "SENT"
+          ? "Company activated and password setup email sent to the owner."
+          : `Company activated, but the password setup email was ${emailStatus.toLowerCase()}. Check email configuration and email logs.`,
+      } : {}),
+    });
   } catch (err) {
     next(err);
   }

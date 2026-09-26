@@ -402,8 +402,8 @@ export default function Operators() {
     try {
       setError("");
       setMessage("");
-      await updateOperatorStatus(op.id, nextStatus, reason.trim());
-      setMessage(`${op.companyName} updated to ${nextStatus}.`);
+      const response = await updateOperatorStatus(op.id, nextStatus, reason.trim());
+      setMessage(response.data.message || `${op.companyName} updated to ${nextStatus}.`);
       await load();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to update operator status");
