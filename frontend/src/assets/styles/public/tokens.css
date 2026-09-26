@@ -1,0 +1,169 @@
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
+
+/*
+ * Design tokens for the public pages (Home, Cars, Car detail, Booking form).
+ * Scoped to [data-public-root] so nothing here reaches the customer, operator
+ * or master surfaces. Every text/background pair below is at least 4.5:1.
+ */
+[data-public-root] {
+  --pub-font-display: "Archivo", system-ui, sans-serif;
+  --pub-font-body: "Instrument Sans", system-ui, sans-serif;
+  --pub-font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* surfaces */
+  --pub-ground: #f6f1e7;
+  --pub-surface: #ffffff;
+  --pub-surface-sunk: #f6f1e7;
+  --pub-line: #e3dacb;
+  --pub-line-soft: #ede4d3;
+  --pub-nav-bg: rgba(246, 241, 231, 0.92);
+
+  /* text */
+  --pub-ink: #14231f;
+  --pub-text: #55605a;
+  --pub-label: #6e685c;
+  --pub-link: #1e4f44;
+  --pub-link-hover: #b8501a;
+
+  /* brand */
+  --pub-brand: #1e4f44;
+  --pub-brand-hover: #14231f;
+  --pub-on-brand: #ffffff;
+  --pub-moss: #2a6b5c;
+  /* design rust #B8501A is 4.44:1 on sand; nudged darker to pass 4.5:1 */
+  --pub-accent: #a84816;
+  --pub-sky: #3f6f8f;
+  --pub-sky-hover: #2f5670;
+  --pub-sky-text: #3f6f8f;
+  --pub-moss-text: #2a6b5c;
+  --pub-cta: #e8863f;
+  --pub-cta-hover: #f0a063;
+  --pub-on-cta: #14231f;
+
+  /* tinted badges */
+  --pub-ok-bg: #e9efea;
+  --pub-ok-fg: #1e4f44;
+  --pub-warn-bg: #f7e9df;
+  --pub-warn-fg: #8a3a12;
+  --pub-error-bg: #fbe9e5;
+  --pub-error-fg: #9c2a14;
+  --pub-info-bg: #e7eef2;
+  --pub-info-fg: #2f5670;
+  --pub-notice-bg: #fdf3e3;
+  --pub-notice-line: #e8d9b8;
+  --pub-notice-fg: #6b4a15;
+  --pub-control-line: #cfc3ac;
+
+  /* placeholders */
+  --pub-stripe-a: #ede4d3;
+  --pub-stripe-b: #e5dac6;
+  --pub-stripe-fg: #6e685c;
+  --pub-stripe-tour-a: #e7eef2;
+  --pub-stripe-tour-b: #dee8ee;
+  --pub-stripe-tour-fg: #4f5f68;
+
+  /* always-dark bands (hero, assistant, CTA, footer) */
+  --pub-deep: #14231f;
+  --pub-deep-2: #1e4f44;
+  --pub-on-deep: #ffffff;
+  --pub-on-deep-soft: #dcd6c8;
+  --pub-on-deep-muted: #c2d8cf;
+  --pub-on-deep-faint: #a3aea8;
+  --pub-deep-line: rgba(246, 241, 231, 0.14);
+
+  /* shape */
+  --pub-radius-sm: 6px;
+  --pub-radius: 12px;
+  --pub-radius-lg: 16px;
+  --pub-shadow-card: 0 16px 32px -18px rgba(20, 35, 31, 0.42);
+  --pub-shadow-pop: 0 28px 60px -20px rgba(20, 35, 31, 0.55);
+  --pub-focus: #b8501a;
+  --pub-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --pub-max: 1240px;
+  --pub-gutter: clamp(16px, 4vw, 40px);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-public-root]:not([data-theme="light"]) {
+    --pub-ground: #0f1916;
+    --pub-surface: #16221e;
+    --pub-surface-sunk: #0f1916;
+    --pub-line: #2b3935;
+    --pub-line-soft: #22302b;
+    --pub-nav-bg: rgba(15, 25, 22, 0.9);
+    --pub-ink: #f1ece2;
+    --pub-text: #bcc6c1;
+    --pub-label: #a8a193;
+    --pub-link: #8fcab7;
+    --pub-link-hover: #f0a063;
+    --pub-brand: #2a6b5c;
+    --pub-brand-hover: #347c6b;
+    --pub-accent: #f0a063;
+    --pub-sky: #3f6f8f;
+    --pub-sky-text: #a9cbe0;
+    --pub-moss-text: #8fcab7;
+    --pub-ok-bg: #1c3a33;
+    --pub-ok-fg: #a9d6c6;
+    --pub-warn-bg: #3a2418;
+    --pub-warn-fg: #f3b38a;
+    --pub-error-bg: #3d1d16;
+    --pub-error-fg: #f5b0a0;
+    --pub-info-bg: #1b2d38;
+    --pub-info-fg: #a9cbe0;
+    --pub-notice-bg: #33291a;
+    --pub-notice-line: #4d3e24;
+    --pub-notice-fg: #f1d9a8;
+    --pub-control-line: #4a5a54;
+    --pub-stripe-a: #1d2a26;
+    --pub-stripe-b: #22312c;
+    --pub-stripe-fg: #a8a193;
+    --pub-stripe-tour-a: #1b2830;
+    --pub-stripe-tour-b: #1f2e37;
+    --pub-stripe-tour-fg: #a9bcc7;
+    --pub-focus: #f0a063;
+    color-scheme: dark;
+  }
+}
+
+[data-public-root][data-theme="dark"] {
+  --pub-ground: #0f1916;
+  --pub-surface: #16221e;
+  --pub-surface-sunk: #0f1916;
+  --pub-line: #2b3935;
+  --pub-line-soft: #22302b;
+  --pub-nav-bg: rgba(15, 25, 22, 0.9);
+  --pub-ink: #f1ece2;
+  --pub-text: #bcc6c1;
+  --pub-label: #a8a193;
+  --pub-link: #8fcab7;
+  --pub-link-hover: #f0a063;
+  --pub-brand: #2a6b5c;
+  --pub-brand-hover: #347c6b;
+  --pub-accent: #f0a063;
+  --pub-sky: #3f6f8f;
+  --pub-sky-text: #a9cbe0;
+  --pub-moss-text: #8fcab7;
+  --pub-ok-bg: #1c3a33;
+  --pub-ok-fg: #a9d6c6;
+  --pub-warn-bg: #3a2418;
+  --pub-warn-fg: #f3b38a;
+  --pub-error-bg: #3d1d16;
+  --pub-error-fg: #f5b0a0;
+  --pub-info-bg: #1b2d38;
+  --pub-info-fg: #a9cbe0;
+  --pub-notice-bg: #33291a;
+  --pub-notice-line: #4d3e24;
+  --pub-notice-fg: #f1d9a8;
+  --pub-control-line: #4a5a54;
+  --pub-stripe-a: #1d2a26;
+  --pub-stripe-b: #22312c;
+  --pub-stripe-fg: #a8a193;
+  --pub-stripe-tour-a: #1b2830;
+  --pub-stripe-tour-b: #1f2e37;
+  --pub-stripe-tour-fg: #a9bcc7;
+  --pub-focus: #f0a063;
+  color-scheme: dark;
+}

@@ -1,0 +1,243 @@
+.summary {
+  flex: 5 1 340px;
+  min-width: 0;
+  position: sticky;
+  top: 88px;
+  align-self: flex-start;
+  background: var(--pub-surface);
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.free {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--pub-ok-bg);
+  color: var(--pub-ok-fg);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.car {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.thumb {
+  flex-shrink: 0;
+  width: 96px;
+  height: 72px;
+  border-radius: 10px;
+  background: repeating-linear-gradient(135deg, var(--pub-stripe-a) 0 8px, var(--pub-stripe-b) 8px 16px);
+  display: grid;
+  place-items: center;
+  font-family: var(--pub-font-mono);
+  font-size: 11px;
+  color: var(--pub-stripe-fg);
+  object-fit: cover;
+}
+
+.carText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.carTitle {
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: var(--pub-ink);
+}
+
+.similar {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--pub-text);
+}
+
+.muted {
+  font-size: 13px;
+  color: var(--pub-text);
+}
+
+.operatorRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.operator {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pub-ink);
+}
+
+.branch {
+  font-weight: 400;
+  color: var(--pub-text);
+}
+
+.verified {
+  font-family: var(--pub-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pub-ok-fg);
+  background: var(--pub-ok-bg);
+  border-radius: 5px;
+  padding: 3px 7px;
+}
+
+.block {
+  border-top: 1px solid var(--pub-line-soft);
+  padding-top: 16px;
+}
+
+.blockHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.h2 {
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--pub-ink);
+  margin-bottom: 8px !important;
+}
+
+.blockHead .h2 {
+  margin-bottom: 0 !important;
+}
+
+.edit {
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.row dt {
+  color: var(--pub-text);
+}
+
+.row dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  color: var(--pub-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.total {
+  border-top: 1px solid var(--pub-line-soft);
+  padding-top: 10px;
+  margin-top: 2px;
+}
+
+.total dt,
+.total dd {
+  font-weight: 700;
+  color: var(--pub-ink);
+  font-size: 15px;
+}
+
+.ageLine {
+  margin-top: 10px !important;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pub-ink);
+}
+
+.ageLineError {
+  color: var(--pub-error-fg);
+}
+
+.payBox {
+  border: 1.5px solid var(--pub-brand);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.payNow {
+  padding: 14px 16px;
+  background: var(--pub-ok-bg);
+}
+
+.payLabel {
+  font-family: var(--pub-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pub-label);
+  margin-bottom: 4px;
+}
+
+.payFigureRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.payFigure {
+  font-family: var(--pub-font-display);
+  font-weight: 800;
+  font-size: 28px;
+  letter-spacing: -0.03em;
+  color: var(--pub-accent);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.payNote {
+  font-size: 13px;
+  color: var(--pub-text);
+}
+
+.later {
+  padding: 12px 16px;
+  border-top: 1px solid var(--pub-line);
+}
+
+.laterLine {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pub-ink);
+}
+
+@media (max-width: 899px) {
+  .summary {
+    position: static;
+  }
+}

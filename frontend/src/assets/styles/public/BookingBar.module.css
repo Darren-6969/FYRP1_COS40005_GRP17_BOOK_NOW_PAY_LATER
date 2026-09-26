@@ -1,0 +1,256 @@
+.bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  background: var(--pub-surface);
+  border-top: 1px solid var(--pub-line);
+  box-shadow: 0 -14px 34px -22px rgba(20, 35, 31, 0.45);
+  padding: 14px clamp(16px, 3vw, 32px) calc(16px + env(safe-area-inset-bottom));
+}
+
+.inner {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reason,
+.afterHours {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.5;
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.reason {
+  color: var(--pub-notice-fg);
+  background: var(--pub-notice-bg);
+}
+
+.afterHours {
+  color: var(--pub-ok-fg);
+  background: var(--pub-ok-bg);
+}
+
+.icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.payBlock {
+  flex-shrink: 0;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.label {
+  font-family: var(--pub-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pub-label);
+}
+
+.lowStock {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pub-warn-fg);
+  background: var(--pub-warn-bg);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.figureRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.figure {
+  font-family: var(--pub-font-display);
+  font-weight: 800;
+  font-size: 32px;
+  letter-spacing: -0.03em;
+  color: var(--pub-accent);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.rate {
+  font-size: 13px;
+  color: var(--pub-text);
+}
+
+.sub {
+  border-left: 1px solid var(--pub-line);
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 14px;
+  line-height: 1.45;
+  min-width: 0;
+  flex: 1 1 160px;
+}
+
+.subMain {
+  color: var(--pub-ink);
+}
+
+.subExtra {
+  font-size: 13px;
+  color: var(--pub-text);
+}
+
+.action {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  flex: 0 0 260px;
+}
+
+.button {
+  border: 0;
+  cursor: pointer;
+  background: var(--pub-brand);
+  color: var(--pub-on-brand);
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+  font-size: 16px;
+  padding: 14px 36px;
+  border-radius: 12px;
+  min-height: 52px;
+  transition: background 0.18s ease;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--pub-brand-hover);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  background: var(--pub-line);
+  color: var(--pub-text);
+}
+
+.note {
+  font-size: 12px;
+  color: var(--pub-text);
+  text-align: center;
+}
+
+/* Phones: deposit and button share the first row; details stack below. */
+@media (max-width: 640px) {
+  .bar {
+    padding-top: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .inner {
+    gap: 8px;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "pay button"
+      "sub sub"
+      "after after"
+      "note note";
+    align-items: center;
+    gap: 6px 12px;
+  }
+
+  .figures,
+  .action {
+    display: contents;
+  }
+
+  .payBlock {
+    grid-area: pay;
+  }
+
+  .button {
+    grid-area: button;
+    padding: 12px 18px;
+    min-height: 48px;
+    font-size: 15px;
+  }
+
+  .sub {
+    grid-area: sub;
+    border-left: 0;
+    padding-left: 0;
+    font-size: 13px;
+  }
+
+  .afterHours {
+    grid-area: after;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  .note {
+    grid-area: note;
+    text-align: left;
+  }
+
+  .figure {
+    font-size: 24px;
+    white-space: nowrap;
+  }
+
+  .figureRow {
+    flex-wrap: wrap;
+    gap: 0 8px;
+  }
+
+  .rate {
+    font-size: 12px;
+  }
+
+  /* Already shown beside the car title on this page. */
+  .lowStock {
+    display: none;
+  }
+
+  .labelRow {
+    margin-bottom: 2px;
+  }
+
+  .reason {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+}

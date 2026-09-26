@@ -64,13 +64,29 @@ import OperatorHelp from "./pages/operator/OperatorHelp";
 import OperatorAccessRoute from "./components/OperatorAccessRoute";
 
 import EmbedEntry from "./pages/embed/EmbedEntry";
-import RootRedirect from "./components/RootRedirect";
+
+// Public Pages
+import PublicLayout from "./layouts/PublicLayout";
+import Home from "./pages/public/Home";
+import CarResults from "./pages/public/CarResults";
+import CarDetail from "./pages/public/CarDetail";
+import CarBookingForm from "./pages/public/CarBookingForm";
+import NotAvailable from "./pages/public/NotAvailable";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<RootRedirect />} />
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/cars" element={<CarResults />} />
+          <Route path="/cars/:listingId" element={<CarDetail />} />
+          {/* Signed-out visitors go to /login?redirect=<this URL>, which keeps every selection. */}
+          <Route element={<ProtectedRoute allowedRoles={["CUSTOMER"]} />}>
+            <Route path="/cars/:listingId/book" element={<CarBookingForm />} />
+          </Route>
+          <Route path="*" element={<NotAvailable />} />
+        </Route>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/operator-register" element={<OperatorRegister />} />
@@ -209,8 +225,6 @@ export default function App() {
               <Route path="help" element={<CustomerHelp />} />
             </Route>
           </Route>
-
-        <Route path="*" element={<RootRedirect />} />
       </Routes>
     </BrowserRouter>
   );

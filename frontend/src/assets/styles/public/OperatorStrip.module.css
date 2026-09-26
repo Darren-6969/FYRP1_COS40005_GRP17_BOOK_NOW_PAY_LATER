@@ -1,0 +1,94 @@
+.strip {
+  background: var(--pub-surface);
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
+  padding: 18px 22px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 24px;
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.logo {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: var(--pub-ok-bg);
+  display: grid;
+  place-items: center;
+  font-family: var(--pub-font-display);
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--pub-ok-fg);
+  object-fit: cover;
+}
+
+.lines {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.nameRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.name {
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--pub-ink);
+}
+
+.branch {
+  font-weight: 500;
+  color: var(--pub-text);
+}
+
+.verified {
+  font-family: var(--pub-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pub-ok-fg);
+  background: var(--pub-ok-bg);
+  border-radius: 5px;
+  padding: 3px 7px;
+}
+
+.rating {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pub-ink);
+}
+
+.ratingCount {
+  font-weight: 400;
+  color: var(--pub-text);
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--pub-text);
+}
+
+.link {
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}

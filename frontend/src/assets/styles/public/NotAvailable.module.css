@@ -1,0 +1,99 @@
+.wrap {
+  padding: clamp(56px, 9vw, 120px) var(--pub-gutter);
+  display: grid;
+  place-items: center;
+  min-height: 60vh;
+}
+
+.card {
+  max-width: 560px;
+  width: 100%;
+  background: var(--pub-surface);
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
+  padding: clamp(28px, 5vw, 44px);
+}
+
+.code {
+  font-family: var(--pub-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pub-accent);
+  margin-bottom: 12px !important;
+}
+
+.title {
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--pub-ink);
+  margin-bottom: 14px !important;
+}
+
+.title:focus {
+  outline: none;
+}
+
+.body {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--pub-text);
+  margin-bottom: 18px !important;
+}
+
+.path {
+  font-size: 13px;
+  color: var(--pub-label);
+  margin-bottom: 26px !important;
+  overflow-wrap: anywhere;
+}
+
+.pathLabel {
+  font-family: var(--pub-font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+}
+
+.path code {
+  font-family: var(--pub-font-mono);
+  color: var(--pub-ink);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.primary,
+.secondary {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.primary {
+  background: var(--pub-brand);
+  color: var(--pub-on-brand) !important;
+}
+
+.primary:hover {
+  background: var(--pub-brand-hover);
+}
+
+.secondary {
+  border: 1.5px solid var(--pub-line);
+  color: var(--pub-ink) !important;
+}
+
+.secondary:hover {
+  border-color: var(--pub-moss);
+}

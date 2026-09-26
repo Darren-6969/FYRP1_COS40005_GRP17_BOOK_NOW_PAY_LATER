@@ -1,0 +1,69 @@
+.root {
+  min-height: 100vh;
+  background: var(--pub-ground);
+  color: var(--pub-ink);
+  font-family: var(--pub-font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-wrap: pretty;
+  overflow-x: clip;
+}
+
+/* Neutralise the few element rules global.css applies everywhere. */
+.root :where(a) {
+  color: var(--pub-link);
+  text-decoration: none;
+}
+
+.root :where(a:hover) {
+  color: var(--pub-link-hover);
+}
+
+.root :where(button:disabled) {
+  opacity: 1;
+}
+
+.root :where(input, select, button, textarea) {
+  font: inherit;
+  color: inherit;
+}
+
+.root :where(h1, h2, h3, h4, p) {
+  margin: 0;
+}
+
+.root :where(*:focus-visible) {
+  outline: 2px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+.main {
+  display: block;
+}
+
+.main:focus {
+  outline: none;
+}
+
+.skip {
+  position: absolute;
+  left: 16px;
+  top: -60px;
+  z-index: 100;
+  background: var(--pub-brand);
+  color: var(--pub-on-brand) !important;
+  padding: 10px 16px;
+  border-radius: var(--pub-radius);
+  font-weight: 600;
+}
+
+.skip:focus {
+  top: 12px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .root {
+    scroll-behavior: smooth;
+  }
+}
