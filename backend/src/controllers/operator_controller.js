@@ -3589,10 +3589,10 @@ export async function resetOperatorUser(req, res, next) {
     if (reason.length < 5) return res.status(400).json({ message: "A reset reason of at least 5 characters is required." });
 
     const user = await prisma.user.findFirst({
-      where: { id: userId, operatorId, role: "NORMAL_SELLER", operatorAccessLevel: "STAFF" },
+      where: { id: userId, operatorId, role: "NORMAL_SELLER", operatorAccessLevel: { in: ["OWNER", "STAFF"] } },
       include: { operator: { select: { companyName: true } } },
     });
-    if (!user) return res.status(404).json({ message: "Operator staff account not found." });
+    if (!user) return res.status(404).json({ message: "Operator account not found." });
 
     const rawToken = crypto.randomBytes(32).toString("hex");
     await prisma.passwordSetupToken.deleteMany({ where: { userId } });
@@ -3602,9 +3602,9 @@ export async function resetOperatorUser(req, res, next) {
     await prisma.refreshToken.deleteMany({ where: { userId } });
 
     const setupUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/setup-password?token=${rawToken}`;
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: user.email,
-      subject: "Your operator password has been reset",
+      subject: "Set up your operator password",
       type: "OPERATOR_PASSWORD_RESET",
       relatedEntityType: "User",
       relatedEntityId: userId,
@@ -3615,7 +3615,13 @@ export async function resetOperatorUser(req, res, next) {
     await prisma.auditLog.create({
       data: { userId: req.user?.id || null, action: "OPERATOR_USER_PASSWORD_RESET", entityType: "User", entityId: String(userId), details: { operatorId, reason } },
     });
-    res.json({ message: "Password reset link sent to the staff account email." });
+    const emailStatus = emailResult.skipped ? "SKIPPED" : emailResult.sent ? "SENT" : "FAILED";
+    res.json({
+      message: emailStatus === "SENT"
+        ? `Password setup link sent to ${user.email}.`
+        : `Password setup email was ${emailStatus.toLowerCase()}. Check email configuration and email logs.`,
+      emailStatus,
+    });
   } catch (err) {
     next(err);
   }

@@ -275,24 +275,33 @@ export async function reviewOperatorApplication(req, res, next) {
     await prisma.refreshToken.deleteMany({ where: { user: { operatorId: application.operatorId } } });
 
     let setupUrl = null;
+    let emailStatus = null;
     if (decision === "APPROVED") {
       const rawToken = crypto.randomBytes(32).toString("hex");
       await prisma.passwordSetupToken.deleteMany({ where: { user: { operatorId: application.operatorId } } });
-      const owner = await prisma.user.findFirst({ where: { operatorId: application.operatorId, operatorAccessLevel: "OWNER" } });
-      await prisma.passwordSetupToken.create({
-        data: { tokenHash: hashToken(rawToken), userId: owner.id, expiresAt: new Date(Date.now() + SETUP_TOKEN_EXPIRY_MS) },
+      const owner = await prisma.user.findFirst({
+        where: { operatorId: application.operatorId, operatorAccessLevel: "OWNER" },
+        select: { id: true, email: true },
       });
-      setupUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/setup-password?token=${rawToken}`;
-      await sendEmail({
-        to: owner.email,
-        subject: "Your operator account has been approved",
-        type: "OPERATOR_ACCOUNT_APPROVED",
-        relatedEntityType: "OperatorApplication",
-        relatedEntityId: applicationId,
-        userId: owner.id,
-        text: `Your account has been approved. Set your password here: ${setupUrl}`,
-        html: `<p>Your operator account for <strong>${application.operator.companyName}</strong> has been approved.</p><p><a href="${setupUrl}">Set up your password</a>. This link expires in 24 hours.</p>`,
-      });
+      if (owner) {
+        await prisma.passwordSetupToken.create({
+          data: { tokenHash: hashToken(rawToken), userId: owner.id, expiresAt: new Date(Date.now() + SETUP_TOKEN_EXPIRY_MS) },
+        });
+        setupUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/setup-password?token=${rawToken}`;
+        const emailResult = await sendEmail({
+          to: owner.email,
+          subject: "Your operator account has been approved",
+          type: "OPERATOR_ACCOUNT_APPROVED",
+          relatedEntityType: "OperatorApplication",
+          relatedEntityId: applicationId,
+          userId: owner.id,
+          text: `Your account has been approved. Set your password here: ${setupUrl}`,
+          html: `<p>Your operator account for <strong>${application.operator.companyName}</strong> has been approved.</p><p><a href="${setupUrl}">Set up your password</a>. This link expires in 24 hours.</p>`,
+        });
+        emailStatus = emailResult.skipped ? "SKIPPED" : emailResult.sent ? "SENT" : "FAILED";
+      } else {
+        emailStatus = "OWNER_MISSING";
+      }
     } else {
       const owner = await prisma.user.findFirst({
         where: { operatorId: application.operatorId, operatorAccessLevel: "OWNER" },
@@ -326,7 +335,10 @@ export async function reviewOperatorApplication(req, res, next) {
       },
     });
 
-    res.json({ message: `Operator application ${decision.toLowerCase()}.`, application: result, setupUrl });
+    const message = decision === "APPROVED" && emailStatus !== "SENT"
+      ? `Application approved, but the password setup email was ${emailStatus === "OWNER_MISSING" ? "not sent because the owner account is missing" : emailStatus.toLowerCase()}. Use the owner account's setup-link action or check email logs.`
+      : `Operator application ${decision.toLowerCase()}.`;
+    res.json({ message, application: result, setupUrl, ...(emailStatus ? { emailStatus } : {}) });
   } catch (err) {
     next(err);
   }

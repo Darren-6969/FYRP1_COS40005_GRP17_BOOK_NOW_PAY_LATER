@@ -12,21 +12,39 @@ import prisma from "../config/db.js";
 //   ? new Resend(process.env.RESEND_API_KEY)
 //   : null;
 
-function configured() {
-  return Boolean(process.env.GMAIL_SMTP_USER && process.env.GMAIL_SMTP_PASS);
+function getSmtpConfiguration() {
+  const host = process.env.SMTP_HOST;
 
-  // Resend version for future production use:
-  // return Boolean(process.env.RESEND_API_KEY);
+  if (host) {
+    const user = process.env.SMTP_USER || process.env.GMAIL_SMTP_PASS;
+    const pass = process.env.SMTP_PASS || process.env.GMAIL_SMTP_PASS;;
+    const port = Number(process.env.SMTP_PORT || 587);
+    const secure = process.env.SMTP_SECURE
+      ? ["true", "1", "yes"].includes(process.env.SMTP_SECURE.toLowerCase())
+      : port === 465;
+
+    return {
+      host,
+      port,
+      secure,
+      auth: user && pass ? { user, pass } : undefined,
+      user,
+    };
+  }
+
+  if (process.env.GMAIL_SMTP_USER && process.env.GMAIL_SMTP_PASS) {
+    return {
+      service: "gmail",
+      auth: { user: process.env.GMAIL_SMTP_USER, pass: process.env.GMAIL_SMTP_PASS },
+      user: process.env.GMAIL_SMTP_USER,
+    };
+  }
+
+  return null;
 }
 
-function getTransporter() {
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.GMAIL_SMTP_USER,
-      pass: process.env.GMAIL_SMTP_PASS,
-    },
-  });
+function getTransporter(configuration) {
+  return nodemailer.createTransport(configuration);
 }
 
 export async function sendEmail({
@@ -40,6 +58,7 @@ export async function sendEmail({
   userId,
 }) {
   const toEmail = Array.isArray(to) ? to.join(",") : to;
+  const smtpConfiguration = getSmtpConfiguration();
 
   const emailLog = await prisma.emailLog.create({
     data: {
@@ -52,14 +71,14 @@ export async function sendEmail({
           ? null
           : String(relatedEntityId),
       userId: userId || null,
-      status: configured() ? "PENDING" : "SKIPPED",
-      error: configured()
+      status: smtpConfiguration ? "PENDING" : "SKIPPED",
+      error: smtpConfiguration
         ? null
-        : "GMAIL_SMTP_USER or GMAIL_SMTP_PASS is not configured. Email was skipped.",
+        : "SMTP_HOST or Gmail SMTP credentials are not configured. Email was skipped.",
     },
   });
 
-  if (!configured()) {
+  if (!smtpConfiguration) {
     console.warn(`[EMAIL SKIPPED] ${subject} -> ${toEmail}`);
     return {
       skipped: true,
@@ -68,12 +87,10 @@ export async function sendEmail({
   }
 
   try {
-    const transporter = getTransporter();
+    const transporter = getTransporter(smtpConfiguration);
 
     const providerResponse = await transporter.sendMail({
-      from:
-        process.env.EMAIL_FROM ||
-        `BNPL System <${process.env.GMAIL_SMTP_USER}>`,
+      from: process.env.EMAIL_FROM || (smtpConfiguration.user ? `BNPL System <${smtpConfiguration.user}>` : undefined),
       to,
       subject,
       html,

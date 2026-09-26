@@ -46,8 +46,8 @@ export default function OperatorApplicationReview() {
     try {
       setError("");
       setMessage("");
-      await reviewOperatorApplication(application.id, decision, reason.trim());
-      setMessage(`Application ${decision.toLowerCase()} successfully.`);
+      const response = await reviewOperatorApplication(application.id, decision, reason.trim());
+      setMessage(response.data.message || `Application ${decision.toLowerCase()} successfully.`);
       await load();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to review operator application.");
