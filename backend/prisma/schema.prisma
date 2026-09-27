@@ -76,6 +76,51 @@ enum TransmissionType {
   MANUAL
 }
 
+enum VehicleType {
+  SEDAN
+  HATCHBACK
+  COMPACT
+  SUV
+  MPV
+  PICKUP
+  VAN
+}
+
+enum Powertrain {
+  PETROL
+  DIESEL
+  HYBRID
+  EV
+}
+
+enum Drivetrain {
+  TWO_WD
+  FOUR_WD
+  AWD
+}
+
+enum FuelPolicy {
+  FULL_TO_FULL
+  SAME_TO_SAME
+}
+
+enum MileagePolicy {
+  UNLIMITED
+  LIMITED
+}
+
+enum AddonUnit {
+  PER_DAY
+  PER_BOOKING
+}
+
+enum BookingChannel {
+  WEB
+  HOST_EMBED
+  MOBILE
+  WHATSAPP
+}
+
 enum PaymentStatus {
   UNPAID
   PENDING_VERIFICATION
@@ -357,6 +402,32 @@ model Booking {
 
   paymentDeadline DateTime?
 
+  // ── Public platform (all nullable/defaulted so Phase 1 rows stay valid) ──
+  channel BookingChannel @default(WEB)
+
+  listingId Int?
+  listing   Listing? @relation(fields: [listingId], references: [id])
+
+  pickupPointId Int?
+  pickupPoint   PickupPoint? @relation(fields: [pickupPointId], references: [id])
+
+  quantity Int @default(1)
+
+  // Server-computed. totalAmount stays the amount owed:
+  // rentalAmount + addonsAmount + feesAmount - discountAmount
+  rentalAmount   Decimal? @db.Decimal(10, 2)
+  addonsAmount   Decimal  @default(0) @db.Decimal(10, 2)
+  feesAmount     Decimal  @default(0) @db.Decimal(10, 2)
+  discountAmount Decimal  @default(0) @db.Decimal(10, 2)
+
+  pricingSnapshot Json? // per-day rates, surcharges and fees as quoted
+  bookingDetails  Json? // contact, driver and agreement timestamps
+
+  pickedUpAt DateTime?
+  returnedAt DateTime?
+
+  addons BookingAddon[]
+
   alternativeServiceName String?
   alternativePrice       Decimal? @db.Decimal(10, 2)
 
@@ -378,6 +449,8 @@ model Booking {
   @@index([operatorId])
   @@index([status])
   @@index([paymentDeadline])
+  @@index([listingId, status])
+  @@index([pickupDate, returnDate])
 }
 
 model Payment {
@@ -468,6 +541,11 @@ model BNPLConfig {
   operator   Operator @relation(fields: [operatorId], references: [id])
 
   paymentDeadlineDays Int     @default(3)
+
+  // Public platform: deposit and missed-balance refund rule
+  downPaymentPercent   Int     @default(30)
+  partialRefundElected Boolean @default(false)
+  partialRefundPercent Int?
   allowReceiptUpload  Boolean @default(true)
   autoCancelOverdue   Boolean @default(true)
 
@@ -605,9 +683,14 @@ model Branch {
 
   phone String?
 
+  // Counter hours, "HH:mm" in operator local time
+  openTime  String?
+  closeTime String?
+
   isActive Boolean @default(true)
 
-  listings Listing[]
+  listings     Listing[]
+  pickupPoints PickupPoint[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -631,8 +714,11 @@ model Listing {
   name        String
   description String? @db.Text
 
-  price    Decimal @db.Decimal(10, 2)
+  price    Decimal @db.Decimal(10, 2) // weekday daily rate
   quantity Int     @default(1)
+
+  weekendPrice Decimal? @db.Decimal(10, 2) // falls back to price
+  peakPrice    Decimal? @db.Decimal(10, 2) // PlatformPeakDate days; falls back to weekend/price
 
   // Car rental fields
   vehicleMake  String?
@@ -644,6 +730,21 @@ model Listing {
   transmission TransmissionType?
 
   luggageCapacity Int?
+
+  vehicleType   VehicleType?
+  powertrain    Powertrain?
+  drivetrain    Drivetrain?
+  fuelPolicy    FuelPolicy?
+  mileagePolicy MileagePolicy @default(UNLIMITED)
+
+  mileageLimitKm    Int?
+  mileageExcessRate Decimal? @db.Decimal(10, 2)
+
+  minDriverAge         Int      @default(21)
+  youngDriverMaxAge    Int?
+  youngDriverSurcharge Decimal? @db.Decimal(10, 2) // per day
+
+  travelArea String? @db.Text
 
   pickupRules   String? @db.Text
   returnRules   String? @db.Text
@@ -665,7 +766,10 @@ model Listing {
   refundPolicy       String? @db.Text
   termsAndConditions String? @db.Text
 
-  images ListingImage[]
+  images       ListingImage[]
+  addons       ListingAddon[]
+  allocations  ListingAllocation[]
+  bookings     Booking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -678,6 +782,7 @@ model Listing {
   @@index([vehicleMake])
   @@index([vehicleModel])
   @@index([transmission])
+  @@index([vehicleType])
 }
 
 model ListingImage {
@@ -723,3 +828,111 @@ model CronJobRun {
   @@index([startedAt])
   @@index([triggeredByUserId])
 }
+
+// =============================================================================
+// Public platform: pricing extras, pickup points, availability, idempotency
+// =============================================================================
+
+model ListingAddon {
+  id Int @id @default(autoincrement())
+
+  listingId Int
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  price       Decimal   @db.Decimal(10, 2)
+  unit        AddonUnit @default(PER_DAY)
+  maxQuantity Int       @default(1)
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  bookingAddons BookingAddon[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listingId, isActive])
+}
+
+model BookingAddon {
+  id Int @id @default(autoincrement())
+
+  bookingId Int
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  // SetNull so an operator can delete an add-on without touching history
+  listingAddonId Int?
+  listingAddon   ListingAddon? @relation(fields: [listingAddonId], references: [id], onDelete: SetNull)
+
+  // Snapshot at booking time
+  name       String
+  unit       AddonUnit
+  unitPrice  Decimal   @db.Decimal(10, 2)
+  quantity   Int
+  totalPrice Decimal   @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([bookingId])
+}
+
+model PickupPoint {
+  id Int @id @default(autoincrement())
+
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  label String
+  note  String?
+  fee   Decimal @default(0) @db.Decimal(10, 2)
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  bookings Booking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId, isActive])
+}
+
+// Operator overrides only. Stock in use is NOT stored here: it is counted
+// from active bookings, so every status change anywhere in the codebase frees
+// or holds stock without extra hooks. No row = Listing.quantity, not blocked.
+model ListingAllocation {
+  listingId Int
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  date DateTime @db.Date
+
+  quantity  Int? // overrides Listing.quantity for this day (channel allocation)
+  isBlocked Boolean @default(false)
+  note      String?
+
+  updatedAt DateTime @updatedAt
+
+  @@id([listingId, date])
+  @@index([date])
+}
+
+model IdempotencyKey {
+  id Int @id @default(autoincrement())
+
+  key      String
+  userId   Int
+  endpoint String
+
+  requestHash    String
+  responseStatus Int?
+  responseBody   Json?
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@unique([userId, endpoint, key])
+  @@index([expiresAt])
+}
+
