@@ -340,11 +340,11 @@ export default function CarDetail() {
   };
 
   const quickChips = [
-    `${listing.seats} seats`,
+    listing.seats && `${listing.seats} seats`,
     TRANSMISSION[listing.transmission],
-    plural(listing.luggageCapacity, "bag"),
+    listing.luggageCapacity !== null && plural(listing.luggageCapacity, "bag"),
     ...(listing.policy.unlimitedMileage ? ["Unlimited mileage"] : []),
-  ];
+  ].filter(Boolean);
 
   const terms = [
     { k: "Fuel policy", ...listing.policy.fuel },
@@ -354,7 +354,10 @@ export default function CarDetail() {
     {
       k: "Drivers",
       value: "Self-drive · 1 authorised driver (you)",
-      note: `Additional drivers: ${formatSen(b.additionalDriverSen)} / day`,
+      note:
+        b.additionalDriverSen !== null
+          ? `Additional drivers: ${formatSen(b.additionalDriverSen)} / day`
+          : "Ask the operator about additional drivers",
     },
     { k: "Minimum driver age", value: String(b.minDriverAge), note: "Younger drivers cannot book this car." },
     ...(b.minDriverAge <= b.youngDriver.maxAge
@@ -362,23 +365,24 @@ export default function CarDetail() {
           {
             k: "Young driver surcharge",
             value: `${formatSen(b.youngDriver.surchargeSen)} / day`,
-            note: "For drivers under 25. Added to the balance.",
+            note: `For drivers aged ${b.minDriverAge}–${b.youngDriver.maxAge}. Added to the balance.`,
           },
         ]
       : []),
   ];
 
+  // Operators may leave some specs blank; those rows are left out.
   const specs = [
     ["Make", listing.vehicleMake],
-    ["Model", `${listing.vehicleModel}, or similar`],
-    ["Year", String(listing.modelYear)],
+    ["Model", listing.vehicleModel && `${listing.vehicleModel}, or similar`],
+    ["Year", listing.modelYear && String(listing.modelYear)],
     ["Type", listing.vehicleType],
-    ["Seats", String(listing.seats)],
+    ["Seats", listing.seats && String(listing.seats)],
     ["Transmission", TRANSMISSION[listing.transmission]],
     ["Powertrain", listing.fuelType],
     ["Drivetrain", listing.driveType === "4WD" ? "4WD or AWD" : listing.driveType],
-    ["Luggage", plural(listing.luggageCapacity, "bag")],
-  ];
+    ["Luggage", listing.luggageCapacity !== null && plural(listing.luggageCapacity, "bag")],
+  ].filter(([, v]) => Boolean(v));
 
   const rateLine = quote
     ? quote.weekendDays

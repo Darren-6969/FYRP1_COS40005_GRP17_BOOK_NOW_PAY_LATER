@@ -23,6 +23,7 @@ import hostRoutes       from "./routes/host_routes.js";
 import uploadRoutes     from "./routes/upload_routes.js";
 import operatorApplicationRoutes from "./routes/operator_application_routes.js";
 import carsxeRoutes from "./routes/carsxe_routes.js";
+import publicRoutes from "./routes/public_routes.js";
 
 import { errorHandler }  from "./middlewares/errorHandler.js";
 import { requestLogger } from "./middlewares/logger_middleware.js";
@@ -128,7 +129,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-bnpl-api-key"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-bnpl-api-key", "Idempotency-Key"],
   exposedHeaders: ["RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset"],
 };
 
@@ -189,6 +190,7 @@ app.use("/api/emails",    emailRoutes);
 app.use("/api/cron",      cronRoutes);
 app.use("/api/host",      hostRoutes);
 app.use("/api/carsxe",    carsxeRoutes);
+app.use("/api/public",    publicRoutes);
 
 // ── Error handler ────────────────────────────────────────────────────────────
 app.use(errorHandler);

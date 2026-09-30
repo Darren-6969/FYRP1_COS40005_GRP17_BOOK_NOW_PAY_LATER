@@ -20,6 +20,8 @@ import { verifyToken, requireVerifiedCustomer } from "../middlewares/auth_middle
 import { allowRoles } from "../middlewares/rbac_middleware.js";
 import { validate } from "../middlewares/validate_middleware.js";
 import { createBookingSchema } from "../validators/booking_validator.js";
+import { carBookingSchema } from "../validators/car_booking_validator.js";
+import { createCarBooking } from "../controllers/car_booking_controller.js";
 
 const router = express.Router();
 
@@ -29,6 +31,8 @@ router.use(allowRoles("CUSTOMER"));
 router.get("/bookings", getCustomerBookings);
 // Vuln 3 fix: Zod validation blocks negative/zero totalAmount and malformed dates
 router.post("/bookings", validate(createBookingSchema), createCustomerBooking);
+// Public platform car requests: server-priced, idempotent (Idempotency-Key header).
+router.post("/car-bookings", requireVerifiedCustomer, validate(carBookingSchema), createCarBooking);
 router.get("/bookings/:id", getCustomerBookingById);
 router.patch("/bookings/:id/accept-alternative", acceptAlternativeBooking);
 router.patch("/bookings/:id/reject-alternative", rejectAlternativeBooking);

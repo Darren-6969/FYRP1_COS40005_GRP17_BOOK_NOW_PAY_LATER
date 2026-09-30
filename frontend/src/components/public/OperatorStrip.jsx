@@ -47,7 +47,10 @@ export default function OperatorStrip({ operator, branch, stats, rating }) {
             {BRAND.suffix} since {formatMonthYear(operator.activeSince)}
           </span>
           <span className={styles.meta}>
-            {formatResponseTime(stats.responseTimeMins)} · Accepts {stats.acceptanceRate}% of requests
+            {formatResponseTime(stats.responseTimeMins)}
+            {stats.acceptanceRate !== null && stats.acceptanceRate !== undefined
+              ? ` · Accepts ${stats.acceptanceRate}% of requests`
+              : ""}
           </span>
         </div>
       </div>

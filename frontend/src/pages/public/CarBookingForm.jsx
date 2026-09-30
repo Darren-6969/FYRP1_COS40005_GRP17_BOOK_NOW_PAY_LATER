@@ -421,7 +421,10 @@ export default function CarBookingForm() {
     { k: "Insurance", v: `${listing.policy.insurance.value} cover. ${listing.policy.insurance.note}` },
     {
       k: "Drivers",
-      v: `One authorised driver. Additional drivers ${formatSen(b.additionalDriverSen)}/day, same age and licence rules.`,
+      v:
+        b.additionalDriverSen !== null
+          ? `One authorised driver. Additional drivers ${formatSen(b.additionalDriverSen)}/day, same age and licence rules.`
+          : "One authorised driver. Ask the operator about additional drivers.",
     },
     {
       k: "Minimum driver age",

@@ -115,13 +115,18 @@ export async function acceptBookingAndRequestPayment({
     throw error;
   }
 
-  const downAmount = Number(
-    ((totalAmount * parsedPercent) / 100).toFixed(2)
-  );
+  // Platform bookings carry the quoted split; charge exactly what was shown.
+  const snapshot = booking.pricingSnapshot;
+  const fromSnapshot =
+    Number.isInteger(snapshot?.depositSen) && Number.isInteger(snapshot?.balanceSen);
 
-  const finalAmount = Number(
-    (totalAmount - downAmount).toFixed(2)
-  );
+  const downAmount = fromSnapshot
+    ? snapshot.depositSen / 100
+    : Number(((totalAmount * parsedPercent) / 100).toFixed(2));
+
+  const finalAmount = fromSnapshot
+    ? snapshot.balanceSen / 100
+    : Number((totalAmount - downAmount).toFixed(2));
 
   // =========================================================
   // 4. Calculate payment schedule

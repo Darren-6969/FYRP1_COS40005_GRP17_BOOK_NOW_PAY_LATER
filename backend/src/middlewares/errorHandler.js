@@ -16,5 +16,10 @@ export function errorHandler(err, req, res, next) {
         ? "Internal server error"
         : err.message || "Internal server error",
       ...(prismaCode ? { code: prismaCode } : {}),
+    // Opt-in application error codes (e.g. LISTING_UNAVAILABLE) that clients
+    // branch on. Set err.appCode deliberately; err.code from Node or libraries
+    // is never exposed.
+    ...(err.appCode ? { code: err.appCode } : {}),
+    ...(err.appCode && err.details ? { details: err.details } : {}),
   });
 }

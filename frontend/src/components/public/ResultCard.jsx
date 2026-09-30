@@ -10,7 +10,9 @@ export default function ResultCard({ result, href, linkState, saved, onToggleSav
   const { listing, days, quote, rateSen, depositPct, depositPerDaySen, remaining, heldUntil } = result;
   const primary = listing.images.find((img) => img.isPrimary) || listing.images[0];
   const title = `${listing.vehicleMake} ${listing.vehicleModel}`;
-  const meta = [listing.vehicleType, `${listing.seats} seats`, TRANSMISSION[listing.transmission], listing.fuelType].join(", ");
+  const meta = [listing.vehicleType, `${listing.seats} seats`, TRANSMISSION[listing.transmission], listing.fuelType]
+    .filter(Boolean)
+    .join(", ");
   const dayWord = days === 1 ? "day" : "days";
 
   return (

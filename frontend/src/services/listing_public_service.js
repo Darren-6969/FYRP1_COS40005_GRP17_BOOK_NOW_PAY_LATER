@@ -1,24 +1,38 @@
 // Public (signed-out) listing reads for the customer-facing pages.
 //
-// There is no public listings endpoint yet: /operators/listings is operator
-// only. Until one exists these functions answer from src/services/mock/.
-// Each returns `{ data }` like an axios response, so pages will not change
-// when the mock is swapped for `api.get(...)`.
-//
-// Amounts in the responses are display quotes only. The server is the source
-// of truth for every price; pages never send them back.
+// Cars come from the backend (/api/public/cars). The whole published fleet is
+// fetched once and filtered, faceted and sorted here, which is fine while the
+// fleet is small; move search to the server once it outgrows one response.
+// Car detail and quotes always come from the server, which is the source of
+// truth for every price. Tours and announcements are still mock data.
 
-import { MOCK_CARS, FEATURED_CAR_IDS, MOCK_TOURS, MOCK_NEWS, PICKUP_CITIES } from "./mock/listings.mock";
+import api from "./api";
+import { MOCK_TOURS, MOCK_NEWS, PICKUP_CITIES } from "./mock/listings.mock";
 import { klDateTimeToIso, klToday } from "../utils/formatPublic";
 import { FACET_GROUPS, hasDates } from "../utils/carSearchParams";
 
 const MOCK_LATENCY_MS = 350;
+const FEATURED_COUNT = 3;
 const FEATURED_QUOTE_DAYS = 3;
 const RECOMMEND_WINDOW_DAYS = 14;
 const DAY_MS = 86400000;
+const FLEET_TTL_MS = 30000;
 
 function respond(data, latency = MOCK_LATENCY_MS) {
   return new Promise((resolve) => setTimeout(() => resolve({ data }), latency));
+}
+
+// One fleet request shared by the landing page and search, refreshed every 30 s.
+let fleetCache = { at: 0, promise: null };
+function loadFleet() {
+  if (!fleetCache.promise || Date.now() - fleetCache.at > FLEET_TTL_MS) {
+    const promise = api.get("/public/cars").then((r) => r.data);
+    promise.catch(() => {
+      if (fleetCache.promise === promise) fleetCache = { at: 0, promise: null };
+    });
+    fleetCache = { at: Date.now(), promise };
+  }
+  return fleetCache.promise;
 }
 
 function isWeekend(plainDate, offsetDays) {
@@ -52,12 +66,13 @@ export function quoteFor(listing, days, from = null) {
   return { days, weekendDays, totalSen, depositSen, balanceSen: totalSen - depositSen };
 }
 
-// TODO(api): GET /listings/featured?category=CAR_RENTAL
-export function getFeaturedCars() {
-  const cars = FEATURED_CAR_IDS.map((id) => MOCK_CARS.find((c) => c.id === id))
-    .filter(Boolean)
+// Landing page: cheapest deposit per day among cars free within two weeks.
+export async function getFeaturedCars() {
+  const { items } = await loadFleet();
+  const cars = recommend(items)
+    .slice(0, FEATURED_COUNT)
     .map((listing) => ({ listing, quote: quoteFor(listing, FEATURED_QUOTE_DAYS) }));
-  return respond(cars);
+  return { data: cars };
 }
 
 // ── Car search ──────────────────────────────────────────────────────
@@ -265,10 +280,9 @@ function findTightest(fleet, c, days) {
   return best;
 }
 
-// TODO(api): GET /listings?category=CAR_RENTAL&<criteria>
-// The server applies filters, availability and pricing from rate_rules.
-export function searchCars(c) {
-  const fleet = MOCK_CARS;
+// Display quotes here ignore peak dates; the detail page quote is exact.
+export async function searchCars(c) {
+  const { items: fleet, cities } = await loadFleet();
   const days = rentalDays(c);
   // Cars with no stock left on any requested date are not offered at all.
   const matching = fleet.filter((l) => passes(l, c, days) && !bookedDuring(l, c.from, days).length);
@@ -303,7 +317,7 @@ export function searchCars(c) {
   const depFleet = days ? fleet.filter((l) => passes(l, c, days, "dep")) : [];
   const deposit = days ? bounds(depFleet.map((l) => quoteFor(l, days, c.from).depositSen / 100)) : null;
 
-  return respond({
+  const result = {
     days,
     total: list.length,
     cities: [...new Set(list.map((l) => l.branch.city))].length,
@@ -312,168 +326,35 @@ export function searchCars(c) {
     facets: buildFacets(fleet, c, days),
     bounds: { price, deposit },
     tightest: list.length ? null : findTightest(fleet, c, days),
-    cityOptions: PICKUP_CITIES,
-  });
+    cityOptions: cities.length ? cities : PICKUP_CITIES,
+  };
+  return { data: result };
 }
 
 // ── Car detail and booking quote ─────────────────────────────────────
 
-const HOUR_MS = 3600000;
-// TODO(api): the payment schedule depends on the customer's credit tier
-// (SRS 03 / 04). These are display defaults for a standard tier only.
-const DEPOSIT_WINDOW_HOURS = 24;
-const BALANCE_DUE_HOURS_BEFORE_PICKUP = 24;
-
-function notFound() {
-  const err = new Error("Listing not found");
-  err.response = { status: 404, data: { code: "LISTING_NOT_FOUND", message: "Listing not found" } };
-  return err;
-}
-
-// TODO(api): GET /listings/:id
 export function getCarListing(id) {
-  const listing = MOCK_CARS.find((c) => String(c.id) === String(id));
-  if (!listing) {
-    return new Promise((_, reject) => setTimeout(() => reject(notFound()), MOCK_LATENCY_MS));
-  }
-  return respond(listing);
+  return api.get(`/public/cars/${encodeURIComponent(id)}`);
 }
 
-function klNowHhmm() {
-  const p = {};
-  new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
-    .formatToParts(new Date())
-    .forEach((x) => {
-      p[x.type] = x.value;
-    });
-  return `${p.hour}:${p.minute}`;
-}
+const PLAIN_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const HHMM = /^\d{2}:\d{2}$/;
 
-// Whole years between a "YYYY-MM-DD" birth date and a plain date.
-function ageOn(dob, onDate) {
-  const [by, bm, bd] = dob.split("-").map(Number);
-  const [y, m, d] = onDate.split("-").map(Number);
-  return y - by - (m < bm || (m === bm && d < bd) ? 1 : 0);
-}
-
-// Next window of the same length, starting after the requested date, with no booked day.
-function nearbyWindow(listing, from, days) {
-  for (let shift = 1; shift <= 30; shift++) {
-    const start = addDays(from, shift);
-    if (listing.booking.availableFrom && start < listing.booking.availableFrom) continue;
-    if (!bookedDuring(listing, start, days).length) return { from: start, to: addDays(start, days) };
-  }
-  return null;
-}
-
-// Everything that changes with the customer's selection: price, schedule,
-// availability, driver eligibility and whether the operator is open now.
-// TODO(api): POST /listings/:id/quote  { from, to, pickupPointId, addOnIds, driverAge }
-// The server is the source of truth for every figure returned here.
+// Price, schedule, availability, driver eligibility and opening hours for the
+// customer's selection. Only well-formed values are sent; the server fills in
+// defaults and validates everything again.
 export function quoteCarBooking(listingId, sel) {
-  const listing = MOCK_CARS.find((c) => String(c.id) === String(listingId));
-  if (!listing) return Promise.reject(notFound());
-  const b = listing.booking;
-  const c = { from: sel.from, to: sel.to, ft: sel.ft, tt: sel.tt };
-  const days = rentalDays(c);
-
-  // A date of birth (booking form) wins over a typed age (detail page).
-  // Age is measured on the pick-up date.
-  const age = sel.driverDob && sel.from ? ageOn(sel.driverDob, sel.from) : sel.age;
-  const eligibility = {
-    minAge: b.minDriverAge,
-    age,
-    underage: age !== null && age < b.minDriverAge,
-    young: age !== null && age >= b.minDriverAge && age <= b.youngDriver.maxAge,
-  };
-
-  const now = klNowHhmm();
-  const hours = { ...b.operatorHours, openNow: now >= b.operatorHours.open && now < b.operatorHours.close };
-  // Shown before dates are picked. Indicative only.
-  const indicative = {
-    fromDailySen: b.rateRules.weekdaySen,
-    depositPerDaySen: Math.round((b.rateRules.weekdaySen * b.downPaymentPct) / 100),
-    depositPct: b.downPaymentPct,
-  };
-
-  if (!days) {
-    return respond({ quote: null, availability: null, eligibility, hours, indicative }, 120);
+  const body = { addOns: sel.addOns || {} };
+  if (PLAIN_DATE.test(sel.from || "") && PLAIN_DATE.test(sel.to || "")) {
+    body.from = sel.from;
+    body.to = sel.to;
   }
-
-  const rental = quoteFor(listing, days, sel.from);
-  const point = b.pickupPoints.find((p) => p.id === sel.pickupPointId) || b.pickupPoints[0];
-  const addOnLines = b.addOns
-    .filter((a) => sel.addOns?.[a.id] > 0)
-    .map((a) => {
-      const qty = Math.min(sel.addOns[a.id], a.maxQty);
-      const amountSen = a.priceSen * qty * (a.unit === "per_day" ? days : 1);
-      return { id: a.id, label: a.label, qty, amountSen };
-    });
-  const addOnsSen = addOnLines.reduce((sum, a) => sum + a.amountSen, 0);
-  const surchargeSen = eligibility.young ? b.youngDriver.surchargeSen * days : 0;
-  const pickupFeeSen = point.feeSen;
-  // Add-ons, surcharges and a paid pick-up point go on the balance, never the deposit.
-  const balanceSen = rental.balanceSen + addOnsSen + surchargeSen + pickupFeeSen;
-  const totalSen = rental.depositSen + balanceSen;
-
-  const pickupAt = klDateTimeToIso(sel.from, sel.ft);
-  const balanceDueAt = new Date(new Date(pickupAt).getTime() - BALANCE_DUE_HOURS_BEFORE_PICKUP * HOUR_MS).toISOString();
-  // If the balance would fall due before the deposit window even closes, the
-  // whole amount is collected at once after acceptance.
-  const payInFull = new Date(balanceDueAt).getTime() <= Date.now() + DEPOSIT_WINDOW_HOURS * HOUR_MS;
-
-  const blockedDates = bookedDuring(listing, sel.from, days);
-  const heldUntil = isHeld(listing, c) ? b.availableFrom : null;
-  const available = !blockedDates.length && !heldUntil;
-  let alternatives = null;
-  if (!available) {
-    const similar = MOCK_CARS.filter(
-      (l) =>
-        l.id !== listing.id &&
-        l.branch.city === listing.branch.city &&
-        l.vehicleType === listing.vehicleType &&
-        !bookedDuring(l, sel.from, days).length &&
-        !isHeld(l, c)
-    );
-    alternatives = { nearby: nearbyWindow(listing, sel.from, days), similarCount: similar.length };
-  }
-
-  return respond(
-    {
-      quote: {
-        days,
-        weekendDays: rental.weekendDays,
-        rentalSen: rental.totalSen,
-        depositPct: b.downPaymentPct,
-        depositSen: rental.depositSen,
-        rentalBalanceSen: rental.balanceSen,
-        addOnLines,
-        addOnsSen,
-        surchargeSen,
-        pickupPoint: point,
-        pickupFeeSen,
-        balanceSen,
-        totalSen,
-        pickupAt,
-        returnAt: klDateTimeToIso(sel.to, sel.tt),
-        depositWindowHours: DEPOSIT_WINDOW_HOURS,
-        payInFull,
-        balanceDueAt,
-        licenceDueAt: payInFull ? pickupAt : balanceDueAt,
-      },
-      availability: {
-        available,
-        blockedDates,
-        heldUntil,
-        remaining: listing.quantity,
-        alternatives,
-      },
-      eligibility,
-      hours,
-      indicative,
-    },
-    120
-  );
+  if (HHMM.test(sel.ft || "")) body.ft = sel.ft;
+  if (HHMM.test(sel.tt || "")) body.tt = sel.tt;
+  if (sel.pickupPointId) body.pickupPointId = String(sel.pickupPointId);
+  if (PLAIN_DATE.test(sel.driverDob || "")) body.driverDob = sel.driverDob;
+  else if (Number.isInteger(sel.age)) body.age = sel.age;
+  return api.post(`/public/cars/${encodeURIComponent(listingId)}/quote`, body);
 }
 
 // TODO(api): GET /listings/featured?category=TOUR
