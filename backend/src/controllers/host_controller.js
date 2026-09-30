@@ -15,7 +15,7 @@ import bcrypt from "bcryptjs";
 import { generateUserCode } from "../services/userCode.js";
 import { issueTokenPair, sanitizeUser } from "./auth_controller.js";
 import { sendEmail } from "../services/email_service.js";
-import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
+
 
 async function mintHandoff(intentId) {
   const raw = crypto.randomBytes(32).toString("hex");
@@ -304,100 +304,68 @@ async function createBookingFromIntent(intent, user) {
       status: created.status,
     });
 
-    const full = await tx.booking.update({
-      where: { id: created.id },
-      data: { bookingCode: formatBookingCode(created.id) },
-      include: {
-        customer: { select: { id: true, userCode: true, name: true, email: true } },
-        operator: true,
-        payment: true,
-        receipt: true,
-        invoice: true,
-      },
-    });
-
-    await tx.hostBookingIntent.update({
-      where: { id: intent.id },
-      data: {
-        status: "CLAIMED",
-        claimedByUserId: user.id,
-        claimedBookingId: full.id,
-      },
-    });
-
-    await tx.auditLog.create({
-      data: {
-        userId: user.id,
-        action: "HOST_BOOKING_CLAIMED",
-        entityType: "Booking",
-        entityId: String(full.id),
-        details: {
-          hostBookingRef: intent.hostBookingRef,
-          operatorCode: intent.operatorCode,
-          intentToken: intent.token,
+      const full = await tx.booking.update({
+        where: { id: created.id },
+        data: { bookingCode: formatBookingCode(created.id) },
+        include: {
+          customer: { select: { id: true, userCode: true, name: true, email: true } },
+          operator: true,
+          payment: true,
+          receipt: true,
+          invoice: true,
         },
-      },
-    });
+      });
 
-    return full;
-  }, { timeout: 15000 });
+      await tx.hostBookingIntent.update({
+        where: { id: intent.id },
+        data: {
+          status: "CLAIMED",
+          claimedByUserId: user.id,
+          claimedBookingId: full.id,
+        },
+      });
 
-  // Automatically accept the booking.
-// This performs the same payment/invoice setup that previously
-// happened when the operator clicked Accept.
-console.log("🚀 AUTO ACCEPT START", {
-  bookingId: booking.id,
-  bookingCode: booking.bookingCode,
-  status: booking.status,
-});
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "HOST_BOOKING_CLAIMED",
+          entityType: "Booking",
+          entityId: String(full.id),
+          details: {
+            hostBookingRef: intent.hostBookingRef,
+            operatorCode: intent.operatorCode,
+            intentToken: intent.token,
+          },
+        },
+      });
 
-let acceptedBooking;
-let payment;
-let invoice;
+      return full;
+    }, { timeout: 15000 });
 
-try {
-  const result = await acceptBookingAndRequestPayment({
+    const operatorUrl = frontendUrl(
+    `/operator/bookings/${booking.id}`
+  );
+
+  await notifyCustomerByBooking({
     booking,
-    actorUserId: user.id,
+    title: "Booking submitted",
+    message: `Your BNPL booking ${booking.bookingCode} has been submitted and is waiting for operator review.`,
+    type: "BOOKING_SUBMITTED",
   });
 
-  acceptedBooking = result.booking;
-  payment = result.payment;
-  invoice = result.invoice;
-
-  console.log("✅ AUTO ACCEPT SUCCESS", {
-    bookingId: acceptedBooking.id,
-    bookingCode: acceptedBooking.bookingCode,
-    status: acceptedBooking.status,
-    paymentStatus: payment?.status,
-    invoiceId: invoice?.id,
-  });
-} catch (error) {
-  console.error("❌ AUTO ACCEPT FAILED", {
-    message: error.message,
-    stack: error.stack,
+  await notifyOperatorUsersByBooking({
+    booking,
+    title: "New booking request",
+    message: `${booking.bookingCode} requires your review.`,
+    type: "BOOKING_SUBMITTED",
+    emailSubject: `New BNPL Booking Request - ${booking.bookingCode}`,
+    emailHtml: bookingSubmittedTemplate({
+      booking,
+      operatorUrl,
+    }),
   });
 
-  throw error;
-}
-
-const operatorUrl = frontendUrl(
-  `/operator/bookings/${acceptedBooking.id}`
-);
-
-await notifyOperatorUsersByBooking({
-  booking: acceptedBooking,
-  title: "New booking",
-  message: `${acceptedBooking.bookingCode} has been automatically confirmed and is awaiting payment.`,
-  type: "BOOKING_CONFIRMED",
-  emailSubject: `New BNPL Booking - ${acceptedBooking.bookingCode}`,
-  emailHtml: bookingSubmittedTemplate({
-    booking: acceptedBooking,
-    operatorUrl,
-  }),
-});
-
-return acceptedBooking;
+  return booking;
 }
 
 export async function createHostBookingIntent(req, res, next) {
