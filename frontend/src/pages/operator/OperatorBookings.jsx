@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import {
+  Link,
+  useSearchParams,
+} from "react-router-dom";
 
 import {
   operatorService,
@@ -10,6 +13,7 @@ import {
 } from "../../services/operator_service";
 
 const tabs = [
+  { label: "Pending", value: "PENDING" },
   { label: "Upcoming", value: "UPCOMING" },
   { label: "In Progress", value: "IN_PROGRESS" },
   { label: "Completed", value: "COMPLETED" },
@@ -22,11 +26,13 @@ const CONFIRMED_STATUSES = new Set([
 ]);
 
 export default function OperatorBookings() {
+  const [searchParams] = useSearchParams();
   const [bookings, setBookings] = useState([]);
   const [activeStatus, setActiveStatus] = useState("UPCOMING");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionLoading, setActionLoading] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -59,6 +65,38 @@ setBookings(res.data.bookings || []);
     loadBookings();
   }, []);
 
+  const handleBookingAction = async (
+  bookingId,
+  action
+    ) => {
+      try {
+        setActionLoading(
+          `${action}-${bookingId}`
+        );
+
+        if (action === "accept") {
+          await operatorService.acceptBooking(
+            bookingId
+          );
+        }
+
+        if (action === "reject") {
+          await operatorService.rejectBooking(
+            bookingId
+          );
+        }
+
+        await loadBookings();
+      } catch (err) {
+        alert(
+          err.response?.data?.message ||
+            "Booking action failed"
+        );
+      } finally {
+        setActionLoading("");
+      }
+    };
+
   const filteredBookings = useMemo(() => {
   const now = new Date();
 
@@ -81,6 +119,13 @@ setBookings(res.data.bookings || []);
     const returnDate = booking.returnDate
       ? new Date(booking.returnDate)
       : null;
+
+    // =========================
+    // PENDING
+    // =========================
+    if (activeStatus === "PENDING") {
+      return status === "PENDING";
+    }
 
     // =========================
     // COMPLETED
@@ -219,8 +264,8 @@ setBookings(res.data.bookings || []);
           <h1>Bookings</h1>
 
           <p>
-            View confirmed bookings throughout their
-            rental lifecycle.
+            Review pending booking requests and manage
+            bookings throughout their rental lifecycle.
           </p>
         </div>
 
@@ -390,6 +435,48 @@ setBookings(res.data.bookings || []);
                             >
                               👁
                             </Link>
+
+                            {String(
+                              booking.status || ""
+                            ).toUpperCase() === "PENDING" && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="success"
+                                  disabled={!!actionLoading}
+                                  onClick={() =>
+                                    handleBookingAction(
+                                      booking.id,
+                                      "accept"
+                                    )
+                                  }
+                                  title="Accept Booking"
+                                >
+                                  {actionLoading ===
+                                  `accept-${booking.id}`
+                                    ? "..."
+                                    : "✓"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  disabled={!!actionLoading}
+                                  onClick={() =>
+                                    handleBookingAction(
+                                      booking.id,
+                                      "reject"
+                                    )
+                                  }
+                                  title="Reject Booking"
+                                >
+                                  {actionLoading ===
+                                  `reject-${booking.id}`
+                                    ? "..."
+                                    : "✕"}
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>

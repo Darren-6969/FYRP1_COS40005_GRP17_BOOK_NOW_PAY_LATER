@@ -101,27 +101,43 @@ export default function OperatorLayout() {
 
   /*Function for Notification Bell*/
     function getNotificationLink(item) {
-      const text = `${item.title || ""} ${item.message || ""}`;
-      const type = item.type || "";
+  const text = `${item.title || ""} ${item.message || ""}`;
+  const type = String(item.type || "").toUpperCase();
 
-      if (type.includes("PAYMENT") || text.toLowerCase().includes("payment")) {
-        return "/operator/payments";
-      }
+  if (
+    type.includes("PAYMENT") ||
+    text.toLowerCase().includes("payment")
+  ) {
+    return "/operator/payments";
+  }
 
-      if (type.includes("INVOICE") || text.toLowerCase().includes("invoice")) {
-        return "/operator/invoices";
-      }
+  if (
+    type.includes("INVOICE") ||
+    text.toLowerCase().includes("invoice")
+  ) {
+    return "/operator/invoices";
+  }
 
-      if (
-        type.includes("BOOKING") ||
-        text.toLowerCase().includes("booking") ||
-        text.match(/BNPL-\d+/i)
-      ) {
-        return "/operator/bookings";
-      }
+  // New booking waiting for operator approval
+  if (
+    type === "BOOKING_SUBMITTED" ||
+    text.toLowerCase().includes("new booking request") ||
+    text.toLowerCase().includes("requires your review")
+  ) {
+    return "/operator/bookings?status=PENDING";
+  }
 
-      return "/operator/notifications";
-    }
+  // Other booking-related notifications
+  if (
+    type.includes("BOOKING") ||
+    text.toLowerCase().includes("booking") ||
+    text.match(/BNPL-\d+/i)
+  ) {
+    return "/operator/bookings";
+  }
+
+  return "/operator/notifications";
+  }
 
   return (
     <div className="operator-shell">
