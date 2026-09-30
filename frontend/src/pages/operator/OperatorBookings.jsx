@@ -27,6 +27,11 @@ const CONFIRMED_STATUSES = new Set([
 
 export default function OperatorBookings() {
   const [searchParams] = useSearchParams();
+  const statusParam =
+    searchParams
+      .get("status")
+      ?.toUpperCase();
+
   const [bookings, setBookings] = useState([]);
   const [activeStatus, setActiveStatus] = useState("UPCOMING");
   const [search, setSearch] = useState("");
@@ -35,6 +40,19 @@ export default function OperatorBookings() {
   const [actionLoading, setActionLoading] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
+  
+  useEffect(() => {
+  if (
+    statusParam &&
+    tabs.some(
+      (tab) =>
+        tab.value === statusParam
+    )
+  ) {
+    setActiveStatus(statusParam);
+    setCurrentPage(1);
+  }
+  }, [statusParam]);
 
   const rowsPerPage = 10;
 
