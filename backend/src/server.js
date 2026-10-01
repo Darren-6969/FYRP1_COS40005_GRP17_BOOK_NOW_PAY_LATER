@@ -4,6 +4,7 @@ import app from "./app.js";
 import { initSocket } from "./utils/socket.js";
 import { startOverdueBookingCron } from "./services/cron_service.js";
 import { startIdempotencyCleanupJob } from "./jobs/idempotencyCleanup_job.js";
+import { startStripeWebhookWorker } from "./jobs/stripeWebhook_worker.js";
 
 dotenv.config();
 
@@ -14,6 +15,7 @@ const server = http.createServer(app);
 initSocket(server);
 startOverdueBookingCron();
 startIdempotencyCleanupJob();
+startStripeWebhookWorker();
 
 server.listen(PORT, () => {
   console.log(`BNPL backend running on http://localhost:${PORT}`);

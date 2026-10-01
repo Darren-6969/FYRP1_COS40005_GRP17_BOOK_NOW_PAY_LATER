@@ -936,3 +936,18 @@ model IdempotencyKey {
   @@index([expiresAt])
 }
 
+model StripeWebhookEvent {
+  id            String    @id
+  type          String
+  payload       Json
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  lastError     String?
+  receivedAt    DateTime  @default(now())
+  nextAttemptAt DateTime  @default(now())
+  lockedAt      DateTime?
+  processedAt   DateTime?
+
+  @@index([status, nextAttemptAt, receivedAt])
+}
+

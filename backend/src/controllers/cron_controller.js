@@ -8,6 +8,7 @@ import {
   runPaymentReminderCheck,
 } from "../services/cron_service.js";
 import { cleanupExpiredIdempotencyKeys } from "../services/idempotency_service.js";
+import { processStripeWebhookEvents } from "../jobs/stripeWebhook_worker.js";
 
 export async function getCronJobStatus(req, res, next) {
   try {
@@ -97,6 +98,7 @@ export async function runNoResponseCron(req, res, next) {
 
 export async function runMaintenanceChecks(req, res, next) {
   try {
+    const webhookResult = req.user ? null : await processStripeWebhookEvents();
     const result = await runBookingMaintenanceChecks({
       triggeredByUserId: req.user?.id || null,
       triggerSource: req.user ? "MANUAL" : "VERCEL_CRON",
@@ -105,6 +107,7 @@ export async function runMaintenanceChecks(req, res, next) {
     res.json({
       message: "Booking maintenance checks completed",
       result,
+      ...(webhookResult ? { webhookResult } : {}),
     });
   } catch (err) {
     next(err);
@@ -115,6 +118,15 @@ export async function runIdempotencyCleanup(_req, res, next) {
   try {
     const deleted = await cleanupExpiredIdempotencyKeys();
     res.json({ message: "Expired idempotency keys cleaned up", deleted });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function runStripeWebhookWorker(_req, res, next) {
+  try {
+    const result = await processStripeWebhookEvents();
+    res.json({ message: "Stripe webhook events processed", result });
   } catch (err) {
     next(err);
   }

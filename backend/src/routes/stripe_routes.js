@@ -224,7 +224,35 @@ router.post(
     }
 
     try {
-      switch (event.type) {
+      await prisma.stripeWebhookEvent.create({
+        data: {
+          id: event.id,
+          type: event.type,
+          payload: event,
+        },
+      });
+    } catch (err) {
+      if (err.code === "P2002") {
+        return res.status(200).json({ received: true, duplicate: true });
+      }
+      console.error(`[Stripe] Could not persist webhook event ${event.id}:`, err.message);
+      return res.status(500).json({ message: "Webhook event could not be persisted" });
+    }
+
+    res.status(200).json({ received: true });
+    setImmediate(() => {
+      import("../jobs/stripeWebhook_worker.js")
+        .then(({ processStripeWebhookEvents }) => processStripeWebhookEvents())
+        .catch((err) => console.error("[StripeWebhookWorker] Dispatch failed:", err.message));
+    });
+    return;
+  }
+);
+
+export async function processStripeWebhookEvent(event) {
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+  switch (event.type) {
         // ── Primary payment confirmation ────────────────────────────────────
         case "checkout.session.completed": {
           const session = event.data.object;
@@ -478,14 +506,8 @@ router.post(
 
         default:
           console.log(`[Stripe] Unhandled event type: ${event.type}`);
-      }
-    } catch (err) {
-      console.error(`[Stripe] Error handling ${event.type}:`, err);
-    }
-
-    res.json({ received: true });
   }
-);
+}
 
 // ── Stripe Connect: account status ───────────────────────────────────────────
 router.get(

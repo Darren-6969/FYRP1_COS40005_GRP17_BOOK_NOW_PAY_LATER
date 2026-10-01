@@ -5,6 +5,7 @@ import {
   runCompletionCheck,
   runMaintenanceChecks,
   runIdempotencyCleanup,
+  runStripeWebhookWorker,
   runNoResponseCron,
   runOverdueCheck,
   runPaymentReminderCron,
@@ -86,6 +87,7 @@ router.post(
 // This runs no-response, payment reminder, overdue, and completion checks.
 router.get("/vercel-maintenance-check", verifyCronSecret, runMaintenanceChecks);
 router.get("/vercel-idempotency-cleanup", verifyCronSecret, runIdempotencyCleanup);
+router.get("/vercel-stripe-webhook-worker", verifyCronSecret, runStripeWebhookWorker);
 
 // Keep old endpoint for backward compatibility.
 router.get("/vercel-overdue-check", verifyCronSecret, runMaintenanceChecks);
