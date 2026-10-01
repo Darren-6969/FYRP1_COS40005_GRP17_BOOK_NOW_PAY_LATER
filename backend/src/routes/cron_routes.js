@@ -3,6 +3,7 @@ import {
   getCronJobStatus,
   getCronHistory,
   runCompletionCheck,
+  runDailyRecovery,
   runMaintenanceChecks,
   runIdempotencyCleanup,
   runStripeWebhookWorker,
@@ -86,6 +87,7 @@ router.post(
 // Vercel Cron sends Authorization: Bearer $CRON_SECRET.
 // This runs no-response, payment reminder, overdue, and completion checks.
 router.get("/vercel-maintenance-check", verifyCronSecret, runMaintenanceChecks);
+router.get("/vercel-daily-recovery-sweep", verifyCronSecret, runDailyRecovery);
 router.get("/vercel-idempotency-cleanup", verifyCronSecret, runIdempotencyCleanup);
 router.get("/vercel-stripe-webhook-worker", verifyCronSecret, runStripeWebhookWorker);
 

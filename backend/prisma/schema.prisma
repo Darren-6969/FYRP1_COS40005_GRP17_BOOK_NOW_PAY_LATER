@@ -829,6 +829,20 @@ model CronJobRun {
   @@index([triggeredByUserId])
 }
 
+model CronJobLog {
+  id             Int      @id @default(autoincrement())
+  jobName        String   @map("job_name")
+  startedAt      DateTime @default(now()) @map("started_at")
+  endedAt        DateTime? @map("ended_at")
+  processedCount Int      @default(0) @map("processed_count")
+  failureCount   Int      @default(0) @map("failure_count")
+  errors         Json     @default("[]") @db.JsonB
+  status         String   @default("RUNNING")
+
+  @@index([jobName, startedAt])
+  @@map("cron_job_logs")
+}
+
 // =============================================================================
 // Public platform: pricing extras, pickup points, availability, idempotency
 // =============================================================================

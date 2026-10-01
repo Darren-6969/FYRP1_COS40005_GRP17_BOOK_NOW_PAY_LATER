@@ -14,7 +14,7 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/vercel-maintenance-check",
+      "path": "/api/cron/vercel-daily-recovery-sweep",
       "schedule": "0 0 * * *"
     },
     {

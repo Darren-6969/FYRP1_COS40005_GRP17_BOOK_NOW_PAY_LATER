@@ -1,6 +1,7 @@
 import prisma from "../config/db.js";
 import { notifyCustomerByBooking } from "./notification_email_service.js";
 import { autoRejectedBookingTemplate } from "./email_templates.js";
+import { runLoggedCronJob } from "./cron_job_service.js";
 
 function toDate(value) {
   const date = new Date(value);
@@ -18,7 +19,7 @@ async function getLatestOperatorConfig(operatorId) {
   });
 }
 
-export async function autoRejectInactiveBookings({
+async function performAutoRejectInactiveBookings({
   triggeredByUserId = null,
   triggerSource = "SYSTEM_CRON",
 } = {}) {
@@ -192,4 +193,11 @@ export async function autoRejectInactiveBookings({
 
     throw err;
   }
+}
+
+export function autoRejectInactiveBookings(options = {}) {
+  return runLoggedCronJob(
+    "AUTO_REJECT_INACTIVE_BOOKINGS",
+    () => performAutoRejectInactiveBookings(options)
+  );
 }

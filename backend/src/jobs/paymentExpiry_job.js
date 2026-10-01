@@ -1,6 +1,8 @@
 import cron from "node-cron";
 import prisma from "../config/db.js";
-import { sendOverdueEmail } from "../services/email_service.js";
+import { notifyCustomerByBooking } from "../services/notification_email_service.js";
+import { bookingStatusTemplate } from "../services/email_templates.js";
+import { runLoggedCronJob } from "../services/cron_job_service.js";
 
 /**
  * Runs every hour.
@@ -10,10 +12,21 @@ export function startPaymentExpiryJob() {
   cron.schedule("0 * * * *", async () => {
     console.log("[PaymentExpiry] Running overdue check...");
     try {
-      const now = new Date();
+      await runPaymentExpiryJob();
+    } catch (err) {
+      console.error("[PaymentExpiry] Job failed:", err.message);
+    }
+  });
 
-      // Find all accepted bookings past deadline with unpaid payment
-      const expired = await prisma.booking.findMany({
+  console.log("[PaymentExpiry] Scheduler started — hourly check");
+}
+
+export function runPaymentExpiryJob() {
+  return runLoggedCronJob("PAYMENT_EXPIRY", async () => {
+    const now = new Date();
+
+    // Find all accepted bookings past deadline with unpaid payment
+    const expired = await prisma.booking.findMany({
         where: {
           status: { in: ["ACCEPTED", "PENDING_PAYMENT"] },
           payment: {
@@ -38,10 +51,11 @@ export function startPaymentExpiryJob() {
         },
       });
 
-      console.log(`[PaymentExpiry] Found ${expired.length} overdue bookings`);
+    console.log(`[PaymentExpiry] Found ${expired.length} overdue bookings`);
 
-      for (const booking of expired) {
-        await prisma.$transaction([
+    let processedCount = 0;
+    for (const booking of expired) {
+      await prisma.$transaction([
           prisma.booking.update({
             where: { id: booking.id },
             data: {
@@ -73,20 +87,25 @@ export function startPaymentExpiryJob() {
           }),
         ]);
 
-        // Send email
-        await sendOverdueEmail(
-          booking.customer.email,
-          booking.customer.name,
-          booking.id,
-          booking.serviceName
-        );
+      // Send email
+      const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;
+      await notifyCustomerByBooking({
+        booking,
+        title: "Payment overdue",
+        message: `Your payment for booking ${booking.bookingCode || booking.id} is overdue. Please contact support.`,
+        type: "PAYMENT_OVERDUE",
+        emailSubject: `Payment Overdue - ${booking.bookingCode || booking.id}`,
+        emailHtml: bookingStatusTemplate({
+          booking,
+          status: "OVERDUE",
+          customerUrl,
+        }),
+      });
 
-        console.log(`[PaymentExpiry] Marked overdue: ${booking.id}`);
-      }
-    } catch (err) {
-      console.error("[PaymentExpiry] Job failed:", err.message);
+      processedCount += 1;
+      console.log(`[PaymentExpiry] Marked overdue: ${booking.id}`);
     }
-  });
 
-  console.log("[PaymentExpiry] Scheduler started — hourly check");
+    return { processedCount };
+  }, { lockName: "OVERDUE_CHECK" });
 }

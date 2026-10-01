@@ -46,6 +46,7 @@ async function runSweep(sessionPaymentStatus) {
       now,
       database,
       StripeClient: StripeStub,
+      runLogged: false,
       paidStateHandler: async (...args) => {
         paidStateCalls.push(args);
         return { payment: { status: "PAID" } };

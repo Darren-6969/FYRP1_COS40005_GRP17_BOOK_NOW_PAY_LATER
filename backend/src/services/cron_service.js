@@ -11,6 +11,7 @@ import {
 import { bookingStatusTemplate } from "./email_templates.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
 import { withDbRetry, ensureDbConnection } from "../utils/dbRetry.js"; // <-- add
+import { runLoggedCronJob } from "./cron_job_service.js";
 
 let lastOverdueRun = null;
 let lastOverdueResult = null;
@@ -117,7 +118,7 @@ function frontendCheckoutUrl(bookingId) {
   return `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/checkout/${bookingId}`;
 }
 
-export async function runPaymentReconciliationCheck({
+async function performPaymentReconciliationCheck({
   now = new Date(),
   database = prisma,
   StripeClient = Stripe,
@@ -256,6 +257,14 @@ export async function runPaymentReconciliationCheck({
   return result;
 }
 
+export function runPaymentReconciliationCheck(options = {}) {
+  const { runLogged = true, lockDatabase = prisma } = options;
+  const run = () => performPaymentReconciliationCheck(options);
+  return runLogged
+    ? runLoggedCronJob("PAYMENT_RECONCILIATION", run, { database: lockDatabase })
+    : run();
+}
+
 function hoursUntil(date, now = new Date()) {
   return (new Date(date).getTime() - now.getTime()) / (1000 * 60 * 60);
 }
@@ -277,7 +286,7 @@ async function hasAuditLog(bookingId, action) {
  * ACCEPTED/PENDING_PAYMENT + deadline passed + unpaid/unverified payment
  * → OVERDUE
  */
-export async function runOverdueBookingCheck({
+async function performOverdueBookingCheck({
   triggeredByUserId = null,
   triggerSource = "MANUAL",
   saveHistory = true,
@@ -412,12 +421,19 @@ export async function runOverdueBookingCheck({
   }
 }
 
+export function runOverdueBookingCheck(options = {}) {
+  return runLoggedCronJob(
+    "OVERDUE_CHECK",
+    () => performOverdueBookingCheck(options)
+  );
+}
+
 /**
  * 2. Auto-completion check
  * PAID + payment PAID + service end date passed
  * → COMPLETED
  */
-export async function runCompletedBookingCheck({
+async function performCompletedBookingCheck({
   triggeredByUserId = null,
   triggerSource = "MANUAL",
   saveHistory = true,
@@ -570,6 +586,13 @@ export async function runCompletedBookingCheck({
   }
 }
 
+export function runCompletedBookingCheck(options = {}) {
+  return runLoggedCronJob(
+    "COMPLETION_CHECK",
+    () => performCompletedBookingCheck(options)
+  );
+}
+
 /**
  * 3. Payment reminder check
  * Reminder strategy:
@@ -578,7 +601,7 @@ export async function runCompletedBookingCheck({
  *
  * Uses audit logs to prevent duplicate reminders.
  */
-export async function runPaymentReminderCheck({
+async function performPaymentReminderCheck({
   triggeredByUserId = null,
   triggerSource = "MANUAL",
   saveHistory = true,
@@ -718,6 +741,13 @@ export async function runPaymentReminderCheck({
   }
 }
 
+export function runPaymentReminderCheck(options = {}) {
+  return runLoggedCronJob(
+    "PAYMENT_REMINDER_CHECK",
+    () => performPaymentReminderCheck(options)
+  );
+}
+
 /**
  * 4. No merchant response after 2 days
  * Option A:
@@ -725,7 +755,7 @@ export async function runPaymentReminderCheck({
  * → REJECTED
  * → notify customer, operator, and master
  */
-export async function runNoMerchantResponseCheck({
+async function performNoMerchantResponseCheck({
   triggeredByUserId = null,
   triggerSource = "MANUAL",
   saveHistory = true,
@@ -886,7 +916,14 @@ export async function runNoMerchantResponseCheck({
   }
 }
 
-export async function runBookingMaintenanceChecks({
+export function runNoMerchantResponseCheck(options = {}) {
+  return runLoggedCronJob(
+    "NO_RESPONSE_CHECK",
+    () => performNoMerchantResponseCheck(options)
+  );
+}
+
+async function performBookingMaintenanceChecks({
   triggeredByUserId = null,
   triggerSource = "MANUAL",
 } = {}) {
@@ -909,7 +946,17 @@ export async function runBookingMaintenanceChecks({
       saveHistory: false,
     });
 
-    const reconciliationResult = await runPaymentReconciliationCheck();
+    let reconciliationResult;
+    try {
+      reconciliationResult = await runPaymentReconciliationCheck();
+    } catch (error) {
+      reconciliationResult = {
+        checkedAt: new Date(),
+        reconciledCount: 0,
+        failedCount: 1,
+        failures: [{ error: error.message }],
+      };
+    }
 
     const reminderResult = await runPaymentReminderCheck({
       triggeredByUserId,
@@ -994,4 +1041,55 @@ export function startOverdueBookingCron() {
 
   cronStarted = true;
   console.log("[CRON] Booking maintenance cron started.");
+}
+
+export function runBookingMaintenanceChecks(options = {}) {
+  return runLoggedCronJob(
+    "BOOKING_MAINTENANCE",
+    () => performBookingMaintenanceChecks(options),
+    {
+      summarize: (result) => ({
+        processedCount:
+          Number(result?.noResponse?.rejectedCount || 0) +
+          Number(result?.paymentReconciliation?.reconciledCount || 0) +
+          Number(result?.reminders?.remindedCount || 0) +
+          Number(result?.overdue?.expiredCount || 0) +
+          Number(result?.completed?.completedCount || 0),
+        failureCount: Number(result?.paymentReconciliation?.failedCount || 0),
+        errors: result?.paymentReconciliation?.failures || [],
+      }),
+    }
+  );
+}
+
+export function runDailyRecoverySweep() {
+  return runLoggedCronJob("DAILY_RECOVERY_SWEEP", async () => {
+    await ensureDbConnection();
+    let reconciliation;
+    try {
+      reconciliation = await runPaymentReconciliationCheck();
+    } catch (error) {
+      reconciliation = {
+        reconciledCount: 0,
+        failedCount: 1,
+        failures: [{ error: error.message }],
+      };
+    }
+    const overdue = await runOverdueBookingCheck({
+      triggerSource: "DAILY_RECOVERY_SWEEP",
+    });
+
+    return {
+      checkedAt: new Date(),
+      reconciliation,
+      overdue,
+      processedCount:
+        Number(reconciliation?.reconciledCount || 0) +
+        Number(overdue?.expiredCount || 0),
+      failureCount:
+        Number(reconciliation?.failedCount || 0) +
+        Number(overdue?.failureCount || 0),
+      errors: reconciliation?.failures || [],
+    };
+  });
 }

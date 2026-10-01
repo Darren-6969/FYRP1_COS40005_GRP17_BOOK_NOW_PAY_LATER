@@ -6,8 +6,9 @@ import {
   runNoMerchantResponseCheck,
   runOverdueBookingCheck,
   runPaymentReminderCheck,
+  runDailyRecoverySweep,
 } from "../services/cron_service.js";
-import { cleanupExpiredIdempotencyKeys } from "../services/idempotency_service.js";
+import { runIdempotencyCleanupJob } from "../jobs/idempotencyCleanup_job.js";
 import { processStripeWebhookEvents } from "../jobs/stripeWebhook_worker.js";
 
 export async function getCronJobStatus(req, res, next) {
@@ -116,7 +117,8 @@ export async function runMaintenanceChecks(req, res, next) {
 
 export async function runIdempotencyCleanup(_req, res, next) {
   try {
-    const deleted = await cleanupExpiredIdempotencyKeys();
+    const result = await runIdempotencyCleanupJob();
+    const deleted = result?.deleted || 0;
     res.json({ message: "Expired idempotency keys cleaned up", deleted });
   } catch (err) {
     next(err);
@@ -127,6 +129,15 @@ export async function runStripeWebhookWorker(_req, res, next) {
   try {
     const result = await processStripeWebhookEvents();
     res.json({ message: "Stripe webhook events processed", result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function runDailyRecovery(_req, res, next) {
+  try {
+    const result = await runDailyRecoverySweep();
+    res.json({ message: "Daily recovery sweep completed", result });
   } catch (err) {
     next(err);
   }
