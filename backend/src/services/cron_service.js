@@ -1,5 +1,8 @@
 import cron from "node-cron";
+import Stripe from "stripe";
 import prisma from "../config/db.js";
+import { applyPaidState } from "../routes/stripe_routes.js";
+import { PAYMENT_TYPES } from "./payment_schedule_service.js";
 import {
   notifyCustomerByBooking,
   notifyOperatorUsersByBooking,
@@ -112,6 +115,145 @@ function frontendBookingUrl(bookingId) {
 
 function frontendCheckoutUrl(bookingId) {
   return `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/checkout/${bookingId}`;
+}
+
+export async function runPaymentReconciliationCheck({
+  now = new Date(),
+  database = prisma,
+  StripeClient = Stripe,
+  paidStateHandler = applyPaidState,
+} = {}) {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error("STRIPE_SECRET_KEY is not configured");
+  }
+
+  const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const candidates = await database.payment.findMany({
+    where: {
+      method: "STRIPE",
+      booking: {
+        is: { status: { in: ["ACCEPTED", "PENDING_PAYMENT"] } },
+      },
+      OR: [
+        {
+          downPaymentStatus: { in: ["UNPAID", "PENDING_VERIFICATION"] },
+          downPaymentDueDate: { gt: now, lte: next24Hours },
+          downPaymentTransactionId: { not: null },
+        },
+        {
+          finalPaymentStatus: { in: ["UNPAID", "PENDING_VERIFICATION"] },
+          finalPaymentDueDate: { gt: now, lte: next24Hours },
+          finalPaymentTransactionId: { not: null },
+        },
+      ],
+    },
+    include: { booking: true },
+  });
+
+  const stripe = new StripeClient(process.env.STRIPE_SECRET_KEY);
+  const result = {
+    checkedAt: now,
+    checkedCount: 0,
+    reconciledCount: 0,
+    failedCount: 0,
+    reconciledPayments: [],
+    failures: [],
+  };
+
+  for (const payment of candidates) {
+    const sharedReference =
+      payment.downPaymentTransactionId &&
+      payment.downPaymentTransactionId === payment.finalPaymentTransactionId;
+    const references = sharedReference && payment.finalPaymentDueDate > now &&
+      payment.finalPaymentDueDate <= next24Hours
+      ? [
+          {
+            transactionId: payment.downPaymentTransactionId,
+            paymentType: PAYMENT_TYPES.FULL_PAYMENT,
+          },
+        ]
+      : sharedReference
+        ? []
+        : [
+          ...(payment.downPaymentStatus !== "PAID" && payment.downPaymentDueDate > now &&
+          payment.downPaymentDueDate <= next24Hours && payment.downPaymentTransactionId
+            ? [{
+                transactionId: payment.downPaymentTransactionId,
+                paymentType: PAYMENT_TYPES.DOWN_PAYMENT,
+              }]
+            : []),
+          ...(payment.finalPaymentStatus !== "PAID" && payment.finalPaymentDueDate > now &&
+          payment.finalPaymentDueDate <= next24Hours && payment.finalPaymentTransactionId
+            ? [{
+                transactionId: payment.finalPaymentTransactionId,
+                paymentType: PAYMENT_TYPES.FINAL_PAYMENT,
+              }]
+            : []),
+        ];
+
+    for (const reference of references) {
+      result.checkedCount += 1;
+      try {
+        let paymentType = reference.paymentType;
+        let paymentIntentId = reference.transactionId;
+        let sessionId = null;
+        let gatewayPaid = false;
+
+        if (reference.transactionId.startsWith("cs_")) {
+          const session = await stripe.checkout.sessions.retrieve(reference.transactionId);
+          if (Number(session.metadata?.bookingId) !== payment.bookingId) {
+            throw new Error("Stripe Checkout Session booking metadata did not match");
+          }
+          gatewayPaid = session.payment_status === "paid";
+          paymentIntentId = typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : session.payment_intent?.id;
+          sessionId = session.id;
+          paymentType = session.metadata?.paymentType || paymentType;
+        } else if (reference.transactionId.startsWith("pi_")) {
+          const intent = await stripe.paymentIntents.retrieve(reference.transactionId);
+          if (intent.metadata?.bookingId && Number(intent.metadata.bookingId) !== payment.bookingId) {
+            throw new Error("Stripe PaymentIntent booking metadata did not match");
+          }
+          gatewayPaid = intent.status === "succeeded";
+          paymentType = intent.metadata?.paymentType || paymentType;
+        } else {
+          continue;
+        }
+
+        if (!gatewayPaid || !paymentIntentId) continue;
+
+        const correction = await paidStateHandler(
+          payment.bookingId,
+          paymentIntentId,
+          sessionId,
+          paymentType,
+          "STRIPE_PAYMENT_RECONCILED"
+        );
+        if (correction && !correction.alreadyPaid && !correction.skippedTerminal) {
+          result.reconciledCount += 1;
+          result.reconciledPayments.push({
+            bookingId: payment.bookingId,
+            paymentType,
+            paymentIntentId,
+          });
+        }
+      } catch (err) {
+        result.failedCount += 1;
+        result.failures.push({
+          bookingId: payment.bookingId,
+          transactionId: reference.transactionId,
+          error: err.message,
+        });
+        console.error(
+          `[PaymentReconciliation] Booking ${payment.bookingId} failed:`,
+          err.message
+        );
+      }
+    }
+  }
+
+  return result;
 }
 
 function hoursUntil(date, now = new Date()) {
@@ -767,6 +909,8 @@ export async function runBookingMaintenanceChecks({
       saveHistory: false,
     });
 
+    const reconciliationResult = await runPaymentReconciliationCheck();
+
     const reminderResult = await runPaymentReminderCheck({
       triggeredByUserId,
       triggerSource,
@@ -788,6 +932,7 @@ export async function runBookingMaintenanceChecks({
     const result = {
       checkedAt: new Date(),
       noResponse: noResponseResult,
+      paymentReconciliation: reconciliationResult,
       reminders: reminderResult,
       overdue: overdueResult,
       completed: completionResult,
@@ -795,6 +940,7 @@ export async function runBookingMaintenanceChecks({
 
     const affectedCount =
       Number(noResponseResult?.rejectedCount || 0) +
+      Number(reconciliationResult?.reconciledCount || 0) +
       Number(reminderResult?.remindedCount || 0) +
       Number(overdueResult?.expiredCount || 0) +
       Number(completionResult?.completedCount || 0);

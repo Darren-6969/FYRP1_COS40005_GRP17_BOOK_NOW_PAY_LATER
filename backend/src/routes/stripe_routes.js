@@ -49,11 +49,12 @@ function includeBookingRelations() {
 // Called from both the webhook handler and the /confirm-session fallback.
 // With Destination Charges the split is already settled by Stripe at charge time,
 // so this function only needs to update our DB, generate the invoice, and notify.
-async function applyPaidState(
+export async function applyPaidState(
   bookingId,
   transactionId,
   sessionId,
-  paymentType = PAYMENT_TYPES.FULL_PAYMENT
+  paymentType = PAYMENT_TYPES.FULL_PAYMENT,
+  auditAction = null
 ) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -127,37 +128,71 @@ async function applyPaidState(
   }
 
   getPaymentSpec(booking.payment, paymentType);
-  const payment = await prisma.payment.update({
-    where: { bookingId },
-    data: getPaymentConfirmationData(booking.payment, paymentType, transactionId),
-  });
+  const paymentData = getPaymentConfirmationData(booking.payment, paymentType, transactionId);
+  let payment;
+  let updatedBooking;
+
+  if (auditAction) {
+    ({ payment, updatedBooking } = await prisma.$transaction(async (tx) => {
+      const correctedPayment = await tx.payment.update({
+        where: { bookingId },
+        data: paymentData,
+      });
+      const correctedBooking = await tx.booking.update({
+        where: { id: bookingId },
+        data: { status: correctedPayment.status === "PAID" ? "PAID" : "PENDING_PAYMENT" },
+        include: includeBookingRelations(),
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: null,
+          action: auditAction,
+          entityType: "Booking",
+          entityId: String(bookingId),
+          details: {
+            sessionId,
+            paymentIntent: transactionId,
+            paymentId: correctedPayment.id,
+            paymentType,
+            source: "SCHEDULED_RECONCILIATION",
+          },
+        },
+      });
+
+      return { payment: correctedPayment, updatedBooking: correctedBooking };
+    }));
+  } else {
+    payment = await prisma.payment.update({ where: { bookingId }, data: paymentData });
+    updatedBooking = await prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: payment.status === "PAID" ? "PAID" : "PENDING_PAYMENT" },
+      include: includeBookingRelations(),
+    });
+  }
 
   const invoice = payment.status === "PAID"
     ? await generateInvoiceForBooking(bookingId, booking.totalAmount, prisma, { status: "PAID" })
     : null;
 
-  const updatedBooking = await prisma.booking.update({
-    where: { id: bookingId },
-    data: { status: payment.status === "PAID" ? "PAID" : "PENDING_PAYMENT" },
-    include: includeBookingRelations(),
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      userId: null,
-      action: "STRIPE_PAYMENT_COMPLETED",
-      entityType: "Booking",
-      entityId: String(bookingId),
-      details: {
-        sessionId,
-        paymentIntent: transactionId,
-        paymentId: payment.id,
-        invoiceId: invoice?.id || null,
-        invoiceNo: invoice?.invoiceNo || null,
-        platformFeePercent: PLATFORM_FEE_PERCENT,
+  if (!auditAction) {
+    await prisma.auditLog.create({
+      data: {
+        userId: null,
+        action: "STRIPE_PAYMENT_COMPLETED",
+        entityType: "Booking",
+        entityId: String(bookingId),
+        details: {
+          sessionId,
+          paymentIntent: transactionId,
+          paymentId: payment.id,
+          invoiceId: invoice?.id || null,
+          invoiceNo: invoice?.invoiceNo || null,
+          platformFeePercent: PLATFORM_FEE_PERCENT,
+        },
       },
-    },
-  });
+    });
+  }
 
   const frontendBase = process.env.FRONTEND_URL || "http://localhost:5173";
 
@@ -709,12 +744,19 @@ router.post(
       // No on_behalf_of — this ensures Stripe applies the platform account's fee
       // rate (3% + RM1) instead of the connected account's default Express rate.
       // Tradeoff: the Stripe processing fee is deducted from the platform's share.
-      const paymentIntentData = destinationAccountId
-        ? {
-            application_fee_amount: platformFeeCents,
-            transfer_data: { destination: destinationAccountId },
-          }
-        : {};
+      const paymentIntentData = {
+        metadata: {
+          bookingId: String(booking.id),
+          customerId: String(req.user.id),
+          paymentType,
+        },
+        ...(destinationAccountId
+          ? {
+              application_fee_amount: platformFeeCents,
+              transfer_data: { destination: destinationAccountId },
+            }
+          : {}),
+      };
 
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card", "fpx", "grabpay"],
@@ -746,6 +788,22 @@ router.post(
           process.env.FRONTEND_URL || "http://localhost:5173"
         }/customer/checkout/${booking.id}?payment=cancelled`,
       }, { idempotencyKey: key });
+
+      const storedPaymentSpec = getPaymentSpec(booking.payment, paymentType);
+      const paymentReferenceData = paymentType === PAYMENT_TYPES.FULL_PAYMENT
+        ? {
+            downPaymentTransactionId: session.id,
+            finalPaymentTransactionId: session.id,
+          }
+        : { [storedPaymentSpec.transactionField]: session.id };
+      const referenceStatusField = storedPaymentSpec.statusField || "status";
+      await prisma.payment.updateMany({
+        where: {
+          bookingId: booking.id,
+          [referenceStatusField]: { not: "PAID" },
+        },
+        data: { method: "STRIPE", ...paymentReferenceData },
+      });
 
       return { status: 200, body: { url: session.url } };
     });
