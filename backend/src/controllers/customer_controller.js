@@ -16,6 +16,7 @@ import {
   getPaymentPendingData,
   PAYMENT_TYPES,
 } from "../services/payment_schedule_service.js";
+import { runIdempotent } from "../services/idempotency_service.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -135,7 +136,7 @@ async function assertCustomerBooking(bookingId, customerId) {
 }
 
 export async function createCustomerBooking(req, res, next) {
-  try {
+  return runIdempotent(req, res, next, "POST /customer/bookings", async () => {
     // Vuln 2 fix: destructure req.body FIRST inside try before any usage
     const {
       operatorId,
@@ -151,9 +152,7 @@ export async function createCustomerBooking(req, res, next) {
     // Vuln 3 fix: Zod middleware (validate(createBookingSchema)) on the route handles
     // type/bounds validation; keep a lightweight required-field guard as a fallback.
     if (!serviceName || !bookingDate || totalAmount === undefined) {
-      return res.status(400).json({
-        message: "serviceName, bookingDate and totalAmount are required",
-      });
+      return { status: 400, body: { message: "serviceName, bookingDate and totalAmount are required" } };
     }
 
     let resolvedOperatorId = operatorId ? Number(operatorId) : null;
@@ -165,10 +164,10 @@ export async function createCustomerBooking(req, res, next) {
       });
 
       if (!fallbackOperator) {
-        return res.status(400).json({
-          message:
-            "No active operator found. Please provide operatorId or create an operator first.",
-        });
+        return {
+          status: 400,
+          body: { message: "No active operator found. Please provide operatorId or create an operator first." },
+        };
       }
 
       resolvedOperatorId = fallbackOperator.id;
@@ -236,18 +235,18 @@ export async function createCustomerBooking(req, res, next) {
       return withCode;
     });
 
-    await notifyCustomerByBooking({
+    const notifications = [notifyCustomerByBooking({
       booking,
       title: "Booking submitted",
       message: `Your booking request for ${serviceName} has been submitted.`,
       type: "BOOKING_SUBMITTED",
-    });
+    })];
 
     const operatorUrl = `${
       process.env.FRONTEND_URL || "http://localhost:5173"
     }/operator/bookings/${booking.id}`;
 
-    await notifyOperatorUsersByBooking({
+    notifications.push(notifyOperatorUsersByBooking({
       booking,
       title: "New booking request",
       message: `${booking.bookingCode || booking.id} requires operator review.`,
@@ -257,12 +256,16 @@ export async function createCustomerBooking(req, res, next) {
         booking,
         operatorUrl,
       }),
-    });
+    }));
 
-    res.status(201).json(mapBooking(booking));
-  } catch (err) {
-    next(err);
-  }
+    Promise.allSettled(notifications).then((results) =>
+      results.filter((result) => result.status === "rejected").forEach((result) =>
+        console.error("[customer-booking] notification failed:", result.reason?.message)
+      )
+    );
+
+    return { status: 201, body: mapBooking(booking) };
+  });
 }
 
 export async function getCustomerBookings(req, res, next) {
@@ -389,7 +392,7 @@ export async function payCustomerBooking(_req, res) {
 }
 
 export async function uploadCustomerReceipt(req, res, next) {
-  try {
+  return runIdempotent(req, res, next, `POST /customer/bookings/${req.params.id}/receipt`, async () => {
     const {
       imageUrl,
       remarks,
@@ -398,38 +401,21 @@ export async function uploadCustomerReceipt(req, res, next) {
     } = req.body;
     const booking = await assertCustomerBooking(req.params.id, req.user.id);
 
-    if (!imageUrl) {
-      return res.status(400).json({ message: "Receipt image is required" });
-    }
-
-    // #18: reject anything that isn't an uploaded image or an https link,
-    // and cap the size (~5 MB base64) to match the frontend's compressed output.
+    if (!imageUrl) return { status: 400, body: { message: "Receipt image is required" } };
     if (!isValidReceiptImage(imageUrl)) {
-      return res.status(400).json({
-        message:
-          "Invalid receipt image. Upload an image file or provide an https link.",
-      });
+      return { status: 400, body: { message: "Invalid receipt image. Upload an image file or provide an https link." } };
     }
-
     if (imageUrl.length > 7_000_000) {
-      return res.status(400).json({
-        message: "Receipt image is too large. Please upload a smaller image.",
-      });
+      return { status: 400, body: { message: "Receipt image is too large. Please upload a smaller image." } };
     }
-
     if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
-      return res.status(400).json({
-        message:
-          "Receipt upload is only available after the booking is accepted.",
-      });
+      return { status: 400, body: { message: "Receipt upload is only available after the booking is accepted." } };
     }
-
     if (!Object.values(PAYMENT_TYPES).includes(paymentType)) {
-      return res.status(400).json({ message: "Invalid payment type" });
+      return { status: 400, body: { message: "Invalid payment type" } };
     }
-
     if (!booking.payment) {
-      return res.status(400).json({ message: "Payment schedule has not been created yet" });
+      return { status: 400, body: { message: "Payment schedule has not been created yet" } };
     }
 
     const pendingPayment = getPaymentPendingData(booking.payment, paymentType);
@@ -437,23 +423,11 @@ export async function uploadCustomerReceipt(req, res, next) {
       where: { bookingId: booking.id },
       data: { method, ...pendingPayment },
     });
-
     await prisma.receipt.upsert({
       where: { bookingId: booking.id },
-      create: {
-        bookingId: booking.id,
-        imageUrl,
-        remarks: remarks || null,
-        status: "PENDING",
-      },
-      update: {
-        imageUrl,
-        remarks: remarks || null,
-        status: "PENDING",
-        verifiedAt: null,
-      },
+      create: { bookingId: booking.id, imageUrl, remarks: remarks || null, status: "PENDING" },
+      update: { imageUrl, remarks: remarks || null, status: "PENDING", verifiedAt: null },
     });
-
     await prisma.auditLog.create({
       data: {
         userId: req.user.id,
@@ -467,50 +441,36 @@ export async function uploadCustomerReceipt(req, res, next) {
       where: { id: booking.id },
       data: { status: "PENDING_PAYMENT" },
       include: {
-        customer: {
-          select: {
-            id: true,
-            userCode: true,
-            name: true,
-            email: true,
-          },
-        },
+        customer: { select: { id: true, userCode: true, name: true, email: true } },
         operator: true,
         payment: true,
         receipt: true,
         invoice: true,
       },
     });
-
-    await notifyCustomerByBooking({
-      booking: updated,
-      title: "Receipt uploaded",
-      message: "Your payment receipt has been submitted for verification.",
-      type: "RECEIPT_UPLOADED",
-    });
-
-    const operatorUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:5173"
-    }/operator/payment-verification`;
-
-    await notifyOperatorUsersByBooking({
-      booking: updated,
-      title: "Receipt uploaded",
-      message: `Customer uploaded a payment receipt for booking ${
-        updated.bookingCode || updated.id
-      }.`,
-      type: "RECEIPT_UPLOADED",
-      emailSubject: `Receipt Uploaded - ${updated.bookingCode || updated.id}`,
-      emailHtml: receiptUploadedTemplate({
+    const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/payment-verification`;
+    Promise.allSettled([
+      notifyCustomerByBooking({
         booking: updated,
-        operatorUrl,
+        title: "Receipt uploaded",
+        message: "Your payment receipt has been submitted for verification.",
+        type: "RECEIPT_UPLOADED",
       }),
-    });
-
-    res.status(201).json(mapBooking(updated));
-  } catch (err) {
-    next(err);
-  }
+      notifyOperatorUsersByBooking({
+        booking: updated,
+        title: "Receipt uploaded",
+        message: `Customer uploaded a payment receipt for booking ${updated.bookingCode || updated.id}.`,
+        type: "RECEIPT_UPLOADED",
+        emailSubject: `Receipt Uploaded - ${updated.bookingCode || updated.id}`,
+        emailHtml: receiptUploadedTemplate({ booking: updated, operatorUrl }),
+      }),
+    ]).then((results) =>
+      results.filter((result) => result.status === "rejected").forEach((result) =>
+        console.error("[customer-receipt] notification failed:", result.reason?.message)
+      )
+    );
+    return { status: 201, body: mapBooking(updated) };
+  });
 }
 
 export async function getCustomerInvoices(req, res, next) {
@@ -565,7 +525,6 @@ export async function getCustomerInvoiceById(req, res, next) {
         },
       },
     });
-
     if (!invoice) {
       return res.status(404).json({ message: "Invoice not found" });
     }
@@ -642,7 +601,6 @@ export async function markCustomerNotificationRead(req, res, next) {
       where: { id: notificationId },
       data: { isRead: true },
     });
-
     res.json(updated);
   } catch (err) {
     next(err);

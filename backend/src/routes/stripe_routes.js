@@ -20,6 +20,7 @@ import {
   getPaymentSpec,
   PAYMENT_TYPES,
 } from "../services/payment_schedule_service.js";
+import { requireIdempotencyKey, runIdempotent } from "../services/idempotency_service.js";
 
 const router = express.Router();
 
@@ -614,16 +615,17 @@ router.post(
   paymentLimiter,
   verifyToken,
   allowRoles("CUSTOMER"),
+  requireIdempotencyKey,
   async (req, res, next) => {
-    try {
+    return runIdempotent(req, res, next, "POST /stripe/checkout", async (key) => {
       const bookingId = parseBookingId(req.body.bookingId);
 
       if (!bookingId) {
-        return res.status(400).json({ message: "Valid bookingId is required" });
+        return { status: 400, body: { message: "Valid bookingId is required" } };
       }
 
       if (!process.env.STRIPE_SECRET_KEY) {
-        return res.status(500).json({ message: "STRIPE_SECRET_KEY is not configured" });
+        return { status: 500, body: { message: "STRIPE_SECRET_KEY is not configured" } };
       }
 
       const booking = await prisma.booking.findUnique({
@@ -632,17 +634,15 @@ router.post(
       });
 
       if (!booking || booking.customerId !== req.user.id) {
-        return res.status(404).json({ message: "Booking not found" });
+        return { status: 404, body: { message: "Booking not found" } };
       }
 
       if (booking.payment?.status === "PAID") {
-        return res.status(400).json({ message: "This booking is already paid" });
+        return { status: 400, body: { message: "This booking is already paid" } };
       }
 
       if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
-        return res.status(400).json({
-          message: "Payment is only available after the booking is accepted.",
-        });
+        return { status: 400, body: { message: "Payment is only available after the booking is accepted." } };
       }
 
       // F6 fix: refuse to start a checkout once the payment deadline has passed.
@@ -651,18 +651,16 @@ router.post(
         booking.paymentDeadline &&
         new Date(booking.paymentDeadline) <= new Date()
       ) {
-        return res.status(400).json({
-          message: "The payment deadline for this booking has passed.",
-        });
+        return { status: 400, body: { message: "The payment deadline for this booking has passed." } };
       }
 
       const paymentType = req.body.paymentType || PAYMENT_TYPES.FULL_PAYMENT;
       if (!Object.values(PAYMENT_TYPES).includes(paymentType)) {
-        return res.status(400).json({ message: "Invalid payment type" });
+        return { status: 400, body: { message: "Invalid payment type" } };
       }
 
       if (!booking.payment) {
-        return res.status(400).json({ message: "Payment schedule has not been created yet" });
+        return { status: 400, body: { message: "Payment schedule has not been created yet" } };
       }
 
       const paymentSpec = getPaymentSpec(booking.payment, paymentType);
@@ -725,12 +723,10 @@ router.post(
         cancel_url: `${
           process.env.FRONTEND_URL || "http://localhost:5173"
         }/customer/checkout/${booking.id}?payment=cancelled`,
-      });
+      }, { idempotencyKey: key });
 
-      res.json({ url: session.url });
-    } catch (err) {
-      next(err);
-    }
+      return { status: 200, body: { url: session.url } };
+    });
   }
 );
 
@@ -741,16 +737,17 @@ router.post(
   paymentLimiter,
   verifyToken,
   allowRoles("CUSTOMER"),
+  requireIdempotencyKey,
   async (req, res, next) => {
-    try {
+    return runIdempotent(req, res, next, "POST /stripe/confirm-session", async () => {
       const { sessionId } = req.body;
 
       if (!sessionId) {
-        return res.status(400).json({ message: "sessionId is required" });
+        return { status: 400, body: { message: "sessionId is required" } };
       }
 
       if (!process.env.STRIPE_SECRET_KEY) {
-        return res.status(500).json({ message: "STRIPE_SECRET_KEY is not configured" });
+        return { status: 500, body: { message: "STRIPE_SECRET_KEY is not configured" } };
       }
 
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -759,7 +756,7 @@ router.post(
       const bookingId = parseBookingId(session.metadata?.bookingId);
 
       if (!bookingId) {
-        return res.status(400).json({ message: "Invalid Stripe session booking metadata" });
+        return { status: 400, body: { message: "Invalid Stripe session booking metadata" } };
       }
 
       const booking = await prisma.booking.findUnique({
@@ -768,11 +765,11 @@ router.post(
       });
 
       if (!booking || booking.customerId !== req.user.id) {
-        return res.status(404).json({ message: "Booking not found" });
+        return { status: 404, body: { message: "Booking not found" } };
       }
 
       if (session.payment_status !== "paid") {
-        return res.status(400).json({ message: `Stripe payment is ${session.payment_status}` });
+        return { status: 400, body: { message: `Stripe payment is ${session.payment_status}` } };
       }
 
       const transactionId = session.payment_intent || session.id || `STRIPE-${Date.now()}`;
@@ -788,14 +785,15 @@ router.post(
         include: includeBookingRelations(),
       });
 
-      res.json({
-        message: "Stripe payment confirmed",
-        booking: refreshed,
-        alreadyPaid: result?.alreadyPaid || false,
-      });
-    } catch (err) {
-      next(err);
-    }
+      return {
+        status: 200,
+        body: {
+          message: "Stripe payment confirmed",
+          booking: refreshed,
+          alreadyPaid: result?.alreadyPaid || false,
+        },
+      };
+    });
   }
 );
 

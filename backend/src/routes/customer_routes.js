@@ -22,6 +22,7 @@ import { validate } from "../middlewares/validate_middleware.js";
 import { createBookingSchema } from "../validators/booking_validator.js";
 import { carBookingSchema } from "../validators/car_booking_validator.js";
 import { createCarBooking } from "../controllers/car_booking_controller.js";
+import { requireIdempotencyKey } from "../services/idempotency_service.js";
 
 const router = express.Router();
 
@@ -30,17 +31,17 @@ router.use(allowRoles("CUSTOMER"));
 
 router.get("/bookings", getCustomerBookings);
 // Vuln 3 fix: Zod validation blocks negative/zero totalAmount and malformed dates
-router.post("/bookings", validate(createBookingSchema), createCustomerBooking);
+router.post("/bookings", requireIdempotencyKey, validate(createBookingSchema), createCustomerBooking);
 // Public platform car requests: server-priced, idempotent (Idempotency-Key header).
-router.post("/car-bookings", requireVerifiedCustomer, validate(carBookingSchema), createCarBooking);
+router.post("/car-bookings", requireVerifiedCustomer, requireIdempotencyKey, validate(carBookingSchema), createCarBooking);
 router.get("/bookings/:id", getCustomerBookingById);
 router.patch("/bookings/:id/accept-alternative", acceptAlternativeBooking);
 router.patch("/bookings/:id/reject-alternative", rejectAlternativeBooking);
 router.patch("/bookings/:id/cancel", cancelCustomerBooking);
 router.get("/bookings/:id/activity", getCustomerBookingActivity);
 
-router.post("/bookings/:id/pay", requireVerifiedCustomer, payCustomerBooking);
-router.post("/bookings/:id/receipt", uploadCustomerReceipt);
+router.post("/bookings/:id/pay", requireVerifiedCustomer, requireIdempotencyKey, payCustomerBooking);
+router.post("/bookings/:id/receipt", requireIdempotencyKey, uploadCustomerReceipt);
 
 router.get("/payments", getCustomerPayments);
 router.get("/invoices", getCustomerInvoices);

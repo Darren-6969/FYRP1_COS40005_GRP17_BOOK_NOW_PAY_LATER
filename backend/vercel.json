@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/vercel-maintenance-check",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/vercel-idempotency-cleanup",
+      "schedule": "0 * * * *"
     }
   ]
 }

@@ -7,6 +7,7 @@ import {
   runOverdueBookingCheck,
   runPaymentReminderCheck,
 } from "../services/cron_service.js";
+import { cleanupExpiredIdempotencyKeys } from "../services/idempotency_service.js";
 
 export async function getCronJobStatus(req, res, next) {
   try {
@@ -105,6 +106,15 @@ export async function runMaintenanceChecks(req, res, next) {
       message: "Booking maintenance checks completed",
       result,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function runIdempotencyCleanup(_req, res, next) {
+  try {
+    const deleted = await cleanupExpiredIdempotencyKeys();
+    res.json({ message: "Expired idempotency keys cleaned up", deleted });
   } catch (err) {
     next(err);
   }

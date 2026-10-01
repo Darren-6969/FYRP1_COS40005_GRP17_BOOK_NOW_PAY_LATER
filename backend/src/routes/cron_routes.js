@@ -4,6 +4,7 @@ import {
   getCronHistory,
   runCompletionCheck,
   runMaintenanceChecks,
+  runIdempotencyCleanup,
   runNoResponseCron,
   runOverdueCheck,
   runPaymentReminderCron,
@@ -84,6 +85,7 @@ router.post(
 // Vercel Cron sends Authorization: Bearer $CRON_SECRET.
 // This runs no-response, payment reminder, overdue, and completion checks.
 router.get("/vercel-maintenance-check", verifyCronSecret, runMaintenanceChecks);
+router.get("/vercel-idempotency-cleanup", verifyCronSecret, runIdempotencyCleanup);
 
 // Keep old endpoint for backward compatibility.
 router.get("/vercel-overdue-check", verifyCronSecret, runMaintenanceChecks);

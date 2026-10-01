@@ -31,14 +31,24 @@ export function readIdempotencyKey(req) {
   return key;
 }
 
+export function requireIdempotencyKey(req, res, next) {
+  try {
+    readIdempotencyKey(req);
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
 /**
  * @returns {Promise<{replay: {status:number, body:any} | null, record: object | null}>}
  */
 export async function claimIdempotencyKey({ key, userId, endpoint, requestHash }) {
+  await prisma.idempotencyKey.deleteMany({ where: { expiresAt: { lte: new Date() } } });
   const where = { userId_endpoint_key: { userId, endpoint, key } };
   const existing = await prisma.idempotencyKey.findUnique({ where });
 
-  if (existing && existing.expiresAt < new Date()) {
+  if (existing && existing.expiresAt <= new Date()) {
     await prisma.idempotencyKey.delete({ where });
   } else if (existing) {
     if (existing.requestHash !== requestHash) {
@@ -63,9 +73,46 @@ export async function claimIdempotencyKey({ key, userId, endpoint, requestHash }
 }
 
 export async function completeIdempotencyKey(record, status, body) {
-  await prisma.idempotencyKey.update({ where: { id: record.id }, data: { responseStatus: status, responseBody: body } });
+  const responseBody = JSON.parse(JSON.stringify(body));
+  await prisma.idempotencyKey.update({ where: { id: record.id }, data: { responseStatus: status, responseBody } });
 }
 
 export async function releaseIdempotencyKey(record) {
   await prisma.idempotencyKey.delete({ where: { id: record.id } }).catch(() => {});
+}
+
+export async function cleanupExpiredIdempotencyKeys() {
+  const { count } = await prisma.idempotencyKey.deleteMany({
+    where: { expiresAt: { lte: new Date() } },
+  });
+  return count;
+}
+
+export async function runIdempotent(req, res, next, endpoint, operation) {
+  let claim;
+  try {
+    const key = readIdempotencyKey(req);
+    claim = await claimIdempotencyKey({
+      key,
+      userId: req.user.id,
+      endpoint,
+      requestHash: hashRequest(req.body),
+    });
+
+    if (claim.replay) {
+      return res.status(claim.replay.status).json(claim.replay.body);
+    }
+
+    const result = await operation(key);
+    if (result.status >= 200 && result.status < 300) {
+      await completeIdempotencyKey(claim.record, result.status, result.body);
+    } else {
+      await releaseIdempotencyKey(claim.record);
+    }
+    claim = null;
+    return res.status(result.status).json(result.body);
+  } catch (err) {
+    if (claim?.record) await releaseIdempotencyKey(claim.record);
+    next(err);
+  }
 }
