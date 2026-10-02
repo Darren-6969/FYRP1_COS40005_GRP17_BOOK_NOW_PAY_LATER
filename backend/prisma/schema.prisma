@@ -590,10 +590,15 @@ model AuditLog {
 
   userId Int?
   user   User? @relation(fields: [userId], references: [id])
+  actorId   Int?
+  actorType String?
 
   action     String
   entityType String
   entityId   String?
+  before     Json?
+  after      Json?
+  ipAddress  String?
   details    Json?
 
   createdAt DateTime @default(now())
@@ -954,6 +959,7 @@ model StripeWebhookEvent {
   id            String    @id
   type          String
   payload       Json
+  requestIp     String?
   status        String    @default("PENDING")
   attempts      Int       @default(0)
   lastError     String?

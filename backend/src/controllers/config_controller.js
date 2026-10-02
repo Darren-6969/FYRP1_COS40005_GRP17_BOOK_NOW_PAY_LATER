@@ -1,6 +1,7 @@
 import prisma from "../config/db.js";
 import { parseId } from "../utils/parseId.js";
 import { getPlatformDeadlinePolicy, isPlatformPeakDate, validatePublishedDeadline } from "../services/platform_policy_service.js";
+import { createAuditLog } from "../services/log_service.js";
 
 function canManageOperator(req, operatorId) {
   if (req.user.role === "MASTER_SELLER") return true;
@@ -177,19 +178,14 @@ export async function updateBNPLConfig(req, res, next) {
       },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        userId: req.user.id,
-        action: "BNPL_CONFIG_UPDATED",
-        entityType: "BNPLConfig",
-        entityId: String(config.id),
-        details: {
-          operatorId,
-          before: { paymentDeadlineDays: existing.paymentDeadlineDays },
-          after: { paymentDeadlineDays: config.paymentDeadlineDays },
-          ...data,
-        },
-      },
+    await createAuditLog({
+      req,
+      action: "BNPL_CONFIG_UPDATED",
+      entityType: "BNPLConfig",
+      entityId: config.id,
+      before: Object.fromEntries(Object.keys(data).map((key) => [key, existing[key]])),
+      after: Object.fromEntries(Object.keys(data).map((key) => [key, config[key]])),
+      details: { operatorId },
     });
 
     res.json(config);
@@ -221,17 +217,13 @@ export async function updatePlatformDeadlineSettings(req, res, next) {
       where: { id: 1 },
       data: { publishedTiers: tiers, mostLenientDays },
     });
-    await prisma.auditLog.create({
-      data: {
-        userId: req.user.id,
-        action: "PLATFORM_DEADLINE_POLICY_UPDATED",
-        entityType: "PlatformDeadlinePolicy",
-        entityId: "1",
-        details: {
-          before: { publishedTiers: before.publishedTiers, mostLenientDays: before.mostLenientDays },
-          after: { publishedTiers: after.publishedTiers, mostLenientDays: after.mostLenientDays },
-        },
-      },
+    await createAuditLog({
+      req,
+      action: "PLATFORM_DEADLINE_POLICY_UPDATED",
+      entityType: "PlatformDeadlinePolicy",
+      entityId: "1",
+      before: { publishedTiers: before.publishedTiers, mostLenientDays: before.mostLenientDays },
+      after: { publishedTiers: after.publishedTiers, mostLenientDays: after.mostLenientDays },
     });
     res.json(after);
   } catch (err) {

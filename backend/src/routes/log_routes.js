@@ -12,4 +12,11 @@ router.get(
   getLogs
 );
 
+router.all(
+  "/",
+  verifyToken,
+  allowRoles("MASTER_SELLER"),
+  (_req, res) => res.status(405).json({ message: "Audit logs are read-only." })
+);
+
 export default router;

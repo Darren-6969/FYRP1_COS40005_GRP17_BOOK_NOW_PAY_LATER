@@ -21,6 +21,7 @@ import {
   PAYMENT_TYPES,
 } from "../services/payment_schedule_service.js";
 import { requireIdempotencyKey, runIdempotent } from "../services/idempotency_service.js";
+import { createAuditLog } from "../services/log_service.js";
 
 const router = express.Router();
 
@@ -264,6 +265,7 @@ router.post(
           id: event.id,
           type: event.type,
           payload: event,
+          requestIp: req.ip || req.socket?.remoteAddress || null,
         },
       });
     } catch (err) {
@@ -284,7 +286,7 @@ router.post(
   }
 );
 
-export async function processStripeWebhookEvent(event) {
+export async function processStripeWebhookEvent(event, requestIp = null) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
   switch (event.type) {
@@ -439,6 +441,17 @@ export async function processStripeWebhookEvent(event) {
             break;
           }
 
+          const [bookingBefore, invoiceBefore] = await Promise.all([
+            prisma.booking.findUnique({
+              where: { id: refundedPayment.bookingId },
+              select: { status: true },
+            }),
+            prisma.invoice.findFirst({
+              where: { bookingId: refundedPayment.bookingId },
+              select: { status: true },
+            }),
+          ]);
+
           await prisma.payment.update({
             where: { id: refundedPayment.id },
             data: { status: "FAILED" },
@@ -456,19 +469,31 @@ export async function processStripeWebhookEvent(event) {
 
           const refundAmount = charge.amount_refunded / 100;
 
-          await prisma.auditLog.create({
-            data: {
-              userId: null,
-              action: "STRIPE_CHARGE_REFUNDED",
-              entityType: "Booking",
-              entityId: String(refundedPayment.bookingId),
-              details: {
+          await createAuditLog({
+            ipAddress: requestIp,
+            action: "STRIPE_CHARGE_REFUNDED",
+            entityType: "Booking",
+            entityId: refundedPayment.bookingId,
+            before: {
+              paymentStatus: refundedPayment.status,
+              paymentAmount: Number(refundedPayment.amount),
+              bookingStatus: bookingBefore?.status ?? null,
+              invoiceStatus: invoiceBefore?.status ?? null,
+            },
+            after: {
+              paymentStatus: "FAILED",
+              amountRefunded: refundAmount,
+              currency: charge.currency,
+              bookingStatus: "CANCELLED",
+              invoiceStatus: invoiceBefore ? "CANCELLED" : null,
+            },
+            details: {
                 chargeId: charge.id,
                 paymentIntent: refundedPiId,
                 amountRefunded: refundAmount,
                 currency: charge.currency,
                 paymentId: refundedPayment.id,
-              },
+                actor: "STRIPE",
             },
           });
 

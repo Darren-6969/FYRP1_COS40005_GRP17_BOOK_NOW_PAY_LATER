@@ -30,6 +30,7 @@ import {
   PAYMENT_TYPES,
 } from "../services/payment_schedule_service.js";
 import { getPlatformDeadlinePolicy, validatePublishedDeadline } from "../services/platform_policy_service.js";
+import { createAuditLog as writeAuditLog } from "../services/log_service.js";
 
 const SETUP_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
@@ -169,7 +170,7 @@ async function findOperatorBooking(req, bookingId) {
   });
 }
 
-async function autoCompletePaidBookings(req) {
+async function autoCompletePaidBookings(_req) {
   // V2.6:
   // Booking completion is now handled manually by the
   // operator using the Return action.
@@ -179,16 +180,8 @@ async function autoCompletePaidBookings(req) {
   return;
 }
 
-async function createAuditLog({ req, action, entityType, entityId, details = {} }) {
-  return prisma.auditLog.create({
-    data: {
-      userId: req.user?.id || null,
-      action,
-      entityType,
-      entityId: entityId === null || entityId === undefined ? null : String(entityId),
-      details,
-    },
-  });
+async function createAuditLog({ req, action, entityType, entityId, before, after, details = {} }) {
+  return writeAuditLog({ req, action, entityType, entityId, before, after, details });
 }
 
 async function createCustomerNotification({
@@ -518,6 +511,8 @@ export async function updateOperatorStatus(req, res, next) {
       action: "COMPANY_STATUS_UPDATED",
       entityType: "Operator",
       entityId: id,
+      before: { status: currentOperator.status },
+      after: { status: operator.status },
       details: { status, reason },
     });
 
@@ -727,15 +722,6 @@ export async function deleteOperatorUser(req, res, next) {
     await prisma.notification.deleteMany({
       where: {
         userId,
-      },
-    });
-
-    await prisma.auditLog.updateMany({
-      where: {
-        userId,
-      },
-      data: {
-        userId: null,
       },
     });
 
@@ -963,6 +949,8 @@ async function updateBookingStatus(req, res, next, status, action) {
       action,
       entityType: "Booking",
       entityId: booking.id,
+      before: { status: booking.status },
+      after: { status: updatedBooking.status },
       details: { status },
     });
 
@@ -1008,6 +996,7 @@ export async function acceptBooking(req, res, next) {
       await acceptBookingAndRequestPayment({
         booking,
         actorUserId: req.user.id,
+        req,
         downPaymentPercent: req.body?.downPaymentPercent,
         downPaymentDueDate: req.body?.downPaymentDueDate,
         finalPaymentDueDate: req.body?.finalPaymentDueDate,
@@ -2681,17 +2670,6 @@ export async function deleteOperator(req, res, next) {
           },
         });
 
-        await tx.auditLog.updateMany({
-          where: {
-            userId: {
-              in: userIds,
-            },
-          },
-          data: {
-            userId: null,
-          },
-        });
-
         if (protectedUserIds.length > 0) {
           await tx.user.updateMany({
             where: {
@@ -3076,6 +3054,12 @@ export async function updateOperatorSettings(req, res, next) {
     }
 
     const config = configForValidation;
+    const operatorBefore = companyLogo === undefined
+      ? null
+      : await prisma.operator.findUnique({
+          where: { id: operatorId },
+          select: { logoUrl: true },
+        });
 
     // #12 fix: PATCH semantics — only overwrite a field when the request actually
     // sent it. Previously any omitted field was forced to null (e.g. saving the
@@ -3144,16 +3128,18 @@ export async function updateOperatorSettings(req, res, next) {
     await createAuditLog({
       req,
       action: "OPERATOR_SETTINGS_UPDATED",
-      entityType: "Operator",
-      entityId: operatorId,
+      entityType: "BNPLConfig",
+      entityId: updatedConfig.id,
+      before: {
+        ...Object.fromEntries(Object.keys(configData).map((key) => [key, config[key]])),
+        ...(operatorBefore ? { operatorLogoUrl: operatorBefore.logoUrl } : {}),
+      },
+      after: {
+        ...Object.fromEntries(Object.keys(configData).map((key) => [key, updatedConfig[key]])),
+        ...(operatorBefore ? { operatorLogoUrl: updatedOperator.logoUrl } : {}),
+      },
       details: {
-        bookingResponseDeadlineMinutes: parsedBookingDeadline,
-        autoRejectInactiveBooking: Boolean(autoRejectInactiveBooking),
-        reminderBeforeAutoRejectMinutes: parsedReminderBeforeReject,
-        acceptedPaymentMethods,
-        operatorReminderBeforeAutoRejectMinutes: parsedOperatorReminder,
-        enableOperatorReminderAlerts: Boolean(enableOperatorReminderAlerts),
-        logoUpdated: Boolean(companyLogo),
+        operatorId,
       },
     });
 

@@ -1,5 +1,6 @@
 import prisma from "../config/db.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
+import { createAuditLog } from "../services/log_service.js";
 
 // Shared include spec for full booking relations
 const bookingInclude = {
@@ -54,6 +55,7 @@ export async function acceptBooking(req, res, next) {
     const { booking: updated } = await acceptBookingAndRequestPayment({
       booking,
       actorUserId: req.user.id,
+      req,
       downPaymentPercent: req.body?.downPaymentPercent,
       downPaymentDueDate: req.body?.downPaymentDueDate,
       finalPaymentDueDate: req.body?.finalPaymentDueDate,
@@ -103,13 +105,13 @@ export async function rejectBooking(req, res, next) {
       include: { customer: true, operator: true, payment: true },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        userId: req.user.id,
-        action: "BOOKING_REJECTED",
-        entityType: "Booking",
-        entityId: id,
-      },
+    await createAuditLog({
+      req,
+      action: "BOOKING_REJECTED",
+      entityType: "Booking",
+      entityId: id,
+      before: { status: booking.status },
+      after: { status: updated.status },
     });
 
     res.json(updated);

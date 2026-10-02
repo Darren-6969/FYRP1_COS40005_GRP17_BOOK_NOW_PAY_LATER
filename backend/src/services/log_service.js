@@ -1,12 +1,20 @@
 import prisma from "../config/db.js";
 
-export async function createAuditLog({ userId, action, entityType, entityId, details } = {}, tx = prisma) {
+export async function createAuditLog(
+  { req, userId, action, entityType, entityId, before, after, ipAddress, details } = {},
+  tx = prisma
+) {
   return tx.auditLog.create({
     data: {
-      userId: userId || null,
+      userId: req?.user?.id ?? userId ?? null,
+      actorId: req?.user?.id ?? userId ?? null,
+      actorType: req?.user || userId != null ? "USER" : "SYSTEM",
       action,
       entityType,
-      entityId: entityId || null,
+      entityId: entityId === null || entityId === undefined ? null : String(entityId),
+      before,
+      after,
+      ipAddress: ipAddress || req?.ip || req?.socket?.remoteAddress || null,
       details: details || undefined,
     },
   });

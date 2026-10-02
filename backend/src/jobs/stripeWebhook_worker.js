@@ -41,7 +41,7 @@ async function performStripeWebhookEvents() {
     result.claimed += 1;
 
     try {
-      await processStripeWebhookEvent(event.payload);
+      await processStripeWebhookEvent(event.payload, event.requestIp);
       await prisma.stripeWebhookEvent.update({
         where: { id: event.id },
         data: { status: "PROCESSED", processedAt: new Date(), lockedAt: null, lastError: null },

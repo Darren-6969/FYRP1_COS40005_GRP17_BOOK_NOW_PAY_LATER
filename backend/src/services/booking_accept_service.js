@@ -4,6 +4,7 @@ import { calculatePaymentDeadline } from "./payment_deadline_service.js";
 import { notifyCustomerByBooking } from "./notification_email_service.js";
 import { invoiceSentTemplate } from "./email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
+import { createAuditLog } from "./log_service.js";
 
 const ACCEPTABLE_STATUSES = [
   "PENDING",
@@ -55,6 +56,7 @@ function includeBookingRelations() {
 export async function acceptBookingAndRequestPayment({
   booking,
   actorUserId,
+  req,
   downPaymentPercent = 10,
   downPaymentDueDate = null,
   finalPaymentDueDate = null,
@@ -347,17 +349,26 @@ export async function acceptBookingAndRequestPayment({
       // =====================================================
       // Audit log
       // =====================================================
-      await tx.auditLog.create({
-        data: {
-          userId: actorUserId || null,
-
-          action: "BOOKING_AUTO_ACCEPTED",
-
-          entityType: "Booking",
-
-          entityId: String(booking.id),
-
-          details: {
+      await createAuditLog({
+        req,
+        userId: actorUserId,
+        action: "BOOKING_AUTO_ACCEPTED",
+        entityType: "Booking",
+        entityId: booking.id,
+        before: {
+          status: booking.status,
+          downPaymentPercent: null,
+          downPaymentAmount: booking.payment?.downPaymentAmount ?? null,
+          discountAmount: booking.discountAmount,
+        },
+        after: {
+          status: updatedBooking.status,
+          downPaymentPercent: parsedPercent,
+          downPaymentAmount: downAmount,
+          finalPaymentAmount: finalAmount,
+          paymentDeadline,
+        },
+        details: {
             previousStatus:
               booking.status,
 
@@ -389,9 +400,8 @@ export async function acceptBookingAndRequestPayment({
 
             invoiceNo:
               invoice.invoiceNo,
-          },
         },
-      });
+      }, tx);
 
       return {
         booking: updatedBooking,
