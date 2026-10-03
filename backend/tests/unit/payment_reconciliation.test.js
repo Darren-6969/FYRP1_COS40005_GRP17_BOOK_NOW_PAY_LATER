@@ -32,7 +32,12 @@ async function runSweep(sessionPaymentStatus) {
         sessions: {
           retrieve: async (id) => ({
             id,
-            metadata: { bookingId: String(bookingId), paymentType: "FULL_PAYMENT" },
+            metadata: {
+              bookingId: String(bookingId),
+              paymentType: "FULL_PAYMENT",
+              feeRateBps: "1000",
+              fundedBy: "PLATFORM",
+            },
             payment_status: sessionPaymentStatus,
             payment_intent: "pi_test_reconciliation",
           }),
@@ -70,6 +75,7 @@ test("reconciles a paid Stripe session using the audited paid-state path", async
     "cs_test_reconciliation",
     "FULL_PAYMENT",
     "STRIPE_PAYMENT_RECONCILED",
+    { feeRateBps: 1000, fundedBy: "PLATFORM" },
   ]);
 });
 

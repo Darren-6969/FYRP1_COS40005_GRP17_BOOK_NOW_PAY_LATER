@@ -22,6 +22,7 @@ import {
 } from "../services/payment_schedule_service.js";
 import { requireIdempotencyKey, runIdempotent } from "../services/idempotency_service.js";
 import { createAuditLog } from "../services/log_service.js";
+import { createCommissionLedgerSnapshot } from "../services/commission_ledger_service.js";
 import {
   createExpressOnboardingLink,
   getStripeAccountState,
@@ -37,6 +38,24 @@ function parseBookingId(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) return null;
   return parsed;
+}
+
+async function getStripeFeeAmountSen(transactionId) {
+  if (!transactionId?.startsWith("pi_") || !process.env.STRIPE_SECRET_KEY) return 0;
+
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  const paymentIntent = await stripe.paymentIntents.retrieve(transactionId, {
+    expand: ["latest_charge.balance_transaction"],
+  });
+  const charge = paymentIntent.latest_charge;
+  const balanceTransaction =
+    charge && typeof charge === "object" ? charge.balance_transaction : null;
+
+  if (!balanceTransaction || typeof balanceTransaction !== "object") {
+    throw new Error(`Stripe fee is not available for payment intent ${transactionId}`);
+  }
+
+  return balanceTransaction.fee;
 }
 
 function includeBookingRelations() {
@@ -60,7 +79,8 @@ export async function applyPaidState(
   transactionId,
   sessionId,
   paymentType = PAYMENT_TYPES.FULL_PAYMENT,
-  auditAction = null
+  auditAction = null,
+  ledgerMetadata = {}
 ) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -135,20 +155,76 @@ export async function applyPaidState(
 
   getPaymentSpec(booking.payment, paymentType);
   const paymentData = getPaymentConfirmationData(booking.payment, paymentType, transactionId);
+  const feeRateBps = Number.isInteger(Number(ledgerMetadata.feeRateBps))
+    ? Number(ledgerMetadata.feeRateBps)
+    : Math.round(PLATFORM_FEE_PERCENT * 100);
+  const fundedBy = ledgerMetadata.fundedBy || booking.discountFundedBy || "OPERATOR";
+  const stripeFeeAmountSen = Number.isInteger(ledgerMetadata.stripeFeeAmountSen)
+    ? ledgerMetadata.stripeFeeAmountSen
+    : await getStripeFeeAmountSen(transactionId);
+  const ledgerSnapshot = createCommissionLedgerSnapshot({
+    booking,
+    payment: booking.payment,
+    paymentType,
+    feeRate: feeRateBps / 100,
+    fundedBy,
+    stripeFeeAmountSen,
+  });
+
+  if (fundedBy === "PLATFORM" && ledgerSnapshot.discountAmountSen > 0) {
+    const destinationAccountId =
+      booking.operator?.stripeAccountId || process.env.STRIPE_CONNECTED_ACCOUNT_ID;
+    if (destinationAccountId) {
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+      await stripe.transfers.create(
+        {
+          amount: ledgerSnapshot.discountAmountSen,
+          currency: "myr",
+          destination: destinationAccountId,
+          transfer_group: `booking_${booking.id}`,
+          metadata: {
+            bookingId: String(booking.id),
+            transactionId,
+            purpose: "PLATFORM_FUNDED_DISCOUNT",
+          },
+        },
+        { idempotencyKey: `commission-subsidy-${transactionId}` }
+      );
+    }
+  }
+
   let payment;
   let updatedBooking;
+  const persistPaidState = async (tx) => {
+    const paidPayment = await tx.payment.update({
+      where: { bookingId },
+      data: paymentData,
+    });
+
+    await tx.commissionLedgerEntry.upsert({
+      where: { transactionId },
+      create: {
+        bookingId,
+        paymentId: paidPayment.id,
+        transactionId,
+        paymentType,
+        ...ledgerSnapshot,
+      },
+      update: {},
+    });
+
+    const paidBooking = await tx.booking.update({
+      where: { id: bookingId },
+      data: { status: paidPayment.status === "PAID" ? "PAID" : "PENDING_PAYMENT" },
+      include: includeBookingRelations(),
+    });
+
+    return { payment: paidPayment, updatedBooking: paidBooking };
+  };
 
   if (auditAction) {
     ({ payment, updatedBooking } = await prisma.$transaction(async (tx) => {
-      const correctedPayment = await tx.payment.update({
-        where: { bookingId },
-        data: paymentData,
-      });
-      const correctedBooking = await tx.booking.update({
-        where: { id: bookingId },
-        data: { status: correctedPayment.status === "PAID" ? "PAID" : "PENDING_PAYMENT" },
-        include: includeBookingRelations(),
-      });
+      const paidState = await persistPaidState(tx);
 
       await tx.auditLog.create({
         data: {
@@ -159,22 +235,17 @@ export async function applyPaidState(
           details: {
             sessionId,
             paymentIntent: transactionId,
-            paymentId: correctedPayment.id,
+            paymentId: paidState.payment.id,
             paymentType,
             source: "SCHEDULED_RECONCILIATION",
           },
         },
       });
 
-      return { payment: correctedPayment, updatedBooking: correctedBooking };
+      return paidState;
     }));
   } else {
-    payment = await prisma.payment.update({ where: { bookingId }, data: paymentData });
-    updatedBooking = await prisma.booking.update({
-      where: { id: bookingId },
-      data: { status: payment.status === "PAID" ? "PAID" : "PENDING_PAYMENT" },
-      include: includeBookingRelations(),
-    });
+    ({ payment, updatedBooking } = await prisma.$transaction(persistPaidState));
   }
 
   const invoice = payment.status === "PAID"
@@ -194,7 +265,7 @@ export async function applyPaidState(
           paymentId: payment.id,
           invoiceId: invoice?.id || null,
           invoiceNo: invoice?.invoiceNo || null,
-          platformFeePercent: PLATFORM_FEE_PERCENT,
+          platformFeePercent: feeRateBps / 100,
         },
       },
     });
@@ -319,7 +390,12 @@ export async function processStripeWebhookEvent(event, requestIp = null, databas
             bookingId,
             transactionId,
             session.id,
-            session.metadata?.paymentType || PAYMENT_TYPES.FULL_PAYMENT
+            session.metadata?.paymentType || PAYMENT_TYPES.FULL_PAYMENT,
+            null,
+            {
+              feeRateBps: Number(session.metadata?.feeRateBps),
+              fundedBy: session.metadata?.fundedBy,
+            }
           );
           break;
         }
@@ -342,7 +418,12 @@ export async function processStripeWebhookEvent(event, requestIp = null, databas
                 existingPayment.bookingId,
                 paymentIntent.id,
                 null,
-                PAYMENT_TYPES.FULL_PAYMENT
+                PAYMENT_TYPES.FULL_PAYMENT,
+                null,
+                {
+                  feeRateBps: Number(paymentIntent.metadata?.feeRateBps),
+                  fundedBy: paymentIntent.metadata?.fundedBy,
+                }
               );
             }
             break;
@@ -361,7 +442,12 @@ export async function processStripeWebhookEvent(event, requestIp = null, databas
               bookingId,
               paymentIntent.id,
               linkedSession.id,
-              linkedSession.metadata?.paymentType || PAYMENT_TYPES.FULL_PAYMENT
+              linkedSession.metadata?.paymentType || PAYMENT_TYPES.FULL_PAYMENT,
+              null,
+              {
+                feeRateBps: Number(linkedSession.metadata?.feeRateBps),
+                fundedBy: linkedSession.metadata?.fundedBy,
+              }
             );
           } else {
             console.log(`[Stripe] payment_intent.succeeded: no matching booking for PI ${paymentIntent.id}`);
@@ -761,7 +847,14 @@ router.post(
       const destinationAccountId =
         booking.operator?.stripeAccountId || process.env.STRIPE_CONNECTED_ACCOUNT_ID;
 
-      const platformFeeCents = Math.round(totalCents * PLATFORM_FEE_PERCENT / 100);
+      const checkoutLedgerSnapshot = createCommissionLedgerSnapshot({
+        booking,
+        payment: booking.payment,
+        paymentType,
+        feeRate: PLATFORM_FEE_PERCENT,
+        fundedBy: booking.discountFundedBy,
+      });
+      const platformFeeCents = checkoutLedgerSnapshot.feeAmountSen;
 
       // Destination Charges: platform fee is retained via application_fee_amount,
       // remainder goes to the connected account automatically.
@@ -773,6 +866,8 @@ router.post(
           bookingId: String(booking.id),
           customerId: String(req.user.id),
           paymentType,
+          feeRateBps: String(Math.round(PLATFORM_FEE_PERCENT * 100)),
+          fundedBy: booking.discountFundedBy,
         },
         ...(destinationAccountId
           ? {
@@ -804,6 +899,8 @@ router.post(
           bookingId: String(booking.id),
           customerId: String(req.user.id),
           paymentType,
+          feeRateBps: String(Math.round(PLATFORM_FEE_PERCENT * 100)),
+          fundedBy: booking.discountFundedBy,
         },
         success_url: `${
           process.env.FRONTEND_URL || "http://localhost:5173"
@@ -881,7 +978,12 @@ router.post(
         bookingId,
         transactionId,
         session.id,
-        session.metadata?.paymentType || PAYMENT_TYPES.FULL_PAYMENT
+        session.metadata?.paymentType || PAYMENT_TYPES.FULL_PAYMENT,
+        null,
+        {
+          feeRateBps: Number(session.metadata?.feeRateBps),
+          fundedBy: session.metadata?.fundedBy,
+        }
       );
 
       const refreshed = await prisma.booking.findUnique({

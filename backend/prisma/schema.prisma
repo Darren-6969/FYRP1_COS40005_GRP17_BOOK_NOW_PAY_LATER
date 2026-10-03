@@ -142,6 +142,11 @@ enum PaymentMethod {
   CASH
 }
 
+enum DiscountFundingSource {
+  OPERATOR
+  PLATFORM
+}
+
 enum ReceiptStatus {
   PENDING
   APPROVED
@@ -421,6 +426,7 @@ model Booking {
   addonsAmount   Decimal  @default(0) @db.Decimal(10, 2)
   feesAmount     Decimal  @default(0) @db.Decimal(10, 2)
   discountAmount Decimal  @default(0) @db.Decimal(10, 2)
+  discountFundedBy DiscountFundingSource @default(OPERATOR)
 
   pricingSnapshot Json? // per-day rates, surcharges and fees as quoted
   bookingDetails  Json? // contact, driver and agreement timestamps
@@ -440,6 +446,7 @@ model Booking {
   alternativeUsed        Boolean  @default(false)
 
   payment Payment?
+  commissionLedgerEntries CommissionLedgerEntry[]
   receipt Receipt?
   invoice Invoice?
 
@@ -481,8 +488,36 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  commissionLedgerEntries CommissionLedgerEntry[]
+
   @@index([status])
   @@index([method])
+}
+
+model CommissionLedgerEntry {
+  id Int @id @default(autoincrement())
+
+  bookingId Int
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  paymentId Int
+  payment   Payment @relation(fields: [paymentId], references: [id])
+
+  transactionId           String                @unique
+  paymentType              String
+  grossAmountSen           Int
+  netAmountSen             Int
+  discountAmountSen        Int
+  feeRateBps               Int
+  fundedBy                 DiscountFundingSource
+  feeAmountSen             Int
+  stripeFeeAmountSen       Int                   @default(0)
+  operatorPayoutAmountSen  Int
+  platformMarginSen        Int
+  currency                 String                @default("MYR")
+  createdAt                DateTime              @default(now())
+
+  @@index([bookingId, createdAt])
+  @@index([paymentId])
 }
 
 model Receipt {

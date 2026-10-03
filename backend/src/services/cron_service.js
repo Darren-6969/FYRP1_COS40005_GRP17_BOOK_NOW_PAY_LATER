@@ -199,6 +199,7 @@ async function performPaymentReconciliationCheck({
         let paymentIntentId = reference.transactionId;
         let sessionId = null;
         let gatewayPaid = false;
+        let ledgerMetadata = {};
 
         if (reference.transactionId.startsWith("cs_")) {
           const session = await stripe.checkout.sessions.retrieve(reference.transactionId);
@@ -211,6 +212,10 @@ async function performPaymentReconciliationCheck({
             : session.payment_intent?.id;
           sessionId = session.id;
           paymentType = session.metadata?.paymentType || paymentType;
+          ledgerMetadata = {
+            feeRateBps: Number(session.metadata?.feeRateBps),
+            fundedBy: session.metadata?.fundedBy,
+          };
         } else if (reference.transactionId.startsWith("pi_")) {
           const intent = await stripe.paymentIntents.retrieve(reference.transactionId);
           if (intent.metadata?.bookingId && Number(intent.metadata.bookingId) !== payment.bookingId) {
@@ -218,6 +223,10 @@ async function performPaymentReconciliationCheck({
           }
           gatewayPaid = intent.status === "succeeded";
           paymentType = intent.metadata?.paymentType || paymentType;
+          ledgerMetadata = {
+            feeRateBps: Number(intent.metadata?.feeRateBps),
+            fundedBy: intent.metadata?.fundedBy,
+          };
         } else {
           continue;
         }
@@ -229,7 +238,8 @@ async function performPaymentReconciliationCheck({
           paymentIntentId,
           sessionId,
           paymentType,
-          "STRIPE_PAYMENT_RECONCILED"
+          "STRIPE_PAYMENT_RECONCILED",
+          ledgerMetadata
         );
         if (correction && !correction.alreadyPaid && !correction.skippedTerminal) {
           result.reconciledCount += 1;
