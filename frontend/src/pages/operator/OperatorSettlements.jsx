@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   CreditCard,
-  DollarSign,
+  Download,
   Receipt,
   Wallet,
   Percent,
@@ -28,8 +28,9 @@ function formatDate(value) {
 
 export default function OperatorSettlements() {
   const [data, setData] = useState({
-    summary: null,
+    summary: { gross: 0, discount: 0, commission: 0, processingFee: 0, net: 0 },
     settlements: [],
+    payouts: [],
     platformFeePercent: 10,
   });
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -38,6 +39,7 @@ export default function OperatorSettlements() {
   const [bookingModalError, setBookingModalError] = useState("");
 
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -72,22 +74,47 @@ export default function OperatorSettlements() {
   }
 
   useEffect(() => {
-    loadSettlements();
+    Promise.resolve().then(loadSettlements);
   }, []);
 
-  const summary = data.summary || {
-    totalCustomerPaid: 0,
-    totalBnplAdminFee: 0,
-    totalStripeFee: 0,
-    totalMerchantReceives: 0,
-  };
+  async function downloadCsv() {
+    try {
+      setDownloading(true);
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/operators/settlements/export.csv`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.message || "Failed to export settlement report");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `operator-settlements-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || "Failed to export settlement report");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  const summary = data.summary || { gross: 0, discount: 0, commission: 0, processingFee: 0, net: 0 };
+  const settlements = data.settlements || [];
+  const payouts = data.payouts || [];
 
   const totalPages = Math.max(
   1,
-  Math.ceil((data.settlements?.length || 0) / rowsPerPage)
+  Math.ceil(settlements.length / rowsPerPage)
 );
 
-const paginatedSettlements = (data.settlements || []).slice(
+const paginatedSettlements = settlements.slice(
   (currentPage - 1) * rowsPerPage,
   currentPage * rowsPerPage
 );
@@ -143,79 +170,143 @@ function closeBookingDetails() {
     <div className="operator-page">
       <section className="operator-page-head">
         <div>
-          <p className="operator-eyebrow">Merchant Settlement</p>
-          <h1>Payment Breakdown</h1>
+          <p className="operator-eyebrow">Operator Settlement</p>
+          <h1>Payout Ledger</h1>
           <p>
-            View how much customers paid, how much BNPL admin earned, and how
-            much the merchant receives from Stripe payments.
+            Reconcile each booking against its recorded payout.
           </p>
         </div>
-
-        <span className="operator-model-badge">
-          BNPL Fee: {data.platformFeePercent}%
-        </span>
       </section>
 
       {error && <div className="operator-alert danger">{error}</div>}
 
-      <section className="operator-metric-grid four">
+      <section className="operator-metric-grid five">
         <div className="operator-metric">
-          <span>Customer Paid</span>
-          <strong>{formatMoney(summary.totalCustomerPaid)}</strong>
-          <small>Total Stripe payments</small>
+          <span>Gross</span>
+          <strong>{formatMoney(summary.gross)}</strong>
+          <small>Before discount</small>
         </div>
 
         <div className="operator-metric">
-          <span>Total BNPL Admin Fee (10%)</span>
-          <strong>{formatMoney(summary.totalBnplAdminFee)}</strong>
-          <small>Platform commission</small>
+          <span>Discounts</span>
+          <strong>{formatMoney(summary.discount)}</strong>
+          <small>Funding source shown per line</small>
         </div>
 
         <div className="operator-metric">
-          <span>Total Stripe Fee (4%+RM1)</span>
-          <strong>{formatMoney(summary.totalStripeFee)}</strong>
-          <small>Processing fee per transaction</small>
+          <span>Commission</span>
+          <strong>{formatMoney(summary.commission)}</strong>
+          <small>Snapshotted per payment</small>
         </div>
 
         <div className="operator-metric">
-          <span>Merchant Receives</span>
-          <strong>{formatMoney(summary.totalMerchantReceives)}</strong>
-          <small>Net merchant amount</small>
+          <span>Processing Fees</span>
+          <strong>{formatMoney(summary.processingFee)}</strong>
+          <small>Stripe fee, separate</small>
+        </div>
+
+        <div className="operator-metric">
+          <span>Operator Net</span>
+          <strong>{formatMoney(summary.net)}</strong>
+          <small>Recorded payout amount</small>
         </div>
       </section>
 
       <section className="operator-card">
         <div className="operator-card-head">
           <div>
+            <h2>Payouts</h2>
+            <p>Each payout lists the booking lines included in its transfer.</p>
+          </div>
+        </div>
+
+        {payouts.length === 0 ? (
+          <div className="operator-empty-state">No payout transfers recorded yet.</div>
+        ) : (
+          <div className="operator-table-wrap">
+            <table className="operator-table">
+              <thead>
+                <tr>
+                  <th>Payout</th>
+                  <th>Status</th>
+                  <th>Amount</th>
+                  <th>Bookings</th>
+                  <th>Stripe Transfer</th>
+                  <th>Transferred</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payouts.map((payout) => (
+                  <tr key={payout.payoutId}>
+                    <td>#{payout.payoutId}</td>
+                    <td>{payout.status}</td>
+                    <td>{formatMoney(payout.amount)}</td>
+                    <td>
+                      {payout.bookings.map((booking) => (
+                        <div key={booking.ledgerEntryId}>
+                          <button
+                            type="button"
+                            className="settlement-booking-link"
+                            onClick={() => openBookingDetails(booking.bookingId)}
+                          >
+                            {booking.bookingCode}
+                          </button>
+                          <small>{booking.paymentType}</small>
+                        </div>
+                      ))}
+                    </td>
+                    <td><small>{payout.stripeTransferId || "-"}</small></td>
+                    <td>{formatDate(payout.transferredAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="operator-card">
+        <div className="operator-card-head">
+          <div>
             <h2>Settlement Details</h2>
-            <p>
-              Each row is connected to a real paid booking and its Stripe
-              transaction ID.
-            </p>
+            <p>Amounts and funding source are read from the payment-time ledger snapshot.</p>
           </div>
 
-          <button className="operator-secondary-btn" onClick={loadSettlements}>
-            Refresh
-          </button>
+          <div className="operator-settlement-actions">
+            <button
+              className="operator-secondary-btn"
+              onClick={downloadCsv}
+              disabled={downloading}
+            >
+              <Download size={16} aria-hidden="true" />
+              {downloading ? "Exporting..." : "Export CSV"}
+            </button>
+            <button className="operator-secondary-btn" onClick={loadSettlements}>
+              Refresh
+            </button>
+          </div>
         </div>
 
         {loading ? (
           <div className="operator-empty-state">Loading settlement data...</div>
-        ) : data.settlements.length === 0 ? (
+        ) : settlements.length === 0 ? (
           <div className="operator-empty-state">
-            No paid Stripe bookings found yet.
+            No commission ledger entries found.
           </div>
         ) : (
           <div className="operator-table-wrap">
             <table className="operator-table">
               <thead>
                 <tr>
-                  <th>Booking ID</th> 
+                  <th>Booking</th>
                   <th>Customer</th>
-                  <th>Customer Paid</th>
-                  <th>BNPL Fee</th>
-                  <th>Stripe Fee</th>
-                  <th>Merchant Receives</th>
+                  <th>Payment</th>
+                  <th>Gross</th>
+                  <th>Discount / Funder</th>
+                  <th>Commission</th>
+                  <th>Processing Fee</th>
+                  <th>Operator Net</th>
+                  <th>Payout</th>
                   <th>Transaction</th>
                   <th>Paid At</th>
                 </tr>
@@ -223,7 +314,7 @@ function closeBookingDetails() {
 
               <tbody>
                 {paginatedSettlements.map((item) => (
-                  <tr key={item.bookingId}>
+                  <tr key={item.ledgerEntryId}>
                     <td>
                         <button
                             type="button"
@@ -240,24 +331,26 @@ function closeBookingDetails() {
                       <small>{item.customerEmail || "-"}</small>
                     </td>
 
-                    <td>{formatMoney(item.customerPaid)}</td>
+                    <td>{item.paymentType}</td>
+                    <td>{formatMoney(item.gross)}</td>
 
                     <td>
-                      <strong>{formatMoney(item.bnplAdminFee)}</strong>
-                      <small>{item.platformFeePercent}% platform fee</small>
+                      <strong>{formatMoney(item.discount)}</strong>
+                      <small>{item.fundedBy}-funded</small>
                     </td>
-
-                   <td>
-                      <strong>{formatMoney(item.stripeFee)}</strong>
-                      <small className="stripe-method-label">
-                        STRIPE - {(item.paymentMethodLabel || "Stripe").replace("Stripe - ", "")}
-                      </small>
-                  </td>
 
                     <td>
-                      <strong>{formatMoney(item.merchantReceives)}</strong>
-                      <small>Net amount</small>
+                      <strong>{formatMoney(item.commission)}</strong>
+                      <small>{(item.feeRateBps / 100).toFixed(2)}% snapshotted</small>
                     </td>
+
+                    <td>{formatMoney(item.processingFee)}</td>
+
+                    <td>
+                      <strong>{formatMoney(item.net)}</strong>
+                    </td>
+
+                    <td>{item.payoutId ? `#${item.payoutId} ${item.payoutStatus}` : "Not paid out"}</td>
 
                     <td>
                       <small>{item.transactionId || "-"}</small>
@@ -271,8 +364,8 @@ function closeBookingDetails() {
             <div className="operator-pagination">
               <span>
                 Showing {(currentPage - 1) * rowsPerPage + 1}-
-                {Math.min(currentPage * rowsPerPage, data.settlements.length)} of{" "}
-                {data.settlements.length}
+                {Math.min(currentPage * rowsPerPage, settlements.length)} of{" "}
+                {settlements.length}
               </span>
 
               <div className="operator-pagination-actions">
@@ -323,26 +416,26 @@ function closeBookingDetails() {
         <div className="operator-settlement-formula">
           <div>
             <CreditCard size={22} />
-            <span>Customer Paid</span>
-            <strong>Full booking amount paid through Stripe</strong>
+            <span>Gross</span>
+            <strong>Ledger gross before discounts</strong>
           </div>
 
           <div>
             <Percent size={22} />
-            <span>BNPL Admin Fee</span>
-            <strong>Customer Paid × {data.platformFeePercent}%</strong>
+            <span>Commission</span>
+            <strong>Recorded at the snapshotted fee rate and funding source</strong>
           </div>
 
           <div>
             <Receipt size={22} />
-            <span>Stripe Fee</span>
-            <strong>4% + RM1 Processing fee from Stripe</strong>
+            <span>Processing Fee</span>
+            <strong>Stripe fee stored separately from commission</strong>
           </div>
 
           <div>
             <Wallet size={22} />
-            <span>Merchant Receives</span>
-            <strong>Customer Paid - BNPL Fee - Stripe Fee</strong>
+            <span>Operator Net</span>
+            <strong>Actual ledger amount assigned to the payout</strong>
           </div>
         </div>
       </section>

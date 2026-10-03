@@ -2001,6 +2001,13 @@
 }
 
 /* Operator Settlements for STRIPE*/
+.operator-settlement-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .operator-settlement-formula {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -10,7 +10,8 @@ import {
   deleteOperator,
   getOperatorDashboard,
   getOperatorBookings,
-  getOperatorSettlements, /* Getting Settlements for STRIPE */
+  getOperatorSettlements,
+  exportOperatorSettlementsCsv,
   getOperatorBookingById,
   acceptBooking,
   rejectBooking,
@@ -245,6 +246,11 @@ router.patch(
  */
 router.get("/reports", ...ownerOnlyAccess, getOperatorReports);
 router.get("/analytics", ...ownerOnlyAccess, getOperatorAnalytics);
+router.get(
+  "/settlements/export.csv",
+  ...ownerOnlyAccess,
+  exportOperatorSettlementsCsv
+);
 router.get(
   "/settlements",
   ...ownerOnlyAccess,

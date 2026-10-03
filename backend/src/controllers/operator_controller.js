@@ -1,7 +1,6 @@
 import crypto from "crypto";
 import prisma from "../config/db.js";
 import bcrypt from "bcryptjs";
-import Stripe from "stripe";
 import { sendEmail } from "../services/email_service.js";
 import { generateForecast, generateAnalytics } from "../services/sarima_service.js";
 import { generateInvoiceForBooking } from "../services/invoice_service.js";
@@ -31,6 +30,10 @@ import {
 } from "../services/payment_schedule_service.js";
 import { getPlatformDeadlinePolicy, validatePublishedDeadline } from "../services/platform_policy_service.js";
 import { createAuditLog as writeAuditLog } from "../services/log_service.js";
+import {
+  buildOperatorSettlementReport,
+  createSettlementCsv,
+} from "../services/operator_settlement_report_service.js";
 
 const SETUP_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
@@ -110,54 +113,6 @@ function mapBooking(booking) {
     payment: mapPayment(booking.payment),
     invoice: mapInvoice(booking.invoice),
   };
-}
-
-/*Helper For Stripe*/
-async function getStripeMethodLabel(transactionId, paymentMethod = "STRIPE") {
-  console.log("[Stripe Method Helper Called]", {
-    transactionId,
-    paymentMethod,
-  });
-
-  if (paymentMethod !== "STRIPE") {
-    return paymentMethod;
-  }
-
-  if (!transactionId || !transactionId.startsWith("pi_")) {
-    return "Stripe";
-  }
-
-  if (!process.env.STRIPE_SECRET_KEY) {
-    console.log("[Stripe Method Debug] Missing STRIPE_SECRET_KEY");
-    return "Stripe";
-  }
-
-  try {
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
-    const paymentIntent = await stripe.paymentIntents.retrieve(transactionId, {
-      expand: ["latest_charge", "payment_method"],
-    });
-
-    const methodType =
-      paymentIntent.latest_charge?.payment_method_details?.type ||
-      paymentIntent.payment_method?.type ||
-      paymentIntent.payment_method_types?.[0];
-
-    console.log("[Stripe Method Debug]", {
-      transactionId,
-      methodType,
-    });
-
-    if (methodType === "card") return "Stripe - Card";
-    if (methodType === "fpx") return "Stripe - FPX";
-    if (methodType === "grabpay") return "Stripe - GrabPay";
-
-    return methodType ? `Stripe - ${methodType}` : "Stripe";
-  } catch (err) {
-    console.error("[Settlement] Failed to detect Stripe method:", err.message);
-    return "Stripe";
-  }
 }
 
 async function findOperatorBooking(req, bookingId) {
@@ -1741,163 +1696,65 @@ export async function getOperatorPaymentVerifications(req, res, next) {
 }
 
 /*Getting Operator Payment for STRIPE DETAILS*/
+async function loadOperatorSettlementReport(req) {
+  const entries = await prisma.commissionLedgerEntry.findMany({
+    where: { booking: { is: bookingWhere(req) } },
+    include: {
+      payment: {
+        select: {
+          status: true,
+          method: true,
+          paidAt: true,
+          downPaymentPaidAt: true,
+          finalPaymentPaidAt: true,
+        },
+      },
+      booking: {
+        select: {
+          id: true,
+          bookingCode: true,
+          serviceName: true,
+          status: true,
+          customer: { select: { name: true, email: true } },
+          operator: { select: { companyName: true } },
+        },
+      },
+      payout: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return buildOperatorSettlementReport(entries);
+}
+
 export async function getOperatorSettlements(req, res, next) {
   try {
     if (!canAccessOperator(req)) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    const platformFeePercent = Number(
-      process.env.STRIPE_PLATFORM_FEE_PERCENT ?? 10
-    );
-
-    const bookings = await prisma.booking.findMany({
-      where: {
-        ...bookingWhere(req),
-        OR: [
-          { status: "PAID" },
-          { status: "COMPLETED" },
-          {
-            payment: {
-              is: {
-                status: "PAID",
-              },
-            },
-          },
-        ],
-      },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        operator: {
-          select: {
-            id: true,
-            companyName: true,
-            stripeAccountId: true,
-          },
-        },
-        payment: true,
-        invoice: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-console.log("[Settlement Debug] bookings count:", bookings.length);
-
-    const settlements = await Promise.all(
-      bookings.map(async (booking) => {
-console.log("[Settlement Debug] transaction:", booking.payment?.transactionId);
-      const customerPaid = toNumber(booking.totalAmount);
-
-      const bnplAdminFee = Number(
-        ((customerPaid * platformFeePercent) / 100).toFixed(2)
-      );
-
-      // Total Stripe fee is 4% + RM1
-      const totalStripeFeePercent = Number(
-        process.env.STRIPE_PROCESSING_FEE_PERCENT ?? 4
-      );
-
-      const stripeFixedFee = Number(
-        process.env.STRIPE_PROCESSING_FIXED_FEE ?? 1
-      );
-
-      const totalStripeFee = Number(
-        ((customerPaid * totalStripeFeePercent) / 100 + stripeFixedFee).toFixed(2)
-      );
-
-      // Merchant only bears 4% + RM1
-      const merchantStripeFeePercent = Number(
-        process.env.MERCHANT_STRIPE_FEE_PERCENT ?? 4
-      );
-
-      const merchantStripeFee = Number(
-        ((customerPaid * merchantStripeFeePercent) / 100 + stripeFixedFee).toFixed(2)
-      );
-
-      const merchantReceives = Number(
-        (customerPaid - bnplAdminFee - merchantStripeFee).toFixed(2)
-      );
-
-      return {
-        bookingId: booking.id,
-        bookingCode:
-          booking.bookingCode || `BNPL-${String(booking.id).padStart(4, "0")}`,
-        serviceName: booking.serviceName,
-
-        customerName: booking.customer?.name || "Customer",
-        customerEmail: booking.customer?.email || null,
-
-        operatorName: booking.operator?.companyName || "Merchant",
-
-        customerPaid,
-        platformFeePercent,
-        bnplAdminFee,
-
-        totalStripeFee,
-        merchantStripeFeePercent,
-        merchantStripeFee,
-
-        // keep this name if your frontend still uses item.stripeFee
-        stripeFee: merchantStripeFee,
-
-        merchantReceives,
-
-        paymentStatus: booking.payment?.status || "PAID",
-        bookingStatus: booking.status,
-
-        // Main payment method stays STRIPE
-        paymentMethod: booking.payment?.method || "STRIPE",
-
-        // This shows Stripe - Card / Stripe - FPX / Stripe - GrabPay
-        paymentMethodLabel: await getStripeMethodLabel(
-  booking.payment?.transactionId,
-  booking.payment?.method
-),
-
-        transactionId: booking.payment?.transactionId || null,
-        paidAt: booking.payment?.paidAt || null,
-
-        invoiceNo: booking.invoice?.invoiceNo || null,
-      };
-    })
-  );
-
-    const summary = settlements.reduce(
-      (acc, item) => {
-        acc.totalCustomerPaid += item.customerPaid;
-        acc.totalBnplAdminFee += item.bnplAdminFee;
-        acc.totalStripeFee += item.stripeFee;
-        acc.totalMerchantReceives += item.merchantReceives;
-        return acc;
-      },
-      {
-        totalCustomerPaid: 0,
-        totalBnplAdminFee: 0,
-        totalStripeFee: 0,
-        totalMerchantReceives: 0,
-      }
-    );
-
+    const report = await loadOperatorSettlementReport(req);
     res.json({
-      platformFeePercent,
-      summary: {
-        totalCustomerPaid: Number(summary.totalCustomerPaid.toFixed(2)),
-        totalBnplAdminFee: Number(summary.totalBnplAdminFee.toFixed(2)),
-        totalStripeFee: Number(summary.totalStripeFee.toFixed(2)),
-        totalMerchantReceives: Number(
-          summary.totalMerchantReceives.toFixed(2)
-        ),
-      },
-      settlements,
+      platformFeePercent: Number(process.env.STRIPE_PLATFORM_FEE_PERCENT ?? 10),
+      ...report,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function exportOperatorSettlementsCsv(req, res, next) {
+  try {
+    if (!canAccessOperator(req)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const report = await loadOperatorSettlementReport(req);
+    const date = new Date().toISOString().slice(0, 10);
+    res
+      .set("Content-Type", "text/csv; charset=utf-8")
+      .set("Content-Disposition", `attachment; filename="operator-settlements-${date}.csv"`)
+      .send(createSettlementCsv(report.settlements));
   } catch (err) {
     next(err);
   }
