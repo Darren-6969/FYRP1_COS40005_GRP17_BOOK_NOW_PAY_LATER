@@ -522,6 +522,7 @@ async function performCompletedBookingCheck({
         },
         data: {
           status: "COMPLETED",
+          serviceResolvedAt: now,
         },
         include: includeBookingRelations(),
       });

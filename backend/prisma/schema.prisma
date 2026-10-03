@@ -57,6 +57,7 @@ enum BookingStatus {
   OVERDUE
   CANCELLED
   COMPLETED
+  NO_SHOW
 }
 
 enum ListingCategory {
@@ -145,6 +146,12 @@ enum PaymentMethod {
 enum DiscountFundingSource {
   OPERATOR
   PLATFORM
+}
+
+enum OperatorPayoutStatus {
+  PENDING
+  TRANSFERRED
+  CANCELLED
 }
 
 enum ReceiptStatus {
@@ -272,6 +279,7 @@ model Operator {
 
   applications OperatorApplication[]
   documents OperatorDocument[]
+  payouts   OperatorPayout[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -433,6 +441,7 @@ model Booking {
 
   pickedUpAt DateTime?
   returnedAt DateTime?
+  serviceResolvedAt DateTime?
 
   addons BookingAddon[]
 
@@ -513,11 +522,33 @@ model CommissionLedgerEntry {
   stripeFeeAmountSen       Int                   @default(0)
   operatorPayoutAmountSen  Int
   platformMarginSen        Int
+  payoutId                 Int?                  @unique
+  payout                   OperatorPayout?        @relation(fields: [payoutId], references: [id])
   currency                 String                @default("MYR")
   createdAt                DateTime              @default(now())
 
   @@index([bookingId, createdAt])
   @@index([paymentId])
+}
+
+model OperatorPayout {
+  id Int @id @default(autoincrement())
+
+  operatorId Int
+  operator   Operator @relation(fields: [operatorId], references: [id])
+
+  destinationAccountId String
+  amountSen        Int
+  status           OperatorPayoutStatus @default(PENDING)
+  idempotencyKey   String               @unique
+  stripeTransferId String?              @unique
+  lastError        String?              @db.Text
+  createdAt        DateTime             @default(now())
+  transferredAt    DateTime?
+
+  ledgerEntry CommissionLedgerEntry?
+
+  @@index([operatorId, status, createdAt])
 }
 
 model Receipt {

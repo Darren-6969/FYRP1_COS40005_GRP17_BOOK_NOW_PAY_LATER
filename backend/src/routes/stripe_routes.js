@@ -72,8 +72,7 @@ function includeBookingRelations() {
 
 // ── Shared paid-state logic ───────────────────────────────────────────────────
 // Called from both the webhook handler and the /confirm-session fallback.
-// With Destination Charges the split is already settled by Stripe at charge time,
-// so this function only needs to update our DB, generate the invoice, and notify.
+// Platform charges remain on the platform until the settlement payout job releases them.
 export async function applyPaidState(
   bookingId,
   transactionId,
@@ -101,7 +100,7 @@ export async function applyPaidState(
   // Stripe session was created. The charge is already captured, so we must not
   // silently mark it PAID (inconsistent state) nor silently drop it (lost money).
   // Instead: record the anomaly, auto-refund, and leave the booking untouched.
-  const TERMINAL = ["CANCELLED", "REJECTED", "COMPLETED", "OVERDUE"];
+  const TERMINAL = ["CANCELLED", "REJECTED", "COMPLETED", "NO_SHOW", "OVERDUE"];
   if (TERMINAL.includes(booking.status)) {
     console.error(
       `[Stripe] Paid webhook for terminal booking ${bookingId} (${booking.status}). Flagging for refund.`
@@ -170,28 +169,6 @@ export async function applyPaidState(
     fundedBy,
     stripeFeeAmountSen,
   });
-
-  if (fundedBy === "PLATFORM" && ledgerSnapshot.discountAmountSen > 0) {
-    const destinationAccountId =
-      booking.operator?.stripeAccountId || process.env.STRIPE_CONNECTED_ACCOUNT_ID;
-    if (destinationAccountId) {
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-      await stripe.transfers.create(
-        {
-          amount: ledgerSnapshot.discountAmountSen,
-          currency: "myr",
-          destination: destinationAccountId,
-          transfer_group: `booking_${booking.id}`,
-          metadata: {
-            bookingId: String(booking.id),
-            transactionId,
-            purpose: "PLATFORM_FUNDED_DISCOUNT",
-          },
-        },
-        { idempotencyKey: `commission-subsidy-${transactionId}` }
-      );
-    }
-  }
 
   let payment;
   let updatedBooking;
@@ -834,33 +811,8 @@ router.post(
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
       const totalCents = Math.round(paymentSpec.amount * 100);
 
-      // ── Destination Charges split ─────────────────────────────────────────
-      // Platform fee: 10% of gross, retained by the platform account.
-      // Merchant receives: 90% minus the Stripe processing fee.
-      // platform bears it, and the platform always keeps exactly 10%.
-      //
-      // This makes the split visible in the Stripe dashboard as:
-      //   Gross amount  MYR XX.XX
-      //   Stripe fee  − MYR  X.XX   (charged to platform)
-      //   Platform fee − MYR  X.XX  (application_fee_amount)
-      //   Net to merchant MYR XX.XX
-      const destinationAccountId =
-        booking.operator?.stripeAccountId || process.env.STRIPE_CONNECTED_ACCOUNT_ID;
-
-      const checkoutLedgerSnapshot = createCommissionLedgerSnapshot({
-        booking,
-        payment: booking.payment,
-        paymentType,
-        feeRate: PLATFORM_FEE_PERCENT,
-        fundedBy: booking.discountFundedBy,
-      });
-      const platformFeeCents = checkoutLedgerSnapshot.feeAmountSen;
-
-      // Destination Charges: platform fee is retained via application_fee_amount,
-      // remainder goes to the connected account automatically.
-      // No on_behalf_of — this ensures Stripe applies the platform account's fee
-      // rate (3% + RM1) instead of the connected account's default Express rate.
-      // Tradeoff: the Stripe processing fee is deducted from the platform's share.
+      // Charge the platform account now; operator transfers happen only after
+      // service resolution and the configured appeal window.
       const paymentIntentData = {
         metadata: {
           bookingId: String(booking.id),
@@ -869,12 +821,6 @@ router.post(
           feeRateBps: String(Math.round(PLATFORM_FEE_PERCENT * 100)),
           fundedBy: booking.discountFundedBy,
         },
-        ...(destinationAccountId
-          ? {
-              application_fee_amount: platformFeeCents,
-              transfer_data: { destination: destinationAccountId },
-            }
-          : {}),
       };
 
       const session = await stripe.checkout.sessions.create({

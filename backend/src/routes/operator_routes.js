@@ -16,6 +16,7 @@ import {
   rejectBooking,
   cancelOperatorBooking,
   confirmBooking,
+  markBookingNoShow,
   suggestAlternative,
   sendPaymentRequest,
 
@@ -177,6 +178,7 @@ router.patch(
   cancelOperatorBooking
 );
 router.patch("/bookings/:id/confirm", ...ownerOnlyAccess, confirmBooking);
+router.patch("/bookings/:id/no-show", ...ownerOnlyAccess, markBookingNoShow);
 router.patch(
   "/bookings/:id/send-payment-request",
   ...ownerOnlyAccess,

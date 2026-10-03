@@ -1167,6 +1167,7 @@ export async function handoverBooking(req, res, next) {
     if (
       [
         "COMPLETED",
+        "NO_SHOW",
         "CANCELLED",
         "REJECTED",
         "OVERDUE",
@@ -1287,6 +1288,7 @@ export async function returnBooking(
 
         data: {
           status: "COMPLETED",
+          serviceResolvedAt: new Date(),
         },
 
         include: includeBookingRelations(),
@@ -1389,15 +1391,15 @@ export async function confirmBooking(req, res, next) {
       });
     }
 
-    if (booking.status === "COMPLETED") {
+    if (["COMPLETED", "NO_SHOW"].includes(booking.status)) {
       return res.status(400).json({
-        message: "This booking is already completed.",
+        message: "This booking is already resolved.",
       });
     }
 
     const updatedBooking = await prisma.booking.update({
       where: { id: booking.id },
-      data: { status: "COMPLETED" },
+      data: { status: "COMPLETED", serviceResolvedAt: new Date() },
       include: includeBookingRelations(),
     });
 
@@ -1438,6 +1440,41 @@ export async function confirmBooking(req, res, next) {
     res.json({
       booking: mapBooking(updatedBooking),
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function markBookingNoShow(req, res, next) {
+  try {
+    const booking = await findOperatorBooking(req, req.params.id);
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+    if (booking.status !== "PAID" || booking.payment?.status !== "PAID") {
+      return res.status(400).json({ message: "Only paid bookings can be marked as no-show." });
+    }
+
+    const now = new Date();
+    const scheduledPickup = booking.pickupDate || booking.bookingDate;
+    if (!scheduledPickup || new Date(scheduledPickup) > now) {
+      return res.status(400).json({ message: "A booking cannot be marked no-show before its scheduled date." });
+    }
+
+    const updatedBooking = await prisma.booking.update({
+      where: { id: booking.id },
+      data: { status: "NO_SHOW", serviceResolvedAt: now },
+      include: includeBookingRelations(),
+    });
+
+    await createAuditLog({
+      req,
+      action: "BOOKING_MARKED_NO_SHOW",
+      entityType: "Booking",
+      entityId: booking.id,
+      details: { previousStatus: booking.status, status: "NO_SHOW", serviceResolvedAt: now },
+    });
+
+    res.json({ booking: mapBooking(updatedBooking) });
   } catch (err) {
     next(err);
   }
