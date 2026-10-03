@@ -1,25 +1,32 @@
-export function errorHandler(err, req, res, next) {
-  const statusCode = err.statusCode || err.status || 500;
-  const isProduction = process.env.NODE_ENV === "production";
-  const prismaCode = err.code && /^P\d{4}$/.test(err.code) ? err.code : undefined;
+import { randomUUID } from "node:crypto";
+import { errorCodeForStatus } from "./logger_middleware.js";
 
+export function errorHandler(err, req, res, _next) {
+  const candidateStatus = Number(err.statusCode || err.status);
+  const statusCode = candidateStatus >= 400 && candidateStatus <= 599 ? candidateStatus : 500;
+  const isProduction = process.env.NODE_ENV === "production";
+  const requestId = req.requestId || randomUUID();
+  const code = err.appCode || errorCodeForStatus(statusCode);
+  const message = isProduction && statusCode >= 500
+    ? "Internal server error"
+    : err.message || "Internal server error";
+
+  err.request_id = requestId;
   console.error({
-    message: err.message,
+    event: "http_error",
+    request_id: requestId,
+    code,
+    message,
     route: req.originalUrl,
     method: req.method,
     statusCode,
+    ...(err.details === undefined ? {} : { details: err.details }),
   });
 
   res.status(statusCode).json({
-    message:
-      isProduction && statusCode >= 500
-        ? "Internal server error"
-        : err.message || "Internal server error",
-      ...(prismaCode ? { code: prismaCode } : {}),
-    // Opt-in application error codes (e.g. LISTING_UNAVAILABLE) that clients
-    // branch on. Set err.appCode deliberately; err.code from Node or libraries
-    // is never exposed.
-    ...(err.appCode ? { code: err.appCode } : {}),
-    ...(err.appCode && err.details ? { details: err.details } : {}),
+    code,
+    message,
+    request_id: requestId,
+    ...(err.details === undefined ? {} : { details: err.details }),
   });
 }

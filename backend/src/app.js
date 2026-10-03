@@ -37,6 +37,7 @@ const app = express();
 // Vercel/other proxies sit in front of the app; needed for correct client IP
 // (used by express-rate-limit and for accurate logging).
 app.set("trust proxy", 1);
+app.use(requestLogger);
 
 function requiredEnvStatus() {
   const required = ["DATABASE_URL", "JWT_SECRET", "FRONTEND_URL"];
@@ -130,7 +131,7 @@ const corsOptions = {
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "x-bnpl-api-key", "Idempotency-Key"],
-  exposedHeaders: ["RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset"],
+  exposedHeaders: ["RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "X-Request-ID"],
 };
 
 // #19: apply the SAME strict origin check to preflight requests
@@ -146,9 +147,6 @@ app.use("/api/stripe", stripeRoutes);
 // ── Body parsing ─────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
-
-// ── Request logger ───────────────────────────────────────────────────────────
-app.use(requestLogger);
 
 // ── Static uploads – only in non-production; use object storage in prod ─────
 if (process.env.NODE_ENV !== "production") {
@@ -193,6 +191,12 @@ app.use("/api/carsxe",    carsxeRoutes);
 app.use("/api/public",    publicRoutes);
 
 // ── Error handler ────────────────────────────────────────────────────────────
+app.use((req, _res, next) => {
+  const error = new Error("Route not found");
+  error.statusCode = 404;
+  error.appCode = "NOT_FOUND";
+  next(error);
+});
 app.use(errorHandler);
 
 export default app;
