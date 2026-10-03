@@ -904,8 +904,7 @@ function StripeConnectCard() {
     fetchStatus();
   }, []);
 
-  // SANDBOX BYPASS: requests a Stripe Express Account Link and redirects the
-  // merchant to Stripe's hosted onboarding form where fake test data is accepted.
+  // Stripe hosts the onboarding form and returns the operator here.
   const handleStartOnboarding = async () => {
     setLaunching(true);
     setStatusError("");
@@ -943,14 +942,12 @@ function StripeConnectCard() {
         </p>
       </div>
 
-      {/* ── Sandbox bypass notice ────────────────────────────────────────── */}
       <div
-        className="operator-alert warning"
+        className="operator-alert info"
         style={{ fontSize: "0.8rem", marginBottom: "1rem" }}
       >
-        <strong>Sandbox mode:</strong> Use fake test data on the Stripe form —
-        SSN <code>000-00-0000</code>, any address, any date of birth. This
-        bypasses real KYC verification and lifts account restrictions instantly.
+        Stripe securely collects your business, identity, and bank details on
+        its hosted onboarding page.
       </div>
 
       {statusError && (
@@ -965,7 +962,9 @@ function StripeConnectCard() {
       {loadingStatus ? (
         <p style={{ opacity: 0.6 }}>Loading account status…</p>
       ) : !status?.configured ? (
-        <p style={{ opacity: 0.6 }}>No connected account configured.</p>
+        <p style={{ opacity: 0.6 }}>
+          Connect a Stripe Express account to receive booking payouts.
+        </p>
       ) : (
         <div
           style={{
@@ -1015,20 +1014,20 @@ function StripeConnectCard() {
       )}
 
       {/* Onboarding button — always shown so the merchant can re-enter the form */}
-      {status?.configured && (
-        <button
-          className="operator-btn"
-          onClick={handleStartOnboarding}
-          disabled={launching}
-          style={{ minWidth: "220px" }}
-        >
-          {launching
-            ? "Redirecting to Stripe…"
-            : isReady
-            ? "Manage Stripe Account"
-            : "Complete Stripe Onboarding"}
-        </button>
-      )}
+      <button
+        className="operator-btn"
+        onClick={handleStartOnboarding}
+        disabled={launching}
+        style={{ minWidth: "220px" }}
+      >
+        {launching
+          ? "Redirecting to Stripe…"
+          : isReady
+          ? "Manage Stripe Account"
+          : status?.configured
+          ? "Complete Stripe Onboarding"
+          : "Connect Stripe Account"}
+      </button>
 
       {isReady && (
         <p

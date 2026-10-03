@@ -249,6 +249,8 @@ model Operator {
   logoUrl      String?
   status       CompanyStatus @default(ACTIVE)
   stripeAccountId String?
+  stripeOnboardingStatus String @default("NOT_STARTED")
+  stripeRequirements Json?
 
   // ── Phase 1: per-operator host integration ──────────────────────────
   apiKeyHash      String?   @unique   // sha-256 of the active host API key

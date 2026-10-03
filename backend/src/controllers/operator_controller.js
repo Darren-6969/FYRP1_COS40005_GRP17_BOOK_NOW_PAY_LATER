@@ -766,7 +766,7 @@ export async function getOperatorDashboard(req, res, next) {
 
     const where = bookingWhere(req);
 
-    const [allBookings, recentBookings, notifications] = await Promise.all([
+    const [allBookings, recentBookings, notifications, operator] = await Promise.all([
       prisma.booking.findMany({
         where,
         include: {
@@ -784,6 +784,16 @@ export async function getOperatorDashboard(req, res, next) {
         orderBy: { createdAt: "desc" },
         take: 6,
       }),
+      req.user.operatorId && req.user.operatorAccessLevel === "OWNER"
+        ? prisma.operator.findUnique({
+            where: { id: req.user.operatorId },
+            select: {
+              stripeAccountId: true,
+              stripeOnboardingStatus: true,
+              stripeRequirements: true,
+            },
+          })
+        : null,
     ]);
 
     const paidBookings = allBookings.filter(
@@ -814,6 +824,18 @@ export async function getOperatorDashboard(req, res, next) {
       summary,
       recentBookings: recentBookings.map(mapBooking),
       notifications,
+      stripeConnect: operator
+        ? {
+            configured: Boolean(operator.stripeAccountId),
+            onboardingStatus: operator.stripeOnboardingStatus,
+            requirements: operator.stripeRequirements || {
+              currentlyDue: [],
+              pastDue: [],
+              pendingVerification: [],
+              errors: [],
+            },
+          }
+        : null,
     });
   } catch (err) {
     next(err);

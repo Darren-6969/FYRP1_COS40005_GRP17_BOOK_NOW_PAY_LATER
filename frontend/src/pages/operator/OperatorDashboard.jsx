@@ -20,6 +20,7 @@ export default function OperatorDashboard() {
   const [bookings, setBookings] = useState([]);
   const [recentBookings, setRecentBookings] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [stripeConnect, setStripeConnect] = useState(null);
   const [forecastData, setForecastData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -58,6 +59,7 @@ export default function OperatorDashboard() {
       setBookings(bookingsRes.data.bookings || []);
       setRecentBookings(dashboardRes.data.recentBookings || []);
       setNotifications(dashboardRes.data.notifications || []);
+      setStripeConnect(dashboardRes.data.stripeConnect || null);
       setForecastData(reportsRes.data);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load operator dashboard");
@@ -83,6 +85,7 @@ export default function OperatorDashboard() {
     setBookings(bookingsRes.data.bookings || []);
     setRecentBookings(dashboardRes.data.recentBookings || []);
     setNotifications(dashboardRes.data.notifications || []);
+    setStripeConnect(dashboardRes.data.stripeConnect || null);
     } catch {
       // Ignore transient poll failures; the next tick retries.
     }
@@ -610,6 +613,67 @@ const operationalMetrics = useMemo(() => {
   return (
     <div style={styles.container}>
       <h1 style={styles.pageTitle}>Operator Dashboard</h1>
+
+      {stripeConnect && stripeConnect.onboardingStatus !== "COMPLETE" && (
+        <section style={{ ...styles.card, marginBottom: "24px" }}>
+          <div style={styles.cardHead}>
+            <div>
+              <h2 style={styles.cardTitle}>Stripe payouts setup</h2>
+              <p style={styles.cardSub}>
+                Status: {stripeConnect.onboardingStatus.replaceAll("_", " ").toLowerCase()}
+              </p>
+            </div>
+            <Link to="/operator/settings" style={styles.linkButton}>
+              Open Stripe Connect settings
+            </Link>
+          </div>
+
+          {stripeConnect.requirements?.pastDue?.length > 0 && (
+            <div style={styles.outstandingDescription}>
+              <strong>Overdue with Stripe:</strong>
+              <ul>
+                {stripeConnect.requirements.pastDue.map((item) => (
+                  <li key={`past-${item}`}>{item.replaceAll(".", " › ")}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {stripeConnect.requirements?.currentlyDue?.length > 0 && (
+            <div style={styles.outstandingDescription}>
+              <strong>Required by Stripe:</strong>
+              <ul>
+                {stripeConnect.requirements.currentlyDue.map((item) => (
+                  <li key={`due-${item}`}>{item.replaceAll(".", " › ")}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {stripeConnect.requirements?.errors?.map((item, index) => (
+            <p key={`${item.code}-${index}`} style={styles.outstandingDescription}>
+              {item.reason || item.requirement || item.code}
+            </p>
+          ))}
+          {stripeConnect.requirements?.pendingVerification?.length > 0 && (
+            <p style={styles.outstandingDescription}>
+              Stripe is verifying: {stripeConnect.requirements.pendingVerification.join(", ")}
+            </p>
+          )}
+          {!stripeConnect.configured && (
+            <p style={styles.outstandingDescription}>
+              Connect a Stripe Express account to receive booking payouts.
+            </p>
+          )}
+          {stripeConnect.configured &&
+            !stripeConnect.requirements?.currentlyDue?.length &&
+            !stripeConnect.requirements?.pastDue?.length &&
+            !stripeConnect.requirements?.pendingVerification?.length &&
+            !stripeConnect.requirements?.errors?.length && (
+              <p style={styles.outstandingDescription}>
+                Continue in Stripe to finish setting up payouts.
+              </p>
+            )}
+        </section>
+      )}
 
       {error && (
         <div style={styles.errorBox}>

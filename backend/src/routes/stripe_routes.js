@@ -12,7 +12,7 @@ import {
   paymentReceiptTemplate,
 } from "../services/email_templates.js";
 import { verifyToken } from "../middlewares/auth_middleware.js";
-import { allowRoles } from "../middlewares/rbac_middleware.js";
+import { allowOperatorAccess, allowRoles } from "../middlewares/rbac_middleware.js";
 import { paymentLimiter } from "../middlewares/rate_limit_middleware.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
 import {
@@ -22,6 +22,11 @@ import {
 } from "../services/payment_schedule_service.js";
 import { requireIdempotencyKey, runIdempotent } from "../services/idempotency_service.js";
 import { createAuditLog } from "../services/log_service.js";
+import {
+  createExpressOnboardingLink,
+  getStripeAccountState,
+  syncStripeAccountUpdated,
+} from "../services/stripe_connect_service.js";
 
 const router = express.Router();
 
@@ -286,10 +291,19 @@ router.post(
   }
 );
 
-export async function processStripeWebhookEvent(event, requestIp = null) {
+export async function processStripeWebhookEvent(event, requestIp = null, database = prisma) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
   switch (event.type) {
+        case "account.updated": {
+          const account = event.data.object;
+          const result = await syncStripeAccountUpdated(account, database);
+          if (!result.count) {
+            console.warn(`[Stripe] Updated account ${account.id} is not linked to an operator.`);
+          }
+          break;
+        }
+
         // ── Primary payment confirmation ────────────────────────────────────
         case "checkout.session.completed": {
           const session = event.data.object;
@@ -583,23 +597,38 @@ router.get(
       const operator = req.user.operatorId
         ? await prisma.operator.findUnique({
             where: { id: req.user.operatorId },
-            select: { stripeAccountId: true },
+            select: {
+              stripeAccountId: true,
+              stripeOnboardingStatus: true,
+              stripeRequirements: true,
+            },
           })
         : null;
 
-      const accountId =
-        operator?.stripeAccountId || process.env.STRIPE_CONNECTED_ACCOUNT_ID;
+      const accountId = operator?.stripeAccountId ||
+        (req.user.role === "MASTER_SELLER" ? process.env.STRIPE_CONNECTED_ACCOUNT_ID : null);
 
       if (!accountId) {
-        return res.json({ configured: false });
+        return res.json({
+          configured: false,
+          onboardingStatus: operator?.stripeOnboardingStatus || "NOT_STARTED",
+          requirements: operator?.stripeRequirements || {
+            currentlyDue: [],
+            pastDue: [],
+            pendingVerification: [],
+            errors: [],
+          },
+        });
       }
 
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
       const account = await stripe.accounts.retrieve(accountId);
+      const accountState = getStripeAccountState(account);
 
       res.json({
         configured: true,
         accountId,
+        onboardingStatus: accountState.stripeOnboardingStatus,
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
         detailsSubmitted: account.details_submitted,
@@ -609,9 +638,11 @@ router.get(
           transfers: account.capabilities?.transfers ?? "inactive",
         },
         requirements: {
-          currentlyDue: account.requirements?.currently_due ?? [],
-          pastDue: account.requirements?.past_due ?? [],
-          errors: account.requirements?.errors ?? [],
+          currentlyDue: accountState.stripeRequirements.currentlyDue,
+          pastDue: accountState.stripeRequirements.pastDue,
+          pendingVerification: accountState.stripeRequirements.pendingVerification,
+          errors: accountState.stripeRequirements.errors,
+          disabledReason: accountState.stripeRequirements.disabledReason,
         },
       });
     } catch (err) {
@@ -621,66 +652,34 @@ router.get(
 );
 
 // ── Stripe Connect: Express onboarding link ───────────────────────────────────
-//
-// SANDBOX BYPASS / SHORTCUT
-// --------------------------
-// Generates a Stripe Express Account Link so the merchant can complete the
-// identity verification form on Stripe's hosted onboarding page.
-//
-// In TEST MODE this is a bypass: Stripe accepts fake data (SSN "000-00-0000",
-// any address/DOB) and immediately lifts the RESTRICTED status — no real KYC.
-//
-// In LIVE MODE this collects real identity documents. Gate behind admin access
-// or remove this route before going to production.
-//
 router.post(
   "/onboarding-link",
   express.json(),
   verifyToken,
-  allowRoles("NORMAL_SELLER", "MASTER_SELLER"),
+  allowOperatorAccess("OWNER"),
   async (req, res, next) => {
     try {
       if (!process.env.STRIPE_SECRET_KEY) {
         return res.status(500).json({ message: "Stripe is not configured" });
       }
 
-      const operator = req.user.operatorId
-        ? await prisma.operator.findUnique({
-            where: { id: req.user.operatorId },
-            select: { stripeAccountId: true },
-          })
-        : null;
-
-      const accountId =
-        operator?.stripeAccountId || process.env.STRIPE_CONNECTED_ACCOUNT_ID;
-
-      if (!accountId) {
-        return res.status(400).json({
-          message: "No Stripe connected account configured for this operator.",
-        });
+      if (!req.user.operatorId) {
+        return res.status(403).json({ message: "No operator account is linked to this user." });
       }
+
+      const operator = await prisma.operator.findUnique({
+        where: { id: req.user.operatorId },
+        select: { id: true, email: true, stripeAccountId: true },
+      });
+      if (!operator) return res.status(404).json({ message: "Operator not found." });
 
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
       const frontendBase = process.env.FRONTEND_URL || "http://localhost:5173";
-
-      // Request the capabilities required for Destination Charges.
-      // 'transfers' is what allows this account to receive funds via transfer_data.destination.
-      // In test mode Stripe auto-approves these instantly; in live mode the
-      // account holder activates them by completing the onboarding form below.
-      await stripe.accounts.update(accountId, {
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-      });
-
-      // SANDBOX BYPASS: account_onboarding type accepts test data on Stripe's
-      // hosted form to lift the RESTRICTED status without real identity verification.
-      const accountLink = await stripe.accountLinks.create({
-        account: accountId,
-        refresh_url: `${frontendBase}/operator/settings?stripe=refresh`,
-        return_url: `${frontendBase}/operator/settings?stripe=connected`,
-        type: "account_onboarding",
+      const accountLink = await createExpressOnboardingLink({
+        operator,
+        stripe,
+        frontendBase,
+        country: process.env.STRIPE_CONNECT_ACCOUNT_COUNTRY || "MY",
       });
 
       res.json({ url: accountLink.url });
