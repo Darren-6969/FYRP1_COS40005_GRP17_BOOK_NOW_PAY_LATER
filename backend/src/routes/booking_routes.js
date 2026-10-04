@@ -3,6 +3,7 @@ import {
   getBookings,
   acceptBooking,
   rejectBooking,
+  overrideBookingStatus,
 } from "../controllers/booking_controller.js";
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import { allowRoles } from "../middlewares/rbac_middleware.js";
@@ -28,6 +29,13 @@ router.patch(
   verifyToken,
   allowRoles("MASTER_SELLER", "NORMAL_SELLER"),
   rejectBooking
+);
+
+router.patch(
+  "/:id/admin-override",
+  verifyToken,
+  allowRoles("MASTER_SELLER"),
+  overrideBookingStatus
 );
 
 export default router;

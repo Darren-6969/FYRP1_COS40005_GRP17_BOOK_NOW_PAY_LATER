@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   acceptBooking,
   getBookings,
+  overrideBookingStatus,
   rejectBooking,
 } from "../../services/admin_service";
 
@@ -42,6 +43,10 @@ function label(value) {
 export default function Bookings() {
   const [bookings, setBookings] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [interventionBooking, setInterventionBooking] = useState(null);
+  const [interventionStatus, setInterventionStatus] = useState("");
+  const [interventionReason, setInterventionReason] = useState("");
+  const [savingIntervention, setSavingIntervention] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 
@@ -175,6 +180,39 @@ function getPageNumbers() {
     }
   };
 
+  const openIntervention = (booking) => {
+    setError("");
+    setMessage("");
+    setInterventionBooking(booking);
+    setInterventionStatus("");
+    setInterventionReason("");
+  };
+
+  const handleInterventionSubmit = async (event) => {
+    event.preventDefault();
+    if (!interventionBooking || interventionReason.trim().length < 5) return;
+
+    try {
+      setSavingIntervention(true);
+      setError("");
+      await overrideBookingStatus(interventionBooking.id, {
+        status: interventionStatus,
+        reason: interventionReason.trim(),
+      });
+      setMessage(
+        interventionStatus === "CANCELLED"
+          ? "Booking force-cancelled. The intervention was recorded in the audit log."
+          : "Booking status overridden. The intervention was recorded in the audit log."
+      );
+      setInterventionBooking(null);
+      await loadBookings();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to intervene on booking.");
+    } finally {
+      setSavingIntervention(false);
+    }
+  };
+
   return (
     <div className="page-stack">
       <section className="card">
@@ -302,6 +340,9 @@ function getPageNumbers() {
                       <button className="btn" onClick={() => setSelected(booking)}>
                         View
                       </button>
+                      <button className="btn danger" onClick={() => openIntervention(booking)}>
+                        Intervene
+                      </button>
 
                       {booking.status === "PENDING" && (
                         <>
@@ -410,6 +451,75 @@ function getPageNumbers() {
                 <tr><td>Receipt Uploaded</td><td>{selected.receipt?.imageUrl ? "Yes" : "No"}</td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {interventionBooking && (
+        <div className="admin-modal-backdrop" onClick={() => !savingIntervention && setInterventionBooking(null)}>
+          <div className="admin-document-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="section-header">
+              <div>
+                <h3>Booking intervention</h3>
+                <p>{interventionBooking.bookingCode || `Booking ${interventionBooking.id}`} · {interventionBooking.operator?.companyName || "Unknown operator"}</p>
+              </div>
+              <button className="btn" type="button" disabled={savingIntervention} onClick={() => setInterventionBooking(null)}>
+                Close
+              </button>
+            </div>
+
+            <form className="admin-form-grid" onSubmit={handleInterventionSubmit}>
+              <label>
+                <span>New booking status</span>
+                <select
+                  id="intervention-status"
+                  value={interventionStatus}
+                  onChange={(event) => setInterventionStatus(event.target.value)}
+                  required
+                >
+                  <option value="" disabled>Select status</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="ACCEPTED">Accepted</option>
+                  <option value="REJECTED">Rejected</option>
+                  <option value="ALTERNATIVE_SUGGESTED">Alternative suggested</option>
+                  <option value="PENDING_PAYMENT">Pending payment</option>
+                  <option value="PAID">Paid</option>
+                  <option value="IN_PROGRESS">In progress</option>
+                  <option value="OVERDUE">Overdue</option>
+                  <option value="CANCELLED">Force cancellation</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="NO_SHOW">No show</option>
+                </select>
+              </label>
+
+              <label className="wide">
+                <span>Reason (required)</span>
+                <textarea
+                  id="intervention-reason"
+                  value={interventionReason}
+                  onChange={(event) => setInterventionReason(event.target.value)}
+                  minLength={5}
+                  maxLength={1000}
+                  rows={4}
+                  required
+                  placeholder="Explain why this booking needs an administrator override."
+                />
+              </label>
+
+              <p className="master-muted wide">This changes the booking status only; payment or refund records are not changed.</p>
+              <div className="admin-form-actions">
+                <button className="btn" type="button" disabled={savingIntervention} onClick={() => setInterventionBooking(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="btn danger"
+                  type="submit"
+                  disabled={savingIntervention || !interventionStatus || interventionReason.trim().length < 5}
+                >
+                  {savingIntervention ? "Saving..." : "Apply intervention"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

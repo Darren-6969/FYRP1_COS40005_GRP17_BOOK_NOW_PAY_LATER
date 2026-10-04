@@ -125,13 +125,6 @@ export default function Dashboard() {
     .reduce((sum, p) => sum + Number(p?.amount || 0), 0) || 0;
   const totalRevenue = dashboardStats?.revenue ?? calculatedRevenue;
 
-  const weeklyTrend = (dashboardStats?.sevenDayTrend || []).map((item) => ({
-    ...item,
-    label: new Date(`${item.date}T00:00:00`).toLocaleDateString("en-MY", {
-      day: "numeric",
-      month: "short",
-    }),
-  }));
   const paymentFailureRate = Number(dashboardStats?.paymentFailureRate || 0);
   const callbackBacklog = dashboardStats?.callbackBacklog ?? 0;
   const scheduledTaskFailures = dashboardStats?.scheduledTaskFailures ?? 0;
@@ -201,7 +194,7 @@ export default function Dashboard() {
       isForecast: false
     }));
     
-    const forecast = (forecastData?.demandForecast || []).slice(0, 14).map(item => ({
+    const forecast = (forecastData?.demandForecast || []).slice(0, 7).map(item => ({
       date: item.date?.slice(5) || item.date,
       predicted: Math.round(item.predictedBookings || 0),
       lowerBound: Math.round(item.lowerBound || 0),
@@ -280,10 +273,13 @@ export default function Dashboard() {
 
   const getForecastInsight = () => {
     if (!forecastData?.demandForecast?.length) return null;
-    const firstWeek = forecastData.demandForecast.slice(0, 7).reduce((sum, d) => sum + (d.predictedBookings || 0), 0);
-    const secondWeek = forecastData.demandForecast.slice(7, 14).reduce((sum, d) => sum + (d.predictedBookings || 0), 0);
-    const trend = secondWeek > firstWeek ? 'increasing' : 'decreasing';
-    const peakDay = forecastData.demandForecast.reduce((max, d) => 
+    const nextSevenDays = forecastData.demandForecast.slice(0, 7);
+    const firstDay = nextSevenDays[0];
+    const lastDay = nextSevenDays[nextSevenDays.length - 1];
+    const trend = lastDay.predictedBookings > firstDay.predictedBookings
+      ? 'increasing'
+      : lastDay.predictedBookings < firstDay.predictedBookings ? 'decreasing' : 'steady';
+    const peakDay = nextSevenDays.reduce((max, d) =>
       (d.predictedBookings > max.predictedBookings) ? d : max, forecastData.demandForecast[0]);
     return { trend, peakDay: peakDay?.date?.slice(5), peakValue: peakDay?.predictedBookings };
   };
@@ -519,28 +515,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section style={styles.chartSection} aria-labelledby="seven-day-trend-title">
-        <div style={styles.sectionHeader}>
-          <h2 id="seven-day-trend-title" style={styles.sectionTitle}>Seven-day bookings and revenue</h2>
-        </div>
-        {weeklyTrend.length > 0 ? (
-          <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart data={weeklyTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} />
-              <YAxis yAxisId="bookings" tick={{ fontSize: 11, fill: "#6b7280" }} allowDecimals={false} />
-              <YAxis yAxisId="revenue" orientation="right" tick={{ fontSize: 11, fill: "#6b7280" }} tickFormatter={(value) => `RM ${Number(value).toLocaleString()}`} />
-              <Tooltip formatter={(value, name) => name === "Revenue" ? [`RM ${Number(value).toLocaleString()}`, name] : [value, name]} />
-              <Legend />
-              <Line yAxisId="bookings" type="monotone" dataKey="bookings" name="Bookings" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3 }} />
-              <Line yAxisId="revenue" type="monotone" dataKey="revenue" name="Revenue" stroke="#059669" strokeWidth={2.5} dot={{ r: 3 }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        ) : (
-          <div style={styles.noData}>Seven-day trend data is unavailable.</div>
-        )}
-      </section>
-
       {/* ROW 2: Booking Overview & Forecast Line Chart (MOST IMPORTANT) */}
       <div style={styles.chartSection}>
         <div style={styles.sectionHeader}>
@@ -629,7 +603,7 @@ export default function Dashboard() {
         {/* Forecast Insight */}
         {forecastInsight && forecastData?.demandForecast?.length > 0 && (
           <div style={styles.forecastNote}>
-            🤖 <strong>SARIMA Insight:</strong> Demand is forecasted to be <strong>{forecastInsight.trend}</strong> over the next 14 days.
+            🤖 <strong>SARIMA Insight:</strong> Demand is forecasted to be <strong>{forecastInsight.trend}</strong> over the next 7 days.
             Peak expected on <strong>{forecastInsight.peakDay}</strong> with approximately <strong>{Math.round(forecastInsight.peakValue)}</strong> bookings.
             {forecastData?.forecastSummary?.modelType && ` (Model: ${forecastData.forecastSummary.modelType})`}
           </div>

@@ -11,6 +11,20 @@ const bookingInclude = {
   invoice: true,
 };
 
+const ADMIN_BOOKING_STATUSES = [
+  "PENDING",
+  "ACCEPTED",
+  "REJECTED",
+  "ALTERNATIVE_SUGGESTED",
+  "PENDING_PAYMENT",
+  "PAID",
+  "IN_PROGRESS",
+  "OVERDUE",
+  "CANCELLED",
+  "COMPLETED",
+  "NO_SHOW",
+];
+
 // ── Get bookings ──────────────────────────────────────────────────────────────
 // OWASP 2025 A01 – Broken Access Control: NORMAL_SELLER sees only their operator's bookings
 export async function getBookings(req, res, next) {
@@ -28,6 +42,75 @@ export async function getBookings(req, res, next) {
     });
 
     res.json(bookings);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function overrideBookingStatus(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const status = String(req.body?.status || "").trim().toUpperCase();
+    const reason = String(req.body?.reason || "").trim();
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ message: "Invalid booking id" });
+    }
+
+    if (!ADMIN_BOOKING_STATUSES.includes(status)) {
+      return res.status(400).json({ message: "Choose a valid booking status" });
+    }
+
+    if (reason.length < 5) {
+      return res.status(400).json({ message: "A reason of at least 5 characters is required" });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findUnique({
+        where: { id },
+        select: { id: true, status: true },
+      });
+
+      if (!booking) return { notFound: true };
+      if (booking.status === status) return { unchanged: true };
+
+      const updated = await tx.booking.update({
+        where: { id },
+        data: { status },
+        include: bookingInclude,
+      });
+      const isForcedCancellation = status === "CANCELLED";
+
+      await createAuditLog({
+        req,
+        action: isForcedCancellation
+          ? "ADMIN_BOOKING_FORCE_CANCELLED"
+          : "ADMIN_BOOKING_STATUS_OVERRIDDEN",
+        entityType: "Booking",
+        entityId: id,
+        before: { status: booking.status },
+        after: { status: updated.status },
+        details: {
+          reason,
+          previousStatus: booking.status,
+          status: updated.status,
+          interventionType: isForcedCancellation
+            ? "FORCED_CANCELLATION"
+            : "FORCED_STATUS_CHANGE",
+        },
+      }, tx);
+
+      return { booking: updated };
+    });
+
+    if (result.notFound) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+    if (result.unchanged) {
+      return res.status(409).json({ message: "Booking already has that status" });
+    }
+
+    res.json({ booking: result.booking });
   } catch (err) {
     next(err);
   }

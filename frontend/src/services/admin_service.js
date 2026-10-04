@@ -6,6 +6,8 @@ export const getSalesReport = (params = {}) => api.get("/dashboard/sales-report"
 export const getBookings = (params = {}) => api.get("/bookings", { params });
 export const acceptBooking = (id) => api.patch(`/bookings/${id}/accept`);
 export const rejectBooking = (id) => api.patch(`/bookings/${id}/reject`);
+export const overrideBookingStatus = (id, payload) =>
+  api.patch(`/bookings/${id}/admin-override`, payload);
 
 export const getPayments = (params = {}) => api.get("/payments", { params });
 export const getOverduePayments = () => api.get("/payments/overdue");
