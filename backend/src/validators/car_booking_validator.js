@@ -10,6 +10,9 @@ export const carQuoteSchema = z.object({
   ft: hhmm.default("10:00"),
   tt: hhmm.default("10:00"),
   pickupPointId: z.union([z.string(), z.number()]).optional().nullable(),
+  dropoffPointId: z.union([z.string(), z.number()]).optional().nullable(),
+  requestedLocation: z.string().trim().max(300).optional().nullable(),
+  cdw: z.boolean().default(false),
   addOns: z.record(z.string(), z.number().int().min(0).max(20)).default({}),
   driverDob: plainDate.optional().nullable(),
   age: z.number().int().min(16).max(120).optional().nullable(),
@@ -21,6 +24,11 @@ export const carBookingSchema = z.object({
   pickupAt: z.string().datetime({ offset: true }),
   returnAt: z.string().datetime({ offset: true }),
   pickupPointId: z.union([z.string(), z.number()]).optional().nullable(),
+  // Defaults to the pickup point when omitted (same-point return).
+  dropoffPointId: z.union([z.string(), z.number()]).optional().nullable(),
+  // A location not on the operator's list; the operator prices it in reply.
+  requestedLocation: z.string().trim().min(3).max(300).optional().nullable(),
+  cdw: z.boolean().default(false),
   addOns: z
     .array(z.object({ id: z.union([z.string(), z.number()]), quantity: z.number().int().min(1).max(20) }))
     .max(20)
@@ -37,9 +45,15 @@ export const carBookingSchema = z.object({
       dateOfBirth: plainDate,
       licenceIssuedIn: z.string().trim().min(2).max(60),
     }),
+    // A request, not an add-on: no price, arranged by the operator (FR-LIST-003).
+    chauffeur: z
+      .object({ requested: z.boolean(), note: z.string().trim().max(500).optional().nullable() })
+      .default({ requested: false }),
     agreements: z.object({
       termsOfServiceAcceptedAt: z.string().datetime({ offset: true }),
       rentalTermsAcceptedAt: z.string().datetime({ offset: true }),
+      // The forfeiture rule is acknowledged on its own (FR-CUST-004, 4.2.5).
+      forfeitureAcceptedAt: z.string().datetime({ offset: true }),
     }),
   }),
 });

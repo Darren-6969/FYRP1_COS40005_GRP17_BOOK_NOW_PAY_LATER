@@ -3237,3 +3237,59 @@
     justify-content: center !important;
   }
 }
+/* Car rental booking detail (SRS 4.2.6). Kept within the Phase 1 look until
+   the customer dashboard is restyled. */
+.car-booking-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.car-booking-head {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.car-booking-thumb {
+  width: 112px;
+  height: 76px;
+  object-fit: cover;
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+
+.car-booking-total {
+  font-size: 1.05rem;
+}
+
+.customer-info-list .car-booking-total {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.car-booking-part {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 13px 14px;
+  margin-top: 10px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.car-booking-part p {
+  margin: 2px 0 0;
+}
+
+@media (max-width: 640px) {
+  .car-booking-part {
+    grid-template-columns: 1fr auto;
+  }
+
+  .car-booking-part .customer-primary-btn {
+    grid-column: 1 / -1;
+    text-align: center;
+  }
+}

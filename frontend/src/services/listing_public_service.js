@@ -10,10 +10,11 @@ import api from "./api";
 import { MOCK_TOURS, MOCK_NEWS, PICKUP_CITIES } from "./mock/listings.mock";
 import { klDateTimeToIso, klToday } from "../utils/formatPublic";
 import { FACET_GROUPS, hasDates } from "../utils/carSearchParams";
+import { depositFor, priceDuration, rentalHours } from "../utils/carPricing";
 
 const MOCK_LATENCY_MS = 350;
 const FEATURED_COUNT = 3;
-const FEATURED_QUOTE_DAYS = 3;
+const FEATURED_QUOTE_HOURS = 3 * 24;
 const RECOMMEND_WINDOW_DAYS = 14;
 const DAY_MS = 86400000;
 const FLEET_TTL_MS = 30000;
@@ -35,35 +36,19 @@ function loadFleet() {
   return fleetCache.promise;
 }
 
-function isWeekend(plainDate, offsetDays) {
-  const d = new Date(`${plainDate}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + offsetDays);
-  const dow = d.getUTCDay();
-  return dow === 0 || dow === 6;
-}
-
 function addDays(plainDate, n) {
   const d = new Date(`${plainDate}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 
-// Display quote for the rental itself over `days` days. Integer sen throughout.
-// With a start date, weekend days use the weekend rate.
-// TODO(api): the server computes this from rate_rules; remove once the
-// listings endpoint returns a quote per result.
-export function quoteFor(listing, days, from = null) {
-  const { weekdaySen, weekendSen } = listing.booking.rateRules;
-  let totalSen = 0;
-  let weekendDays = 0;
-  for (let i = 0; i < days; i++) {
-    const weekend = Boolean(from) && isWeekend(from, i);
-    if (weekend) weekendDays++;
-    totalSen += weekend ? weekendSen : weekdaySen;
-  }
-  // Deposits are shown in whole ringgit.
-  const depositSen = Math.round((totalSen * listing.booking.downPaymentPct) / 10000) * 100;
-  return { days, weekendDays, totalSen, depositSen, balanceSen: totalSen - depositSen };
+// Display estimate of the rental for a duration in hours, using the same
+// rules as the server (months, weeks, days, leftover hours). Overtime, point
+// charges and add-ons are left to the detail page quote.
+export function quoteFor(listing, hours) {
+  const { lines, rentalSen } = priceDuration(hours, listing.booking.rateCard);
+  const depositSen = depositFor(rentalSen, listing.booking.downPaymentPct);
+  return { hours, rateLines: lines, totalSen: rentalSen, depositSen, balanceSen: rentalSen - depositSen };
 }
 
 // Landing page: cheapest deposit per day among cars free within two weeks.
@@ -71,7 +56,7 @@ export async function getFeaturedCars() {
   const { items } = await loadFleet();
   const cars = recommend(items)
     .slice(0, FEATURED_COUNT)
-    .map((listing) => ({ listing, quote: quoteFor(listing, FEATURED_QUOTE_DAYS) }));
+    .map((listing) => ({ listing, quote: quoteFor(listing, FEATURED_QUOTE_HOURS) }));
   return { data: cars };
 }
 
@@ -112,6 +97,13 @@ function facetMatches(listing, group, value) {
   return f.test ? f.test(listing, value) : f.get(listing) === value;
 }
 
+export function rentalHoursFor(c) {
+  if (!hasDates(c)) return 0;
+  const start = klDateTimeToIso(c.from, c.ft);
+  const end = klDateTimeToIso(c.to, c.tt);
+  return start && end ? rentalHours(start, end) : 0;
+}
+
 export function rentalDays(c) {
   if (!hasDates(c)) return 0;
   const start = klDateTimeToIso(c.from, c.ft);
@@ -123,12 +115,6 @@ export function rentalDays(c) {
 
 function depositPerDaySen(listing) {
   return Math.round((listing.booking.dailyRateSen * listing.booking.downPaymentPct) / 100);
-}
-
-// Still out with a customer on the requested pick-up date (rolling return hold).
-function isHeld(listing, c) {
-  const from = listing.booking.availableFrom;
-  return hasDates(c) && Boolean(from) && from > c.from;
 }
 
 // Requested plain dates on which the car has no stock left.
@@ -158,7 +144,7 @@ function passes(listing, c, days, skip) {
     if (c.pmax !== null && listing.booking.dailyRateSen > c.pmax * 100) return false;
   }
   if (skip !== "dep" && days) {
-    const dep = quoteFor(listing, days, c.from).depositSen;
+    const dep = quoteFor(listing, rentalHoursFor(c)).depositSen;
     if (c.dmin !== null && dep < c.dmin * 100) return false;
     if (c.dmax !== null && dep > c.dmax * 100) return false;
   }
@@ -176,9 +162,8 @@ const newestFirst = (a, b) => new Date(b.createdAt) - new Date(a.createdAt);
 // Cheapest deposit per day first, never three cars in a row from one operator,
 // and only cars that are free within the next fourteen days.
 function recommend(list) {
-  const horizon = klToday(RECOMMEND_WINDOW_DAYS);
   const pool = list
-    .filter((l) => !l.booking.availableFrom || l.booking.availableFrom <= horizon)
+    .filter((l) => bookedDuring(l, klToday(), RECOMMEND_WINDOW_DAYS).length < RECOMMEND_WINDOW_DAYS)
     .sort((a, b) => depositPerDaySen(a) - depositPerDaySen(b) || newestFirst(a, b));
   const out = [];
   while (pool.length) {
@@ -216,9 +201,8 @@ function toResult(listing, c, days) {
     rateSen: listing.booking.dailyRateSen,
     depositPct: listing.booking.downPaymentPct,
     depositPerDaySen: depositPerDaySen(listing),
-    quote: days ? quoteFor(listing, days, c.from) : null,
+    quote: days ? quoteFor(listing, rentalHoursFor(c)) : null,
     remaining: listing.quantity,
-    heldUntil: isHeld(listing, c) ? listing.booking.availableFrom : null,
   };
 }
 
@@ -240,7 +224,7 @@ function buildFacets(fleet, c, days) {
       fleet.forEach((l) => seen.set(String(l.operator.id), l.operator.companyName));
       values = [...seen].map(([value, label]) => ({ value, label }));
     }
-    const base = fleet.filter((l) => passes(l, c, days, group) && !isHeld(l, c));
+    const base = fleet.filter((l) => passes(l, c, days, group));
     return {
       group,
       label: f.label,
@@ -280,15 +264,14 @@ function findTightest(fleet, c, days) {
   return best;
 }
 
-// Display quotes here ignore peak dates; the detail page quote is exact.
+// Display quotes here cover the rental only; the detail page quote adds
+// overtime, point charges and add-ons.
 export async function searchCars(c) {
   const { items: fleet, cities } = await loadFleet();
   const days = rentalDays(c);
   // Cars with no stock left on any requested date are not offered at all.
   const matching = fleet.filter((l) => passes(l, c, days) && !bookedDuring(l, c.from, days).length);
-  const available = matching.filter((l) => !isHeld(l, c));
-  const held = matching.filter((l) => isHeld(l, c));
-  const list = sortList(available, c.sort);
+  const list = sortList(matching, c.sort);
   const anyFilter = isAnyFilter(c);
 
   const groups = [];
@@ -303,19 +286,11 @@ export async function searchCars(c) {
       });
     }
   }
-  if (held.length) {
-    groups.push({
-      key: "held",
-      title: "Available from a later date",
-      note: "These are still out with a customer. The operator confirms the vehicle is back before it can be booked again.",
-      items: sortList(held, c.sort === "recommended" ? "payable" : c.sort).map((l) => toResult(l, c, days)),
-    });
-  }
-
   const priceFleet = fleet.filter((l) => passes(l, c, days, "price"));
   const price = bounds((priceFleet.length ? priceFleet : fleet).map((l) => l.booking.dailyRateSen / 100));
   const depFleet = days ? fleet.filter((l) => passes(l, c, days, "dep")) : [];
-  const deposit = days ? bounds(depFleet.map((l) => quoteFor(l, days, c.from).depositSen / 100)) : null;
+  const hours = rentalHoursFor(c);
+  const deposit = days ? bounds(depFleet.map((l) => quoteFor(l, hours).depositSen / 100)) : null;
 
   const result = {
     days,
@@ -352,6 +327,9 @@ export function quoteCarBooking(listingId, sel) {
   if (HHMM.test(sel.ft || "")) body.ft = sel.ft;
   if (HHMM.test(sel.tt || "")) body.tt = sel.tt;
   if (sel.pickupPointId) body.pickupPointId = String(sel.pickupPointId);
+  if (sel.dropoffPointId) body.dropoffPointId = String(sel.dropoffPointId);
+  if (sel.requestedLocation && sel.requestedLocation.trim()) body.requestedLocation = sel.requestedLocation.trim();
+  body.cdw = Boolean(sel.cdw);
   if (PLAIN_DATE.test(sel.driverDob || "")) body.driverDob = sel.driverDob;
   else if (Number.isInteger(sel.age)) body.age = sel.age;
   return api.post(`/public/cars/${encodeURIComponent(listingId)}/quote`, body);

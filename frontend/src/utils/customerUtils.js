@@ -77,7 +77,8 @@ export function canCustomerPay(booking) {
 
   return (
     bookingStatus === "PENDING_PAYMENT" &&
-    ["", "UNPAID", "PENDING"].includes(paymentStatus)
+    // PARTIALLY_PAID: the deposit is in (or was 0%) and the balance is owed.
+    ["", "UNPAID", "PENDING", "PARTIALLY_PAID"].includes(paymentStatus)
   );
 }
 

@@ -42,7 +42,8 @@ export default function PaymentSchedule({
   const deposit = formatSen(quote.depositSen);
   const balance = formatSen(quote.balanceSen);
   const total = formatSen(quote.totalSen);
-  const hasExtras = quote.addOnsSen > 0 || quote.surchargeSen > 0 || quote.pickupFeeSen > 0;
+  const hasExtras =
+    quote.addOnsSen > 0 || quote.surchargeSen > 0 || quote.pickupFeeSen > 0 || quote.dropoffFeeSen > 0 || quote.overtimeSen > 0;
   const partial = refundRule?.type === "PARTIAL";
   const respond = (
     <Step
@@ -53,11 +54,15 @@ export default function PaymentSchedule({
     />
   );
 
-  if (quote.payInFull) {
+  // Pay everything on acceptance: either pickup is too close for a separate
+  // balance, or the operator takes the full amount up front (100%).
+  if (quote.payInFull || !quote.balanceSen) {
     return (
       <div>
         <p role="status" className={styles.fullNotice}>
-          If accepted, you&apos;ll pay the full {total} at once, because pickup is within the balance window.
+          {quote.payInFull
+            ? `If accepted, you'll pay the full ${total} at once, because pickup is within the balance window.`
+            : `${operatorName} takes the full ${total} when the booking is accepted. There is no separate balance.`}
         </p>
         <ol className={styles.steps}>
           {respond}
@@ -76,20 +81,28 @@ export default function PaymentSchedule({
     <div>
       <ol className={styles.steps}>
         {respond}
-        <Step n={2} title={`Pay the ${deposit} deposit within ${quote.depositWindowHours} hours of acceptance`} amount={deposit} />
+        {quote.depositSen ? (
+          <Step n={2} title={`Pay the ${deposit} deposit within ${quote.depositWindowHours} hours of acceptance`} amount={deposit} />
+        ) : (
+          <Step n={2} title="No deposit for this car" note={`${operatorName} collects everything as the balance.`} />
+        )}
         <Step
           n={3}
           title={`Pay the balance ${balance} by ${due}`}
           extra={showCountdown ? countdown(quote.balanceDueAt) : null}
           note={
-            hasExtras ? "Includes your add-ons, pick-up point and surcharges" : "Add-ons and a paid pick-up point are added here"
+            hasExtras
+              ? "Includes your add-ons, pickup and drop-off charges, and any night handover charge"
+              : "Add-ons and any pickup or drop-off charge are added here"
           }
           amount={balance}
         />
         <Step n={4} title={`Upload your driving licence by ${formatShortDateTime(quote.licenceDueAt)}`} note={licenceNote} />
       </ol>
       <p className={styles.consequence}>
-        {partial
+        {!quote.depositSen
+          ? `If the balance or your licence is not in by ${due}, the booking is cancelled.`
+          : partial
           ? `If the balance or your licence is not in by ${due}, the booking is cancelled. The operator refunds ${refundRule.refundPct}% of the ${deposit} deposit, once paid, and keeps the rest.`
           : `If the balance or your licence is not in by ${due}, the booking is cancelled and the operator keeps the ${deposit} deposit, once paid.`}
       </p>

@@ -104,13 +104,16 @@ export async function acceptBookingAndRequestPayment({
   const totalAmount = Number(booking.totalAmount);
   const parsedPercent = Number(downPaymentPercent);
 
+  // SRS V2.9 (4.3.5): operators set the down payment from 0 to 100 percent.
+  // 0 means everything is paid as the balance; 100 means everything is paid
+  // on acceptance.
   if (
     !Number.isFinite(parsedPercent) ||
-    parsedPercent <= 0 ||
-    parsedPercent >= 100
+    parsedPercent < 0 ||
+    parsedPercent > 100
   ) {
     const error = new Error(
-      "downPaymentPercent must be greater than 0 and less than 100"
+      "downPaymentPercent must be between 0 and 100"
     );
 
     error.statusCode = 400;
@@ -226,6 +229,20 @@ export async function acceptBookingAndRequestPayment({
     shortLeadBooking,
   });
 
+  // A part with nothing to pay is settled when the schedule is created, so
+  // the customer is only ever asked for the part that carries an amount and
+  // the existing PAID / PARTIALLY_PAID rules still apply.
+  const acceptedAt = new Date();
+  const downSettled = downAmount <= 0;
+  const finalSettled = finalAmount <= 0;
+  const zeroParts = {
+    downPaymentStatus: downSettled ? "PAID" : "UNPAID",
+    finalPaymentStatus: finalSettled ? "PAID" : "UNPAID",
+    downPaymentPaidAt: downSettled ? acceptedAt : null,
+    finalPaymentPaidAt: finalSettled ? acceptedAt : null,
+    status: downSettled && !finalSettled ? "PARTIALLY_PAID" : "UNPAID",
+  };
+
   // =========================================================
   // 5. Payment + invoice + booking update transaction
   // =========================================================
@@ -247,7 +264,7 @@ export async function acceptBookingAndRequestPayment({
             booking.payment?.method ||
             "PENDING",
 
-          status: "UNPAID",
+          status: zeroParts.status,
 
           downPaymentAmount: downAmount,
           finalPaymentAmount: finalAmount,
@@ -255,11 +272,11 @@ export async function acceptBookingAndRequestPayment({
           downPaymentDueDate: downDue,
           finalPaymentDueDate: finalDue,
 
-          downPaymentStatus: "UNPAID",
-          finalPaymentStatus: "UNPAID",
+          downPaymentStatus: zeroParts.downPaymentStatus,
+          finalPaymentStatus: zeroParts.finalPaymentStatus,
 
-          downPaymentPaidAt: null,
-          finalPaymentPaidAt: null,
+          downPaymentPaidAt: zeroParts.downPaymentPaidAt,
+          finalPaymentPaidAt: zeroParts.finalPaymentPaidAt,
 
           downPaymentTransactionId: null,
           finalPaymentTransactionId: null,
@@ -272,7 +289,7 @@ export async function acceptBookingAndRequestPayment({
 
           method: "PENDING",
 
-          status: "UNPAID",
+          status: zeroParts.status,
 
           downPaymentAmount: downAmount,
           finalPaymentAmount: finalAmount,
@@ -280,8 +297,10 @@ export async function acceptBookingAndRequestPayment({
           downPaymentDueDate: downDue,
           finalPaymentDueDate: finalDue,
 
-          downPaymentStatus: "UNPAID",
-          finalPaymentStatus: "UNPAID",
+          downPaymentStatus: zeroParts.downPaymentStatus,
+          finalPaymentStatus: zeroParts.finalPaymentStatus,
+          downPaymentPaidAt: zeroParts.downPaymentPaidAt,
+          finalPaymentPaidAt: zeroParts.finalPaymentPaidAt,
         },
       });
 

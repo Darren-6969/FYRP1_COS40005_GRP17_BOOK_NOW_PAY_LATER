@@ -1,6 +1,30 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { register } from "../../services/auth_service";
+import { login, register } from "../../services/auth_service";
+import { saveSession, unbindTab } from "../../utils/session";
+
+// Only same-site paths, never "//host" or a full URL.
+function isSafeRedirectPath(path) {
+  return typeof path === "string" && path.startsWith("/") && !path.startsWith("//");
+}
+
+// Sign the new customer in with the details they just registered.
+// Returns false when sign-in fails so the caller can fall back to the
+// login page.
+async function signInAfterRegister(email, password) {
+  const { data } = await login({ email, password });
+  const token = data?.token || data?.accessToken || data?.data?.token || null;
+  const user = data?.user || data?.data?.user || null;
+  if (!token || !user?.id) return false;
+  const role = String(user.role || "CUSTOMER").toUpperCase();
+  saveSession({
+    token,
+    refreshToken: data?.refreshToken || data?.refresh_token || null,
+    user: { ...user, role },
+    role,
+  });
+  return role === "CUSTOMER";
+}
 import "../../assets/styles/global.css";
 
 export default function Register() {
@@ -86,6 +110,24 @@ export default function Register() {
         password,
       });
 
+      // Host (GoCar) sign-ups keep the login step, which claims the booking.
+      if (!hostToken) {
+        let signedIn = false;
+        try {
+          unbindTab();
+          signedIn = await signInAfterRegister(email, password);
+        } catch {
+          signedIn = false;
+        }
+        if (signedIn) {
+          // Signed up from the booking form: straight back to it, with the
+          // trip in the URL and the form draft restored. Otherwise home.
+          const target = redirectParam && isSafeRedirectPath(redirectParam) ? redirectParam : "/";
+          navigate(target, { replace: true });
+          return;
+        }
+      }
+
       const params = new URLSearchParams();
 
       if (hostToken) params.set("hostToken", hostToken);
@@ -132,7 +174,7 @@ export default function Register() {
 
             {redirectParam && !hostToken && (
               <p className="bnpl-auth-subtitle">
-                After registration, please login to continue your BNPL booking.
+                After you register, you go straight back to your booking. Your trip and details are kept.
               </p>
             )}
 

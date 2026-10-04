@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
 import { formatSen, formatShortDateTime } from "../../utils/formatPublic";
+import { durationText, rateLineLabel } from "../../utils/carPricing";
 import styles from "../../assets/styles/public/BookingSummary.module.css";
 
 function plural(n, word) {
@@ -14,20 +15,23 @@ export default function BookingSummary({ listing, quote, eligibility, editHref }
   const primary = listing.images.find((img) => img.isPrimary) || listing.images[0];
   const days = quote?.days || 0;
   const daysText = plural(days, "day");
+  const lengthText = quote ? durationText(quote.hours) : "";
+  const sameReturn = quote && quote.dropoffPoint && quote.dropoffPoint.id === quote.pickupPoint.id;
 
   const lines = [];
   if (quote) {
-    lines.push({
-      k: quote.weekendDays
-        ? `Rental ${daysText}, ${quote.weekendDays} at the weekend rate`
-        : `Rental ${daysText} × ${formatSen(b.rateRules.weekdaySen)}`,
-      v: quote.rentalSen,
-    });
+    (quote.rateLines || []).forEach((l) => lines.push({ k: `Rental ${rateLineLabel(l, formatSen)}`, v: l.amountSen }));
+    if (quote.overtimeSen)
+      lines.push({
+        k: `Night handover ${quote.nightHandovers === 1 ? "charge" : `× ${quote.nightHandovers}`}`,
+        v: quote.overtimeSen,
+      });
     quote.addOnLines.forEach((a) => {
-      const unit = b.addOns.find((x) => x.id === a.id)?.unit;
-      lines.push({ k: `${a.label} × ${a.qty}${unit === "per_day" ? `, ${daysText}` : ""}`, v: a.amountSen });
+      const unit = a.id === "cdw" ? "per_day" : b.addOns.find((x) => x.id === a.id)?.unit;
+      lines.push({ k: `${a.label}${a.qty > 1 ? ` × ${a.qty}` : ""}${unit === "per_day" ? `, ${daysText}` : ""}`, v: a.amountSen });
     });
-    if (quote.pickupFeeSen) lines.push({ k: quote.pickupPoint.label, v: quote.pickupFeeSen });
+    if (quote.pickupFeeSen) lines.push({ k: `Pickup at ${quote.pickupPoint.label}`, v: quote.pickupFeeSen });
+    if (quote.dropoffFeeSen) lines.push({ k: `Drop-off at ${quote.dropoffPoint.label}`, v: quote.dropoffFeeSen });
     if (quote.surchargeSen)
       lines.push({
         k: `Young driver surcharge ${daysText} × ${formatSen(b.youngDriver.surchargeSen)}`,
@@ -59,7 +63,7 @@ export default function BookingSummary({ listing, quote, eligibility, editHref }
         )}
         <div className={styles.carText}>
           <div className={styles.carTitle}>
-            {title} <span className={styles.similar}>or similar</span>
+            {title}
           </div>
           <span className={styles.muted}>{listing.vehicleType}</span>
           <div className={styles.operatorRow}>
@@ -80,9 +84,15 @@ export default function BookingSummary({ listing, quote, eligibility, editHref }
         </div>
         <dl className={styles.dl}>
           <div className={styles.row}>
-            <dt>Pick-up point</dt>
+            <dt>{quote?.requestedLocation ? "Requested location" : "Pickup point"}</dt>
             <dd>{quote?.pickupPoint.label || "Not set"}</dd>
           </div>
+          {quote && !quote.requestedLocation && (
+            <div className={styles.row}>
+              <dt>Drop-off point</dt>
+              <dd>{sameReturn ? "Same as pickup" : quote.dropoffPoint?.label || "Not set"}</dd>
+            </div>
+          )}
           <div className={styles.row}>
             <dt>Pick-up</dt>
             <dd>{quote ? formatShortDateTime(quote.pickupAt) : "Not set"}</dd>
@@ -93,7 +103,7 @@ export default function BookingSummary({ listing, quote, eligibility, editHref }
           </div>
           <div className={styles.row}>
             <dt>Rental length</dt>
-            <dd>{quote ? daysText : "Not set"}</dd>
+            <dd>{quote ? lengthText : "Not set"}</dd>
           </div>
         </dl>
         <p className={`${styles.ageLine} ${eligibility?.underage ? styles.ageLineError : ""}`}>{ageLine}</p>
@@ -115,11 +125,16 @@ export default function BookingSummary({ listing, quote, eligibility, editHref }
                 <dd>{formatSen(quote.totalSen)}</dd>
               </div>
             </dl>
+            {quote.requestedLocation && (
+              <p className={styles.muted}>
+                The operator replies with any charge for your requested location. You accept it before paying anything.
+              </p>
+            )}
           </div>
 
           <div className={styles.payBox}>
             <div className={styles.payNow}>
-              <div className={styles.payLabel}>{quote.payInFull ? "Full amount" : "Deposit"}</div>
+              <div className={styles.payLabel}>{quote.payInFull || !quote.balanceSen ? "Full amount" : quote.depositSen ? "Deposit" : "No deposit"}</div>
               <div className={styles.payFigureRow}>
                 <span className={styles.payFigure}>{formatSen(quote.payInFull ? quote.totalSen : quote.depositSen)}</span>
                 <span className={styles.payNote}>
@@ -131,12 +146,12 @@ export default function BookingSummary({ listing, quote, eligibility, editHref }
             </div>
             <div className={styles.later}>
               <div className={styles.laterLine}>
-                {quote.payInFull
+                {quote.payInFull || !quote.balanceSen
                   ? "Nothing left to pay later"
                   : `Balance ${formatSen(quote.balanceSen)} by ${formatShortDateTime(quote.balanceDueAt)}`}
               </div>
               <div className={styles.muted}>
-                {quote.payInFull ? "Upload your driving licence before pick-up" : "Includes add-ons and fees"}
+                {quote.payInFull || !quote.balanceSen ? "Upload your driving licence before pickup" : "Includes add-ons and fees"}
               </div>
             </div>
           </div>

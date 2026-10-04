@@ -100,6 +100,8 @@ export function parseBookingSelection(params) {
     tt: p.get("tt") || DEFAULT_TIME,
     age: parseAge(p.get("age")),
     pickupPointId: p.get("pp") || "",
+    dropoffPointId: p.get("dp") || "",
+    cdw: p.get("cdw") === "1",
     addOns,
   };
 }
@@ -114,6 +116,8 @@ export function toBookingParams(sel) {
   }
   if (sel.age !== null && sel.age !== undefined && sel.age !== "") p.set("age", String(sel.age));
   if (sel.pickupPointId) p.set("pp", sel.pickupPointId);
+  if (sel.dropoffPointId) p.set("dp", sel.dropoffPointId);
+  if (sel.cdw) p.set("cdw", "1");
   const ad = Object.entries(sel.addOns || {})
     .filter(([, n]) => n > 0)
     .map(([id, n]) => `${id}:${n}`)

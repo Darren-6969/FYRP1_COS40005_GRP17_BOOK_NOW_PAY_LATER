@@ -11,9 +11,12 @@ import {
   klHhmm,
   klPlainDate,
   klToday,
+  NIGHT_END,
+  NIGHT_START,
+  nightHandovers,
   paymentTiming,
   priceRental,
-  rateRulesFor,
+  rateCardFor,
   rentalDates,
   rentalDays,
   toSen,
@@ -106,12 +109,56 @@ function refundRuleFor(config) {
 
 // ── DTO ──────────────────────────────────────────────────────────────
 
-function pickupPointsFor(branch) {
+// Fixed points (FR-LIST-004). Each point may serve pickup, drop-off or both,
+// with its own charge for each. feeSen is kept as the pickup charge for the
+// pages built before V2.9.
+function pointsFor(branch) {
   if (branch.pickupPoints.length) {
-    return branch.pickupPoints.map((p) => ({ id: String(p.id), label: p.label, note: p.note || "", feeSen: toSen(p.fee) }));
+    return branch.pickupPoints.map((p) => ({
+      id: String(p.id),
+      label: p.label,
+      address: p.address || "",
+      note: p.note || "",
+      usage: p.usage || "BOTH",
+      pickupFeeSen: toSen(p.fee) ?? 0,
+      dropoffFeeSen: toSen(p.dropoffFee) ?? 0,
+      feeSen: toSen(p.fee) ?? 0,
+    }));
   }
-  // No points configured: the branch counter is the only pick-up point.
-  return [{ id: "branch", label: `Branch counter, ${branch.name}`, note: branch.address, feeSen: 0 }];
+  // No points configured: the branch counter serves both, free of charge.
+  return [
+    {
+      id: "branch",
+      label: `Branch counter, ${branch.name}`,
+      address: branch.address,
+      note: "",
+      usage: "BOTH",
+      pickupFeeSen: 0,
+      dropoffFeeSen: 0,
+      feeSen: 0,
+    },
+  ];
+}
+
+const servesPickup = (p) => p.usage !== "DROPOFF";
+const servesDropoff = (p) => p.usage !== "PICKUP";
+
+function pickupPointsFor(branch) {
+  return pointsFor(branch).filter(servesPickup);
+}
+
+function dropoffPointsFor(branch) {
+  return pointsFor(branch).filter(servesDropoff);
+}
+
+// Collision Damage Waiver: a default per-day add-on on every listing once the
+// operator has priced it. Booked as a BookingAddon with no listingAddonId.
+export const CDW_ID = "cdw";
+
+function cdwFor(listing) {
+  const priceSen = toSen(listing.cdwDailyPrice);
+  if (!priceSen) return null;
+  return { id: CDW_ID, label: "Collision Damage Waiver", description: "Optional. Reduces your liability for damage to the car.", priceSen, unit: "per_day", maxQty: 1 };
 }
 
 function addOnsFor(listing) {
@@ -198,12 +245,19 @@ export function toCarDto(listing, facts, availability) {
     driveType: DRIVETRAIN_LABEL[listing.drivetrain] || null,
     booking: {
       dailyRateSen: toSen(listing.price),
-      rateRules: rateRulesFor(listing),
+      rateCard: rateCardFor(listing),
+      overtime: {
+        feeSen: toSen(listing.overtimeFee) ?? 0,
+        window: { from: NIGHT_START, to: NIGHT_END },
+        nightBlocked: listing.blockNightHandover,
+      },
+      cdw: cdwFor(listing),
       downPaymentPct: config?.downPaymentPercent ?? DEFAULT_DOWN_PAYMENT_PCT,
       refundRule: refundRuleFor(config),
       pickupPoints: pickupPointsFor(listing.branch),
+      dropoffPoints: dropoffPointsFor(listing.branch),
       addOns: addOnsFor(listing),
-      minDriverAge: listing.minDriverAge,
+      minDriverAge: eligibilityFor(listing, null).minAge,
       youngDriver: {
         maxAge: listing.youngDriverMaxAge ?? listing.minDriverAge - 1,
         surchargeSen: toSen(listing.youngDriverSurcharge) ?? 0,
@@ -262,7 +316,11 @@ export async function getPublicCar(id) {
  * source of truth for every figure; booking creation calls priceSelection()
  * again inside its transaction rather than trusting a stored quote.
  *
- * sel: { from, to, ft, tt, pickupPointId, addOns: {id: qty}, driverDob, age }
+ * sel: { from, to, ft, tt, pickupPointId, dropoffPointId, requestedLocation,
+ *        cdw, addOns: {id: qty}, driverDob, age }
+ *
+ * Returns problems[] instead of throwing, so the quote endpoint can show them
+ * and booking creation can refuse with the first one.
  */
 export function priceSelection(listing, config, sel, peakDates) {
   const pickupAt = klDateTimeToUtc(sel.from, sel.ft);
@@ -273,30 +331,62 @@ export function priceSelection(listing, config, sel, peakDates) {
   const eligibility = eligibilityFor(listing, age);
   const downPaymentPct = config?.downPaymentPercent ?? DEFAULT_DOWN_PAYMENT_PCT;
 
-  if (!days) return { days: 0, eligibility, downPaymentPct };
+  if (!days) return { days: 0, eligibility, downPaymentPct, problems: [] };
 
-  const points = pickupPointsFor(listing.branch);
-  const point = points.find((p) => p.id === String(sel.pickupPointId)) || points[0];
+  const problems = [];
+  const pickupPoints = pickupPointsFor(listing.branch);
+  const dropoffPoints = dropoffPointsFor(listing.branch);
+  const requestedLocation = typeof sel.requestedLocation === "string" ? sel.requestedLocation.trim().slice(0, 300) : "";
 
+  // A requested location replaces the pickup point; the operator prices it
+  // when replying with a suggested alternative, so it adds nothing here.
+  const point = requestedLocation
+    ? { id: "requested", label: requestedLocation, pickupFeeSen: 0, dropoffFeeSen: 0, feeSen: 0, requested: true }
+    : pickupPoints.find((p) => p.id === String(sel.pickupPointId)) || pickupPoints[0];
+  const dropoffId = sel.dropoffPointId ?? sel.pickupPointId;
+  const dropoff = requestedLocation && !sel.dropoffPointId
+    ? point
+    : dropoffPoints.find((p) => p.id === String(dropoffId)) || dropoffPoints[0];
+
+  if (!point) problems.push({ code: "PICKUP_POINT_INVALID", message: "This car has no pickup point" });
+  if (!dropoff) problems.push({ code: "DROPOFF_POINT_INVALID", message: "This car has no drop-off point" });
+
+  const nights = nightHandovers(pickupAt, returnAt);
+  if (nights && listing.blockNightHandover) {
+    problems.push({
+      code: "NIGHT_HANDOVER_BLOCKED",
+      message: `This operator does not hand over or receive cars between ${NIGHT_START} and ${NIGHT_END}`,
+    });
+  }
+  if (eligibility.underage) {
+    problems.push({ code: "DRIVER_UNDERAGE", message: `The driver must be at least ${eligibility.minAge} on the pickup date` });
+  }
+
+  const cdw = cdwFor(listing);
   const chosen = addOnsFor(listing)
     .filter((a) => Number(sel.addOns?.[a.id]) > 0)
     .map((a) => ({ ...a, qty: Math.min(Math.floor(Number(sel.addOns[a.id])), a.maxQty) }));
+  if (cdw && (sel.cdw === true || sel.cdw === "1" || Number(sel.addOns?.[CDW_ID]) > 0)) chosen.unshift({ ...cdw, qty: 1 });
 
   const dates = rentalDates(pickupAt, days);
   const priced = priceRental({
-    rates: rateRulesFor(listing),
-    dates,
-    peakDates,
+    card: rateCardFor(listing),
+    pickupAt,
+    returnAt,
     downPaymentPct,
+    overtimeFeeSen: listing.blockNightHandover ? 0 : toSen(listing.overtimeFee) ?? 0,
     addOns: chosen,
     surchargePerDaySen: eligibility.young ? toSen(listing.youngDriverSurcharge) ?? 0 : 0,
-    pickupFeeSen: point.feeSen,
+    pickupFeeSen: point?.pickupFeeSen ?? 0,
+    dropoffFeeSen: dropoff?.dropoffFeeSen ?? 0,
   });
 
-  // A peak date in the rental removes the partial refund election (SRS peak calendar).
-  const refundRule = priced.peakDays > 0 ? { type: "FORFEIT" } : refundRuleFor(config);
+  // The peak calendar now only affects refunds: a peak date in the rental
+  // removes the partial refund election (SRS V2.9, 4.1.2).
+  const peakDays = dates.filter((d) => peakDates.has(d)).length;
+  const refundRule = peakDays > 0 ? { type: "FORFEIT" } : refundRuleFor(config);
 
-  return { days, eligibility, downPaymentPct, pickupAt, returnAt, dates, point, priced, refundRule };
+  return { days, eligibility, downPaymentPct, pickupAt, returnAt, dates, point, dropoff, requestedLocation, priced, peakDays, refundRule, problems };
 }
 
 function hoursFor(branch) {
@@ -335,12 +425,13 @@ async function findAlternatives(listing, from, days) {
 export async function quotePublicCar(id, sel) {
   const listing = await loadPublicListing(id);
   const facts = (await loadOperatorFacts([listing.operatorId])).get(listing.operatorId);
-  const rates = rateRulesFor(listing);
+  const card = rateCardFor(listing);
   const downPct = facts.config?.downPaymentPercent ?? DEFAULT_DOWN_PAYMENT_PCT;
 
   const indicative = {
-    fromDailySen: rates.weekdaySen,
-    depositPerDaySen: Math.round((rates.weekdaySen * downPct) / 100),
+    fromDailySen: card.dailySen,
+    rateCard: card,
+    depositPerDaySen: Math.round((card.dailySen * downPct) / 100),
     depositPct: downPct,
   };
   const hours = hoursFor(listing.branch);
@@ -356,9 +447,8 @@ export async function quotePublicCar(id, sel) {
   const requested = (await loadAvailability([listing], r.dates[0], addDays(r.dates[0], r.days))).get(listing.id);
   const blockedDates = r.dates.filter((d) => (requested.remaining.get(d) ?? 0) <= 0);
   const remaining = Math.max(0, Math.min(...r.dates.map((d) => requested.remaining.get(d) ?? 0)));
-  const { availableFrom } = (await horizonAvailability([listing])).get(listing.id);
-  const heldUntil = availableFrom && availableFrom > r.dates[0] ? availableFrom : null;
-  const available = !blockedDates.length && !heldUntil;
+  const heldUntil = null; // no return hold since SRS V2.9; kept for the page
+  const available = !blockedDates.length;
 
   const timing = paymentTiming(r.pickupAt);
   const p = r.priced;
@@ -366,9 +456,12 @@ export async function quotePublicCar(id, sel) {
   return {
     quote: {
       days: p.days,
-      weekendDays: p.weekendDays,
-      peakDays: p.peakDays,
+      hours: p.hours,
+      rateLines: p.rateLines,
+      peakDays: r.peakDays,
       rentalSen: p.rentalSen,
+      nightHandovers: p.nightHandovers,
+      overtimeSen: p.overtimeSen,
       depositPct: p.depositPct,
       depositSen: p.depositSen,
       rentalBalanceSen: p.rentalBalanceSen,
@@ -377,6 +470,9 @@ export async function quotePublicCar(id, sel) {
       surchargeSen: p.surchargeSen,
       pickupPoint: r.point,
       pickupFeeSen: p.pickupFeeSen,
+      dropoffPoint: r.dropoff,
+      dropoffFeeSen: p.dropoffFeeSen,
+      requestedLocation: r.requestedLocation || null,
       balanceSen: p.balanceSen,
       totalSen: p.totalSen,
       refundRule: r.refundRule,
@@ -392,6 +488,7 @@ export async function quotePublicCar(id, sel) {
       alternatives: available ? null : await findAlternatives(listing, sel.from, r.days),
     },
     eligibility: r.eligibility,
+    problems: r.problems,
     hours,
     indicative,
   };

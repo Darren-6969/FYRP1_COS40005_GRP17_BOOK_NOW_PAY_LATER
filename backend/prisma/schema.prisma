@@ -110,6 +110,12 @@ enum MileagePolicy {
   LIMITED
 }
 
+enum PointUsage {
+  PICKUP
+  DROPOFF
+  BOTH
+}
+
 enum AddonUnit {
   PER_DAY
   PER_BOOKING
@@ -437,7 +443,14 @@ model Booking {
   listing   Listing? @relation(fields: [listingId], references: [id])
 
   pickupPointId Int?
-  pickupPoint   PickupPoint? @relation(fields: [pickupPointId], references: [id])
+  pickupPoint   PickupPoint? @relation("BookingPickupPoint", fields: [pickupPointId], references: [id])
+
+  dropoffPointId Int?
+  dropoffPoint   PickupPoint? @relation("BookingDropoffPoint", fields: [dropoffPointId], references: [id])
+
+  // A location the customer asked for that is not on the operator's list.
+  // The operator prices it through suggest alternative (FR-LIST-004).
+  requestedLocation String?
 
   quantity Int @default(1)
 
@@ -483,6 +496,8 @@ model Booking {
   @@index([paymentDeadline])
   @@index([listingId, status])
   @@index([pickupDate, returnDate])
+
+  @@index([dropoffPointId])
 }
 
 model Payment {
@@ -537,7 +552,7 @@ model CommissionLedgerEntry {
   operatorPayoutAmountSen  Int
   platformMarginSen        Int
   payoutId                 Int?                  @unique
-  payout                   OperatorPayout?        @relation(fields: [payoutId], references: [id])
+  payout                   OperatorPayout?        @relation(fields: [payoutId], references: [id], onDelete: Restrict)
   currency                 String                @default("MYR")
   createdAt                DateTime              @default(now())
 
@@ -806,11 +821,28 @@ model Listing {
   name        String
   description String? @db.Text
 
-  price    Decimal @db.Decimal(10, 2) // weekday daily rate
+  price    Decimal @db.Decimal(10, 2) // daily rate (FR-LIST-002)
   quantity Int     @default(1)
 
-  weekendPrice Decimal? @db.Decimal(10, 2) // falls back to price
-  peakPrice    Decimal? @db.Decimal(10, 2) // PlatformPeakDate days; falls back to weekend/price
+  // FR-LIST-002 (SRS V2.9): duration-based rates. Weekly covers 7 days and
+  // monthly 30 days; an empty weekly or monthly rate falls back to the next
+  // shorter rate.
+  hourlyRate  Decimal? @db.Decimal(10, 2)
+  weeklyRate  Decimal? @db.Decimal(10, 2)
+  monthlyRate Decimal? @db.Decimal(10, 2)
+
+  // Flat charge for a pickup or return between 21:00 and 09:00, unless the
+  // operator blocks night pickups and returns instead.
+  overtimeFee   Decimal? @db.Decimal(10, 2)
+  blockNightHandover Boolean @default(false)
+
+  // Collision Damage Waiver: default add-on, priced per day per listing,
+  // optional for the customer. Null means the operator has not priced it yet.
+  cdwDailyPrice Decimal? @db.Decimal(10, 2)
+
+  // Retired by SRS V2.9. Kept until the operator form stops writing them.
+  weekendPrice Decimal? @db.Decimal(10, 2)
+  peakPrice    Decimal? @db.Decimal(10, 2)
 
   // Car rental fields
   vehicleMake  String?
@@ -990,14 +1022,18 @@ model PickupPoint {
   branchId Int
   branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
-  label String
-  note  String?
-  fee   Decimal @default(0) @db.Decimal(10, 2)
+  label   String
+  address String?
+  note    String?
+  usage   PointUsage @default(BOTH)
+  fee        Decimal @default(0) @db.Decimal(10, 2) // pickup charge
+  dropoffFee Decimal @default(0) @db.Decimal(10, 2)
 
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
-  bookings Booking[]
+  bookings         Booking[] @relation("BookingPickupPoint")
+  dropoffBookings  Booking[] @relation("BookingDropoffPoint")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

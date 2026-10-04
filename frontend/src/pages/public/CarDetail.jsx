@@ -12,6 +12,7 @@ import {
   klToday,
 } from "../../utils/formatPublic";
 import { getToken } from "../../utils/session";
+import { durationText, rateLinesText } from "../../utils/carPricing";
 import useSavedListings from "../../hooks/useSavedListings";
 import PaymentSchedule from "../../components/public/PaymentSchedule";
 import RefundBox from "../../components/public/RefundBox";
@@ -307,9 +308,13 @@ export default function CarDetail() {
   const availability = tripValid ? q?.availability : null;
   const eligibility = q?.eligibility;
   const title = `${listing.vehicleMake} ${listing.vehicleModel}`;
-  const pickupPointId = sel.pickupPointId || b.pickupPoints[0].id;
+  const pickupPointId = sel.pickupPointId || b.pickupPoints[0]?.id || "";
+  const pickupServesDropoff = b.dropoffPoints.some((p) => p.id === pickupPointId);
+  const dropoffPointId = sel.dropoffPointId || (pickupServesDropoff ? pickupPointId : b.dropoffPoints[0]?.id) || "";
   const days = quote?.days || 0;
   const daysText = plural(days, "day");
+  const lengthText = quote ? durationText(quote.hours) : "";
+  const problems = tripValid ? q?.problems || [] : [];
 
   const update = (changes) => {
     setParams(toBookingParams({ ...sel, pickupPointId, ...changes }), { replace: true });
@@ -322,10 +327,10 @@ export default function CarDetail() {
   else if (sel.age === null) reason = "Enter the driver's age in Your trip to check eligibility.";
   else if (eligibility?.underage)
     reason = `The minimum driver age for this car is ${eligibility.minAge}. The driver you entered is ${sel.age}.`;
+  else if (problems.some((p) => p.code === "NIGHT_HANDOVER_BLOCKED"))
+    reason = `${listing.operator.companyName} doesn't hand over or receive cars between ${b.overtime.window.from} and ${b.overtime.window.to}. Change the pickup or return time.`;
   else if (availability && !availability.available)
-    reason = availability.blockedDates.length
-      ? `This car is already booked on ${formatDateList(availability.blockedDates)}. Pick another option above.`
-      : `This car is still out with a customer until ${formatShortDate(availability.heldUntil)}. Pick another option above.`;
+    reason = `This car is already booked on ${formatDateList(availability.blockedDates)}. Pick another option above.`;
   // Hold the button while a fresh quote for the current selection is loading.
   const quoting = quoteRes.key !== quoteKey;
 
@@ -336,7 +341,7 @@ export default function CarDetail() {
 
   const requestBooking = () => {
     if (reason || quoting) return;
-    navigate(`/cars/${listing.id}/book?${toBookingParams({ ...sel, pickupPointId })}`);
+    navigate(`/cars/${listing.id}/book?${toBookingParams({ ...sel, pickupPointId, dropoffPointId })}`);
   };
 
   const quickChips = [
@@ -374,7 +379,7 @@ export default function CarDetail() {
   // Operators may leave some specs blank; those rows are left out.
   const specs = [
     ["Make", listing.vehicleMake],
-    ["Model", listing.vehicleModel && `${listing.vehicleModel}, or similar`],
+    ["Model", listing.vehicleModel],
     ["Year", listing.modelYear && String(listing.modelYear)],
     ["Type", listing.vehicleType],
     ["Seats", listing.seats && String(listing.seats)],
@@ -385,12 +390,17 @@ export default function CarDetail() {
   ].filter(([, v]) => Boolean(v));
 
   const rateLine = quote
-    ? quote.weekendDays
-      ? `Your ${daysText} include ${plural(quote.weekendDays, "weekend day")} at ${formatSen(
-          b.rateRules.weekendSen
-        )}, so the rental is ${formatSen(quote.rentalSen)}.`
-      : `All ${daysText} fall on weekdays, so each is charged at ${formatSen(b.rateRules.weekdaySen)}.`
-    : "Set dates to see which rate applies to each day.";
+    ? `Your ${lengthText} is charged as ${rateLinesText(quote.rateLines)}, so the rental is ${formatSen(quote.rentalSen)}.`
+    : "Set dates to see how your rental is charged.";
+
+  // Rates the operator has set, shortest period first. Weekly and monthly are
+  // optional; when empty, longer rentals use the next shorter rate.
+  const rateRows = [
+    ["Per hour", b.rateCard.hourlySen, "Rentals under 6 hours, and leftover hours under 6"],
+    ["Per day", b.rateCard.dailySen, "6 to 24 hours counts as one day"],
+    ["Per week", b.rateCard.weeklySen, "Each full 7 days"],
+    ["Per month", b.rateCard.monthlySen, "Each full 30 days"],
+  ].filter(([, v]) => Number.isInteger(v) && v > 0);
 
   const ind = q?.indicative;
   const bar = quote?.payInFull
@@ -398,16 +408,18 @@ export default function CarDetail() {
         label: "Full amount",
         figure: formatSen(quote.totalSen),
         rate: "after confirmation",
-        sub: `Nothing left to pay later · ${daysText} · pick-up is within the balance window`,
+        sub: `Nothing left to pay later · ${lengthText} · pickup is within the balance window`,
       }
     : quote
     ? {
         label: "Deposit",
         figure: formatSen(quote.depositSen),
         rate: "after confirmation",
-        sub: `Balance ${formatSen(quote.balanceSen)} by ${formatShortDateTime(quote.balanceDueAt)} · Total ${formatSen(
-          quote.totalSen
-        )} · ${daysText}`,
+        sub: quote.balanceSen
+          ? `Balance ${formatSen(quote.balanceSen)} by ${formatShortDateTime(quote.balanceDueAt)} · Total ${formatSen(
+              quote.totalSen
+            )} · ${lengthText}`
+          : `Nothing left to pay later · ${lengthText}`,
       }
     : {
         label: "Deposit from · indicative",
@@ -448,7 +460,7 @@ export default function CarDetail() {
           {lowStock && <span className={styles.lowStock}>{lowStockText}</span>}
         </div>
         <p className={styles.subtitle}>
-          {listing.vehicleType} · or similar · {listing.branch.name}
+          {listing.vehicleType} · {listing.branch.name}
         </p>
         <ul className={styles.chips}>
           {quickChips.map((c) => (
@@ -468,7 +480,7 @@ export default function CarDetail() {
             Your trip
           </h2>
           <span className={styles.cardHeadNote}>
-            {listing.branch.name} · return to the same point · <strong>{quote ? daysText : "dates not set"}</strong>
+            {listing.branch.name} · <strong>{quote ? lengthText : "dates not set"}</strong>
           </span>
         </div>
         <div className={styles.tripGrid}>
@@ -523,7 +535,7 @@ export default function CarDetail() {
               id={`${uid}-age`}
               type="number"
               inputMode="numeric"
-              min={18}
+              min={17}
               max={99}
               value={sel.age ?? ""}
               onChange={(e) => update({ age: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
@@ -554,20 +566,52 @@ export default function CarDetail() {
                     type="radio"
                     name={`${uid}-point`}
                     checked={checked}
-                    onChange={() => update({ pickupPointId: p.id })}
+                    onChange={() => update({ pickupPointId: p.id, dropoffPointId: sel.dropoffPointId })}
                     className={styles.radio}
                   />
                   <span className={styles.pointText}>
                     <span className={styles.pointLabel}>{p.label}</span>
-                    <span className={styles.pointNote}>{p.note}</span>
+                    <span className={styles.pointNote}>{p.address || p.note}</span>
                   </span>
-                  <span className={p.feeSen ? styles.pointPrice : styles.pointFree}>
-                    {p.feeSen ? `+ ${formatSen(p.feeSen)}` : "Free"}
+                  <span className={p.pickupFeeSen ? styles.pointPrice : styles.pointFree}>
+                    {p.pickupFeeSen ? `+ ${formatSen(p.pickupFeeSen)}` : "Free"}
                   </span>
                 </label>
               );
             })}
           </div>
+        </fieldset>
+
+        <fieldset className={styles.points}>
+          <legend className={styles.pointsLegend}>Drop-off point</legend>
+          <p className={styles.pointsNote}>You can return the car to a different point. Its charge is added to the balance.</p>
+          <div className={styles.pointList}>
+            {b.dropoffPoints.map((p) => {
+              const checked = p.id === dropoffPointId;
+              return (
+                <label key={p.id} className={`${styles.point} ${checked ? styles.pointOn : ""}`}>
+                  <input
+                    type="radio"
+                    name={`${uid}-dropoff`}
+                    checked={checked}
+                    onChange={() => update({ dropoffPointId: p.id })}
+                    className={styles.radio}
+                  />
+                  <span className={styles.pointText}>
+                    <span className={styles.pointLabel}>
+                      {p.label}
+                      {p.id === pickupPointId ? " (same as pickup)" : ""}
+                    </span>
+                    <span className={styles.pointNote}>{p.address || p.note}</span>
+                  </span>
+                  <span className={p.dropoffFeeSen ? styles.pointPrice : styles.pointFree}>
+                    {p.dropoffFeeSen ? `+ ${formatSen(p.dropoffFeeSen)}` : "Free"}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <p className={styles.pointsNote}>Need a place that isn&apos;t listed? You can request one on the next page.</p>
         </fieldset>
       </section>
 
@@ -577,13 +621,9 @@ export default function CarDetail() {
             Not available for your dates
           </h2>
           <p className={styles.text}>
-            {availability.blockedDates.length
-              ? `${formatDateList(availability.blockedDates)} ${
-                  availability.blockedDates.length === 1 ? "is" : "are"
-                } already booked for this car. Choose one of these instead:`
-              : `This car is still out with a customer and frees up ${formatShortDate(
-                  availability.heldUntil
-                )}. Choose one of these instead:`}
+            {`${formatDateList(availability.blockedDates)} ${
+              availability.blockedDates.length === 1 ? "is" : "are"
+            } already booked for this car. Choose one of these instead:`}
           </p>
           <div className={styles.altList}>
             {alternatives?.nearby && (
@@ -671,25 +711,47 @@ export default function CarDetail() {
 
       <section className={styles.card} aria-labelledby="rules-h">
         <h2 id="rules-h" className={`${styles.h2} ${styles.cardTitle}`}>
-          How the daily rate is set
+          How the price is set
         </h2>
         <p className={styles.text}>
-          The operator sets a rate for each day. Weekends and peak periods such as school holidays and festive seasons
-          cost more.
+          The rate is the same on every date. Your rental is charged in whole months, then weeks, then days, with leftover
+          hours charged by the hour. A weekly or monthly rate only covers its own period.
         </p>
         <div className={styles.rates}>
-          {[
-            ["Mon to Fri", b.rateRules.weekdaySen],
-            ["Sat and Sun", b.rateRules.weekendSen],
-            ["Peak periods", b.rateRules.peakSen],
-          ].map(([k, v]) => (
+          {rateRows.map(([k, v, note]) => (
             <div key={k} className={styles.rate}>
               <div className={styles.rateKey}>{k}</div>
-              <div className={styles.rateValue}>{formatSen(v)} / day</div>
+              <div className={styles.rateValue}>{formatSen(v)}</div>
+              <div className={styles.rateKey}>{note}</div>
             </div>
           ))}
         </div>
         <p className={styles.rateLine}>{rateLine}</p>
+        <dl className={styles.terms}>
+          <div className={styles.term}>
+            <dt className={styles.termKey}>Night pickup and return</dt>
+            <dd className={styles.termValue}>
+              {b.overtime.nightBlocked
+                ? `Not available ${b.overtime.window.from} to ${b.overtime.window.to}`
+                : b.overtime.feeSen
+                ? `${formatSen(b.overtime.feeSen)} each`
+                : "No extra charge"}
+            </dd>
+            <dd className={styles.termNote}>
+              {b.overtime.nightBlocked
+                ? `${listing.operator.companyName} only hands over and receives cars between ${b.overtime.window.to} and ${b.overtime.window.from}.`
+                : `A flat charge for a pickup or return between ${b.overtime.window.from} and ${b.overtime.window.to}, added to the balance.`}
+            </dd>
+          </div>
+          <div className={styles.term}>
+            <dt className={styles.termKey}>Late return</dt>
+            <dd className={styles.termValue}>Charged by the hour at the counter</dd>
+            <dd className={styles.termNote}>
+              Not part of your booking total. {listing.operator.companyName} records the return time and you pay any late
+              hours when you hand the car back.
+            </dd>
+          </div>
+        </dl>
       </section>
 
       <section className={styles.card} aria-labelledby="add-h">
@@ -698,6 +760,24 @@ export default function CarDetail() {
         </h2>
         <p className={styles.text}>Add-ons are paid with the balance. Your deposit stays the same.</p>
         <ul className={styles.addons}>
+          {b.cdw && (
+            <li className={`${styles.addon} ${sel.cdw ? styles.addonOn : ""}`}>
+              <div className={styles.addonText}>
+                <div className={styles.addonName}>{b.cdw.label}</div>
+                <div className={styles.addonDesc}>{b.cdw.description}</div>
+              </div>
+              <span className={styles.addonPrice}>{formatSen(b.cdw.priceSen)} / day</span>
+              <button
+                type="button"
+                className={`${styles.addToggle} ${sel.cdw ? styles.addToggleOn : ""}`}
+                aria-pressed={sel.cdw}
+                aria-label={`${sel.cdw ? "Remove" : "Add"} collision damage waiver`}
+                onClick={() => update({ cdw: !sel.cdw })}
+              >
+                {sel.cdw ? "Added" : "Add"}
+              </button>
+            </li>
+          )}
           {b.addOns.map((a) => {
             const qty = sel.addOns[a.id] || 0;
             const on = qty > 0;

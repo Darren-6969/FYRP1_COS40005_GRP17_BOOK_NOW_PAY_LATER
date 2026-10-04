@@ -14,8 +14,18 @@ import Notice from "../../components/public/Notice";
 import styles from "../../assets/styles/public/CarBookingForm.module.css";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const FIELD_ID = { name: "bf-name", phone: "bf-phone", driverName: "bf-driver", dob: "bf-dob-d", agree: "bf-agree" };
-const ORDER = ["name", "phone", "driverName", "dob", "agree"];
+const FIELD_ID = {
+  name: "bf-name",
+  phone: "bf-phone",
+  driverName: "bf-driver",
+  dob: "bf-dob-d",
+  location: "bf-location",
+  chauffeurNote: "bf-chauffeur-note",
+  agree: "bf-agree",
+  forfeit: "bf-forfeit",
+};
+const ORDER = ["name", "phone", "driverName", "dob", "location", "chauffeurNote", "agree", "forfeit"];
+const MAX_NOTE = 500;
 const MIN_BIRTH_YEAR = 1920;
 const THIS_YEAR = new Date().getFullYear();
 const DRAFT_PREFIX = "bnpl_booking_draft:";
@@ -38,7 +48,7 @@ function phoneDigits(phone) {
   return phone.replace(/[\s-]/g, "").replace(/^\+?60/, "").replace(/^0/, "");
 }
 
-function validate(key, f, agreed) {
+function validate(key, f, agreed, forfeitAgreed) {
   if (key === "name") return f.name.trim() ? "" : "Enter your full name.";
   if (key === "phone") {
     const n = phoneDigits(f.phone);
@@ -56,14 +66,20 @@ function validate(key, f, agreed) {
         : "Enter the day and year as numbers.";
     return "";
   }
+  if (key === "location") {
+    if (!f.requestOther) return "";
+    return f.requestedLocation.trim().length >= 3 ? "" : "Enter the place you'd like to pick up from, for example a hotel name.";
+  }
+  if (key === "chauffeurNote") return f.chauffeurNote.length <= MAX_NOTE ? "" : `Keep the note under ${MAX_NOTE} characters.`;
   if (key === "agree") return agreed ? "" : "Tick to agree to the Terms of Service and rental terms.";
+  if (key === "forfeit") return forfeitAgreed ? "" : "Tick to confirm you understand what happens if a payment or your licence is late.";
   return "";
 }
 
-function validateAll(f, agreed) {
+function validateAll(f, agreed, forfeitAgreed) {
   const errors = {};
   ORDER.forEach((k) => {
-    const msg = validate(k, f, agreed);
+    const msg = validate(k, f, agreed, forfeitAgreed);
     if (msg) errors[k] = msg;
   });
   return errors;
@@ -96,10 +112,8 @@ function clearDraft(listingId) {
 }
 
 function initialForm(listingId) {
-  const draft = readDraft(listingId);
-  if (draft) return draft;
   const user = getUser() || {};
-  return {
+  const blank = {
     name: user.name || user.fullName || "",
     phone: user.phone ? phoneDigits(String(user.phone)) : "",
     isDriver: true,
@@ -108,7 +122,26 @@ function initialForm(listingId) {
     dobM: "",
     dobY: "",
     licence: "MY",
+    requestOther: false,
+    requestedLocation: "",
+    chauffeur: false,
+    chauffeurNote: "",
   };
+  // Drafts saved before the V2.9 fields existed still restore.
+  const draft = readDraft(listingId);
+  return draft ? { ...blank, ...draft } : blank;
+}
+
+// What the customer accepts if the balance or the licence is late (4.2.5).
+function forfeitText(rule, depositSen, op) {
+  if (!depositSen) return "If a payment or my driving licence is not in by its deadline, the booking is cancelled.";
+  if (rule?.type === "PARTIAL")
+    return `If a payment or my driving licence is not in by its deadline, the booking is cancelled and ${op} refunds ${rule.refundPct}% of my ${formatSen(
+      depositSen
+    )} deposit and keeps the rest.`;
+  return `If a payment or my driving licence is not in by its deadline, the booking is cancelled and ${op} keeps my ${formatSen(
+    depositSen
+  )} deposit.`;
 }
 
 // "Andaman Motors'", "Borneo Wheels Sdn. Bhd.'s"
@@ -219,7 +252,7 @@ function TermsDialog({ open, onClose, title, terms }) {
 
 export default function CarBookingForm() {
   const { listingId } = useParams();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const key = params.toString();
   const sel = useMemo(() => parseBookingSelection(new URLSearchParams(key)), [key]);
@@ -227,6 +260,7 @@ export default function CarBookingForm() {
 
   const [form, setForm] = useState(() => initialForm(listingId));
   const [agreedAt, setAgreedAt] = useState(null);
+  const [forfeitAt, setForfeitAt] = useState(null);
   const [errors, setErrors] = useState({});
   const [summaryTick, setSummaryTick] = useState(0);
   const [status, setStatus] = useState({ kind: "idle" });
@@ -239,9 +273,14 @@ export default function CarBookingForm() {
   const idemKey = useRef(null);
 
   const agreed = Boolean(agreedAt);
+  const forfeitAgreed = Boolean(forfeitAt);
   const dob = parseDob(form);
   const dobIso = dob.state === "ok" ? dob.iso : "";
-  const quoteKey = `${listingId}?${key}&dob=${dobIso}`;
+  // A requested location is quoted once it is complete, not on every keystroke.
+  const [quotedLocation, setQuotedLocation] = useState(() =>
+    form.requestOther && form.requestedLocation.trim().length >= 3 ? form.requestedLocation.trim() : ""
+  );
+  const quoteKey = `${listingId}?${key}&dob=${dobIso}&rl=${quotedLocation}`;
 
   useEffect(() => {
     let alive = true;
@@ -258,13 +297,13 @@ export default function CarBookingForm() {
     const s = parseBookingSelection(new URLSearchParams(key));
     // The date of birth is the source of the driver's age here; the age typed
     // on the car page is only a preview.
-    quoteCarBooking(listingId, { ...s, age: null, driverDob: dobIso || null })
+    quoteCarBooking(listingId, { ...s, age: null, driverDob: dobIso || null, requestedLocation: quotedLocation })
       .then((r) => alive && setQuoteRes({ key: quoteKey, data: r.data }))
       .catch(() => alive && setQuoteRes({ key: quoteKey, data: null }));
     return () => {
       alive = false;
     };
-  }, [listingId, key, dobIso, quoteKey]);
+  }, [listingId, key, dobIso, quotedLocation, quoteKey]);
 
   useEffect(() => {
     writeDraft(listingId, form);
@@ -275,7 +314,7 @@ export default function CarBookingForm() {
   }, [summaryTick]);
 
   useEffect(() => {
-    if (status.kind === "failed" || status.kind === "unavailable") bannerRef.current?.focus();
+    if (status.kind === "failed" || status.kind === "unavailable" || status.kind === "refused") bannerRef.current?.focus();
   }, [status]);
 
   if (listingRes.id !== listingId) {
@@ -303,8 +342,12 @@ export default function CarBookingForm() {
   const quote = q?.quote || null;
   const eligibility = q?.eligibility;
   const sending = status.kind === "sending";
-  const pickupPointId = sel.pickupPointId || b.pickupPoints[0].id;
+  const pickupPointId = sel.pickupPointId || b.pickupPoints[0]?.id || "";
+  const dropoffPointId = sel.dropoffPointId || "";
   const detailHref = `/cars/${listing.id}?${toBookingParams({ ...sel, pickupPointId })}`;
+  const setSel = (changes) => setParams(toBookingParams({ ...sel, pickupPointId, ...changes }), { replace: true });
+  const problems = q?.problems || [];
+  const nightBlocked = problems.some((p) => p.code === "NIGHT_HANDOVER_BLOCKED");
   const similarHref = `/cars?${new URLSearchParams({
     city: listing.branch.city,
     type: listing.vehicleType,
@@ -324,16 +367,30 @@ export default function CarBookingForm() {
     blockReason = "Choose your pick-up and return dates on the car page before sending a request.";
   else if (under)
     blockReason = `You can't send a request yet. This car needs drivers aged ${eligibility.minAge} or over, and the date of birth entered makes the driver ${eligibility.age}.`;
+  else if (nightBlocked)
+    blockReason = `${op} doesn't hand over or receive cars between ${b.overtime.window.from} and ${b.overtime.window.to}. Change the times on the car page.`;
   else if (showUnavailable) blockReason = "You can't request these dates. Choose other dates or a similar car above.";
 
   // Once a field has shown an error, re-check it as the user types.
   const change = (field, errKey, value) => {
     const next = { ...form, [field]: value };
     setForm(next);
-    if (errors[errKey]) setErrors((e) => ({ ...e, [errKey]: validate(errKey, next, agreed) }));
+    if (errors[errKey]) setErrors((e) => ({ ...e, [errKey]: validate(errKey, next, agreed, forfeitAgreed) }));
   };
 
-  const blur = (k) => setErrors((e) => ({ ...e, [k]: validate(k, form, agreed) }));
+  const blur = (k) => setErrors((e) => ({ ...e, [k]: validate(k, form, agreed, forfeitAgreed) }));
+
+  const commitLocation = (f = form) => {
+    const value = f.requestOther ? f.requestedLocation.trim() : "";
+    setQuotedLocation(value.length >= 3 ? value : "");
+  };
+
+  const toggleRequestOther = () => {
+    const next = { ...form, requestOther: !form.requestOther };
+    setForm(next);
+    setErrors((e) => ({ ...e, location: "" }));
+    commitLocation(next);
+  };
 
   // Validate the date of birth only when focus leaves the whole group.
   const blurDob = (e) => {
@@ -347,18 +404,27 @@ export default function CarBookingForm() {
     if (errors.agree) setErrors((er) => ({ ...er, agree: on ? "" : er.agree }));
   };
 
+  const toggleForfeit = (e) => {
+    const on = e.target.checked;
+    setForfeitAt(on ? new Date().toISOString() : null);
+    if (errors.forfeit) setErrors((er) => ({ ...er, forfeit: on ? "" : er.forfeit }));
+  };
+
   const send = () => {
     if (!idemKey.current) idemKey.current = newIdempotencyKey();
     setStatus({ kind: "sending" });
     const digits = phoneDigits(form.phone);
 
-    // Identifiers and choices only. TODO(api): the server prices the booking
-    // from rate_rules at request time; no amount is sent from here.
+    // Identifiers and choices only. The server prices the booking.
+    const requested = form.requestOther ? form.requestedLocation.trim() : "";
     const payload = {
       listingId: listing.id,
       pickupAt: quote.pickupAt,
       returnAt: quote.returnAt,
-      pickupPointId,
+      pickupPointId: requested ? null : pickupPointId,
+      dropoffPointId: requested ? null : dropoffPointId || null,
+      requestedLocation: requested || null,
+      cdw: Boolean(sel.cdw),
       addOns: Object.entries(sel.addOns)
         .filter(([, n]) => n > 0)
         .map(([id, quantity]) => ({ id, quantity })),
@@ -370,9 +436,11 @@ export default function CarBookingForm() {
           dateOfBirth: dobIso,
           licenceIssuedIn: form.licence,
         },
+        chauffeur: { requested: form.chauffeur, note: form.chauffeur ? form.chauffeurNote.trim() || null : null },
         agreements: {
           termsOfServiceAcceptedAt: agreedAt,
           rentalTermsAcceptedAt: agreedAt,
+          forfeitureAcceptedAt: forfeitAt,
         },
       },
     };
@@ -383,9 +451,13 @@ export default function CarBookingForm() {
         navigate(`/customer/bookings/${res.data.id}`);
       })
       .catch((err) => {
-        const code = err?.response?.data?.code;
-        if (code === "LISTING_UNAVAILABLE") {
-          setStatus({ kind: "unavailable", dates: err.response.data.details?.dates || [] });
+        const data = err?.response?.data || {};
+        if (data.code === "LISTING_UNAVAILABLE") {
+          setStatus({ kind: "unavailable", dates: data.details?.dates || [] });
+        } else if (err?.response?.status === 422 || data.code === "OTP_REQUIRED") {
+          // A rule the request can't pass as it stands (night handover, driver
+          // age, account check). Retrying won't help, so say what to change.
+          setStatus({ kind: "refused", message: data.message || "This request can't be sent as it stands." });
         } else {
           setStatus({ kind: "failed" });
         }
@@ -395,7 +467,7 @@ export default function CarBookingForm() {
   const onSubmit = (e) => {
     e.preventDefault();
     if (sending) return;
-    const found = validateAll(form, agreed);
+    const found = validateAll(form, agreed, forfeitAgreed);
     if (Object.keys(found).length) {
       setErrors(found);
       setStatus({ kind: "idle" });
@@ -434,6 +506,18 @@ export default function CarBookingForm() {
               b.youngDriver.surchargeSen
             )}/day, added to the balance.`
           : `${b.minDriverAge}.`,
+    },
+    {
+      k: "Night pickup and return",
+      v: b.overtime.nightBlocked
+        ? `Not available between ${b.overtime.window.from} and ${b.overtime.window.to}.`
+        : b.overtime.feeSen
+        ? `${formatSen(b.overtime.feeSen)} for each pickup or return between ${b.overtime.window.from} and ${b.overtime.window.to}, added to the balance.`
+        : "No extra charge.",
+    },
+    {
+      k: "Late return",
+      v: `${op} records the return time. Late hours are charged by the hour and paid at the counter; they are not part of the booking total.`,
     },
     { k: "Travel area", v: listing.policy.travelArea },
     { k: "Late pick-up", v: listing.policy.latePickup },
@@ -517,6 +601,21 @@ export default function CarBookingForm() {
                 <button type="button" className={styles.secondaryButton} onClick={send}>
                   Try again
                 </button>
+              </div>
+            )}
+
+            {status.kind === "refused" && (
+              <div ref={bannerRef} tabIndex={-1} role="alert" className={`${styles.banner} ${styles.bannerError}`}>
+                <div className={styles.bannerBody}>
+                  <AlertCircle size={22} aria-hidden="true" className={styles.bannerIcon} />
+                  <div>
+                    <h2 className={styles.bannerTitle}>Your request wasn&apos;t sent. Nothing was charged.</h2>
+                    <p className={styles.bannerText}>{status.message}</p>
+                  </div>
+                </div>
+                <Link to={`${detailHref}#trip`} className={styles.secondaryLink}>
+                  Change your trip
+                </Link>
               </div>
             )}
 
@@ -767,6 +866,136 @@ export default function CarBookingForm() {
               </fieldset>
             </section>
 
+            <section className={styles.card} aria-labelledby="s3-h">
+              <h2 id="s3-h" className={styles.h2}>
+                Pickup, drop-off and extras
+              </h2>
+
+              {!form.requestOther && quote && (
+                <dl className={styles.miniTerms}>
+                  <div>
+                    <dt>Pickup</dt>
+                    <dd>{quote.pickupPoint.label}</dd>
+                  </div>
+                  <div>
+                    <dt>Drop-off</dt>
+                    <dd>
+                      {quote.dropoffPoint && quote.dropoffPoint.id !== quote.pickupPoint.id
+                        ? quote.dropoffPoint.label
+                        : "Same as pickup"}
+                    </dd>
+                  </div>
+                </dl>
+              )}
+              {!form.requestOther && (
+                <p className={styles.hint}>
+                  <Link to={`${detailHref}#trip`}>Change pickup or drop-off point</Link>
+                </p>
+              )}
+
+              <div className={styles.switchRow}>
+                <span id="bf-other-switch" className={styles.label}>
+                  Request a location that isn&apos;t listed
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.requestOther}
+                  aria-labelledby="bf-other-switch"
+                  className={`${styles.switch} ${form.requestOther ? styles.switchOn : ""}`}
+                  onClick={toggleRequestOther}
+                >
+                  <span className={styles.switchKnob} />
+                </button>
+              </div>
+              {form.requestOther && (
+                <div className={styles.field}>
+                  <label htmlFor={FIELD_ID.location} className={styles.label}>
+                    Where would you like to pick up and return the car?
+                  </label>
+                  <input
+                    id={FIELD_ID.location}
+                    type="text"
+                    maxLength={300}
+                    value={form.requestedLocation}
+                    onChange={(e) => change("requestedLocation", "location", e.target.value)}
+                    onBlur={() => {
+                      blur("location");
+                      commitLocation();
+                    }}
+                    aria-invalid={Boolean(errors.location)}
+                    aria-describedby={describe("bf-location-hint", errors.location && "bf-location-err")}
+                    className={`${styles.input} ${errors.location ? styles.inputInvalid : ""}`}
+                  />
+                  <p id="bf-location-hint" className={styles.hint}>
+                    {op} replies with the charge for this location. You accept or decline it before paying anything.
+                  </p>
+                  <FieldError id="bf-location-err">{errors.location}</FieldError>
+                </div>
+              )}
+
+              {b.cdw && (
+                <div className={styles.switchRow}>
+                  <span id="bf-cdw-switch" className={styles.label}>
+                    {b.cdw.label}, {formatSen(b.cdw.priceSen)}/day
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={sel.cdw}
+                    aria-labelledby="bf-cdw-switch"
+                    aria-describedby="bf-cdw-hint"
+                    className={`${styles.switch} ${sel.cdw ? styles.switchOn : ""}`}
+                    onClick={() => setSel({ cdw: !sel.cdw })}
+                  >
+                    <span className={styles.switchKnob} />
+                  </button>
+                </div>
+              )}
+              {b.cdw && (
+                <p id="bf-cdw-hint" className={styles.hint}>
+                  Optional. {b.cdw.description} Added to the balance.
+                </p>
+              )}
+
+              <div className={styles.switchRow}>
+                <span id="bf-chauffeur-switch" className={styles.label}>
+                  Ask about a chauffeur
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.chauffeur}
+                  aria-labelledby="bf-chauffeur-switch"
+                  className={`${styles.switch} ${form.chauffeur ? styles.switchOn : ""}`}
+                  onClick={() => setForm((f) => ({ ...f, chauffeur: !f.chauffeur }))}
+                >
+                  <span className={styles.switchKnob} />
+                </button>
+              </div>
+              {form.chauffeur && (
+                <div className={styles.field}>
+                  <label htmlFor={FIELD_ID.chauffeurNote} className={styles.label}>
+                    Note for {op} (optional)
+                  </label>
+                  <textarea
+                    id={FIELD_ID.chauffeurNote}
+                    rows={3}
+                    maxLength={MAX_NOTE}
+                    value={form.chauffeurNote}
+                    onChange={(e) => change("chauffeurNote", "chauffeurNote", e.target.value)}
+                    onBlur={() => blur("chauffeurNote")}
+                    aria-describedby="bf-chauffeur-hint"
+                    className={styles.input}
+                  />
+                  <p id="bf-chauffeur-hint" className={styles.hint}>
+                    Not included in the price. {op} arranges the chauffeur and any charge with you directly.
+                  </p>
+                  <FieldError id="bf-chauffeur-err">{errors.chauffeurNote}</FieldError>
+                </div>
+              )}
+            </section>
+
             <section className={styles.card} aria-labelledby="s4-h">
               <h2 id="s4-h" className={styles.h2}>
                 Review and agree
@@ -800,6 +1029,10 @@ export default function CarBookingForm() {
                   <div>
                     <dt>Mileage</dt>
                     <dd>{listing.policy.mileage.value}</dd>
+                  </div>
+                  <div>
+                    <dt>Late return</dt>
+                    <dd>Charged by the hour, paid at the counter</dd>
                   </div>
                 </dl>
               </div>
@@ -837,6 +1070,21 @@ export default function CarBookingForm() {
                   </span>
                 </div>
                 <FieldError id="bf-agree-err">{errors.agree}</FieldError>
+                <div className={`${styles.agreeRow} ${errors.forfeit ? styles.agreeInvalid : ""}`}>
+                  <input
+                    id={FIELD_ID.forfeit}
+                    type="checkbox"
+                    checked={forfeitAgreed}
+                    onChange={toggleForfeit}
+                    aria-invalid={Boolean(errors.forfeit)}
+                    aria-describedby={describe(errors.forfeit && "bf-forfeit-err")}
+                    className={styles.checkbox}
+                  />
+                  <label htmlFor={FIELD_ID.forfeit} className={styles.agreeText}>
+                    I understand: {forfeitText(b.refundRule, quote?.depositSen, op)}
+                  </label>
+                </div>
+                <FieldError id="bf-forfeit-err">{errors.forfeit}</FieldError>
               </div>
 
               <div className={styles.submitBlock}>

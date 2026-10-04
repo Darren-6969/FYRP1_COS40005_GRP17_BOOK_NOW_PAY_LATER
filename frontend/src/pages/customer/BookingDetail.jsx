@@ -9,6 +9,7 @@ import {
   statusLabel,
 } from "../../utils/customerUtils";
 import { refreshNotifications } from "../../utils/notifyRefresh";
+import CarBookingPanel from "../../components/booking/CarBookingPanel";
 
 export default function BookingDetail() {
   const { id } = useParams();
@@ -63,6 +64,7 @@ export default function BookingDetail() {
 
   const bookingCode = booking.bookingCode || `#${booking.id}`;
   const isHostBooking = Boolean(booking.hostBookingRef);
+  const isCarBooking = Boolean(booking.car);
 
   return (
     <div className="customer-page customer-booking-detail-page">
@@ -89,6 +91,7 @@ export default function BookingDetail() {
             {booking.operator?.companyName || "Host"}
           </p>
 
+          {!isCarBooking && (
           <div className="customer-info-list detail customer-booking-info-grid">
             <div>
               <span>Service Type</span>
@@ -130,9 +133,10 @@ export default function BookingDetail() {
               <strong>{statusLabel(booking.payment?.status || "UNPAID")}</strong>
             </div>
           </div>
+          )}
 
           <div className="customer-card-actions">
-            {canCustomerPay(booking) && (
+            {!isCarBooking && canCustomerPay(booking) && (
               <Link
                 className="customer-primary-btn"
                 to={`/customer/checkout/${booking.id}`}
@@ -171,6 +175,8 @@ export default function BookingDetail() {
             )}
           </div>
         </article>
+
+        {isCarBooking && <CarBookingPanel booking={booking} />}
 
         {booking.status === "ALTERNATIVE_SUGGESTED" && (
           <article className="customer-glass-card customer-alternative-card">

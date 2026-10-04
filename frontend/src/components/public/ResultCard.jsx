@@ -1,22 +1,22 @@
 import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
-import { formatResponseTime, formatSen, formatShortDate } from "../../utils/formatPublic";
+import { formatResponseTime, formatSen } from "../../utils/formatPublic";
+import { durationText } from "../../utils/carPricing";
 import styles from "../../assets/styles/public/ResultCard.module.css";
 
 const TRANSMISSION = { AUTOMATIC: "Automatic", MANUAL: "Manual" };
 
 // One car in the results list. `href` already carries the trip (dates, age).
 export default function ResultCard({ result, href, linkState, saved, onToggleSave }) {
-  const { listing, days, quote, rateSen, depositPct, depositPerDaySen, remaining, heldUntil } = result;
+  const { listing, quote, rateSen, depositPct, depositPerDaySen, remaining } = result;
   const primary = listing.images.find((img) => img.isPrimary) || listing.images[0];
   const title = `${listing.vehicleMake} ${listing.vehicleModel}`;
   const meta = [listing.vehicleType, `${listing.seats} seats`, TRANSMISSION[listing.transmission], listing.fuelType]
     .filter(Boolean)
     .join(", ");
-  const dayWord = days === 1 ? "day" : "days";
 
   return (
-    <article className={`${styles.card} ${heldUntil ? styles.held : ""}`}>
+    <article className={styles.card}>
       <div className={styles.media}>
         {primary ? (
           <img src={primary.imageUrl} alt="" className={styles.img} />
@@ -65,11 +65,9 @@ export default function ResultCard({ result, href, linkState, saved, onToggleSav
         </div>
         <p className={styles.response}>{formatResponseTime(listing.operatorStats.responseTimeMins)}</p>
 
-        {heldUntil && <p className={styles.heldNote}>Frees up {formatShortDate(heldUntil)}</p>}
-
         <div className={styles.foot}>
           <div className={styles.pay}>
-            {quote && remaining <= 2 && !heldUntil && (
+            {quote && remaining <= 2 && (
               <p className={styles.scarcity}>
                 Only {remaining} left for these dates
               </p>
@@ -78,18 +76,18 @@ export default function ResultCard({ result, href, linkState, saved, onToggleSav
               {quote ? "Deposit" : "Deposit from"}
               <span className={styles.pctInLabel}>
                 {" "}
-                · {depositPct}% of {quote ? "total" : "rental"}
+                · {depositPct}% of rental
               </span>
             </p>
             <p className={styles.payFigure}>{formatSen(quote ? quote.depositSen : depositPerDaySen)}</p>
             <p className={styles.payWhen}>paid after the operator confirms</p>
             <p className={styles.paySub}>
               {quote
-                ? `${formatSen(rateSen)}/day × ${days} ${dayWord} · ${formatSen(quote.totalSen)} total`
+                ? `${formatSen(quote.totalSen)} rental for ${durationText(quote.hours)}`
                 : `${formatSen(rateSen)}/day · set dates for the total`}
               <span className={styles.pctInSub}>
                 {" "}
-                · {depositPct}% of {quote ? "total" : "rental"}
+                · {depositPct}% of rental
               </span>
             </p>
           </div>

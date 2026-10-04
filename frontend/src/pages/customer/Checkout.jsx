@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useCustomerBooking } from "../../hooks/useBookings";
 import { submitCustomerPayment } from "../../hooks/usePayments";
 import { createStripeCheckoutSession } from "../../services/customer_service";
@@ -33,15 +33,22 @@ export default function Checkout() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { booking, loading, error } = useCustomerBooking(id);
+  const [searchParams] = useSearchParams();
+  const requestedType = PAYMENT_TYPES[searchParams.get("type")] || null;
 
   const [method, setMethod] = useState("");
-  const [paymentType, setPaymentType] = useState(PAYMENT_TYPES.DOWN_PAYMENT);
+  const [chosenType, setChosenType] = useState(requestedType);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
   const isManualPayment = method === "DUITNOW_SPAY";
   const downPaymentPaid = booking?.payment?.downPaymentStatus === "PAID";
   const finalPaymentPaid = booking?.payment?.finalPaymentStatus === "PAID";
+  // The first part still owed, unless the customer picked one. A 0% deposit
+  // is settled on acceptance, so the balance comes first in that case.
+  const paymentType =
+    chosenType || (downPaymentPaid ? PAYMENT_TYPES.FINAL_PAYMENT : PAYMENT_TYPES.DOWN_PAYMENT);
+  const setPaymentType = setChosenType;
 
 const acceptedPaymentMethods = useMemo(() => {
   return booking?.operator?.config?.acceptedPaymentMethods || {};
@@ -193,7 +200,7 @@ useEffect(() => {
               label="Pay down-payment"
               description={`${formatMoney(booking.payment?.downPaymentAmount)} due ${formatCustomerDate(booking.payment?.downPaymentDueDate)}`}
               selected={paymentType === PAYMENT_TYPES.DOWN_PAYMENT}
-              disabled={downPaymentPaid || finalPaymentPaid}
+              disabled={downPaymentPaid}
               onClick={() => setPaymentType(PAYMENT_TYPES.DOWN_PAYMENT)}
             />
             <PaymentChoice
@@ -207,7 +214,7 @@ useEffect(() => {
               label="Pay full amount"
               description={formatMoney(booking.totalAmount)}
               selected={paymentType === PAYMENT_TYPES.FULL_PAYMENT}
-              disabled={downPaymentPaid || finalPaymentPaid}
+              disabled={downPaymentPaid || finalPaymentPaid || !Number(booking.payment?.finalPaymentAmount)}
               onClick={() => setPaymentType(PAYMENT_TYPES.FULL_PAYMENT)}
             />
           </div>

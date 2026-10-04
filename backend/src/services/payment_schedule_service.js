@@ -9,6 +9,19 @@ export function getPaymentSpec(payment, paymentType) {
     throw new Error("A valid payment type is required");
   }
 
+  const spec = buildPaymentSpec(payment, paymentType);
+  // A 0% or 100% down payment leaves one part at zero; it is settled on
+  // acceptance and there is nothing to charge.
+  if (!(spec.amount > 0)) {
+    const error = new Error("There is nothing to pay for this part of the booking");
+    error.statusCode = 400;
+    error.appCode = "NOTHING_TO_PAY";
+    throw error;
+  }
+  return spec;
+}
+
+function buildPaymentSpec(payment, paymentType) {
   if (paymentType === PAYMENT_TYPES.DOWN_PAYMENT) {
     return {
       amount: Number(payment.downPaymentAmount),

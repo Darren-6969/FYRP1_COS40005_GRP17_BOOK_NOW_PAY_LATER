@@ -2,8 +2,9 @@
 //
 // Creates a booking request (status PENDING, manual operator acceptance) for a
 // published car listing. The body carries identifiers and choices only; every
-// amount is computed here from the listing, the operator's BNPL settings and
-// the peak calendar.
+// amount is computed here from the listing (duration rates, overtime, points,
+// add-ons and CDW) and the operator's BNPL settings. The peak calendar only
+// decides the refund rule.
 //
 // Double booking is prevented by locking the listing row for the length of the
 // transaction, so two requests for the last car are serialised and the second
@@ -14,9 +15,9 @@ import { calculatePaymentDeadline } from "../services/payment_deadline_service.j
 import { notifyCustomerByBooking, notifyOperatorUsersByBooking } from "../services/notification_email_service.js";
 import { bookingSubmittedTemplate } from "../services/email_templates.js";
 import { tempBookingCode, formatBookingCode } from "../utils/bookingCode.js";
-import { addDays, fromSen, klHhmm, klPlainDate, rentalDays } from "../services/car_pricing_service.js";
+import { addDays, fromSen, klHhmm, klPlainDate, rateCardFor, rentalDays } from "../services/car_pricing_service.js";
 import { loadAvailability, loadPeakDates } from "../services/car_availability_service.js";
-import { loadOperatorFacts, loadPublicListing, priceSelection } from "../services/public_car_service.js";
+import { CDW_ID, loadOperatorFacts, loadPublicListing, priceSelection } from "../services/public_car_service.js";
 import { assignCreditTier } from "../services/credit_tier_service.js";
 import {
   claimIdempotencyKey,
@@ -28,7 +29,9 @@ import {
 
 const ENDPOINT = "POST /customer/car-bookings";
 const MIN_LEAD_MINUTES = 60;
-const MAX_RENTAL_DAYS = 30;
+// Monthly rates make longer rentals sellable; 90 days keeps the availability
+// window and the peak lookup bounded.
+const MAX_RENTAL_DAYS = 90;
 
 function fail(status, appCode, message, details) {
   const err = new Error(message);
@@ -51,6 +54,9 @@ function selectionFrom(body) {
       to: klPlainDate(returnAt),
       tt: klHhmm(returnAt),
       pickupPointId: body.pickupPointId ?? null,
+      dropoffPointId: body.dropoffPointId ?? null,
+      requestedLocation: body.requestedLocation ?? null,
+      cdw: body.cdw === true,
       addOns: Object.fromEntries(body.addOns.map((a) => [String(a.id), a.quantity])),
       driverDob: body.bookingDetails.driver.dateOfBirth,
     },
@@ -65,14 +71,18 @@ function validateSelection(listing, body, pickupAt, returnAt) {
   if (!days) throw fail(400, "INVALID_DATES", "Return must be after pick-up");
   if (days > MAX_RENTAL_DAYS) throw fail(400, "RENTAL_TOO_LONG", `Rentals are limited to ${MAX_RENTAL_DAYS} days`);
 
-  const pointIds = listing.branch.pickupPoints.map((p) => String(p.id));
-  const pointId = body.pickupPointId === null || body.pickupPointId === undefined ? null : String(body.pickupPointId);
-  if (pointId && pointId !== "branch" && !pointIds.includes(pointId)) {
-    throw fail(400, "PICKUP_POINT_INVALID", "That pick-up point is not offered for this car");
-  }
+  const points = new Map(listing.branch.pickupPoints.map((p) => [String(p.id), p]));
+  const check = (rawId, usageNot, code, label) => {
+    const id = rawId === null || rawId === undefined ? null : String(rawId);
+    if (!id || id === "branch") return;
+    const point = points.get(id);
+    if (!point || point.usage === usageNot) throw fail(400, code, `That ${label} point is not offered for this car`);
+  };
+  if (!body.requestedLocation) check(body.pickupPointId, "DROPOFF", "PICKUP_POINT_INVALID", "pickup");
+  check(body.dropoffPointId, "PICKUP", "DROPOFF_POINT_INVALID", "drop-off");
 
   const addonIds = listing.addons.map((a) => String(a.id));
-  const unknown = body.addOns.filter((a) => !addonIds.includes(String(a.id)));
+  const unknown = body.addOns.filter((a) => a.id !== CDW_ID && !addonIds.includes(String(a.id)));
   if (unknown.length) throw fail(400, "ADDON_INVALID", "One or more add-ons are not offered for this car");
 }
 
@@ -96,14 +106,21 @@ export async function createCarBooking(req, res, next) {
     const peakDates = await loadPeakDates(sel.from, addDays(sel.from, MAX_RENTAL_DAYS + 1));
     const r = priceSelection(listing, facts.config, sel, peakDates);
 
-    if (r.eligibility.underage) {
-      throw fail(422, "DRIVER_UNDERAGE", `The driver must be at least ${r.eligibility.minAge} on the pick-up date`);
+    if (r.problems.length) {
+      const [first] = r.problems;
+      throw fail(422, first.code, first.message, { problems: r.problems });
     }
 
     const p = r.priced;
     const paymentDeadline = await calculatePaymentDeadline(listing.operatorId, null, pickupAt);
     const chosenAddons = new Map(listing.addons.map((a) => [String(a.id), a]));
-    const location = r.point.id === "branch" ? `${listing.branch.name}, ${listing.branch.address}` : r.point.label;
+    const pointText = (pt) => (pt.id === "branch" ? `${listing.branch.name}, ${listing.branch.address}` : pt.label);
+    const location = r.requestedLocation
+      ? `Requested: ${r.requestedLocation}`
+      : r.dropoff.id === r.point.id
+        ? pointText(r.point)
+        : `${pointText(r.point)} → ${pointText(r.dropoff)}`;
+    const pointId = (pt) => (pt && /^\d+$/.test(pt.id) ? Number(pt.id) : null);
 
     const booking = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Listing" WHERE id = ${listing.id} FOR UPDATE`;
@@ -133,36 +150,47 @@ export async function createCarBooking(req, res, next) {
           pickupDate: pickupAt,
           returnDate: returnAt,
           location,
-          pickupPointId: r.point.id === "branch" ? null : Number(r.point.id),
+          pickupPointId: pointId(r.point),
+          dropoffPointId: pointId(r.dropoff),
+          requestedLocation: r.requestedLocation || null,
           quantity: 1,
           rentalAmount: fromSen(p.rentalSen),
           addonsAmount: fromSen(p.addOnsSen),
-          feesAmount: fromSen(p.surchargeSen + p.pickupFeeSen),
+          feesAmount: fromSen(p.overtimeSen + p.surchargeSen + p.pickupFeeSen + p.dropoffFeeSen),
           discountAmount: "0.00",
           totalAmount: fromSen(p.totalSen),
           creditTier: assignCreditTier(fromSen(p.totalSen), platformSettings.creditTierThresholds),
           paymentDeadline,
           status: "PENDING",
           pricingSnapshot: {
+            version: 2, // SRS V2.9 duration pricing
             currency: "MYR",
             unit: "sen",
-            dayLines: p.dayLines,
+            rateCard: rateCardFor(listing),
+            hours: p.hours,
+            days: p.days,
+            rateLines: p.rateLines,
             rentalSen: p.rentalSen,
+            nightHandovers: p.nightHandovers,
+            overtimeSen: p.overtimeSen,
             depositPct: p.depositPct,
             depositSen: p.depositSen,
             addOnLines: p.addOnLines,
             surchargeSen: p.surchargeSen,
             pickupFeeSen: p.pickupFeeSen,
+            dropoffFeeSen: p.dropoffFeeSen,
             balanceSen: p.balanceSen,
             totalSen: p.totalSen,
             refundRule: r.refundRule,
             pickupPoint: r.point,
+            dropoffPoint: r.dropoff,
+            requestedLocation: r.requestedLocation || null,
           },
           bookingDetails: body.bookingDetails,
           addons: {
             create: p.addOnLines.map((line) => ({
-              listingAddonId: Number(line.id),
-              name: chosenAddons.get(line.id).name,
+              listingAddonId: line.id === CDW_ID ? null : Number(line.id),
+              name: line.id === CDW_ID ? line.label : chosenAddons.get(line.id).name,
               unit: line.unit === "per_day" ? "PER_DAY" : "PER_BOOKING",
               unitPrice: fromSen(line.unitPriceSen),
               quantity: line.qty,

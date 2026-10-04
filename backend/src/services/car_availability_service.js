@@ -8,12 +8,13 @@
 //   used(day)      = active bookings of the listing covering that day
 //   remaining(day) = stock(day) - used(day)
 //
-// Rolling return hold: an IN_PROGRESS booking with no returnedAt keeps its car
-// out through today even after its return date, until the operator confirms
-// the return. Manual acceptance still lets the operator overrule this.
+// A booking holds its car for its booked dates only (SRS V2.9 removed the
+// rolling return hold). A late return is recorded and charged at the counter.
 
 import prisma from "../config/db.js";
-import { addDays, klPlainDate, klToday, rentalDays, rentalDates } from "./car_pricing_service.js";
+import { addDays, klPlainDate, klToday, occupiedDates } from "./car_pricing_service.js";
+
+export { occupiedDates };
 
 // Statuses that hold a car. PENDING is included so stock is reserved when the
 // customer sends the request, not when the operator accepts it.
@@ -34,22 +35,11 @@ function datesBetween(fromPlain, toPlainExclusive) {
   return out;
 }
 
-// Plain dates a booking occupies, including the rolling return hold.
-export function occupiedDates(booking, today = klToday()) {
-  if (!booking.pickupDate || !booking.returnDate) return [];
-  const dates = rentalDates(booking.pickupDate, rentalDays(booking.pickupDate, booking.returnDate));
-  const unreturned = booking.status === "IN_PROGRESS" && !booking.returnedAt;
-  if (unreturned && dates.length && dates[dates.length - 1] < today) {
-    for (let d = addDays(dates[dates.length - 1], 1); d <= today; d = addDays(d, 1)) dates.push(d);
-  }
-  return dates;
-}
-
 /**
  * Remaining stock per listing per plain date in [from, toExclusive).
  * Pass `db` (a transaction client) when called inside a transaction.
  *
- * @returns {Map<number, {remaining: Map<string, number>, heldDates: Set<string>}>}
+ * @returns {Map<number, {remaining: Map<string, number>}>}
  */
 export async function loadAvailability(listings, fromPlain, toPlainExclusive, db = prisma) {
   const ids = listings.map((l) => l.id);
@@ -58,20 +48,15 @@ export async function loadAvailability(listings, fromPlain, toPlainExclusive, db
 
   const windowStart = new Date(`${fromPlain}T00:00:00+08:00`);
   const windowEnd = new Date(`${toPlainExclusive}T00:00:00+08:00`);
-  const today = klToday();
-
   const [bookings, allocations] = await Promise.all([
     db.booking.findMany({
       where: {
         listingId: { in: ids },
         status: { in: ACTIVE_BOOKING_STATUSES },
         pickupDate: { lt: windowEnd },
-        OR: [
-          { returnDate: { gt: windowStart } },
-          { status: "IN_PROGRESS", returnedAt: null },
-        ],
+        returnDate: { gt: windowStart },
       },
-      select: { listingId: true, status: true, pickupDate: true, returnDate: true, returnedAt: true },
+      select: { listingId: true, pickupDate: true, returnDate: true },
     }),
     db.listingAllocation.findMany({
       where: { listingId: { in: ids }, date: { gte: new Date(`${fromPlain}T00:00:00Z`), lt: new Date(`${toPlainExclusive}T00:00:00Z`) } },
@@ -82,7 +67,7 @@ export async function loadAvailability(listings, fromPlain, toPlainExclusive, db
 
   for (const listing of listings) {
     const remaining = new Map(days.map((d) => [d, listing.quantity]));
-    result.set(listing.id, { remaining, heldDates: new Set() });
+    result.set(listing.id, { remaining });
   }
 
   for (const a of allocations) {
@@ -95,26 +80,21 @@ export async function loadAvailability(listings, fromPlain, toPlainExclusive, db
   for (const b of bookings) {
     const entry = result.get(b.listingId);
     if (!entry) continue;
-    const booked = rentalDates(b.pickupDate, rentalDays(b.pickupDate, b.returnDate));
-    for (const date of occupiedDates(b, today)) {
+    for (const date of occupiedDates(b)) {
       if (!entry.remaining.has(date)) continue;
       entry.remaining.set(date, entry.remaining.get(date) - 1);
-      if (!booked.includes(date)) entry.heldDates.add(date);
     }
   }
 
   return result;
 }
 
-// Summary the public pages use: sold-out dates in the horizon, and the first
-// bookable date when a car is still out with a customer today.
+// Summary the public pages use: sold-out dates in the horizon.
+// availableFrom stays in the shape for the existing pages; with no return
+// hold there is no "held until" date, so it is always null.
 export function summarise(entry, today = klToday()) {
   const bookedDates = [...entry.remaining].filter(([, n]) => n <= 0).map(([d]) => d);
-  let availableFrom = null;
-  if (entry.heldDates.has(today) && (entry.remaining.get(today) ?? 1) <= 0) {
-    availableFrom = [...entry.remaining.keys()].find((d) => d > today && entry.remaining.get(d) > 0) ?? null;
-  }
-  return { bookedDates, availableFrom, remainingToday: entry.remaining.get(today) ?? 0 };
+  return { bookedDates, availableFrom: null, remainingToday: entry.remaining.get(today) ?? 0 };
 }
 
 export async function horizonAvailability(listings, db = prisma) {
