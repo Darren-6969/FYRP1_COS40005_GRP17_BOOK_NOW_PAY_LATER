@@ -9,25 +9,97 @@ export async function getDashboardStats(req, res, next) {
     const bookingFilter  = isMaster ? {} : { operatorId: req.user.operatorId };
     const paymentFilter  = isMaster ? {} : { booking: { operatorId: req.user.operatorId } };
 
-    const [totalBookings, payments, overduePayments, operators] =
-      await Promise.all([
-        prisma.booking.count({ where: bookingFilter }),
-        prisma.payment.findMany({ where: paymentFilter }),
-        prisma.payment.count({ where: { status: "OVERDUE", ...paymentFilter } }),
-        isMaster
-          ? prisma.operator.count({ where: { status: "ACTIVE" } })
-          : Promise.resolve(1),
-      ]);
+    const startDate = new Date();
+    startDate.setUTCHours(0, 0, 0, 0);
+    startDate.setUTCDate(startDate.getUTCDate() - 6);
+    const sevenDayBookingWhere = {
+      ...bookingFilter,
+      createdAt: { gte: startDate },
+    };
+    const sevenDayPaymentWhere = {
+      ...paymentFilter,
+      createdAt: { gte: startDate },
+    };
 
-    const revenue = payments
-      .filter((p) => p.status === "PAID")
-      .reduce((sum, p) => sum + Number(p.amount), 0);
-
-    res.json({
+    const [
       totalBookings,
       revenue,
       overduePayments,
+      operators,
+      registeredUsers,
+      recentBookings,
+      recentPayments,
+      paymentCount,
+      failedPayments,
+      callbackBacklog,
+      failedCronLogs,
+    ] = await Promise.all([
+      prisma.booking.count({ where: bookingFilter }),
+      prisma.payment.aggregate({
+        where: { ...paymentFilter, status: "PAID" },
+        _sum: { amount: true },
+      }),
+      prisma.payment.count({ where: { status: "OVERDUE", ...paymentFilter } }),
+      isMaster
+        ? prisma.operator.count({ where: { status: "ACTIVE" } })
+        : Promise.resolve(1),
+      isMaster ? prisma.user.count() : Promise.resolve(null),
+      prisma.booking.findMany({
+        where: sevenDayBookingWhere,
+        select: { createdAt: true },
+      }),
+      prisma.payment.findMany({
+        where: { ...paymentFilter, status: "PAID", paidAt: { gte: startDate } },
+        select: { paidAt: true, amount: true },
+      }),
+      prisma.payment.count({ where: sevenDayPaymentWhere }),
+      prisma.payment.count({ where: { ...sevenDayPaymentWhere, status: "FAILED" } }),
+      isMaster
+        ? prisma.stripeWebhookEvent.count({
+            where: { status: { in: ["PENDING", "FAILED", "PROCESSING"] } },
+          })
+        : Promise.resolve(null),
+      isMaster
+        ? prisma.cronJobLog.count({
+            where: {
+              startedAt: { gte: startDate },
+              OR: [{ status: "FAILED" }, { failureCount: { gt: 0 } }],
+            },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const dailyTrend = new Map();
+    for (let dayOffset = 0; dayOffset < 7; dayOffset += 1) {
+      const day = new Date(startDate);
+      day.setUTCDate(startDate.getUTCDate() + dayOffset);
+      const date = day.toISOString().slice(0, 10);
+      dailyTrend.set(date, { date, bookings: 0, revenue: 0 });
+    }
+    for (const booking of recentBookings) {
+      const date = booking.createdAt.toISOString().slice(0, 10);
+      if (dailyTrend.has(date)) dailyTrend.get(date).bookings += 1;
+    }
+    for (const payment of recentPayments) {
+      if (!payment.paidAt) continue;
+      const date = payment.paidAt.toISOString().slice(0, 10);
+      if (dailyTrend.has(date)) dailyTrend.get(date).revenue += Number(payment.amount);
+    }
+
+    res.json({
+      totalBookings,
+      revenue: Number(revenue._sum.amount || 0),
+      overduePayments,
       activeOperators: operators,
+      registeredUsers,
+      sevenDayTrend: [...dailyTrend.values()],
+      paymentFailureRate: paymentCount
+        ? Math.round((failedPayments / paymentCount) * 10000) / 100
+        : 0,
+      failedPayments,
+      paymentCount,
+      callbackBacklog,
+      scheduledTaskFailures: failedCronLogs,
     });
   } catch (err) {
     next(err);

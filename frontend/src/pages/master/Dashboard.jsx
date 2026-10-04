@@ -1,18 +1,32 @@
 import { useEffect, useState } from "react";
 import { 
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
-  ComposedChart, Area
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Line, CartesianGrid, Legend,
+  ComposedChart
 } from "recharts";
 import { getBookings } from "../../services/booking_service";
 import { getPayments } from "../../services/payment_service";
 import { operatorService } from "../../services/operator_service";
 import { Eye } from "lucide-react";
+import { getDashboardStats } from "../../services/admin_service";
+
+function MetricTitle({ title, description }) {
+  return (
+    <div className="master-metric-title-row">
+      <span className="master-metric-title-text">{title}</span>
+      <span className="master-metric-info-wrap">
+        <Eye size={14} />
+        <span className="master-metric-tooltip">{description}</span>
+      </span>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   // ========== ALL HOOKS - TOP LEVEL ==========
   const [bookings, setBookings] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [dashboardStats, setDashboardStats] = useState(null);
   const [forecastData, setForecastData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -26,7 +40,7 @@ export default function Dashboard() {
     return "repeat(2, 1fr)";
   }
 
-  return "repeat(6, 1fr)";
+  return "repeat(4, 1fr)";
   };
   
   const [gridColumns, setGridColumns] = useState(getGridColumns());
@@ -44,6 +58,13 @@ export default function Dashboard() {
         let bookingsRes = { data: [] };
         let paymentsRes = { data: [] };
         let reportsRes = { data: null };
+        let statsRes = { data: null };
+
+        try {
+          statsRes = await getDashboardStats();
+        } catch (e) {
+          console.warn("Dashboard stats API failed:", e);
+        }
         
         try {
           bookingsRes = await getBookings();
@@ -66,6 +87,7 @@ export default function Dashboard() {
         setBookings(Array.isArray(bookingsRes?.data) ? bookingsRes.data : []);
         setPayments(Array.isArray(paymentsRes?.data) ? paymentsRes.data : []);
         setForecastData(reportsRes?.data || null);
+        setDashboardStats(statsRes?.data || null);
         
       } catch (err) {
         console.error("Dashboard error:", err);
@@ -92,15 +114,47 @@ export default function Dashboard() {
   }, []);
 
   // ========== CALCULATIONS ==========
-  const totalBookings = bookings?.length || 0;
+  const totalBookings = dashboardStats?.totalBookings ?? bookings?.length ?? 0;
   const pendingBookings = bookings?.filter(b => b?.status === "PENDING").length || 0;
   const paidBookings = bookings?.filter(b => b?.status === "PAID").length || 0;
   const cancelledBookings = bookings?.filter(b => 
     b?.status === "REJECTED" || b?.status === "CANCELLED"
   ).length || 0;
-  const overduePayments = payments?.filter(p => p?.status === "OVERDUE").length || 0;
-  const totalRevenue = payments?.filter(p => p?.status === "PAID")
+  const overduePayments = dashboardStats?.overduePayments ?? payments?.filter(p => p?.status === "OVERDUE").length ?? 0;
+  const calculatedRevenue = payments?.filter(p => p?.status === "PAID")
     .reduce((sum, p) => sum + Number(p?.amount || 0), 0) || 0;
+  const totalRevenue = dashboardStats?.revenue ?? calculatedRevenue;
+
+  const weeklyTrend = (dashboardStats?.sevenDayTrend || []).map((item) => ({
+    ...item,
+    label: new Date(`${item.date}T00:00:00`).toLocaleDateString("en-MY", {
+      day: "numeric",
+      month: "short",
+    }),
+  }));
+  const paymentFailureRate = Number(dashboardStats?.paymentFailureRate || 0);
+  const callbackBacklog = dashboardStats?.callbackBacklog ?? 0;
+  const scheduledTaskFailures = dashboardStats?.scheduledTaskFailures ?? 0;
+  const healthAlerts = [
+    {
+      title: "Payment failure rate",
+      value: `${paymentFailureRate}%`,
+      detail: `${dashboardStats?.failedPayments || 0} failed of ${dashboardStats?.paymentCount || 0} payments in 7 days`,
+      level: paymentFailureRate >= 10 ? "critical" : paymentFailureRate >= 5 ? "warning" : "healthy",
+    },
+    {
+      title: "Callback backlog",
+      value: callbackBacklog.toLocaleString(),
+      detail: "Unprocessed payment callbacks",
+      level: callbackBacklog >= 20 ? "critical" : callbackBacklog > 0 ? "warning" : "healthy",
+    },
+    {
+      title: "Scheduled task failures",
+      value: scheduledTaskFailures.toLocaleString(),
+      detail: "Failed or partial runs in 7 days",
+      level: scheduledTaskFailures > 0 ? "critical" : "healthy",
+    },
+  ];
 
   // ========== 30-DAY BOOKINGS OVERVIEW (HISTORICAL) ==========
   const getLast30DaysData = () => {
@@ -345,17 +399,6 @@ export default function Dashboard() {
     forecastNote: { marginTop: '16px', textAlign: 'center', fontSize: '12px', color: '#6b7280', borderTop: '1px solid #e5e7eb', paddingTop: '16px' }
   };
 
-  const MetricTitle = ({ title, description }) => (
-    <div className="master-metric-title-row">
-      <span className="master-metric-title-text">{title}</span>
-
-      <span className="master-metric-info-wrap">
-        <Eye size={14} />
-        <span className="master-metric-tooltip">{description}</span>
-      </span>
-    </div>
-  );
-
   // ========== CONDITIONAL RETURNS ==========
   if (loading) {
     return (
@@ -383,7 +426,7 @@ export default function Dashboard() {
     <div style={styles.container}>
       <h1 style={styles.pageTitle}>Dashboard</h1>
 
-      {/* ROW 1: Six Metric Cards */}
+      {/* Platform-wide metrics */}
       <div style={styles.metricsGrid}>
       <div style={styles.metricCard}>
         <MetricTitle
@@ -432,7 +475,71 @@ export default function Dashboard() {
         />
         <div style={styles.metricValue}>RM {totalRevenue.toLocaleString()}</div>
       </div>
+
+      <div style={styles.metricCard}>
+        <MetricTitle
+          title="Active Operators"
+          description="Operators currently active on the platform."
+        />
+        <div style={styles.metricValue}>{(dashboardStats?.activeOperators ?? 0).toLocaleString()}</div>
+      </div>
+
+      <div style={styles.metricCard}>
+        <MetricTitle
+          title="Registered Users"
+          description="All user accounts registered on the platform."
+        />
+        <div style={styles.metricValue}>{(dashboardStats?.registeredUsers ?? 0).toLocaleString()}</div>
+      </div>
     </div>
+
+      <section style={styles.chartSection} aria-labelledby="platform-health-title">
+        <div style={styles.sectionHeader}>
+          <h2 id="platform-health-title" style={styles.sectionTitle}>Platform health</h2>
+          <span style={{ fontSize: "12px", color: "#6b7280" }}>Last 7 days</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: "12px" }}>
+          {healthAlerts.map((alert) => {
+            const palette = {
+              healthy: { background: "#f0fdf4", border: "#bbf7d0", color: "#166534", label: "Healthy" },
+              warning: { background: "#fffbeb", border: "#fde68a", color: "#92400e", label: "Attention" },
+              critical: { background: "#fef2f2", border: "#fecaca", color: "#991b1b", label: "Critical" },
+            }[alert.level];
+            return (
+              <div key={alert.title} style={{ padding: "14px 16px", border: `1px solid ${palette.border}`, borderLeft: `4px solid ${palette.color}`, borderRadius: "6px", background: palette.background }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+                  <strong style={{ color: "#1f2937", fontSize: "13px" }}>{alert.title}</strong>
+                  <span style={{ color: palette.color, fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>{palette.label}</span>
+                </div>
+                <div style={{ color: "#111827", fontSize: "24px", fontWeight: 700, marginTop: "8px" }}>{alert.value}</div>
+                <div style={{ color: "#6b7280", fontSize: "12px", marginTop: "3px" }}>{alert.detail}</div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section style={styles.chartSection} aria-labelledby="seven-day-trend-title">
+        <div style={styles.sectionHeader}>
+          <h2 id="seven-day-trend-title" style={styles.sectionTitle}>Seven-day bookings and revenue</h2>
+        </div>
+        {weeklyTrend.length > 0 ? (
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={weeklyTrend}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} />
+              <YAxis yAxisId="bookings" tick={{ fontSize: 11, fill: "#6b7280" }} allowDecimals={false} />
+              <YAxis yAxisId="revenue" orientation="right" tick={{ fontSize: 11, fill: "#6b7280" }} tickFormatter={(value) => `RM ${Number(value).toLocaleString()}`} />
+              <Tooltip formatter={(value, name) => name === "Revenue" ? [`RM ${Number(value).toLocaleString()}`, name] : [value, name]} />
+              <Legend />
+              <Line yAxisId="bookings" type="monotone" dataKey="bookings" name="Bookings" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line yAxisId="revenue" type="monotone" dataKey="revenue" name="Revenue" stroke="#059669" strokeWidth={2.5} dot={{ r: 3 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : (
+          <div style={styles.noData}>Seven-day trend data is unavailable.</div>
+        )}
+      </section>
 
       {/* ROW 2: Booking Overview & Forecast Line Chart (MOST IMPORTANT) */}
       <div style={styles.chartSection}>
