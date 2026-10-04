@@ -19,7 +19,7 @@
     },
     {
       "path": "/api/cron/vercel-idempotency-cleanup",
-      "schedule": "0 * * * *"
+      "schedule": "30 0 * * *"
     }
   ]
 }
