@@ -30,6 +30,7 @@ import {
 } from "../services/payment_schedule_service.js";
 import { getPlatformDeadlinePolicy, validatePublishedDeadline } from "../services/platform_policy_service.js";
 import { createAuditLog as writeAuditLog } from "../services/log_service.js";
+import { getPlatformSettings } from "../services/platform_settings_service.js";
 import {
   buildOperatorSettlementReport,
   createSettlementCsv,
@@ -282,10 +283,15 @@ export async function createOperator(req, res, next) {
           },
         });
 
+        const platformSettings = await tx.platformSettings.upsert({
+          where: { id: 1 },
+          create: { id: 1 },
+          update: {},
+        });
         await tx.bNPLConfig.create({
           data: {
             operatorId: operator.id,
-            paymentDeadlineDays: 3,
+            paymentDeadlineDays: platformSettings.defaultPaymentDeadlineDays,
             allowReceiptUpload: true,
             autoCancelOverdue: true,
             invoiceLogoUrl: logoUrl || null,
@@ -1735,7 +1741,7 @@ export async function getOperatorSettlements(req, res, next) {
 
     const report = await loadOperatorSettlementReport(req);
     res.json({
-      platformFeePercent: Number(process.env.STRIPE_PLATFORM_FEE_PERCENT ?? 10),
+      platformFeePercent: Number((await getPlatformSettings()).commissionRate),
       ...report,
     });
   } catch (err) {
@@ -2675,10 +2681,11 @@ async function getOrCreateOperatorConfig(operatorId) {
   });
 
   if (!config) {
+    const platformSettings = await getPlatformSettings();
     config = await prisma.bNPLConfig.create({
       data: {
         operatorId,
-        paymentDeadlineDays: 3,
+        paymentDeadlineDays: platformSettings.defaultPaymentDeadlineDays,
         allowReceiptUpload: true,
         autoCancelOverdue: true,
         bookingResponseDeadlineMinutes: 120,

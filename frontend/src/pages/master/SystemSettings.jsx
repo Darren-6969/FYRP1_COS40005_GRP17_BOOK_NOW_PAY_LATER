@@ -7,7 +7,14 @@ import {
   deletePeakDate,
   getPlatformDeadlineSettings,
   updatePlatformDeadlineSettings,
+  getPlatformSettings,
+  updatePlatformSettings,
 } from "../../services/admin_service";
+
+const DEFAULT_FEATURE_FLAGS = {
+  allowReceiptUpload: true,
+  automaticOverdueHandling: true,
+};
 
 function dateTime(value) {
   if (!value) return "-";
@@ -41,10 +48,19 @@ export default function SystemSettings() {
   const [peakForm, setPeakForm] = useState({ date: "", label: "" });
   const [deadlinePolicy, setDeadlinePolicy] = useState({ publishedTiers: [1, 3, 7], mostLenientDays: 7 });
   const [tierInput, setTierInput] = useState("1, 3, 7");
+  const [platformForm, setPlatformForm] = useState({
+    commissionRate: "5",
+    defaultPaymentDeadlineDays: "3",
+    licenceReuploadWindowHours: "48",
+    creditTierThresholds: "{}",
+    exposureLimits: "{}",
+    featureFlags: DEFAULT_FEATURE_FLAGS,
+  });
 
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingPlatform, setSavingPlatform] = useState(false);
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -56,12 +72,22 @@ export default function SystemSettings() {
       const res = await getBNPLConfigs();
       const peakRes = await getPeakDates();
       const policyRes = await getPlatformDeadlineSettings();
+      const platformRes = await getPlatformSettings();
       const items = res.data?.configs || [];
+      const settings = platformRes.data;
 
       setConfigs(items);
       setPeakDates(peakRes.data || []);
       setDeadlinePolicy(policyRes.data);
       setTierInput((policyRes.data?.publishedTiers || []).join(", "));
+      setPlatformForm({
+        commissionRate: String(settings.commissionRate ?? 5),
+        defaultPaymentDeadlineDays: String(settings.defaultPaymentDeadlineDays ?? 3),
+        licenceReuploadWindowHours: String(settings.licenceReuploadWindowHours ?? 48),
+        creditTierThresholds: JSON.stringify(settings.creditTierThresholds || {}, null, 2),
+        exposureLimits: JSON.stringify(settings.exposureLimits || {}, null, 2),
+        featureFlags: { ...DEFAULT_FEATURE_FLAGS, ...(settings.featureFlags || {}) },
+      });
 
       if (items.length && !selectedOperatorId) {
         setSelectedOperatorId(String(items[0].operatorId));
@@ -114,6 +140,52 @@ export default function SystemSettings() {
       await load();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to update platform deadline tiers.");
+    }
+  };
+
+  const handlePlatformChange = (event) => {
+    const { name, value } = event.target;
+    setPlatformForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleGlobalFeatureFlagChange = (event) => {
+    const { name, checked } = event.target;
+    setPlatformForm((prev) => ({
+      ...prev,
+      featureFlags: { ...prev.featureFlags, [name]: checked },
+    }));
+  };
+
+  const savePlatformSettings = async (event) => {
+    event.preventDefault();
+    setSavingPlatform(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const creditTierThresholds = JSON.parse(platformForm.creditTierThresholds);
+      const exposureLimits = JSON.parse(platformForm.exposureLimits);
+      if (!creditTierThresholds || typeof creditTierThresholds !== "object" || Array.isArray(creditTierThresholds)) {
+        throw new Error("Credit tier thresholds must be a JSON object.");
+      }
+      if (!exposureLimits || typeof exposureLimits !== "object" || Array.isArray(exposureLimits)) {
+        throw new Error("Exposure limits must be a JSON object.");
+      }
+
+      await updatePlatformSettings({
+        commissionRate: Number(platformForm.commissionRate),
+        defaultPaymentDeadlineDays: Number(platformForm.defaultPaymentDeadlineDays),
+        licenceReuploadWindowHours: Number(platformForm.licenceReuploadWindowHours),
+        creditTierThresholds,
+        exposureLimits,
+        featureFlags: platformForm.featureFlags,
+      });
+      setMessage("Platform rules and feature flags saved.");
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to update platform settings.");
+    } finally {
+      setSavingPlatform(false);
     }
   };
 
@@ -219,6 +291,58 @@ export default function SystemSettings() {
 
   return (
     <div className="page-stack">
+      <section className="card">
+        <div className="section-header">
+          <div>
+            <h3>Platform Rules &amp; Feature Flags</h3>
+            <p>Global rules apply platform-wide. Operator-level controls below can further disable supported features for an individual operator.</p>
+          </div>
+        </div>
+        <form className="admin-form-grid" onSubmit={savePlatformSettings}>
+          <label>
+            <span>Commission rate (%)</span>
+            <input name="commissionRate" type="number" min="0" max="100" step="0.01" value={platformForm.commissionRate} onChange={handlePlatformChange} required />
+          </label>
+          <label>
+            <span>Default payment deadline (days)</span>
+            <input name="defaultPaymentDeadlineDays" type="number" min="1" value={platformForm.defaultPaymentDeadlineDays} onChange={handlePlatformChange} required />
+            <small>Must be one of the published deadline tiers.</small>
+          </label>
+          <label>
+            <span>Licence re-upload window (hours)</span>
+            <input name="licenceReuploadWindowHours" type="number" min="1" max="720" value={platformForm.licenceReuploadWindowHours} onChange={handlePlatformChange} required />
+          </label>
+          <label>
+            <span>Credit tier thresholds (JSON object)</span>
+            <textarea name="creditTierThresholds" value={platformForm.creditTierThresholds} onChange={handlePlatformChange} rows={4} placeholder={'{"Tier 1": 1000, "Tier 2": 5000}'} />
+            <small>Use tier names as keys and non-negative numeric thresholds as values.</small>
+          </label>
+          <label>
+            <span>Exposure limits (JSON object)</span>
+            <textarea name="exposureLimits" value={platformForm.exposureLimits} onChange={handlePlatformChange} rows={4} placeholder={'{"Tier 1": 500, "Tier 2": 2500}'} />
+            <small>Use tier names as keys and non-negative numeric limits as values.</small>
+          </label>
+          <div className="wide">
+            <h4 style={{ margin: "4px 0 10px", fontSize: 14, color: "#0f172a" }}>Global feature switches</h4>
+            <div className="admin-form-grid" style={{ margin: 0 }}>
+              <label className="admin-checkbox">
+                <input type="checkbox" name="allowReceiptUpload" checked={Boolean(platformForm.featureFlags.allowReceiptUpload)} onChange={handleGlobalFeatureFlagChange} />
+                <span>Manual receipt upload</span>
+              </label>
+              <label className="admin-checkbox">
+                <input type="checkbox" name="automaticOverdueHandling" checked={Boolean(platformForm.featureFlags.automaticOverdueHandling)} onChange={handleGlobalFeatureFlagChange} />
+                <span>Automatic overdue processing</span>
+              </label>
+            </div>
+          </div>
+          <div className="admin-form-actions">
+            <button className="btn primary" type="submit" disabled={savingPlatform}>
+              {savingPlatform ? "Saving..." : "Save Platform Rules"}
+            </button>
+          </div>
+        </form>
+      </section>
+
       <section className="card">
         <div className="section-header">
           <div>
@@ -344,7 +468,7 @@ export default function SystemSettings() {
                 checked={Boolean(form.allowReceiptUpload)}
                 onChange={handleChange}
               />
-              <span>Allow manual DuitNow / SPay receipt upload</span>
+                <span>Per-operator feature flag: manual receipt upload</span>
             </label>
 
             <label className="admin-checkbox">
@@ -354,7 +478,7 @@ export default function SystemSettings() {
                 checked={Boolean(form.autoCancelOverdue)}
                 onChange={handleChange}
               />
-              <span>Auto-mark unpaid bookings as overdue after deadline</span>
+                <span>Per-operator feature flag: automatic overdue processing</span>
             </label>
 
             {/* ── Email & Invoice Branding ─────────────────── */}

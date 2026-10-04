@@ -12,6 +12,7 @@ import { bookingStatusTemplate } from "./email_templates.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
 import { withDbRetry, ensureDbConnection } from "../utils/dbRetry.js"; // <-- add
 import { runLoggedCronJob } from "./cron_job_service.js";
+import { getPlatformSettings, isFeatureEnabled } from "./platform_settings_service.js";
 
 let lastOverdueRun = null;
 let lastOverdueResult = null;
@@ -314,7 +315,9 @@ async function performOverdueBookingCheck({
 
     const now = new Date();
 
-    const overdueCandidates = await prisma.booking.findMany({
+    const platformSettings = await getPlatformSettings();
+    const overdueCandidates = isFeatureEnabled(platformSettings, "automaticOverdueHandling")
+      ? await prisma.booking.findMany({
       where: {
         paymentDeadline: {
           lt: now,
@@ -345,7 +348,8 @@ async function performOverdueBookingCheck({
         },
       },
       include: includeBookingRelations(),
-    });
+      })
+      : [];
 
     const expired = [];
 

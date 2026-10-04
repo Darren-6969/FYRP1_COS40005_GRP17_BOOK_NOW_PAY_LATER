@@ -2,6 +2,10 @@ import prisma from "../config/db.js";
 import { parseId } from "../utils/parseId.js";
 import { getPlatformDeadlinePolicy, isPlatformPeakDate, validatePublishedDeadline } from "../services/platform_policy_service.js";
 import { createAuditLog } from "../services/log_service.js";
+import {
+  DEFAULT_PLATFORM_FEATURE_FLAGS,
+  getPlatformSettings as loadPlatformSettings,
+} from "../services/platform_settings_service.js";
 
 function canManageOperator(req, operatorId) {
   if (req.user.role === "MASTER_SELLER") return true;
@@ -23,11 +27,12 @@ async function ensureConfig(operatorId) {
   });
 
   if (existing) return existing;
+  const platformSettings = await loadPlatformSettings();
 
   return prisma.bNPLConfig.create({
     data: {
       operatorId,
-      paymentDeadlineDays: 3,
+      paymentDeadlineDays: platformSettings.defaultPaymentDeadlineDays,
       allowReceiptUpload: true,
       autoCancelOverdue: true,
       invoiceFooterText: "Thank you for using Book Now Pay Later.",
@@ -170,22 +175,22 @@ export async function updateBNPLConfig(req, res, next) {
       });
     }
 
-    const config = await prisma.bNPLConfig.update({
-      where: { id: existing.id },
-      data,
-      include: {
-        operator: true,
-      },
-    });
-
-    await createAuditLog({
-      req,
-      action: "BNPL_CONFIG_UPDATED",
-      entityType: "BNPLConfig",
-      entityId: config.id,
-      before: Object.fromEntries(Object.keys(data).map((key) => [key, existing[key]])),
-      after: Object.fromEntries(Object.keys(data).map((key) => [key, config[key]])),
-      details: { operatorId },
+    const config = await prisma.$transaction(async (tx) => {
+      const updated = await tx.bNPLConfig.update({
+        where: { id: existing.id },
+        data,
+        include: { operator: true },
+      });
+      await createAuditLog({
+        req,
+        action: "BNPL_CONFIG_UPDATED",
+        entityType: "BNPLConfig",
+        entityId: updated.id,
+        before: Object.fromEntries(Object.keys(data).map((key) => [key, existing[key]])),
+        after: Object.fromEntries(Object.keys(data).map((key) => [key, updated[key]])),
+        details: { operatorId },
+      }, tx);
+      return updated;
     });
 
     res.json(config);
@@ -213,19 +218,152 @@ export async function updatePlatformDeadlineSettings(req, res, next) {
     }
 
     const before = await getPlatformDeadlinePolicy();
-    const after = await prisma.platformDeadlinePolicy.update({
-      where: { id: 1 },
-      data: { publishedTiers: tiers, mostLenientDays },
-    });
-    await createAuditLog({
-      req,
-      action: "PLATFORM_DEADLINE_POLICY_UPDATED",
-      entityType: "PlatformDeadlinePolicy",
-      entityId: "1",
-      before: { publishedTiers: before.publishedTiers, mostLenientDays: before.mostLenientDays },
-      after: { publishedTiers: after.publishedTiers, mostLenientDays: after.mostLenientDays },
+    const settings = await loadPlatformSettings();
+    if (!tiers.includes(settings.defaultPaymentDeadlineDays)) {
+      return res.status(400).json({
+        message: "Published tiers must include the current default payment deadline.",
+      });
+    }
+    const after = await prisma.$transaction(async (tx) => {
+      const updated = await tx.platformDeadlinePolicy.update({
+        where: { id: 1 },
+        data: { publishedTiers: tiers, mostLenientDays },
+      });
+      await createAuditLog({
+        req,
+        action: "PLATFORM_DEADLINE_POLICY_UPDATED",
+        entityType: "PlatformDeadlinePolicy",
+        entityId: "1",
+        before: { publishedTiers: before.publishedTiers, mostLenientDays: before.mostLenientDays },
+        after: { publishedTiers: updated.publishedTiers, mostLenientDays: updated.mostLenientDays },
+      }, tx);
+      return updated;
     });
     res.json(after);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getPlatformSettings(req, res, next) {
+  try {
+    res.json(await loadPlatformSettings());
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updatePlatformSettings(req, res, next) {
+  try {
+    const existing = await loadPlatformSettings();
+    const commissionRate = Number(req.body.commissionRate ?? existing.commissionRate);
+    const defaultPaymentDeadlineDays = Number(
+      req.body.defaultPaymentDeadlineDays ?? existing.defaultPaymentDeadlineDays
+    );
+    const licenceReuploadWindowHours = Number(
+      req.body.licenceReuploadWindowHours ?? existing.licenceReuploadWindowHours
+    );
+    const deadlinePolicy = await getPlatformDeadlinePolicy();
+
+    if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) {
+      return res.status(400).json({ message: "Commission rate must be between 0 and 100 percent." });
+    }
+    if (!validatePublishedDeadline(deadlinePolicy, defaultPaymentDeadlineDays)) {
+      return res.status(400).json({
+        message: `Default payment deadline must be one of the published tiers: ${deadlinePolicy.publishedTiers.join(", ")} days.`,
+      });
+    }
+    if (!Number.isInteger(licenceReuploadWindowHours) || licenceReuploadWindowHours < 1 || licenceReuploadWindowHours > 720) {
+      return res.status(400).json({ message: "Licence re-upload window must be between 1 and 720 hours." });
+    }
+
+    const normalizeNumericMap = (value, current, fieldName) => {
+      if (value === undefined) return current;
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error(`${fieldName} must be a JSON object of named numeric values.`);
+      }
+      const entries = Object.entries(value);
+      if (entries.some(([key, amount]) => !key.trim() || !Number.isFinite(Number(amount)) || Number(amount) < 0)) {
+        throw new Error(`${fieldName} values must be named non-negative numbers.`);
+      }
+      return Object.fromEntries(entries.map(([key, amount]) => [key, Number(amount)]));
+    };
+
+    let creditTierThresholds;
+    let exposureLimits;
+    try {
+      creditTierThresholds = normalizeNumericMap(
+        req.body.creditTierThresholds,
+        existing.creditTierThresholds,
+        "Credit tier thresholds"
+      );
+      exposureLimits = normalizeNumericMap(
+        req.body.exposureLimits,
+        existing.exposureLimits,
+        "Exposure limits"
+      );
+    } catch (validationError) {
+      return res.status(400).json({ message: validationError.message });
+    }
+
+    let featureFlags = existing.featureFlags;
+    if (req.body.featureFlags !== undefined) {
+      const submittedFlags = req.body.featureFlags;
+      if (!submittedFlags || typeof submittedFlags !== "object" || Array.isArray(submittedFlags)) {
+        return res.status(400).json({ message: "Feature flags must be a JSON object." });
+      }
+      featureFlags = { ...existing.featureFlags };
+      for (const [key, enabled] of Object.entries(submittedFlags)) {
+        if (!Object.hasOwn(DEFAULT_PLATFORM_FEATURE_FLAGS, key) || typeof enabled !== "boolean") {
+          return res.status(400).json({ message: `Invalid platform feature flag: ${key}` });
+        }
+        featureFlags[key] = enabled;
+      }
+    }
+
+    const data = {
+      commissionRate,
+      defaultPaymentDeadlineDays,
+      creditTierThresholds,
+      exposureLimits,
+      licenceReuploadWindowHours,
+      featureFlags,
+    };
+    const before = {
+      ...existing,
+      commissionRate: Number(existing.commissionRate),
+    };
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.platformSettings.update({
+        where: { id: 1 },
+        data,
+      });
+      let updatedDefaultConfigs = 0;
+      if (existing.defaultPaymentDeadlineDays !== defaultPaymentDeadlineDays) {
+        const updateResult = await tx.bNPLConfig.updateMany({
+          where: { paymentDeadlineDays: existing.defaultPaymentDeadlineDays },
+          data: { paymentDeadlineDays: defaultPaymentDeadlineDays },
+        });
+        updatedDefaultConfigs = updateResult.count;
+      }
+      const after = {
+        ...updated,
+        commissionRate: Number(updated.commissionRate),
+      };
+      await createAuditLog({
+        req,
+        action: "PLATFORM_SETTINGS_UPDATED",
+        entityType: "PlatformSettings",
+        entityId: "1",
+        before,
+        after,
+        details: { updatedDefaultConfigs },
+      }, tx);
+      return { settings: updated, updatedDefaultConfigs };
+    });
+
+    res.json(result);
   } catch (err) {
     next(err);
   }

@@ -17,6 +17,7 @@ import {
   PAYMENT_TYPES,
 } from "../services/payment_schedule_service.js";
 import { runIdempotent } from "../services/idempotency_service.js";
+import { getPlatformSettings, isFeatureEnabled } from "../services/platform_settings_service.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -400,6 +401,14 @@ export async function uploadCustomerReceipt(req, res, next) {
       paymentType = PAYMENT_TYPES.FULL_PAYMENT,
     } = req.body;
     const booking = await assertCustomerBooking(req.params.id, req.user.id);
+
+    const [platformSettings, operatorConfig] = await Promise.all([
+      getPlatformSettings(),
+      prisma.bNPLConfig.findFirst({ where: { operatorId: booking.operatorId } }),
+    ]);
+    if (!isFeatureEnabled(platformSettings, "allowReceiptUpload") || operatorConfig?.allowReceiptUpload === false) {
+      return { status: 403, body: { message: "Manual receipt upload is disabled for this platform or operator." } };
+    }
 
     if (!imageUrl) return { status: 400, body: { message: "Receipt image is required" } };
     if (!isValidReceiptImage(imageUrl)) {

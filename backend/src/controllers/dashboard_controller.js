@@ -1,4 +1,5 @@
 import prisma from "../config/db.js";
+import { getPlatformSettings } from "../services/platform_settings_service.js";
 
 export async function getDashboardStats(req, res, next) {
   try {
@@ -122,9 +123,7 @@ export async function getSalesReport(req, res, next) {
     if (from || to) whereClause.createdAt = dateFilter;
     if (operatorId) whereClause.operatorId = Number(operatorId);
 
-    const platformFeePercent = Number(
-      process.env.STRIPE_PLATFORM_FEE_PERCENT ?? 10
-    );
+    const platformFeePercent = Number((await getPlatformSettings()).commissionRate);
 
     const bookings = await prisma.booking.findMany({
       where: whereClause,

@@ -1,7 +1,7 @@
 import prisma from "../config/db.js";
+import { getPlatformSettings } from "./platform_settings_service.js";
 
 const DEFAULT_CONFIG = {
-  paymentDeadlineDays: 3,
   allowReceiptUpload: true,
   autoCancelOverdue: true,
 };
@@ -9,8 +9,13 @@ const DEFAULT_CONFIG = {
 export async function getOrCreateConfig(operatorId) {
   let config = await prisma.bNPLConfig.findFirst({ where: { operatorId } });
   if (!config) {
+    const settings = await getPlatformSettings();
     config = await prisma.bNPLConfig.create({
-      data: { operatorId, ...DEFAULT_CONFIG },
+      data: {
+        operatorId,
+        ...DEFAULT_CONFIG,
+        paymentDeadlineDays: settings.defaultPaymentDeadlineDays,
+      },
     });
   }
   return config;

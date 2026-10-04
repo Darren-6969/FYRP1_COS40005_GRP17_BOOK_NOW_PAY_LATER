@@ -36,6 +36,8 @@ export const createPeakDate = (payload) => api.post("/licence-verification/peak-
 export const deletePeakDate = (id) => api.delete(`/licence-verification/peak-dates/${id}`);
 export const getPlatformDeadlineSettings = () => api.get("/config/platform-deadlines");
 export const updatePlatformDeadlineSettings = (payload) => api.patch("/config/platform-deadlines", payload);
+export const getPlatformSettings = () => api.get("/config/platform-settings");
+export const updatePlatformSettings = (payload) => api.patch("/config/platform-settings", payload);
 export const getPartialRefundEligibility = (date) => api.get("/config/partial-refund-eligibility", { params: { date } });
 /// Create new company with initial admin user (OWNER)
 export const uploadOperatorLogo = (file) => {

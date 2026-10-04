@@ -23,6 +23,7 @@ import {
 import { requireIdempotencyKey, runIdempotent } from "../services/idempotency_service.js";
 import { createAuditLog } from "../services/log_service.js";
 import { createCommissionLedgerSnapshot } from "../services/commission_ledger_service.js";
+import { getPlatformSettings } from "../services/platform_settings_service.js";
 import {
   createExpressOnboardingLink,
   getStripeAccountState,
@@ -32,7 +33,7 @@ import {
 const router = express.Router();
 
 // Platform fee percentage retained on every transaction (default 5).
-const PLATFORM_FEE_PERCENT = Number(process.env.STRIPE_PLATFORM_FEE_PERCENT ?? 5);
+const LEGACY_PLATFORM_FEE_PERCENT = Number(process.env.STRIPE_PLATFORM_FEE_PERCENT ?? 5);
 
 function parseBookingId(value) {
   const parsed = Number(value);
@@ -156,7 +157,7 @@ export async function applyPaidState(
   const paymentData = getPaymentConfirmationData(booking.payment, paymentType, transactionId);
   const feeRateBps = Number.isInteger(Number(ledgerMetadata.feeRateBps))
     ? Number(ledgerMetadata.feeRateBps)
-    : Math.round(PLATFORM_FEE_PERCENT * 100);
+    : Math.round(LEGACY_PLATFORM_FEE_PERCENT * 100);
   const fundedBy = ledgerMetadata.fundedBy || booking.discountFundedBy || "OPERATOR";
   const stripeFeeAmountSen = Number.isInteger(ledgerMetadata.stripeFeeAmountSen)
     ? ledgerMetadata.stripeFeeAmountSen
@@ -808,6 +809,7 @@ router.post(
       }
 
       const paymentSpec = getPaymentSpec(booking.payment, paymentType);
+      const platformFeePercent = Number((await getPlatformSettings()).commissionRate);
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
       const totalCents = Math.round(paymentSpec.amount * 100);
 
@@ -818,7 +820,7 @@ router.post(
           bookingId: String(booking.id),
           customerId: String(req.user.id),
           paymentType,
-          feeRateBps: String(Math.round(PLATFORM_FEE_PERCENT * 100)),
+          feeRateBps: String(Math.round(platformFeePercent * 100)),
           fundedBy: booking.discountFundedBy,
         },
       };
@@ -845,7 +847,7 @@ router.post(
           bookingId: String(booking.id),
           customerId: String(req.user.id),
           paymentType,
-          feeRateBps: String(Math.round(PLATFORM_FEE_PERCENT * 100)),
+          feeRateBps: String(Math.round(platformFeePercent * 100)),
           fundedBy: booking.discountFundedBy,
         },
         success_url: `${

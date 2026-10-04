@@ -3,6 +3,7 @@ import prisma from "../config/db.js";
 import { createInAppNotification } from "../services/notification_email_service.js";
 import { sendEmail } from "../services/email_service.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
+import { getPlatformSettings } from "../services/platform_settings_service.js";
 
 const SLA_HOURS = 48;
 const REJECTION_REASONS = new Set(["EXPIRED", "UNREADABLE", "NOT_A_LICENCE"]);
@@ -32,7 +33,19 @@ export async function getMyLicenceDocument(req, res, next) {
       where: { customerId: req.user.id },
       orderBy: { submittedAt: "desc" },
     });
-    res.json({ document: publicDocument(document), canReupload: !document || ["REJECTED", "REUPLOAD_REQUIRED"].includes(document.status) });
+    const settings = await getPlatformSettings();
+    const reuploadWindowEndsAt = document?.reviewedAt
+      ? new Date(document.reviewedAt.getTime() + settings.licenceReuploadWindowHours * 60 * 60 * 1000)
+      : null;
+    const canReupload = !document || (
+      ["REJECTED", "REUPLOAD_REQUIRED"].includes(document.status) &&
+      (!reuploadWindowEndsAt || reuploadWindowEndsAt.getTime() >= Date.now())
+    );
+    res.json({
+      document: publicDocument(document),
+      canReupload,
+      reuploadWindowEndsAt,
+    });
   } catch (err) {
     next(err);
   }
@@ -49,6 +62,14 @@ export async function submitLicenceDocument(req, res, next) {
     });
     if (latest?.status === "UNDER_REVIEW") {
       return res.status(409).json({ message: "Your latest licence is already waiting for review." });
+    }
+    const platformSettings = await getPlatformSettings();
+    if (
+      latest?.reviewedAt &&
+      ["REJECTED", "REUPLOAD_REQUIRED"].includes(latest.status) &&
+      Date.now() > latest.reviewedAt.getTime() + platformSettings.licenceReuploadWindowHours * 60 * 60 * 1000
+    ) {
+      return res.status(409).json({ message: "The licence re-upload window has closed. Please contact support." });
     }
 
     const document = await prisma.customerLicenceDocument.create({
@@ -221,15 +242,19 @@ export async function createPeakDate(req, res, next) {
     if (Number.isNaN(peakDate.getTime()) || !/^\d{4}-\d{2}-\d{2}$/.test(String(req.body.date || "")) || !label) {
       return res.status(400).json({ message: "A valid date and label are required." });
     }
-    const date = await prisma.platformPeakDate.create({ data: { peakDate, label } });
-    await prisma.auditLog.create({
-      data: {
-        userId: req.user.id,
-        action: "PLATFORM_PEAK_DATE_CREATED",
-        entityType: "PlatformPeakDate",
-        entityId: String(date.id),
-        details: { before: null, after: { peakDate: date.peakDate, label: date.label } },
-      },
+    const date = await prisma.$transaction(async (tx) => {
+      const created = await tx.platformPeakDate.create({ data: { peakDate, label } });
+      await tx.auditLog.create({
+        data: {
+          userId: req.user.id,
+          action: "PLATFORM_PEAK_DATE_CREATED",
+          entityType: "PlatformPeakDate",
+          entityId: String(created.id),
+          before: null,
+          after: { peakDate: created.peakDate, label: created.label },
+        },
+      });
+      return created;
     });
     res.status(201).json(date);
   } catch (err) {
@@ -243,15 +268,18 @@ export async function deletePeakDate(req, res, next) {
     const id = Number(req.params.id);
     const existing = await prisma.platformPeakDate.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ message: "Peak date not found." });
-    await prisma.platformPeakDate.delete({ where: { id } });
-    await prisma.auditLog.create({
-      data: {
-        userId: req.user.id,
-        action: "PLATFORM_PEAK_DATE_DELETED",
-        entityType: "PlatformPeakDate",
-        entityId: String(id),
-        details: { before: { peakDate: existing.peakDate, label: existing.label }, after: null },
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.platformPeakDate.delete({ where: { id } });
+      await tx.auditLog.create({
+        data: {
+          userId: req.user.id,
+          action: "PLATFORM_PEAK_DATE_DELETED",
+          entityType: "PlatformPeakDate",
+          entityId: String(id),
+          before: { peakDate: existing.peakDate, label: existing.label },
+          after: null,
+        },
+      });
     });
     res.status(204).end();
   } catch (err) {
