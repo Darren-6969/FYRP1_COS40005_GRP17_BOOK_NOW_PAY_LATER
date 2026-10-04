@@ -1,3 +1,4 @@
+import "./instrument.js";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -130,7 +131,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-bnpl-api-key", "Idempotency-Key"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-bnpl-api-key", "Idempotency-Key", "X-Request-ID"],
   exposedHeaders: ["RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "X-Request-ID"],
 };
 
@@ -195,7 +196,7 @@ app.use((req, _res, next) => {
   const error = new Error("Route not found");
   error.statusCode = 404;
   error.appCode = "NOT_FOUND";
-  next(error);
+  next(error); 
 });
 app.use(errorHandler);
 

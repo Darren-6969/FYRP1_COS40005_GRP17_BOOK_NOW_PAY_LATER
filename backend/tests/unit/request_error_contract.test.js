@@ -41,6 +41,21 @@ test("normalizes direct JSON errors and assigns a response request ID", () => {
   });
 });
 
+test("reuses a valid incoming request ID for backend correlation", () => {
+  const requestId = "b3b7ba3d-ea83-4d38-9e2c-80ff8351b64f";
+  const req = {
+    headers: { "x-request-id": requestId },
+    method: "GET",
+    originalUrl: "/api/bookings",
+  };
+  const res = createResponse();
+
+  requestLogger(req, res, () => {});
+
+  assert.equal(req.requestId, requestId);
+  assert.equal(res.headers["X-Request-ID"], requestId);
+});
+
 test("logs thrown errors with the same request ID returned to clients", () => {
   const req = { method: "GET", originalUrl: "/api/missing" };
   const res = createResponse();

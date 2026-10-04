@@ -1,4 +1,16 @@
 import { randomUUID } from "node:crypto";
+import * as Sentry from "@sentry/node";
+
+const configuredWindowMs = Number(process.env.ERROR_RATE_WINDOW_MS);
+const configuredThreshold = Number(process.env.ERROR_RATE_THRESHOLD);
+const ERROR_RATE_WINDOW_MS = Number.isInteger(configuredWindowMs) && configuredWindowMs > 0
+  ? configuredWindowMs
+  : 5 * 60 * 1000;
+const ERROR_RATE_THRESHOLD = Number.isInteger(configuredThreshold) && configuredThreshold > 0
+  ? configuredThreshold
+  : 20;
+let recentServerErrors = [];
+let lastSpikeAlertAt = 0;
 
 const STATUS_CODES = {
   400: "BAD_REQUEST",
@@ -20,6 +32,50 @@ const STATUS_CODES = {
 
 export function errorCodeForStatus(statusCode) {
   return STATUS_CODES[statusCode] || `HTTP_${statusCode}`;
+}
+
+function reportErrorRateSpike(req) {
+  const now = Date.now();
+  recentServerErrors = recentServerErrors.filter((timestamp) => now - timestamp < ERROR_RATE_WINDOW_MS);
+  recentServerErrors.push(now);
+  if (recentServerErrors.length < ERROR_RATE_THRESHOLD || now - lastSpikeAlertAt < ERROR_RATE_WINDOW_MS) return;
+
+  lastSpikeAlertAt = now;
+  const alert = {
+    event: "http_error_rate_spike",
+    text: "HTTP 5xx error rate spike",
+    request_id: req.requestId,
+    window_ms: ERROR_RATE_WINDOW_MS,
+    error_count: recentServerErrors.length,
+    threshold: ERROR_RATE_THRESHOLD,
+  };
+  console.error(alert);
+  Sentry.withScope((scope) => {
+    scope.setTag("alert_type", "http_error_rate_spike");
+    scope.setTag("request_id", req.requestId);
+    scope.setLevel("error");
+    scope.setContext("error_rate", {
+      window_ms: ERROR_RATE_WINDOW_MS,
+      error_count: recentServerErrors.length,
+      threshold: ERROR_RATE_THRESHOLD,
+    });
+    Sentry.captureMessage("HTTP 5xx error rate spike");
+  });
+
+  const webhookUrl = process.env.ERROR_ALERT_WEBHOOK_URL;
+  if (webhookUrl) {
+    void fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(alert),
+    }).catch((error) => {
+      console.error({
+        event: "error_alert_delivery_failed",
+        request_id: req.requestId,
+        message: error.message,
+      });
+    });
+  }
 }
 
 function normalizeErrorBody(body, req, statusCode) {
@@ -46,7 +102,10 @@ function normalizeErrorBody(body, req, statusCode) {
 }
 
 export function requestLogger(req, res, next) {
-  req.requestId = randomUUID();
+  const incomingRequestId = req.headers?.["x-request-id"];
+  req.requestId = incomingRequestId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(incomingRequestId)
+    ? incomingRequestId
+    : randomUUID();
   res.setHeader("X-Request-ID", req.requestId);
 
   const originalJson = res.json;
@@ -64,10 +123,11 @@ export function requestLogger(req, res, next) {
       event: "http_request",
       request_id: req.requestId,
       method: req.method,
-      route: req.originalUrl,
+      route: req.path,
       statusCode: res.statusCode,
       durationMs: ms,
     });
+    if (res.statusCode >= 500) reportErrorRateSpike(req);
   });
   next();
 }

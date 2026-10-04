@@ -14,6 +14,7 @@ test("createAuditLog records actor, snapshots, IP, and entity metadata", async (
   };
   const req = {
     user: { id: 42 },
+    requestId: "b3b7ba3d-ea83-4d38-9e2c-80ff8351b64f",
     ip: "203.0.113.4",
     socket: { remoteAddress: "127.0.0.1" },
   };
@@ -35,6 +36,7 @@ test("createAuditLog records actor, snapshots, IP, and entity metadata", async (
     userId: 42,
     actorId: 42,
     actorType: "USER",
+    requestId: "b3b7ba3d-ea83-4d38-9e2c-80ff8351b64f",
     action: "BOOKING_STATUS_FORCED",
     entityType: "Booking",
     entityId: "17",

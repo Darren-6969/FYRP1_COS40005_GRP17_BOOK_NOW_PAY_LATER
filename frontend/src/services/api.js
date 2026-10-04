@@ -1,4 +1,5 @@
 import axios from "axios";
+import * as Sentry from "@sentry/react";
 import { getToken, getRefreshToken, updateTokens, clearSession } from "../utils/session";
 import {
   isMemorySession,
@@ -12,9 +13,24 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
 });
 
+function rememberRequestId(requestId) {
+  if (!requestId || typeof window === "undefined") return;
+  window.__BNPL_LAST_REQUEST_ID = requestId;
+  try {
+    window.sessionStorage.setItem("bnpl:last-request-id", requestId);
+  } catch {
+    // Keep in-memory correlation when browser storage is unavailable.
+  }
+}
+
 api.interceptors.request.use((config) => {
   const token = getMemoryToken() || getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  const requestId = globalThis.crypto?.randomUUID?.();
+  if (requestId) {
+    config.headers["X-Request-ID"] = requestId;
+    config.__requestId = requestId;
+  }
   return config;
 });
 
@@ -26,12 +42,30 @@ const resume = (err, token = null) => {
 };
 
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    rememberRequestId(res.headers?.["x-request-id"] || res.config?.__requestId);
+    return res;
+  },
   async (error) => {
     const original = error.config;
     const status = error.response?.status;
     const url = original?.url || "";
     const isAuthCall = url.includes("/auth/refresh") || url.includes("/auth/login");
+    const requestId = error.response?.headers?.["x-request-id"] ||
+      error.response?.data?.request_id || original?.__requestId;
+    rememberRequestId(requestId);
+
+    if ((status >= 500 || !error.response) && error.code !== "ERR_CANCELED") {
+      Sentry.withScope((scope) => {
+        if (requestId) scope.setTag("request_id", requestId);
+        scope.setContext("http", {
+          method: original?.method?.toUpperCase(),
+          url: url.split("?")[0],
+          status_code: status || 0,
+        });
+        Sentry.captureException(error);
+      });
+    }
 
     if (status !== 401 || original?._retry || isAuthCall) {
       return Promise.reject(error);

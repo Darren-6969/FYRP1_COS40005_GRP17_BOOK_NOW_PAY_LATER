@@ -9,6 +9,7 @@ export async function createAuditLog(
       userId: req?.user?.id ?? userId ?? null,
       actorId: req?.user?.id ?? userId ?? null,
       actorType: req?.user || userId != null ? "USER" : "SYSTEM",
+      ...(req?.requestId ? { requestId: req.requestId } : {}),
       action,
       entityType,
       entityId: entityId === null || entityId === undefined ? null : String(entityId),

@@ -672,6 +672,7 @@ model AuditLog {
   user   User? @relation(fields: [userId], references: [id])
   actorId   Int?
   actorType String?
+  requestId String?
 
   action     String
   entityType String
@@ -686,6 +687,7 @@ model AuditLog {
   @@index([userId])
   @@index([entityType])
   @@index([entityId])
+  @@index([requestId])
 }
 
 model EmailLog {

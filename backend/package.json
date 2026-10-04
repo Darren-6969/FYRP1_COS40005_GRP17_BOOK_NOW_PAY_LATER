@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
+    "@sentry/node": "^11.4.0",
     "@vercel/blob": "^2.4.0",
     "arima": "^0.2.8",
     "axios": "^1.15.2",
