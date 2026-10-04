@@ -15,6 +15,7 @@ import {
 import api from "../../services/api";
 import { downloadElementAsPdf } from "../../utils/pdfUtils";
 import { formatOperatorMoney } from "../../services/operator_service";
+import { getPilotMetrics } from "../../services/admin_service";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,59 @@ function downloadCSV(historical, forecast, operatorName, period) {
   URL.revokeObjectURL(url);
 }
 
+function csvValue(value) {
+  let text = value == null ? "" : String(value);
+  if (/^[=+@\t\r-]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function downloadPilotCSV(report) {
+  const rows = [
+    ["Pilot Scorecard", "Value"],
+    ["Period", `${report.period.from} to ${report.period.to}`],
+    ["Bookings created", report.counts.bookingsCreated],
+    ["Paid events", report.counts.paid],
+    ["Completed events", report.counts.completed],
+    ["Expired events", report.counts.expired],
+    ["No-show events", report.counts.noShow],
+    ["GMV (MYR)", report.finance.gmv.toFixed(2)],
+    ["Commission revenue (MYR)", report.finance.commissionRevenue.toFixed(2)],
+    ["Settled payouts (MYR)", report.finance.settledPayouts.toFixed(2)],
+    ["Allocation utilisation (%)", report.allocation.utilisationRate ?? "N/A"],
+    ["Reserved unit-days", report.allocation.reservedUnitDays],
+    ["Allocated unit-days", report.allocation.allocatedUnitDays],
+    ["Operator cancellations", report.operatorCancellation.count],
+    ["Operator cancellation rate (%)", report.operatorCancellation.rate ?? "N/A"],
+    [],
+    ["Rates by credit tier"],
+    ["Credit tier", "Cohort bookings", "Due bookings", "On-time payment rate (%)", "Expired bookings", "Expiry rate (%)"],
+    ...report.paymentByCreditTier.map((tier) => [
+      tier.creditTier,
+      tier.bookings,
+      tier.dueBookings,
+      tier.onTimePaymentRate ?? "N/A",
+      tier.expiredBookings,
+      tier.expiryRate ?? "N/A",
+    ]),
+  ];
+  const blob = new Blob([rows.map((row) => row.map(csvValue).join(",")).join("\r\n")], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `pilot-scorecard-${report.period.from}-to-${report.period.to}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function isoDay(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 const INSIGHT_ICONS = { success: "↑", warning: "⚠", danger: "!", info: "→", neutral: "·" };
 const DOW_COLORS = ["#3b82f6", "#3b82f6", "#3b82f6", "#3b82f6", "#3b82f6", "#f59e0b", "#f59e0b"];
 
@@ -78,6 +132,30 @@ export default function MasterAnalytics() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
   const contentRef = useRef(null);
+  const [pilotPeriod, setPilotPeriod] = useState(() => {
+    const today = new Date();
+    const from = new Date(today);
+    from.setDate(today.getDate() - 6);
+    return { from: isoDay(from), to: isoDay(today) };
+  });
+  const [pilotMetrics, setPilotMetrics] = useState(null);
+  const [pilotLoading, setPilotLoading] = useState(true);
+  const [pilotError, setPilotError] = useState("");
+
+  useEffect(() => {
+    let current = true;
+    getPilotMetrics(pilotPeriod)
+      .then((res) => {
+        if (current) setPilotMetrics(res.data);
+      })
+      .catch((err) => {
+        if (current) setPilotError(err.response?.data?.message ?? "Failed to load pilot scorecard.");
+      })
+      .finally(() => {
+        if (current) setPilotLoading(false);
+      });
+    return () => { current = false; };
+  }, [pilotPeriod]);
 
   // Load operator list once
   useEffect(() => {
@@ -249,6 +327,67 @@ export default function MasterAnalytics() {
           </button>
         </div>
       )}
+
+      <section className="master-analytics-card" aria-labelledby="pilot-scorecard-title">
+        <div className="master-analytics-card-head">
+          <div>
+            <h2 id="pilot-scorecard-title">Pilot Scorecard</h2>
+            <p>Event counts use event dates. Tier rates use bookings created in-period and due by its end; allocation utilisation is reserved ÷ available unit-days.</p>
+          </div>
+          <div className="master-analytics-controls">
+            <label>From <input className="master-analytics-select" type="date" value={pilotPeriod.from} max={pilotPeriod.to} onChange={(event) => { setPilotLoading(true); setPilotError(""); setPilotPeriod((period) => ({ ...period, from: event.target.value })); }} /></label>
+            <label>To <input className="master-analytics-select" type="date" min={pilotPeriod.from} max={isoDay(new Date())} value={pilotPeriod.to} onChange={(event) => { setPilotLoading(true); setPilotError(""); setPilotPeriod((period) => ({ ...period, to: event.target.value })); }} /></label>
+            <button type="button" className="master-analytics-btn secondary" disabled={!pilotMetrics || pilotLoading} onClick={() => downloadPilotCSV(pilotMetrics)}>↓ CSV</button>
+          </div>
+        </div>
+
+        {pilotError && <div className="operator-alert danger" role="alert">{pilotError}</div>}
+        {pilotLoading ? (
+          <div className="operator-empty-state">Loading pilot scorecard…</div>
+        ) : pilotMetrics && (
+          <>
+            <div className="master-analytics-metric-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", marginBottom: 16 }}>
+              <Metric label="Bookings created" value={pilotMetrics.counts.bookingsCreated.toLocaleString()} />
+              <Metric label="Paid events" value={pilotMetrics.counts.paid.toLocaleString()} />
+              <Metric label="Completed" value={pilotMetrics.counts.completed.toLocaleString()} />
+              <Metric label="Expired" value={pilotMetrics.counts.expired.toLocaleString()} variant="warning" />
+              <Metric label="No-show" value={pilotMetrics.counts.noShow.toLocaleString()} variant="warning" />
+            </div>
+
+            <div className="master-analytics-metric-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", marginBottom: 20 }}>
+              <Metric label="GMV" value={formatOperatorMoney(pilotMetrics.finance.gmv)} sub="Gross booking value" />
+              <Metric label="Commission revenue" value={formatOperatorMoney(pilotMetrics.finance.commissionRevenue)} sub="Recorded commission ledger" />
+              <Metric label="Settled payouts" value={formatOperatorMoney(pilotMetrics.finance.settledPayouts)} sub="Transferred during period" />
+              <Metric label="Allocation utilisation" value={pilotMetrics.allocation.utilisationRate == null ? "N/A" : `${pilotMetrics.allocation.utilisationRate}%`} sub={`${pilotMetrics.allocation.reservedUnitDays.toLocaleString()} / ${pilotMetrics.allocation.allocatedUnitDays.toLocaleString()} unit-days`} />
+              <Metric label="Operator cancellation rate" value={pilotMetrics.operatorCancellation.rate == null ? "N/A" : `${pilotMetrics.operatorCancellation.rate}%`} sub={`${pilotMetrics.operatorCancellation.count.toLocaleString()} cancellations in created-booking cohort`} variant="warning" />
+            </div>
+
+            <div className="master-analytics-card-head">
+              <div>
+                <h2>Payment outcomes by credit tier</h2>
+                <p>On-time rate = paid on/before deadline ÷ bookings due by period end. Expiry rate = expired ÷ due bookings. Tiers are snapshotted from System Settings; older bookings without a tier appear as Unconfigured.</p>
+              </div>
+            </div>
+            {pilotMetrics.paymentByCreditTier.length ? (
+              <div className="master-analytics-chart-scroll">
+                <table className="analytics-services-table">
+                  <thead><tr><th>Credit tier</th><th>Cohort bookings</th><th>Due by period end</th><th>On-time payment rate</th><th>Expired</th><th>Expiry rate</th></tr></thead>
+                  <tbody>{pilotMetrics.paymentByCreditTier.map((tier) => (
+                    <tr key={tier.creditTier}>
+                      <td>{tier.creditTier}</td>
+                      <td>{tier.bookings.toLocaleString()}</td>
+                      <td>{tier.dueBookings.toLocaleString()}</td>
+                      <td>{tier.onTimePaymentRate == null ? "N/A" : `${tier.onTimePaymentRate}%`}</td>
+                      <td>{tier.expiredBookings.toLocaleString()}</td>
+                      <td>{tier.expiryRate == null ? "N/A" : `${tier.expiryRate}%`}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            ) : <div className="operator-empty-state">No bookings were created during this period.</div>}
+          </>
+        )}
+      </section>
 
       {loading && (
         <div className="master-analytics-card" style={{ textAlign: "center", padding: 40 }}>

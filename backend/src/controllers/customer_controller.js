@@ -18,6 +18,7 @@ import {
 } from "../services/payment_schedule_service.js";
 import { runIdempotent } from "../services/idempotency_service.js";
 import { getPlatformSettings, isFeatureEnabled } from "../services/platform_settings_service.js";
+import { assignCreditTier } from "../services/credit_tier_service.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -190,6 +191,11 @@ export async function createCustomerBooking(req, res, next) {
     );
 
     const booking = await prisma.$transaction(async (tx) => {
+      const platformSettings = await tx.platformSettings.upsert({
+        where: { id: 1 },
+        create: { id: 1 },
+        update: {},
+      });
       const created = await tx.booking.create({
         data: {
           bookingCode: tempBookingCode(),
@@ -203,6 +209,7 @@ export async function createCustomerBooking(req, res, next) {
           paymentDeadline: defaultPaymentDeadline,
           location: location || null,
           totalAmount,
+          creditTier: assignCreditTier(totalAmount, platformSettings.creditTierThresholds),
           status: "PENDING",
         },
       });

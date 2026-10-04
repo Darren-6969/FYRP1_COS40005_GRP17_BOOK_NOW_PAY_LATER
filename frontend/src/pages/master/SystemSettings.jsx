@@ -315,7 +315,7 @@ export default function SystemSettings() {
           <label>
             <span>Credit tier thresholds (JSON object)</span>
             <textarea name="creditTierThresholds" value={platformForm.creditTierThresholds} onChange={handlePlatformChange} rows={4} placeholder={'{"Tier 1": 1000, "Tier 2": 5000}'} />
-            <small>Use tier names as keys and non-negative numeric thresholds as values.</small>
+            <small>Use tier names as keys and the maximum booking exposure in MYR as each value.</small>
           </label>
           <label>
             <span>Exposure limits (JSON object)</span>

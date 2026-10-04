@@ -1,6 +1,7 @@
 import api from "./api";
 
 export const getDashboardStats = () => api.get("/dashboard/stats");
+export const getPilotMetrics = (params = {}) => api.get("/dashboard/pilot-metrics", { params });
 export const getSalesReport = (params = {}) => api.get("/dashboard/sales-report", { params });
 
 export const getBookings = (params = {}) => api.get("/bookings", { params });

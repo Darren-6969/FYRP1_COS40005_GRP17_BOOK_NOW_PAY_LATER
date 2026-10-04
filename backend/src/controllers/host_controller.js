@@ -9,6 +9,7 @@ import {
 import { bookingSubmittedTemplate } from "../services/email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
+import { assignCreditTier } from "../services/credit_tier_service.js";
 import { tempBookingCode, formatBookingCode } from "../utils/bookingCode.js";
 import { hashApiKey } from "../utils/apiKey.js";
 import bcrypt from "bcryptjs";
@@ -277,6 +278,11 @@ async function createBookingFromIntent(intent, user) {
 });
 
   const booking = await prisma.$transaction(async (tx) => {
+    const platformSettings = await tx.platformSettings.upsert({
+      where: { id: 1 },
+      create: { id: 1 },
+      update: {},
+    });
     const created = await tx.booking.create({
       data: {
         bookingCode: tempBookingCode(),
@@ -290,6 +296,7 @@ async function createBookingFromIntent(intent, user) {
         returnDate: intent.returnDate,
         location: intent.location,
         totalAmount: intent.totalAmount,
+        creditTier: assignCreditTier(intent.totalAmount, platformSettings.creditTierThresholds),
         // No operator acceptance queue.
       // Once the customer claims the host booking,
       // the booking is confirmed and awaits payment.

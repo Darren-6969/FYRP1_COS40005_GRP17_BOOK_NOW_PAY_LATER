@@ -426,6 +426,7 @@ model Booking {
 
   totalAmount Decimal       @db.Decimal(10, 2)
   status      BookingStatus @default(PENDING)
+  creditTier  String?
 
   paymentDeadline DateTime?
 
@@ -478,6 +479,7 @@ model Booking {
   @@index([customerId])
   @@index([operatorId])
   @@index([status])
+  @@index([createdAt, status])
   @@index([paymentDeadline])
   @@index([listingId, status])
   @@index([pickupDate, returnDate])
@@ -541,6 +543,7 @@ model CommissionLedgerEntry {
 
   @@index([bookingId, createdAt])
   @@index([paymentId])
+  @@index([createdAt])
 }
 
 model OperatorPayout {
@@ -561,6 +564,7 @@ model OperatorPayout {
   ledgerEntry CommissionLedgerEntry?
 
   @@index([operatorId, status, createdAt])
+  @@index([transferredAt])
 }
 
 model Receipt {
@@ -688,6 +692,7 @@ model AuditLog {
   @@index([entityType])
   @@index([entityId])
   @@index([requestId])
+  @@index([action, createdAt])
 }
 
 model EmailLog {

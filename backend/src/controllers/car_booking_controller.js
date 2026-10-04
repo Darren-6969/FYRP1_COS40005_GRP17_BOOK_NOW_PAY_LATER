@@ -17,6 +17,7 @@ import { tempBookingCode, formatBookingCode } from "../utils/bookingCode.js";
 import { addDays, fromSen, klHhmm, klPlainDate, rentalDays } from "../services/car_pricing_service.js";
 import { loadAvailability, loadPeakDates } from "../services/car_availability_service.js";
 import { loadOperatorFacts, loadPublicListing, priceSelection } from "../services/public_car_service.js";
+import { assignCreditTier } from "../services/credit_tier_service.js";
 import {
   claimIdempotencyKey,
   completeIdempotencyKey,
@@ -107,6 +108,12 @@ export async function createCarBooking(req, res, next) {
     const booking = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Listing" WHERE id = ${listing.id} FOR UPDATE`;
 
+      const platformSettings = await tx.platformSettings.upsert({
+        where: { id: 1 },
+        create: { id: 1 },
+        update: {},
+      });
+
       const stock = (await loadAvailability([listing], r.dates[0], addDays(r.dates[0], r.days), tx)).get(listing.id);
       const soldOut = r.dates.filter((d) => (stock.remaining.get(d) ?? 0) <= 0);
       if (soldOut.length) {
@@ -133,6 +140,7 @@ export async function createCarBooking(req, res, next) {
           feesAmount: fromSen(p.surchargeSen + p.pickupFeeSen),
           discountAmount: "0.00",
           totalAmount: fromSen(p.totalSen),
+          creditTier: assignCreditTier(fromSen(p.totalSen), platformSettings.creditTierThresholds),
           paymentDeadline,
           status: "PENDING",
           pricingSnapshot: {
