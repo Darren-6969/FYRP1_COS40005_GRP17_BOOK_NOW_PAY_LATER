@@ -38,7 +38,8 @@ const FAQS = [
   { q: "What happens if my request is declined?", a: "Nothing is charged, and we show you similar cars." },
   { q: "What happens if I miss the balance deadline?", a: "The deposit is forfeited in full. That is the default and it is not negotiable after the cutoff. Individual car rental operators may elect a partial refund rule instead, available only on standard listings outside the platform's peak calendar; where they have, the listing and the payment screen say so before you commit." },
   { q: "When do I submit my driving licence?", a: "After your booking is confirmed, not during checkout. You upload it against that specific order, not once for your account, and it shares the same deadline as the balance. The check is preliminary: rental staff still inspect the original document at handover." },
-  { q: "What is the rolling return hold?", a: "It is an inventory rule, not a charge. A booking keeps holding its vehicle past the stated return date until the operator confirms the car is back and ready. That is what stops a car that came back late, damaged or went for servicing from being shown to you as available." },
+  { q: "What if I return the car late?", a: "The operator records the time you hand the car back. Late hours are charged by the hour and paid at the counter; they are not part of your booking total." },
+  { q: "Is there a minimum driver age?", a: "No. Every driver needs a valid driving licence, uploaded before the balance deadline, with the original brought to pickup." },
   { q: "Are the operators verified?", a: "Every operator submits their SSM business registration and relevant transport or tourism licences, and the platform team reviews the application before any listing goes live. Each operator has a public page showing verified status, branch count, completed bookings and how long they have been active." },
   { q: "Is my data protected?", a: "The platform operates under Malaysia's Personal Data Protection Act 2010. Your details are shared with the operator you book with and only to the extent needed to fulfil the booking. You can access, correct, and withdraw consent from your personal centre." },
 ];
@@ -48,14 +49,6 @@ const SEAT_OPTIONS = [
   { value: "4", label: "4+ seats" },
   { value: "5", label: "5+ seats" },
   { value: "7", label: "7+ seats" },
-];
-
-const AGE_OPTIONS = [
-  { value: "18-20", label: "18-20" },
-  { value: "21-24", label: "21-24" },
-  { value: "25-29", label: "25-29" },
-  { value: "30-64", label: "30-64" },
-  { value: "65+", label: "65+" },
 ];
 
 function prefersReducedMotion() {
@@ -244,7 +237,7 @@ function SearchPanel() {
   const [tab, setTab] = useState("car");
   const [dep, setDep] = useState(200);
   const [error, setError] = useState("");
-  const [car, setCar] = useState(() => ({ city: "", from: klToday(7), to: klToday(10), seats: "", age: "25-29" }));
+  const [car, setCar] = useState(() => ({ city: "", from: klToday(7), to: klToday(10), seats: "" }));
   const [tour, setTour] = useState(() => ({ destination: "Kuching", from: klToday(7), to: klToday(10), party: "2", group: "Family" }));
   const isCar = tab === "car";
   const values = isCar ? car : tour;
@@ -277,7 +270,6 @@ function SearchPanel() {
         city: car.city,
         from: car.from,
         to: car.to,
-        age: car.age,
         sel: { ...criteria.sel, seats: car.seats ? [car.seats] : [] },
         dmax: dep < DEP_MAX ? dep : null,
       });
@@ -363,16 +355,6 @@ function SearchPanel() {
                 <span className={styles.fieldLabel}>Seats needed</span>
                 <select className={styles.fieldControl} value={car.seats} onChange={update("seats")}>
                   {SEAT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Driver age</span>
-                <select className={styles.fieldControl} value={car.age} onChange={update("age")}>
-                  {AGE_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
                     </option>

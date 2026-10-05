@@ -14,8 +14,6 @@ export const carQuoteSchema = z.object({
   requestedLocation: z.string().trim().max(300).optional().nullable(),
   cdw: z.boolean().default(false),
   addOns: z.record(z.string(), z.number().int().min(0).max(20)).default({}),
-  driverDob: plainDate.optional().nullable(),
-  age: z.number().int().min(16).max(120).optional().nullable(),
 });
 
 // Identifiers and choices only. The server prices the booking.
@@ -42,7 +40,8 @@ export const carBookingSchema = z.object({
     driver: z.object({
       isBooker: z.boolean(),
       fullName: z.string().trim().min(2).max(120),
-      dateOfBirth: plainDate,
+      // No date of birth or age: a valid driving licence is the only driver
+      // requirement (client decision, Oct 2026).
       licenceIssuedIn: z.string().trim().min(2).max(60),
     }),
     // A request, not an add-on: no price, arranged by the operator (FR-LIST-003).

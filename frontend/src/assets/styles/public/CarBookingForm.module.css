@@ -348,29 +348,10 @@
   gap: 8px;
 }
 
-.dobRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
 
-.dobPart {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
 
-.dobDay {
-  width: 72px;
-}
 
-.dobMonth {
-  width: 170px;
-}
 
-.dobYear {
-  width: 100px;
-}
 
 .noteInfo,
 .noteError {

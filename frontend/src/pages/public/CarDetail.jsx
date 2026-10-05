@@ -212,15 +212,6 @@ function PickerField({ id, label, type, value, display, onChange, min, error, er
   );
 }
 
-function ageHelpText(e, surchargeSen) {
-  if (e.underage) return `Below the minimum age of ${e.minAge} for this car.`;
-  if (e.young) {
-    const range = e.minAge === 24 ? "Aged 24" : e.minAge === 23 ? "Aged 23 or 24" : `Aged ${e.minAge} to 24`;
-    return `${range}: ${formatSen(surchargeSen)} / day young driver surcharge applies.`;
-  }
-  return e.minAge >= 25 ? `Minimum age ${e.minAge}.` : `Minimum age ${e.minAge}. Under 25 pays a young driver surcharge.`;
-}
-
 // ── Page ─────────────────────────────────────────────────────────────
 
 function DetailSkeleton() {
@@ -306,7 +297,6 @@ export default function CarDetail() {
   const q = quoteRes.data;
   const quote = tripValid ? q?.quote : null;
   const availability = tripValid ? q?.availability : null;
-  const eligibility = q?.eligibility;
   const title = `${listing.vehicleMake} ${listing.vehicleModel}`;
   const pickupPointId = sel.pickupPointId || b.pickupPoints[0]?.id || "";
   const pickupServesDropoff = b.dropoffPoints.some((p) => p.id === pickupPointId);
@@ -324,9 +314,6 @@ export default function CarDetail() {
   // Why the request button is off, in priority order.
   let reason = "";
   if (!tripValid) reason = "Pick your pick-up and return dates in Your trip to see the deposit.";
-  else if (sel.age === null) reason = "Enter the driver's age in Your trip to check eligibility.";
-  else if (eligibility?.underage)
-    reason = `The minimum driver age for this car is ${eligibility.minAge}. The driver you entered is ${sel.age}.`;
   else if (problems.some((p) => p.code === "NIGHT_HANDOVER_BLOCKED"))
     reason = `${listing.operator.companyName} doesn't hand over or receive cars between ${b.overtime.window.from} and ${b.overtime.window.to}. Change the pickup or return time.`;
   else if (availability && !availability.available)
@@ -364,16 +351,11 @@ export default function CarDetail() {
           ? `Additional drivers: ${formatSen(b.additionalDriverSen)} / day`
           : "Ask the operator about additional drivers",
     },
-    { k: "Minimum driver age", value: String(b.minDriverAge), note: "Younger drivers cannot book this car." },
-    ...(b.minDriverAge <= b.youngDriver.maxAge
-      ? [
-          {
-            k: "Young driver surcharge",
-            value: `${formatSen(b.youngDriver.surchargeSen)} / day`,
-            note: `For drivers aged ${b.minDriverAge}–${b.youngDriver.maxAge}. Added to the balance.`,
-          },
-        ]
-      : []),
+    {
+      k: "Driving licence",
+      value: "A valid driving licence",
+      note: "Upload it before the balance deadline and bring the original to pickup. No minimum age.",
+    },
   ];
 
   // Operators may leave some specs blank; those rows are left out.
@@ -526,29 +508,6 @@ export default function CarDetail() {
               display={sel.tt}
               onChange={(e) => update({ tt: e.target.value })}
             />
-          </div>
-          <div className={styles.ageField}>
-            <label htmlFor={`${uid}-age`} className={styles.tripLabel}>
-              Driver age
-            </label>
-            <input
-              id={`${uid}-age`}
-              type="number"
-              inputMode="numeric"
-              min={17}
-              max={99}
-              value={sel.age ?? ""}
-              onChange={(e) => update({ age: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
-              aria-describedby={`${uid}-age-help`}
-              aria-invalid={Boolean(eligibility?.underage)}
-              className={`${styles.ageInput} ${eligibility?.underage ? styles.pickerInvalid : ""}`}
-            />
-            <p
-              id={`${uid}-age-help`}
-              className={`${styles.ageHelp} ${eligibility?.underage ? styles.ageHelpError : ""}`}
-            >
-              {eligibility ? ageHelpText(eligibility, b.youngDriver.surchargeSen) : " "}
-            </p>
           </div>
         </div>
 
@@ -875,13 +834,6 @@ export default function CarDetail() {
 
       <BookingBar
         {...bar}
-        surchargeLine={
-          quote && quote.surchargeSen
-            ? `incl. young driver surcharge, ${formatSen(b.youngDriver.surchargeSen)} × ${daysText} · ${formatSen(
-                quote.surchargeSen
-              )}`
-            : ""
-        }
         lowStockText={lowStockText}
         reason={reason}
         afterHoursText={

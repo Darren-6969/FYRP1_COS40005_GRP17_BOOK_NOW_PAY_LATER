@@ -172,16 +172,7 @@
   font-size: 15px;
 }
 
-.ageLine {
-  margin-top: 10px !important;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--pub-ink);
-}
 
-.ageLineError {
-  color: var(--pub-error-fg);
-}
 
 .payBox {
   border: 1.5px solid var(--pub-brand);

@@ -5,8 +5,6 @@
 import prisma from "../config/db.js";
 import {
   addDays,
-  ageOn,
-  eligibilityFor,
   klDateTimeToUtc,
   klHhmm,
   klPlainDate,
@@ -304,12 +302,6 @@ export function toCarDto(listing, facts, availability) {
       pickupPoints: pickupPointsFor(listing.branch),
       dropoffPoints: dropoffPointsFor(listing.branch),
       addOns: addOnsFor(listing),
-      minDriverAge: eligibilityFor(listing, null).minAge,
-      youngDriver: {
-        maxAge: listing.youngDriverMaxAge ?? listing.minDriverAge - 1,
-        surchargeSen: toSen(listing.youngDriverSurcharge) ?? 0,
-        unit: "per_day",
-      },
       additionalDriverSen: additional ? toSen(additional.price) : null,
       availableFrom: availability.availableFrom,
       bookedDates: availability.bookedDates,
@@ -364,7 +356,10 @@ export async function getPublicCar(id) {
  * again inside its transaction rather than trusting a stored quote.
  *
  * sel: { from, to, ft, tt, pickupPointId, dropoffPointId, requestedLocation,
- *        cdw, addOns: {id: qty}, driverDob, age }
+ *        cdw, addOns: {id: qty} }
+ *
+ * No driver age is asked (client decision, Oct 2026): a valid driving
+ * licence is the only driver requirement.
  *
  * Returns problems[] instead of throwing, so the quote endpoint can show them
  * and booking creation can refuse with the first one.
@@ -374,11 +369,9 @@ export function priceSelection(listing, config, sel, peakDates) {
   const returnAt = klDateTimeToUtc(sel.to, sel.tt);
   const days = pickupAt && returnAt ? rentalDays(pickupAt, returnAt) : 0;
 
-  const age = sel.driverDob && sel.from ? ageOn(sel.driverDob, sel.from) : sel.age ?? null;
-  const eligibility = eligibilityFor(listing, age);
   const downPaymentPct = config?.downPaymentPercent ?? DEFAULT_DOWN_PAYMENT_PCT;
 
-  if (!days) return { days: 0, eligibility, downPaymentPct, problems: [] };
+  if (!days) return { days: 0, downPaymentPct, problems: [] };
 
   const problems = [];
   const pickupPoints = pickupPointsFor(listing.branch);
@@ -405,9 +398,6 @@ export function priceSelection(listing, config, sel, peakDates) {
       message: `This operator does not hand over or receive cars between ${NIGHT_START} and ${NIGHT_END}`,
     });
   }
-  if (eligibility.underage) {
-    problems.push({ code: "DRIVER_UNDERAGE", message: `The driver must be at least ${eligibility.minAge} on the pickup date` });
-  }
 
   const cdw = cdwFor(listing);
   const chosen = addOnsFor(listing)
@@ -423,7 +413,6 @@ export function priceSelection(listing, config, sel, peakDates) {
     downPaymentPct,
     overtimeFeeSen: listing.blockNightHandover ? 0 : toSen(listing.overtimeFee) ?? 0,
     addOns: chosen,
-    surchargePerDaySen: eligibility.young ? toSen(listing.youngDriverSurcharge) ?? 0 : 0,
     pickupFeeSen: point?.pickupFeeSen ?? 0,
     dropoffFeeSen: dropoff?.dropoffFeeSen ?? 0,
   });
@@ -433,7 +422,7 @@ export function priceSelection(listing, config, sel, peakDates) {
   const peakDays = dates.filter((d) => peakDates.has(d)).length;
   const refundRule = peakDays > 0 ? { type: "FORFEIT" } : refundRuleFor(config);
 
-  return { days, eligibility, downPaymentPct, pickupAt, returnAt, dates, point, dropoff, requestedLocation, priced, peakDays, refundRule, problems };
+  return { days, downPaymentPct, pickupAt, returnAt, dates, point, dropoff, requestedLocation, priced, peakDays, refundRule, problems };
 }
 
 function hoursFor(branch) {
@@ -488,7 +477,7 @@ export async function quotePublicCar(id, sel) {
   const r = priceSelection(listing, facts.config, sel, peakDates);
 
   if (!r.days) {
-    return { quote: null, availability: null, eligibility: r.eligibility, hours, indicative };
+    return { quote: null, availability: null, hours, indicative };
   }
 
   const requested = (await loadAvailability([listing], r.dates[0], addDays(r.dates[0], r.days))).get(listing.id);
@@ -514,7 +503,6 @@ export async function quotePublicCar(id, sel) {
       rentalBalanceSen: p.rentalBalanceSen,
       addOnLines: p.addOnLines.map(({ id, label, qty, amountSen }) => ({ id, label, qty, amountSen })),
       addOnsSen: p.addOnsSen,
-      surchargeSen: p.surchargeSen,
       pickupPoint: r.point,
       pickupFeeSen: p.pickupFeeSen,
       dropoffPoint: r.dropoff,
@@ -534,7 +522,6 @@ export async function quotePublicCar(id, sel) {
       remaining,
       alternatives: available ? null : await findAlternatives(listing, sel.from, r.days),
     },
-    eligibility: r.eligibility,
     problems: r.problems,
     hours,
     indicative,

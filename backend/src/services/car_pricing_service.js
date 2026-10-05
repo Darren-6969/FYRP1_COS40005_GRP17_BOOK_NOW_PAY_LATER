@@ -72,14 +72,6 @@ export function rentalDates(pickupAt, days) {
   return Array.from({ length: days }, (_, i) => addDays(first, i));
 }
 
-// Whole years between a "YYYY-MM-DD" birth date and a plain date.
-export function ageOn(dob, onDate) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dob || "")) return null;
-  const [by, bm, bd] = dob.split("-").map(Number);
-  const [y, m, d] = onDate.split("-").map(Number);
-  return y - by - (m < bm || (m === bm && d < bd) ? 1 : 0);
-}
-
 // "HH:mm" in Malaysia for a given instant (default: now).
 export function klHhmm(now = new Date()) {
   return new Date(now.getTime() + KL_OFFSET_MS).toISOString().slice(11, 16);
@@ -165,8 +157,9 @@ export function depositFor(rentalSen, downPaymentPct) {
 /**
  * Price a car rental. The deposit is a percentage of the duration charge
  * only, so the amount payable now matches what the customer compared in
- * search; at 100% the whole total is the deposit. Overtime, point charges, add-ons (including CDW) and the young
- * driver surcharge go on the balance. Late returns are paid at the counter
+ * search; at 100% the whole total is the deposit. Overtime, point charges
+ * and add-ons (including CDW) go on the balance. Late returns are paid at
+ * the counter
  * and never appear here.
  *
  * @param {object} p
@@ -176,7 +169,6 @@ export function depositFor(rentalSen, downPaymentPct) {
  * @param {number} p.downPaymentPct 0 to 100
  * @param {number} [p.overtimeFeeSen] flat charge per night handover
  * @param {{id:string,label:string,priceSen:number,unit:string,qty:number}[]} [p.addOns] chosen, CDW included
- * @param {number} [p.surchargePerDaySen] 0 unless the driver is young
  * @param {number} [p.pickupFeeSen]
  * @param {number} [p.dropoffFeeSen]
  */
@@ -187,7 +179,6 @@ export function priceRental({
   downPaymentPct,
   overtimeFeeSen = 0,
   addOns = [],
-  surchargePerDaySen = 0,
   pickupFeeSen = 0,
   dropoffFeeSen = 0,
 }) {
@@ -207,9 +198,8 @@ export function priceRental({
     amountSen: a.priceSen * a.qty * (a.unit === "per_day" ? days : 1),
   }));
   const addOnsSen = addOnLines.reduce((sum, a) => sum + a.amountSen, 0);
-  const surchargeSen = surchargePerDaySen * days;
 
-  const extrasSen = overtimeSen + addOnsSen + surchargeSen + pickupFeeSen + dropoffFeeSen;
+  const extrasSen = overtimeSen + addOnsSen + pickupFeeSen + dropoffFeeSen;
 
   // 100% means the customer pays everything on acceptance (4.3.5), so the
   // extras move onto the deposit and nothing is left for a balance.
@@ -230,7 +220,6 @@ export function priceRental({
     rentalBalanceSen,
     addOnLines,
     addOnsSen,
-    surchargeSen,
     pickupFeeSen,
     dropoffFeeSen,
     balanceSen,
@@ -259,17 +248,3 @@ export function paymentTiming(pickupAt, now = new Date()) {
   };
 }
 
-// Driver age rules for a listing on the pick-up date.
-// Platform minimum driver age (SRS V2.9); operators may set a higher one.
-export const PLATFORM_MIN_DRIVER_AGE = 17;
-
-export function eligibilityFor(listing, age) {
-  const minAge = Math.max(PLATFORM_MIN_DRIVER_AGE, listing.minDriverAge ?? PLATFORM_MIN_DRIVER_AGE);
-  const maxYoung = listing.youngDriverMaxAge ?? minAge - 1;
-  return {
-    minAge,
-    age,
-    underage: age !== null && age !== undefined && age < minAge,
-    young: age !== null && age !== undefined && age >= minAge && age <= maxYoung,
-  };
-}

@@ -3,9 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   addDays,
-  ageOn,
   depositFor,
-  eligibilityFor,
   fromSen,
   isNightTime,
   klDateTimeToUtc,
@@ -126,7 +124,7 @@ test("night window is 21:00 to 09:00, counted per handover", () => {
   assert.equal(nightHandovers(at("2026-10-01", "10:00"), at("2026-10-03", "10:00")), 0);
 });
 
-test("overtime, points, add-ons and surcharge go on the balance", () => {
+test("overtime, points and add-ons go on the balance", () => {
   const pickupAt = at("2026-10-05", "22:00");
   const r = priceRental({
     card,
@@ -138,7 +136,6 @@ test("overtime, points, add-ons and surcharge go on the balance", () => {
       { id: "cdw", label: "Collision Damage Waiver", priceSen: 2500, unit: "per_day", qty: 1 },
       { id: "2", label: "Cleaning", priceSen: 3000, unit: "per_booking", qty: 1 },
     ],
-    surchargePerDaySen: 2000,
     pickupFeeSen: 4000,
     dropoffFeeSen: 1500,
   });
@@ -147,8 +144,7 @@ test("overtime, points, add-ons and surcharge go on the balance", () => {
   assert.equal(r.nightHandovers, 2);
   assert.equal(r.overtimeSen, 6000);
   assert.equal(r.addOnsSen, 2500 * 2 + 3000);
-  assert.equal(r.surchargeSen, 4000);
-  assert.equal(r.balanceSen, 24000 - 6000 + 6000 + 8000 + 4000 + 4000 + 1500);
+  assert.equal(r.balanceSen, 24000 - 6000 + 6000 + 8000 + 4000 + 1500);
   assert.equal(r.totalSen, r.depositSen + r.balanceSen);
 });
 
@@ -168,17 +164,6 @@ test("a rental holds stock on its booked dates only (no return hold)", () => {
   const booking = { status: "IN_PROGRESS", returnedAt: null, pickupDate: at("2026-10-01"), returnDate: at("2026-10-03") };
   assert.deepEqual(occupiedDates(booking), ["2026-10-01", "2026-10-02"]);
   assert.equal(addDays("2026-12-31", 1), "2027-01-01");
-});
-
-test("driver age is measured on the pick-up date", () => {
-  assert.equal(ageOn("2003-10-02", "2026-10-01"), 22);
-  assert.equal(ageOn("2003-10-01", "2026-10-01"), 23);
-  assert.equal(eligibilityFor({ minDriverAge: 16 }, 16).minAge, 17); // platform floor
-  const listing = { minDriverAge: 21, youngDriverMaxAge: 24 };
-  assert.deepEqual(eligibilityFor(listing, 20), { minAge: 21, age: 20, underage: true, young: false });
-  assert.equal(eligibilityFor(listing, 23).young, true);
-  assert.equal(eligibilityFor(listing, 25).young, false);
-  assert.equal(eligibilityFor({ minDriverAge: 25, youngDriverMaxAge: null }, 25).young, false);
 });
 
 test("balance collected at once when pick-up is too close", () => {

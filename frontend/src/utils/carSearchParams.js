@@ -1,7 +1,8 @@
 // The car search lives in the URL so results are shareable and survive
 // back/forward. This module is the only place that knows the format.
 //
-//   city, from, to (YYYY-MM-DD), ft, tt (HH:MM), sort, age
+//   city, from, to (YYYY-MM-DD), ft, tt (HH:MM), sort
+//   (No driver age: a valid licence is the only driver requirement.)
 //   type, seats, trans, fuel, drive, brand, refund, operator (comma lists)
 //   pmin, pmax (price per day, whole RM), dmin, dmax (amount payable now, whole RM)
 
@@ -39,7 +40,6 @@ export function parseCarSearch(params) {
     ft: p.get("ft") || DEFAULT_TIME,
     tt: p.get("tt") || DEFAULT_TIME,
     sort: SORTS.some((s) => s.value === sort) ? sort : "recommended",
-    age: p.get("age") || "",
     sel,
     pmin: num(p, "pmin"),
     pmax: num(p, "pmax"),
@@ -58,7 +58,6 @@ export function toCarSearchParams(c) {
     p.set("tt", c.tt || DEFAULT_TIME);
   }
   if (c.sort && c.sort !== "recommended") p.set("sort", c.sort);
-  if (c.age) p.set("age", c.age);
   FACET_GROUPS.forEach((g) => {
     if (c.sel?.[g]?.length) p.set(g, c.sel[g].join(","));
   });
@@ -73,14 +72,8 @@ export function hasDates(c) {
 }
 
 // ── Booking selection (detail page -> booking form) ─────────────────
-//   from, to, ft, tt, age (years; a landing band like "25-29" reads as 25)
+//   from, to, ft, tt
 //   pp (pick-up point id), ad (add-ons as id:qty, comma separated)
-
-export function parseAge(value) {
-  if (!value) return null;
-  const n = parseInt(String(value), 10);
-  return Number.isFinite(n) ? n : null;
-}
 
 export function parseBookingSelection(params) {
   const p = params instanceof URLSearchParams ? params : new URLSearchParams(params);
@@ -98,7 +91,6 @@ export function parseBookingSelection(params) {
     to: p.get("to") || "",
     ft: p.get("ft") || DEFAULT_TIME,
     tt: p.get("tt") || DEFAULT_TIME,
-    age: parseAge(p.get("age")),
     pickupPointId: p.get("pp") || "",
     dropoffPointId: p.get("dp") || "",
     cdw: p.get("cdw") === "1",
@@ -114,7 +106,6 @@ export function toBookingParams(sel) {
     p.set("ft", sel.ft || DEFAULT_TIME);
     p.set("tt", sel.tt || DEFAULT_TIME);
   }
-  if (sel.age !== null && sel.age !== undefined && sel.age !== "") p.set("age", String(sel.age));
   if (sel.pickupPointId) p.set("pp", sel.pickupPointId);
   if (sel.dropoffPointId) p.set("dp", sel.dropoffPointId);
   if (sel.cdw) p.set("cdw", "1");
@@ -135,6 +126,5 @@ export function tripParams(c) {
     p.set("ft", c.ft || DEFAULT_TIME);
     p.set("tt", c.tt || DEFAULT_TIME);
   }
-  if (c.age) p.set("age", c.age);
   return p;
 }

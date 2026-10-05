@@ -347,7 +347,7 @@ export function getCarListing(id) {
 const PLAIN_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^\d{2}:\d{2}$/;
 
-// Price, schedule, availability, driver eligibility and opening hours for the
+// Price, schedule, availability and opening hours for the
 // customer's selection. Only well-formed values are sent; the server fills in
 // defaults and validates everything again.
 export function quoteCarBooking(listingId, sel) {
@@ -362,8 +362,6 @@ export function quoteCarBooking(listingId, sel) {
   if (sel.dropoffPointId) body.dropoffPointId = String(sel.dropoffPointId);
   if (sel.requestedLocation && sel.requestedLocation.trim()) body.requestedLocation = sel.requestedLocation.trim();
   body.cdw = Boolean(sel.cdw);
-  if (PLAIN_DATE.test(sel.driverDob || "")) body.driverDob = sel.driverDob;
-  else if (Number.isInteger(sel.age)) body.age = sel.age;
   return api.post(`/public/cars/${encodeURIComponent(listingId)}/quote`, body);
 }
 

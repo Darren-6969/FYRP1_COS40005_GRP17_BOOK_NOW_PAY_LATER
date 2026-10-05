@@ -376,7 +376,7 @@
 /* ── trip ───────────────────────────────────────────────────────── */
 .tripGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr 150px;
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
   align-items: start;
 }
@@ -387,8 +387,7 @@
   gap: 10px;
 }
 
-.pickerField,
-.ageField {
+.pickerField {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -458,29 +457,8 @@
   color: var(--pub-error-fg);
 }
 
-.ageInput {
-  border: 1.5px solid var(--pub-control-line);
-  border-radius: 10px;
-  padding: 10px 12px;
-  min-height: 46px;
-  background: var(--pub-surface);
-  font-size: 15px !important;
-  font-weight: 600;
-  color: var(--pub-ink) !important;
-  width: 100%;
-}
 
-.ageHelp {
-  grid-column: 1 / -1;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--pub-text);
-}
 
-.ageHelpError {
-  color: var(--pub-error-fg);
-  font-weight: 500;
-}
 
 .points {
   border: 0;
@@ -985,10 +963,6 @@
 @media (max-width: 760px) {
   .tripGrid {
     grid-template-columns: 1fr;
-  }
-
-  .ageField {
-    max-width: 200px;
   }
 }
 

@@ -7,7 +7,7 @@ import styles from "../../assets/styles/public/ResultCard.module.css";
 
 const TRANSMISSION = { AUTOMATIC: "Automatic", MANUAL: "Manual" };
 
-// One car in the results list. `href` already carries the trip (dates, age).
+// One car in the results list. `href` already carries the trip (dates and times).
 export default function ResultCard({ result, href, linkState, saved, onToggleSave }) {
   const { listing, quote, rateSen, depositPct, depositPerDaySen, remaining } = result;
   const primary = listing.images.find((img) => img.isPrimary) || listing.images[0];

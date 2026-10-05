@@ -98,6 +98,7 @@ function PriceBreakdown({ pricing }) {
       `${a.label}${a.qty > 1 ? ` × ${a.qty}` : ""}${a.unit === "per_day" ? `, ${days} ${days === 1 ? "day" : "days"}` : ""}`,
       a.amountSen,
     ]),
+    // Only bookings priced before driver age was removed carry this.
     ...(pricing.surchargeSen ? [["Young driver surcharge", pricing.surchargeSen]] : []),
     ...(pricing.pickupFeeSen ? [[`Pickup at ${pricing.pickupPoint?.label}`, pricing.pickupFeeSen]] : []),
     ...(pricing.dropoffFeeSen ? [[`Drop-off at ${pricing.dropoffPoint?.label}`, pricing.dropoffFeeSen]] : []),

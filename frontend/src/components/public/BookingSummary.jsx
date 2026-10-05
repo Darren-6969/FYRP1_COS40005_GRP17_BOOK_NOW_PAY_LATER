@@ -9,7 +9,7 @@ function plural(n, word) {
 }
 
 // Sidebar on the booking form. Displays the server quote; computes nothing.
-export default function BookingSummary({ listing, quote, eligibility, editHref }) {
+export default function BookingSummary({ listing, quote, editHref }) {
   const b = listing.booking;
   const title = `${listing.vehicleMake} ${listing.vehicleModel}`;
   const primary = listing.images.find((img) => img.isPrimary) || listing.images[0];
@@ -32,18 +32,6 @@ export default function BookingSummary({ listing, quote, eligibility, editHref }
     });
     if (quote.pickupFeeSen) lines.push({ k: `Pickup at ${quote.pickupPoint.label}`, v: quote.pickupFeeSen });
     if (quote.dropoffFeeSen) lines.push({ k: `Drop-off at ${quote.dropoffPoint.label}`, v: quote.dropoffFeeSen });
-    if (quote.surchargeSen)
-      lines.push({
-        k: `Young driver surcharge ${daysText} × ${formatSen(b.youngDriver.surchargeSen)}`,
-        v: quote.surchargeSen,
-      });
-  }
-
-  let ageLine = "Add date of birth to confirm the price";
-  if (eligibility?.age !== null && eligibility?.age !== undefined) {
-    ageLine = eligibility.underage
-      ? `Driver age ${eligibility.age} is below the minimum of ${eligibility.minAge}`
-      : `Priced for driver age ${eligibility.age}`;
   }
 
   return (
@@ -106,7 +94,6 @@ export default function BookingSummary({ listing, quote, eligibility, editHref }
             <dd>{quote ? lengthText : "Not set"}</dd>
           </div>
         </dl>
-        <p className={`${styles.ageLine} ${eligibility?.underage ? styles.ageLineError : ""}`}>{ageLine}</p>
       </div>
 
       {quote && (

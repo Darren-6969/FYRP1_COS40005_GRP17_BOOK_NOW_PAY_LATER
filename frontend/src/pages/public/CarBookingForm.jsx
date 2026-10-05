@@ -4,7 +4,7 @@ import { AlertCircle, Check, CircleAlert, Info, TriangleAlert, X } from "lucide-
 import { getCarListing, quoteCarBooking } from "../../services/listing_public_service";
 import { requestCarBooking } from "../../services/car_booking_service";
 import { parseBookingSelection, toBookingParams, tripParams } from "../../utils/carSearchParams";
-import { formatDateList, formatSen, formatShortDate, formatShortDateTime } from "../../utils/formatPublic";
+import { formatDateList, formatSen, formatShortDateTime } from "../../utils/formatPublic";
 import { getUser } from "../../utils/session";
 import { BRAND } from "../../constants/brand";
 import PaymentSchedule from "../../components/public/PaymentSchedule";
@@ -13,36 +13,20 @@ import BookingSummary from "../../components/public/BookingSummary";
 import Notice from "../../components/public/Notice";
 import styles from "../../assets/styles/public/CarBookingForm.module.css";
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const FIELD_ID = {
   name: "bf-name",
   phone: "bf-phone",
   driverName: "bf-driver",
-  dob: "bf-dob-d",
   location: "bf-location",
   chauffeurNote: "bf-chauffeur-note",
   agree: "bf-agree",
   forfeit: "bf-forfeit",
 };
-const ORDER = ["name", "phone", "driverName", "dob", "location", "chauffeurNote", "agree", "forfeit"];
+const ORDER = ["name", "phone", "driverName", "location", "chauffeurNote", "agree", "forfeit"];
 const MAX_NOTE = 500;
-const MIN_BIRTH_YEAR = 1920;
-const THIS_YEAR = new Date().getFullYear();
 const DRAFT_PREFIX = "bnpl_booking_draft:";
 
 // ── validation ───────────────────────────────────────────────────────
-
-function parseDob(f) {
-  if (!f.dobD || !f.dobM || !f.dobY) return { state: "empty" };
-  if (!/^\d{1,2}$/.test(f.dobD) || !/^\d{4}$/.test(f.dobY)) return { state: "bad" };
-  const d = Number(f.dobD);
-  const m = Number(f.dobM);
-  const y = Number(f.dobY);
-  if (y < MIN_BIRTH_YEAR || y > THIS_YEAR) return { state: "year" };
-  const daysInMonth = new Date(y, m, 0).getDate();
-  if (d < 1 || d > daysInMonth) return { state: "bad", daysInMonth, m, y };
-  return { state: "ok", iso: `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}` };
-}
 
 function phoneDigits(phone) {
   return phone.replace(/[\s-]/g, "").replace(/^\+?60/, "").replace(/^0/, "");
@@ -56,16 +40,6 @@ function validate(key, f, agreed, forfeitAgreed) {
     return /^1\d{8,9}$/.test(n) ? "" : "Enter a Malaysian mobile number, for example 12-345 6789.";
   }
   if (key === "driverName") return f.isDriver || f.driverName.trim() ? "" : "Enter the driver's full name.";
-  if (key === "dob") {
-    const r = parseDob(f);
-    if (r.state === "empty") return "Enter the driver's full date of birth.";
-    if (r.state === "year") return `Enter a year of birth between ${MIN_BIRTH_YEAR} and ${THIS_YEAR}.`;
-    if (r.state === "bad")
-      return r.daysInMonth
-        ? `Enter a real date. ${MONTHS[r.m - 1]} ${r.y} has ${r.daysInMonth} days.`
-        : "Enter the day and year as numbers.";
-    return "";
-  }
   if (key === "location") {
     if (!f.requestOther) return "";
     return f.requestedLocation.trim().length >= 3 ? "" : "Enter the place you'd like to pick up from, for example a hotel name.";
@@ -118,9 +92,6 @@ function initialForm(listingId) {
     phone: user.phone ? phoneDigits(String(user.phone)) : "",
     isDriver: true,
     driverName: "",
-    dobD: "",
-    dobM: "",
-    dobY: "",
     licence: "MY",
     requestOther: false,
     requestedLocation: "",
@@ -274,13 +245,11 @@ export default function CarBookingForm() {
 
   const agreed = Boolean(agreedAt);
   const forfeitAgreed = Boolean(forfeitAt);
-  const dob = parseDob(form);
-  const dobIso = dob.state === "ok" ? dob.iso : "";
   // A requested location is quoted once it is complete, not on every keystroke.
   const [quotedLocation, setQuotedLocation] = useState(() =>
     form.requestOther && form.requestedLocation.trim().length >= 3 ? form.requestedLocation.trim() : ""
   );
-  const quoteKey = `${listingId}?${key}&dob=${dobIso}&rl=${quotedLocation}`;
+  const quoteKey = `${listingId}?${key}&rl=${quotedLocation}`;
 
   useEffect(() => {
     let alive = true;
@@ -295,15 +264,13 @@ export default function CarBookingForm() {
   useEffect(() => {
     let alive = true;
     const s = parseBookingSelection(new URLSearchParams(key));
-    // The date of birth is the source of the driver's age here; the age typed
-    // on the car page is only a preview.
-    quoteCarBooking(listingId, { ...s, age: null, driverDob: dobIso || null, requestedLocation: quotedLocation })
+    quoteCarBooking(listingId, { ...s, requestedLocation: quotedLocation })
       .then((r) => alive && setQuoteRes({ key: quoteKey, data: r.data }))
       .catch(() => alive && setQuoteRes({ key: quoteKey, data: null }));
     return () => {
       alive = false;
     };
-  }, [listingId, key, dobIso, quotedLocation, quoteKey]);
+  }, [listingId, key, quotedLocation, quoteKey]);
 
   useEffect(() => {
     writeDraft(listingId, form);
@@ -340,7 +307,6 @@ export default function CarBookingForm() {
   const op = listing.operator.companyName;
   const q = quoteRes.data;
   const quote = q?.quote || null;
-  const eligibility = q?.eligibility;
   const sending = status.kind === "sending";
   const pickupPointId = sel.pickupPointId || b.pickupPoints[0]?.id || "";
   const dropoffPointId = sel.dropoffPointId || "";
@@ -353,20 +319,15 @@ export default function CarBookingForm() {
     type: listing.vehicleType,
     ...Object.fromEntries(tripParams(sel)),
   })}`;
-  const cityHref = `/cars?${new URLSearchParams({ city: listing.branch.city, ...Object.fromEntries(tripParams(sel)) })}`;
 
   const unavailableOnLoad = q?.availability && !q.availability.available;
   const unavailableDates =
     status.kind === "unavailable" ? status.dates : unavailableOnLoad ? q.availability.blockedDates : [];
   const showUnavailable = status.kind === "unavailable" || unavailableOnLoad;
-  const under = Boolean(eligibility?.underage);
-  const young = Boolean(eligibility?.young) && !errors.dob;
 
   let blockReason = "";
   if (!quote)
     blockReason = "Choose your pick-up and return dates on the car page before sending a request.";
-  else if (under)
-    blockReason = `You can't send a request yet. This car needs drivers aged ${eligibility.minAge} or over, and the date of birth entered makes the driver ${eligibility.age}.`;
   else if (nightBlocked)
     blockReason = `${op} doesn't hand over or receive cars between ${b.overtime.window.from} and ${b.overtime.window.to}. Change the times on the car page.`;
   else if (showUnavailable) blockReason = "You can't request these dates. Choose other dates or a similar car above.";
@@ -392,11 +353,6 @@ export default function CarBookingForm() {
     commitLocation(next);
   };
 
-  // Validate the date of birth only when focus leaves the whole group.
-  const blurDob = (e) => {
-    if (e.relatedTarget && /^bf-dob-/.test(e.relatedTarget.id || "")) return;
-    blur("dob");
-  };
 
   const toggleAgree = (e) => {
     const on = e.target.checked;
@@ -433,7 +389,6 @@ export default function CarBookingForm() {
         driver: {
           isBooker: form.isDriver,
           fullName: form.isDriver ? form.name.trim() : form.driverName.trim(),
-          dateOfBirth: dobIso,
           licenceIssuedIn: form.licence,
         },
         chauffeur: { requested: form.chauffeur, note: form.chauffeur ? form.chauffeurNote.trim() || null : null },
@@ -483,9 +438,7 @@ export default function CarBookingForm() {
 
   const errorList = ORDER.filter((k) => errors[k]).map((k) => ({ k, msg: errors[k], id: FIELD_ID[k] }));
   const describe = (...ids) => ids.filter(Boolean).join(" ") || undefined;
-  const pickupDate = quote ? formatShortDate(sel.from) : "";
   const due = quote ? formatShortDateTime(quote.payInFull ? quote.licenceDueAt : quote.balanceDueAt) : "";
-  const youngRange = eligibility ? `${eligibility.minAge}–${b.youngDriver.maxAge}` : "";
 
   const rentalTerms = [
     { k: "Fuel", v: `${listing.policy.fuel.value}. ${listing.policy.fuel.note}` },
@@ -495,18 +448,10 @@ export default function CarBookingForm() {
       k: "Drivers",
       v:
         b.additionalDriverSen !== null
-          ? `One authorised driver. Additional drivers ${formatSen(b.additionalDriverSen)}/day, same age and licence rules.`
+          ? `One authorised driver. Additional drivers ${formatSen(b.additionalDriverSen)}/day, each with a valid licence.`
           : "One authorised driver. Ask the operator about additional drivers.",
     },
-    {
-      k: "Minimum driver age",
-      v:
-        b.minDriverAge <= b.youngDriver.maxAge
-          ? `${b.minDriverAge}. Drivers aged ${b.minDriverAge}–${b.youngDriver.maxAge} pay ${formatSen(
-              b.youngDriver.surchargeSen
-            )}/day, added to the balance.`
-          : `${b.minDriverAge}.`,
-    },
+    { k: "Driving licence", v: "A valid driving licence for each driver. No minimum age." },
     {
       k: "Night pickup and return",
       v: b.overtime.nightBlocked
@@ -744,95 +689,6 @@ export default function CarBookingForm() {
                   <FieldError id="bf-driver-err">{errors.driverName}</FieldError>
                 </div>
               )}
-
-              <fieldset
-                className={styles.group}
-                aria-describedby={describe("bf-dob-hint", errors.dob && "bf-dob-err", (young || under) && !errors.dob && "bf-dob-note")}
-              >
-                <legend className={styles.label}>{form.isDriver ? "Your date of birth" : "Driver's date of birth"}</legend>
-                <p id="bf-dob-hint" className={styles.hint}>
-                  Used to check the minimum age of {b.minDriverAge}
-                  {b.minDriverAge <= b.youngDriver.maxAge ? " and any young driver surcharge" : ""}.
-                </p>
-                <div className={styles.dobRow}>
-                  <div className={styles.dobPart}>
-                    <label htmlFor="bf-dob-d" className={styles.smallLabel}>
-                      Day
-                    </label>
-                    <input
-                      id="bf-dob-d"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="bday-day"
-                      maxLength={2}
-                      value={form.dobD}
-                      onChange={(e) => change("dobD", "dob", e.target.value.replace(/\D/g, ""))}
-                      onBlur={blurDob}
-                      aria-invalid={Boolean(errors.dob)}
-                      className={`${styles.input} ${styles.dobDay} ${errors.dob || under ? styles.inputInvalid : ""}`}
-                    />
-                  </div>
-                  <div className={styles.dobPart}>
-                    <label htmlFor="bf-dob-m" className={styles.smallLabel}>
-                      Month
-                    </label>
-                    <select
-                      id="bf-dob-m"
-                      autoComplete="bday-month"
-                      value={form.dobM}
-                      onChange={(e) => change("dobM", "dob", e.target.value)}
-                      onBlur={blurDob}
-                      aria-invalid={Boolean(errors.dob)}
-                      className={`${styles.input} ${styles.dobMonth} ${errors.dob || under ? styles.inputInvalid : ""}`}
-                    >
-                      <option value="">Select</option>
-                      {MONTHS.map((m, i) => (
-                        <option key={m} value={String(i + 1)}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className={styles.dobPart}>
-                    <label htmlFor="bf-dob-y" className={styles.smallLabel}>
-                      Year
-                    </label>
-                    <input
-                      id="bf-dob-y"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="bday-year"
-                      maxLength={4}
-                      value={form.dobY}
-                      onChange={(e) => change("dobY", "dob", e.target.value.replace(/\D/g, ""))}
-                      onBlur={blurDob}
-                      aria-invalid={Boolean(errors.dob)}
-                      className={`${styles.input} ${styles.dobYear} ${errors.dob || under ? styles.inputInvalid : ""}`}
-                    />
-                  </div>
-                </div>
-                <FieldError id="bf-dob-err">{errors.dob}</FieldError>
-                {young && (
-                  <p id="bf-dob-note" role="status" className={styles.noteInfo}>
-                    <Info size={16} aria-hidden="true" className={styles.inlineIcon} />
-                    <span>
-                      Drivers aged {youngRange} pay {formatSen(b.youngDriver.surchargeSen)}/day. Added to your balance.
-                    </span>
-                  </p>
-                )}
-                {under && !errors.dob && (
-                  <div id="bf-dob-note" role="alert" className={styles.noteError}>
-                    <CircleAlert size={18} aria-hidden="true" className={styles.inlineIcon} />
-                    <div>
-                      <p className={styles.noteStrong}>This car needs drivers aged {eligibility.minAge} or over.</p>
-                      <p>
-                        This date of birth makes the driver {eligibility.age} on {pickupDate}.{" "}
-                        <Link to={cityHref}>See cars for drivers under {eligibility.minAge}</Link>
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </fieldset>
 
               <fieldset className={styles.group}>
                 <legend className={styles.label}>Licence issued in</legend>
@@ -1113,7 +969,7 @@ export default function CarBookingForm() {
           </fieldset>
         </form>
 
-        <BookingSummary listing={listing} quote={quote} eligibility={eligibility} editHref={`${detailHref}#trip`} />
+        <BookingSummary listing={listing} quote={quote} editHref={`${detailHref}#trip`} />
       </div>
 
       <TermsDialog open={termsOpen} onClose={closeTerms} title={`${possessive(op)} rental terms`} terms={rentalTerms} />

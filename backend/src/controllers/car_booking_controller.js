@@ -58,7 +58,6 @@ function selectionFrom(body) {
       requestedLocation: body.requestedLocation ?? null,
       cdw: body.cdw === true,
       addOns: Object.fromEntries(body.addOns.map((a) => [String(a.id), a.quantity])),
-      driverDob: body.bookingDetails.driver.dateOfBirth,
     },
   };
 }
@@ -156,7 +155,7 @@ export async function createCarBooking(req, res, next) {
           quantity: 1,
           rentalAmount: fromSen(p.rentalSen),
           addonsAmount: fromSen(p.addOnsSen),
-          feesAmount: fromSen(p.overtimeSen + p.surchargeSen + p.pickupFeeSen + p.dropoffFeeSen),
+          feesAmount: fromSen(p.overtimeSen + p.pickupFeeSen + p.dropoffFeeSen),
           discountAmount: "0.00",
           totalAmount: fromSen(p.totalSen),
           creditTier: assignCreditTier(fromSen(p.totalSen), platformSettings.creditTierThresholds),
@@ -176,7 +175,6 @@ export async function createCarBooking(req, res, next) {
             depositPct: p.depositPct,
             depositSen: p.depositSen,
             addOnLines: p.addOnLines,
-            surchargeSen: p.surchargeSen,
             pickupFeeSen: p.pickupFeeSen,
             dropoffFeeSen: p.dropoffFeeSen,
             balanceSen: p.balanceSen,
