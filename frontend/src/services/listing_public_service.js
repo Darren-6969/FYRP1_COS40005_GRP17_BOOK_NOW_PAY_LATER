@@ -268,6 +268,15 @@ function findTightest(fleet, c, days) {
 // overtime, point charges and add-ons.
 export async function searchCars(c) {
   const { items: fleet, cities } = await loadFleet();
+  return { data: searchFleet(fleet, c, { cities }) };
+}
+
+/**
+ * Filter, facet and sort a set of cars against search criteria. The results
+ * page passes the whole fleet; the seller page passes one operator's cars and
+ * groups them by branch instead of by city.
+ */
+export function searchFleet(fleet, c, { cities = [], groupBy = "city" } = {}) {
   const days = rentalDays(c);
   // Cars with no stock left on any requested date are not offered at all.
   const matching = fleet.filter((l) => passes(l, c, days) && !bookedDuring(l, c.from, days).length);
@@ -275,7 +284,12 @@ export async function searchCars(c) {
   const anyFilter = isAnyFilter(c);
 
   const groups = [];
-  if (list.length) {
+  if (list.length && groupBy === "branch") {
+    [...new Map(list.map((l) => [l.branch.id, l.branch])).values()].forEach((branch) => {
+      const cars = list.filter((l) => l.branch.id === branch.id);
+      groups.push({ key: `branch-${branch.id}`, branchId: branch.id, title: branch.name, items: cars.map((l) => toResult(l, c, days)) });
+    });
+  } else if (list.length) {
     if (anyFilter) {
       groups.push({ key: "all", title: "", items: list.map((l) => toResult(l, c, days)) });
     } else {
@@ -303,7 +317,25 @@ export async function searchCars(c) {
     tightest: list.length ? null : findTightest(fleet, c, days),
     cityOptions: cities.length ? cities : PICKUP_CITIES,
   };
-  return { data: result };
+  return result;
+}
+
+// ── Operator seller pages ────────────────────────────────────────────
+
+// Profile, branches, terms and every published car of one operator.
+// handle is the slug, or the numeric id from older links.
+export function getOperatorStorefront(handle) {
+  return api.get(`/public/operators/${encodeURIComponent(handle)}`);
+}
+
+// Operator cards for the landing page band.
+export function getFeaturedOperators(limit = 6) {
+  return api.get("/public/operators", { params: { limit } });
+}
+
+// The link an operator shares; falls back to the id before slugs existed.
+export function operatorHref(operator) {
+  return operator?.slug ? `/o/${operator.slug}` : `/operators/${operator?.id}`;
 }
 
 // ── Car detail and booking quote ─────────────────────────────────────

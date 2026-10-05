@@ -1335,3 +1335,85 @@
     justify-content: space-between;
   }
 }
+
+/* ── operators band (links to each seller page) ─────────────────── */
+.opGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 14px;
+}
+
+.opCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 84px;
+  padding: 16px 18px;
+  background: var(--pub-surface);
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.opCard:hover {
+  border-color: var(--pub-brand);
+  box-shadow: var(--pub-shadow-card);
+}
+
+.opCard:focus-visible {
+  outline: 3px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+.opLogo {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--pub-ok-bg);
+  color: var(--pub-ok-fg);
+  display: grid;
+  place-items: center;
+  font-family: var(--pub-font-display);
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.opText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.opName {
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--pub-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opMeta {
+  font-size: 14px;
+  color: var(--pub-text);
+}
+
+.opVerified {
+  font-family: var(--pub-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--pub-ok-fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .opCard {
+    transition: none;
+  }
+}

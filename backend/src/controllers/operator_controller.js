@@ -1,3 +1,4 @@
+import { uniqueOperatorSlug } from "../services/operator_storefront_service.js";
 import crypto from "crypto";
 import prisma from "../config/db.js";
 import bcrypt from "bcryptjs";
@@ -249,6 +250,7 @@ export async function createOperator(req, res, next) {
         const operator = await tx.operator.create({
           data: {
             operatorCode,
+            slug: await uniqueOperatorSlug(companyName, tx),
             companyName,
             email,
             phone: phone || null,

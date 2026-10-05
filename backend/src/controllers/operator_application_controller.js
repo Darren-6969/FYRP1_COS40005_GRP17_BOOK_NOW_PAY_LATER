@@ -1,3 +1,4 @@
+import { uniqueOperatorSlug } from "../services/operator_storefront_service.js";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import prisma from "../config/db.js";
@@ -80,6 +81,7 @@ export async function submitOperatorApplication(req, res, next) {
       const operator = await tx.operator.create({
         data: {
           operatorCode,
+          slug: await uniqueOperatorSlug(companyName, tx),
           companyName: String(companyName).trim(),
           email: normalizedEmail,
           phone: phone ? String(phone).trim() : null,

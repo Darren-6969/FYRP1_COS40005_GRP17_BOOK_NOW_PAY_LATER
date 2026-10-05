@@ -67,6 +67,7 @@ import EmbedEntry from "./pages/embed/EmbedEntry";
 
 // Public Pages
 import PublicLayout from "./layouts/PublicLayout";
+import OperatorStorefront from "./pages/public/OperatorStorefront";
 import Home from "./pages/public/Home";
 import CarResults from "./pages/public/CarResults";
 import CarDetail from "./pages/public/CarDetail";
@@ -80,6 +81,8 @@ export default function App() {
         <Route element={<PublicLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/cars" element={<CarResults />} />
+          <Route path="/o/:slug" element={<OperatorStorefront />} />
+          <Route path="/operators/:handle" element={<OperatorStorefront />} />
           <Route path="/cars/:listingId" element={<CarDetail />} />
           {/* Signed-out visitors go to /login?redirect=<this URL>, which keeps every selection. */}
           <Route element={<ProtectedRoute allowedRoles={["CUSTOMER"]} />}>

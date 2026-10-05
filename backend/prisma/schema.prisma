@@ -266,6 +266,14 @@ model Operator {
   phone        String?
   logoUrl      String?
   status       CompanyStatus @default(ACTIVE)
+
+  // Seller page (FR-CUST-007). The slug gives the operator a short link to
+  // share (/o/<slug>); the rest is written by the operator.
+  slug            String?  @unique
+  about           String?  @db.Text
+  coverImageUrl   String?
+  establishedYear Int?
+  languages       String[] @default([])
   stripeAccountId String?
   stripeOnboardingStatus String @default("NOT_STARTED")
   stripeRequirements Json?
@@ -793,6 +801,10 @@ model Branch {
   // Counter hours, "HH:mm" in operator local time
   openTime  String?
   closeTime String?
+
+  // Per-day hours, Monday first: [{ closed, open, close }] x 7. When null,
+  // openTime/closeTime apply every day.
+  weeklyHours Json?
 
   isActive Boolean @default(true)
 

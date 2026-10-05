@@ -1,3 +1,4 @@
+import { operatorHref } from "../../services/listing_public_service";
 import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
 import { formatResponseTime, formatSen } from "../../utils/formatPublic";
@@ -56,7 +57,7 @@ export default function ResultCard({ result, href, linkState, saved, onToggleSav
 
         <div className={styles.operatorRow}>
           <span className={styles.operator}>
-            <Link to={`/operators/${listing.operator.id}`} className={styles.operatorLink}>
+            <Link to={operatorHref(listing.operator)} className={styles.operatorLink}>
               {listing.operator.companyName}
             </Link>{" "}
             ({listing.branch.name})

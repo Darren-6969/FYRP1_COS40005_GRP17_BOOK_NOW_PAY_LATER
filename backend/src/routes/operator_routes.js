@@ -1,4 +1,5 @@
 import express from "express";
+import { getMyStorefront, updateMyStorefront } from "../controllers/storefront_controller.js";
 import {
   createOperator,
   createOperatorUser,
@@ -257,6 +258,8 @@ router.get(
   getOperatorSettlements
 ); /* OPERATOR STRIPE SETTLEMENT DETAILS */
 
+router.get("/storefront", ...ownerOnlyAccess, getMyStorefront);
+router.patch("/storefront", ...ownerOnlyAccess, updateMyStorefront);
 router.get("/settings", ...ownerOnlyAccess, getOperatorSettings);
 router.patch("/settings", ...ownerOnlyAccess, updateOperatorSettings);
 router.get(

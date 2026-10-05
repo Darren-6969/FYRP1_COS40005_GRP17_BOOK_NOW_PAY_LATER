@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { BRAND } from "../../constants/brand";
 import { FEATURES } from "../../constants/features";
 import { formatMonthYear, formatResponseTime } from "../../utils/formatPublic";
+import { operatorHref } from "../../services/listing_public_service";
 import styles from "../../assets/styles/public/OperatorStrip.module.css";
 
 function initials(name) {
@@ -31,9 +32,9 @@ export default function OperatorStrip({ operator, branch, stats, rating }) {
         )}
         <div className={styles.lines}>
           <div className={styles.nameRow}>
-            <span className={styles.name}>
+            <Link to={operatorHref(operator)} className={styles.name}>
               {operator.companyName} <span className={styles.branch}>({branch.name})</span>
-            </span>
+            </Link>
             {operator.verified && <span className={styles.verified}>Verified</span>}
             {FEATURES.showRating && rating && (
               <span className={styles.rating}>
@@ -54,8 +55,8 @@ export default function OperatorStrip({ operator, branch, stats, rating }) {
           </span>
         </div>
       </div>
-      <Link to={`/cars?operator=${operator.id}`} className={styles.link}>
-        See all cars from this operator
+      <Link to={operatorHref(operator)} className={styles.link}>
+        Visit {operator.companyName}&apos;s page
       </Link>
     </section>
   );

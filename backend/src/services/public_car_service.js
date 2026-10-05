@@ -36,8 +36,8 @@ export const PUBLIC_LISTING_WHERE = {
   branch: { isActive: true },
 };
 
-const LISTING_INCLUDE = {
-  operator: { select: { id: true, companyName: true, logoUrl: true, status: true, createdAt: true } },
+export const LISTING_INCLUDE = {
+  operator: { select: { id: true, slug: true, companyName: true, logoUrl: true, status: true, createdAt: true } },
   branch: {
     include: { pickupPoints: { where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] } },
   },
@@ -65,9 +65,53 @@ function notFound() {
 
 // ── Operator facts ───────────────────────────────────────────────────
 
+// "Verified" means the business licence check passed (FR-COMP-002): the
+// application was approved and no business document is unapproved or past
+// its expiry date. Operators created without an application are not shown
+// as verified until they go through the check.
+async function verifiedOperatorIds(ids) {
+  const now = new Date();
+  const [approved, unsettled] = await Promise.all([
+    prisma.operatorApplication.findMany({ where: { operatorId: { in: ids }, status: "APPROVED" }, select: { operatorId: true } }),
+    prisma.operatorDocument.findMany({
+      where: {
+        operatorId: { in: ids },
+        documentType: { in: ["BUSINESS_REGISTRATION", "BUSINESS_LICENSE"] },
+        OR: [{ status: { not: "APPROVED" } }, { expiresAt: { lte: now } }],
+      },
+      select: { operatorId: true },
+    }),
+  ]);
+  const blocked = new Set(unsettled.map((d) => d.operatorId));
+  return new Set(approved.map((a) => a.operatorId).filter((id) => !blocked.has(id)));
+}
+
+// Median minutes from a booking request to the operator's first answer
+// (accept, reject or suggest an alternative) over the acceptance window.
+// Automatic rejections are not the operator answering, so they don't count.
+async function responseTimes(ids, since) {
+  if (!ids.length) return new Map();
+  const rows = await prisma.$queryRaw`
+    SELECT b."operatorId" AS "operatorId",
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (a.first_at - b."createdAt")) / 60) AS mins,
+           count(*)::int AS n
+    FROM "Booking" b
+    JOIN (
+      SELECT "entityId", min("createdAt") AS first_at
+      FROM "AuditLog"
+      WHERE "entityType" = 'Booking'
+        AND action IN ('BOOKING_AUTO_ACCEPTED', 'BOOKING_REJECTED', 'ALTERNATIVE_SUGGESTED')
+      GROUP BY "entityId"
+    ) a ON a."entityId" = b.id::text
+    WHERE b."operatorId" = ANY(${ids}) AND b."createdAt" >= ${since}
+    GROUP BY b."operatorId"`;
+  return new Map(rows.filter((r) => r.n >= MIN_DECISIONS_FOR_RATE).map((r) => [r.operatorId, Math.max(1, Math.round(Number(r.mins)))]));
+}
+
 async function loadOperatorFacts(operatorIds) {
   const ids = [...new Set(operatorIds)];
   const since = new Date(Date.now() - ACCEPTANCE_WINDOW_DAYS * 86400000);
+  const [verified, responseMins] = await Promise.all([verifiedOperatorIds(ids), responseTimes(ids, since)]);
   const [configs, branchCounts, completed, decided, rejected] = await Promise.all([
     prisma.bNPLConfig.findMany({ where: { operatorId: { in: ids } }, orderBy: { id: "asc" } }),
     prisma.branch.groupBy({ by: ["operatorId"], where: { operatorId: { in: ids }, isActive: true }, _count: { _all: true } }),
@@ -91,6 +135,8 @@ async function loadOperatorFacts(operatorIds) {
     const d = count(decided, id);
     facts.set(id, {
       config,
+      verified: verified.has(id),
+      responseTimeMins: responseMins.get(id) ?? null,
       branchCount: count(branchCounts, id),
       completedBookings: count(completed, id),
       // Too few decisions to say anything honest: the page shows "New operator".
@@ -100,7 +146,7 @@ async function loadOperatorFacts(operatorIds) {
   return facts;
 }
 
-function refundRuleFor(config) {
+export function refundRuleFor(config) {
   if (config?.partialRefundElected && config.partialRefundPercent) {
     return { type: "PARTIAL", refundPct: config.partialRefundPercent };
   }
@@ -225,9 +271,10 @@ export function toCarDto(listing, facts, availability) {
     createdAt: listing.createdAt,
     operator: {
       id: listing.operator.id,
+      slug: listing.operator.slug,
       companyName: listing.operator.companyName,
       logoUrl: listing.operator.logoUrl,
-      verified: listing.operator.status === "ACTIVE",
+      verified: facts.verified,
       activeSince: klPlainDate(listing.operator.createdAt),
       branchCount: facts.branchCount,
       completedBookings: facts.completedBookings,
@@ -272,7 +319,7 @@ export function toCarDto(listing, facts, availability) {
     policy: policyFor(listing),
     faqs: STANDARD_FAQS,
     operatorStats: {
-      responseTimeMins: null,
+      responseTimeMins: facts.responseTimeMins,
       acceptanceRate: facts.acceptanceRate,
     },
   };

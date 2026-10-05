@@ -2,7 +2,13 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { getRole, getToken } from "../../utils/session";
 import { formatRinggit, formatSen, klToday } from "../../utils/formatPublic";
-import { getAnnouncements, getFeaturedCars, getFeaturedTours } from "../../services/listing_public_service";
+import {
+  getAnnouncements,
+  getFeaturedCars,
+  getFeaturedOperators,
+  getFeaturedTours,
+  operatorHref,
+} from "../../services/listing_public_service";
 import { PICKUP_CITIES, PICKUP_SHORTCUTS } from "../../services/mock/listings.mock";
 import { parseCarSearch, toCarSearchParams } from "../../utils/carSearchParams";
 import styles from "../../assets/styles/public/Home.module.css";
@@ -155,7 +161,7 @@ function CarCard({ listing, quote }) {
       </div>
       <div className={styles.cardBody}>
         <div className={styles.cardOperator}>
-          <Link to={`/operators/${listing.operator.id}`} className={styles.operatorLink}>
+          <Link to={operatorHref(listing.operator)} className={styles.operatorLink}>
             {listing.operator.companyName}
           </Link>
           {listing.operator.verified && <span className={styles.verified}>Verified</span>}
@@ -566,6 +572,41 @@ function Faq() {
   );
 }
 
+// Operators with live cars, verified and busiest first.
+const loadOperators = () => getFeaturedOperators(6).then((r) => ({ data: r.data.items }));
+
+function operatorInitials(name) {
+  return String(name || "")
+    .replace(/Sdn\.? Bhd\.?/i, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
+
+function OperatorCard({ operator }) {
+  return (
+    <Link to={operatorHref(operator)} className={styles.opCard}>
+      {operator.logoUrl ? (
+        <img src={operator.logoUrl} alt="" className={styles.opLogo} />
+      ) : (
+        <span className={styles.opLogo} aria-hidden="true">
+          {operatorInitials(operator.companyName)}
+        </span>
+      )}
+      <span className={styles.opText}>
+        <span className={styles.opName}>{operator.companyName}</span>
+        <span className={styles.opMeta}>
+          {[operator.cities.join(", "), `${operator.carCount} ${operator.carCount === 1 ? "car" : "cars"}`].filter(Boolean).join(" · ")}
+        </span>
+        {operator.verified && <span className={styles.opVerified}>Verified business</span>}
+      </span>
+    </Link>
+  );
+}
+
 function useFetch(fn) {
   const [state, setState] = useState({ status: "loading", data: null });
   useEffect(() => {
@@ -585,6 +626,7 @@ function Landing() {
   const cars = useFetch(getFeaturedCars);
   const tours = useFetch(getFeaturedTours);
   const news = useFetch(getAnnouncements);
+  const operators = useFetch(loadOperators);
 
   useReveal(rootRef, [cars.status, tours.status, news.status]);
 
@@ -685,6 +727,26 @@ function Landing() {
           )}
         </div>
       </section>
+
+      {operators.status === "ready" && operators.data.length > 0 && (
+        <section className={`${styles.section} ${styles.sectionTight}`} aria-labelledby="ops-title">
+          <div className={styles.container}>
+            <div className={styles.sectionHead}>
+              <div>
+                <p className={styles.eyebrow}>Operators</p>
+                <h2 id="ops-title" className={styles.h2}>
+                  Local rental companies on the platform
+                </h2>
+              </div>
+            </div>
+            <div className={styles.opGrid}>
+              {operators.data.map((o) => (
+                <OperatorCard key={o.id} operator={o} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section id="tours" className={`${styles.section} ${styles.sectionTours}`} aria-labelledby="tours-title">
         <div className={styles.container}>

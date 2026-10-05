@@ -76,8 +76,9 @@ export function formatDateList(plainDates) {
 // Operator response time -> "Usually responds within 90 min" / "... 2 hours".
 export function formatResponseTime(mins) {
   if (mins === null || mins === undefined) return "New operator";
-  if (mins < 60) return `Usually responds within ${mins} min`;
-  const hours = mins / 60;
+  if (mins < 60) return `Usually responds within ${Math.max(1, Math.round(mins))} min`;
+  // Real medians are rarely whole hours; round up so the promise holds.
+  const hours = Math.ceil(mins / 60);
   return `Usually responds within ${hours} ${hours === 1 ? "hour" : "hours"}`;
 }
 
