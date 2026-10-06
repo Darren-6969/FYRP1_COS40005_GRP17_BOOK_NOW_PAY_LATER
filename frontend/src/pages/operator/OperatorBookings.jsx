@@ -33,7 +33,7 @@ export default function OperatorBookings() {
       ?.toUpperCase();
 
   const [bookings, setBookings] = useState([]);
-  const [activeStatus, setActiveStatus] = useState("UPCOMING");
+  const [activeStatus, setActiveStatus] = useState("PENDING");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
