@@ -19,6 +19,7 @@ import {
 import { runIdempotent } from "../services/idempotency_service.js";
 import { getPlatformSettings, isFeatureEnabled } from "../services/platform_settings_service.js";
 import { assignCreditTier } from "../services/credit_tier_service.js";
+import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -733,93 +734,155 @@ export async function getCustomerBookingActivity(req, res, next) {
 
 export async function acceptAlternativeBooking(req, res, next) {
   try {
-    const booking = await assertCustomerBooking(req.params.id, req.user.id);
+    const booking = await assertCustomerBooking(
+      req.params.id,
+      req.user.id
+    );
 
     if (booking.status !== "ALTERNATIVE_SUGGESTED") {
       return res.status(400).json({
-        message: "This booking does not have an alternative suggestion to accept.",
+        message:
+          "This booking does not have an alternative suggestion to accept.",
       });
     }
 
     if (!booking.alternativeServiceName) {
       return res.status(400).json({
-        message: "No alternative booking details found.",
+        message:
+          "No alternative booking details found.",
       });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const accepted = await tx.booking.update({
-        where: { id: booking.id },
-        data: {
-          serviceName: booking.alternativeServiceName,
-          totalAmount: booking.alternativePrice || booking.totalAmount,
-          pickupDate: booking.alternativePickupDate || booking.pickupDate,
-          returnDate: booking.alternativeReturnDate || booking.returnDate,
-          status: "ACCEPTED",
-        },
-        include: {
-          customer: {
-            select: {
-              id: true,
-              userCode: true,
-              name: true,
-              email: true,
+    // 1. Apply the alternative details first.
+    // IMPORTANT: keep status as ALTERNATIVE_SUGGESTED
+    // because acceptBookingAndRequestPayment()
+    // accepts this status.
+    const alternativeAccepted =
+      await prisma.$transaction(async (tx) => {
+        const updated =
+          await tx.booking.update({
+            where: {
+              id: booking.id,
+            },
+
+            data: {
+              serviceName:
+                booking.alternativeServiceName,
+
+              totalAmount:
+                booking.alternativePrice ||
+                booking.totalAmount,
+
+              pickupDate:
+                booking.alternativePickupDate ||
+                booking.pickupDate,
+
+              returnDate:
+                booking.alternativeReturnDate ||
+                booking.returnDate,
+
+              status:
+                "ALTERNATIVE_SUGGESTED",
+            },
+
+            include: {
+              customer: {
+                select: {
+                  id: true,
+                  userCode: true,
+                  name: true,
+                  email: true,
+                },
+              },
+
+              operator: true,
+              payment: true,
+              receipt: true,
+              invoice: true,
+            },
+          });
+
+        await tx.auditLog.create({
+          data: {
+            userId: req.user.id,
+
+            action:
+              "CUSTOMER_ACCEPTED_ALTERNATIVE",
+
+            entityType:
+              "Booking",
+
+            entityId:
+              String(booking.id),
+
+            details: {
+              alternativeServiceName:
+                booking.alternativeServiceName,
+
+              alternativePrice:
+                booking.alternativePrice,
             },
           },
-          operator: true,
-          payment: true,
-          receipt: true,
-          invoice: true,
-        },
+        });
+
+        return updated;
       });
 
-      await tx.auditLog.create({
-        data: {
-          userId: req.user.id,
-          action: "CUSTOMER_ACCEPTED_ALTERNATIVE",
-          entityType: "Booking",
-          entityId: String(booking.id),
-          details: {
-            alternativeServiceName: booking.alternativeServiceName,
-            alternativePrice: booking.alternativePrice,
-          },
-        },
+    // 2. Create the payment schedule + invoice
+    // and change booking to PENDING_PAYMENT.
+    const {
+      booking: paymentReadyBooking,
+    } =
+      await acceptBookingAndRequestPayment({
+        booking: alternativeAccepted,
+        actorUserId: req.user.id,
+        req,
       });
 
-      return accepted;
-    });
-
-    await notifyCustomerByBooking({
-      booking: updated,
-      title: "Alternative accepted",
-      message: `You accepted the alternative option for booking ${
-        updated.bookingCode || updated.id
-      }.`,
-      type: "ALTERNATIVE_ACCEPTED",
-    });
-
+    // 3. Notify operator that customer accepted.
     const operatorUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:5173"
-    }/operator/bookings/${updated.id}`;
+      process.env.FRONTEND_URL ||
+      "http://localhost:5173"
+    }/operator/bookings/${paymentReadyBooking.id}`;
 
     await notifyOperatorUsersByBooking({
-      booking: updated,
-      title: "Customer accepted alternative",
-      message: `${updated.customer?.name || "Customer"} accepted the alternative suggestion for booking ${
-        updated.bookingCode || updated.id
+      booking: paymentReadyBooking,
+
+      title:
+        "Customer accepted alternative",
+
+      message: `${
+        paymentReadyBooking.customer?.name ||
+        "Customer"
+      } accepted the alternative suggestion for booking ${
+        paymentReadyBooking.bookingCode ||
+        paymentReadyBooking.id
       }.`,
-      type: "CUSTOMER_ACCEPTED_ALTERNATIVE",
-      emailSubject: `Customer Accepted Alternative - ${
-        updated.bookingCode || updated.id
-      }`,
-      emailHtml: customerAlternativeResponseTemplate({
-        booking: updated,
-        accepted: true,
-        operatorUrl,
-      }),
+
+      type:
+        "CUSTOMER_ACCEPTED_ALTERNATIVE",
+
+      emailSubject:
+        `Customer Accepted Alternative - ${
+          paymentReadyBooking.bookingCode ||
+          paymentReadyBooking.id
+        }`,
+
+      emailHtml:
+        customerAlternativeResponseTemplate({
+          booking:
+            paymentReadyBooking,
+
+          accepted: true,
+
+          operatorUrl,
+        }),
     });
 
-    res.json(mapBooking(updated));
+    // 4. Return booking with payment information
+    res.json(
+      mapBooking(paymentReadyBooking)
+    );
   } catch (err) {
     next(err);
   }

@@ -15,6 +15,9 @@ export default function OperatorBookingDetail() {
   const [booking, setBooking] = useState(null);
   const [timeline, setTimeline] = useState([]);
 
+  const [showAlternative, setShowAlternative] =
+  useState(false);
+
   const [showPaymentDeadline, setShowPaymentDeadline] =
     useState(false);
 
@@ -169,6 +172,10 @@ export default function OperatorBookingDetail() {
     "REJECTED",
   ].includes(bookingStatus);
 
+  const canSuggestAlternative =
+  bookingStatus === "PENDING" &&
+  !booking.alternativeUsed;
+
   // =========================================================
   // Handover
   //
@@ -255,6 +262,7 @@ export default function OperatorBookingDetail() {
     null;
 
   const hasAnyAction =
+    canSuggestAlternative ||
     canHandover ||
     canReturn ||
     canEditDeadline ||
@@ -607,6 +615,20 @@ export default function OperatorBookingDetail() {
 
           <div className="operator-action-stack">
 
+            {/* Suggest Alternative */}
+              {canSuggestAlternative && (
+                <button
+                  type="button"
+                  className="operator-secondary-btn"
+                  disabled={!!actionLoading}
+                  onClick={() =>
+                    setShowAlternative(true)
+                  }
+                >
+                  Suggest Alternative
+                </button>
+              )}
+
             {/* Handover */}
             {canHandover && (
               <button
@@ -687,6 +709,16 @@ export default function OperatorBookingDetail() {
         </div>
       </section>
 
+      {showAlternative && (
+        <AlternativeModal
+          booking={booking}
+          onClose={() =>
+            setShowAlternative(false)
+          }
+          onDone={loadBooking}
+        />
+      )}
+
       {/* =====================================================
           Payment Deadline Modal
       ====================================================== */}
@@ -735,6 +767,242 @@ function InfoRow({
       >
         {value}
       </strong>
+    </div>
+  );
+}
+
+function AlternativeModal({
+  booking,
+  onClose,
+  onDone,
+}) {
+  const [form, setForm] = useState({
+    alternativeServiceName: "",
+    alternativePrice:
+      booking.totalAmount || "",
+    alternativePickupDate:
+      toDatetimeLocalValue(
+        booking.pickupDate
+      ),
+    alternativeReturnDate:
+      toDatetimeLocalValue(
+        booking.returnDate
+      ),
+    reason: "",
+  });
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const handleSubmit = async () => {
+    if (
+      !form.alternativeServiceName.trim() ||
+      !form.reason.trim()
+    ) {
+      alert(
+        "Alternative service name and reason are required."
+      );
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await operatorService.suggestAlternative(
+        booking.id,
+        {
+          alternativeServiceName:
+            form.alternativeServiceName.trim(),
+
+          alternativePrice:
+            form.alternativePrice
+              ? Number(
+                  form.alternativePrice
+                )
+              : null,
+
+          alternativePickupDate:
+            form.alternativePickupDate ||
+            null,
+
+          alternativeReturnDate:
+            form.alternativeReturnDate ||
+            null,
+
+          reason: form.reason.trim(),
+        }
+      );
+
+      await onDone();
+      onClose();
+    } catch (err) {
+      alert(
+        err.response?.data?.message ||
+          "Failed to suggest alternative"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="operator-modal-backdrop">
+      <div className="operator-modal">
+        <div className="operator-card-head">
+          <div>
+            <h2>
+              Suggest an Alternative
+            </h2>
+
+            <p>
+              Suggest another vehicle or
+              booking option to the customer.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="operator-alternative-grid">
+
+          <div className="operator-alt-card">
+            <p>Original Booking</p>
+
+            <strong>
+              {booking.serviceName}
+            </strong>
+
+            <span>
+              Pickup:{" "}
+              {formatOperatorDateTime(
+                booking.pickupDate
+              )}
+            </span>
+
+            <span>
+              Return:{" "}
+              {formatOperatorDateTime(
+                booking.returnDate
+              )}
+            </span>
+
+            <strong>
+              {formatOperatorMoney(
+                booking.totalAmount
+              )}
+            </strong>
+          </div>
+
+          <div className="operator-alt-arrow">
+            →
+          </div>
+
+          <div className="operator-alt-card">
+            <p>Suggested Alternative</p>
+
+            <input
+              placeholder="Alternative vehicle / service"
+              value={
+                form.alternativeServiceName
+              }
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  alternativeServiceName:
+                    e.target.value,
+                })
+              }
+            />
+
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="Alternative price"
+              value={
+                form.alternativePrice
+              }
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  alternativePrice:
+                    e.target.value,
+                })
+              }
+            />
+
+            <input
+              type="datetime-local"
+              value={
+                form.alternativePickupDate
+              }
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  alternativePickupDate:
+                    e.target.value,
+                })
+              }
+            />
+
+            <input
+              type="datetime-local"
+              value={
+                form.alternativeReturnDate
+              }
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  alternativeReturnDate:
+                    e.target.value,
+                })
+              }
+            />
+          </div>
+        </div>
+
+        <label className="operator-field">
+          Reason for Suggestion *
+
+          <textarea
+            placeholder="Example: The selected vehicle is unavailable."
+            value={form.reason}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                reason: e.target.value,
+              })
+            }
+          />
+        </label>
+
+        <div className="operator-modal-actions">
+          <button
+            type="button"
+            className="operator-secondary-btn"
+            onClick={onClose}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            className="operator-primary-btn"
+            onClick={handleSubmit}
+            disabled={loading}
+          >
+            {loading
+              ? "Sending..."
+              : "Send Suggestion"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
