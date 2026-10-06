@@ -20,14 +20,13 @@ function getOperatorNotificationLink(item) {
   const text = `${item.title || ""} ${item.message || ""}`.toLowerCase();
   const type = `${item.type || ""}`.toLowerCase();
 
-  // New booking request / pending review
+  // New booking 
   if (
-    text.includes("new booking request") ||
-    text.includes("requires review") ||
-    type.includes("booking_request") ||
-    type.includes("new_booking")
+  text.includes("new booking") ||
+  type.includes("booking_request") ||
+  type.includes("new_booking")
   ) {
-    return "/operator/booking-requests";
+  return "/operator/bookings";
   }
 
   // Booking auto-rejected
