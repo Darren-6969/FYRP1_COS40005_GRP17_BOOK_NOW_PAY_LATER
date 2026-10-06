@@ -23,6 +23,7 @@ import {
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 import { parseId } from "../utils/parseId.js";
+import { operatorBookingUrl } from "../utils/frontendUrls.js";
 import { generateUserCode } from "../services/userCode.js";
 import { generateApiKey } from "../utils/apiKey.js";
 import {
@@ -1890,9 +1891,7 @@ export async function approvePayment(req, res, next) {
       }),
     });
 
-    const operatorPaymentUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:5173"
-    }/operator/payment-verification`;
+    const operatorPaymentUrl = operatorBookingUrl(updatedBooking.id);
 
     await notifyOperatorUsersByBooking({
       booking: updatedBooking,

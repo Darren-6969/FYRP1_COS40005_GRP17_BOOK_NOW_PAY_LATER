@@ -207,6 +207,9 @@ export default function App() {
                 <Route path="settlements" element={<OperatorSettlements />} />
                 <Route path="settings" element={<OperatorSettings />} />
               </Route>
+
+              {/* An old or mistyped link lands on the dashboard, not a blank page */}
+              <Route path="*" element={<Navigate to="/operator/dashboard" replace />} />
             </Route>
           </Route>
 

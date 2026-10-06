@@ -12,6 +12,7 @@ import {
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 import { tempBookingCode, formatBookingCode } from "../utils/bookingCode.js";
 import { parseId } from "../utils/parseId.js";
+import { operatorPaymentsUrl } from "../utils/frontendUrls.js";
 import {
   getPaymentPendingData,
   PAYMENT_TYPES,
@@ -539,7 +540,7 @@ export async function uploadCustomerReceipt(req, res, next) {
         invoice: true,
       },
     });
-    const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/payment-verification`;
+    const operatorUrl = operatorPaymentsUrl();
     Promise.allSettled([
       notifyCustomerByBooking({
         booking: updated,

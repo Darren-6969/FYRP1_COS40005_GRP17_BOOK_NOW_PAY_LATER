@@ -15,6 +15,7 @@ import { verifyToken } from "../middlewares/auth_middleware.js";
 import { allowOperatorAccess, allowRoles } from "../middlewares/rbac_middleware.js";
 import { paymentLimiter } from "../middlewares/rate_limit_middleware.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
+import { operatorBookingUrl } from "../utils/frontendUrls.js";
 import {
   getPaymentConfirmationData,
   getPaymentSpec,
@@ -277,7 +278,7 @@ export async function applyPaidState(
     emailHtml: merchantPaymentConfirmedTemplate({
       booking: updatedBooking,
       payment,
-      operatorUrl: `${frontendBase}/operator/payment-verification`,
+      operatorUrl: operatorBookingUrl(updatedBooking.id),
     }),
   });
 
