@@ -406,15 +406,49 @@ export default function CarBookingForm() {
         navigate(`/customer/bookings/${res.data.id}`);
       })
       .catch((err) => {
-        const data = err?.response?.data || {};
-        if (data.code === "LISTING_UNAVAILABLE") {
-          setStatus({ kind: "unavailable", dates: data.details?.dates || [] });
-        } else if (err?.response?.status === 422 || data.code === "OTP_REQUIRED") {
-          // A rule the request can't pass as it stands (night handover, driver
-          // age, account check). Retrying won't help, so say what to change.
-          setStatus({ kind: "refused", message: data.message || "This request can't be sent as it stands." });
+        const data =
+          err?.response?.data || {};
+
+        if (
+          data.code ===
+          "LISTING_UNAVAILABLE"
+        ) {
+          setStatus({
+            kind: "unavailable",
+            dates:
+              data.details?.dates ||
+              [],
+          });
+
+        } else if (
+          err?.response?.status ===
+            422 ||
+          data.code ===
+            "OTP_REQUIRED" ||
+          data.code ===
+            "CONCURRENT_EXPOSURE_LIMIT"
+        ) {
+          setStatus({
+            kind: "refused",
+            message:
+              data.message ||
+              "This request can't be sent as it stands.",
+          });
+
+        } else if (
+          data.code ===
+          "REQUEST_IN_PROGRESS"
+        ) {
+          setStatus({
+            kind: "refused",
+            message:
+              "This booking request is already being processed. Please wait a moment before trying again.",
+          });
+
         } else {
-          setStatus({ kind: "failed" });
+          setStatus({
+            kind: "failed",
+          });
         }
       });
   };

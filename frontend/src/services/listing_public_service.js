@@ -267,8 +267,60 @@ function findTightest(fleet, c, days) {
 // Display quotes here cover the rental only; the detail page quote adds
 // overtime, point charges and add-ons.
 export async function searchCars(c) {
-  const { items: fleet, cities } = await loadFleet();
-  return { data: searchFleet(fleet, c, { cities }) };
+  const {
+    items: fleet,
+    cities,
+  } = await loadFleet();
+
+  const days =
+    rentalDays(c);
+
+  let availabilityById =
+    null;
+
+  if (
+    c.from &&
+    days > 0
+  ) {
+    const to =
+      addDays(
+        c.from,
+        days
+      );
+
+    const response =
+      await getCarsAvailability(
+        c.from,
+        to
+      );
+
+    availabilityById =
+      new Map(
+        (
+          response.data?.items ||
+          []
+        ).map(
+          (item) => [
+            Number(
+              item.listingId
+            ),
+            item,
+          ]
+        )
+      );
+  }
+
+  return {
+    data:
+      searchFleet(
+        fleet,
+        c,
+        {
+          cities,
+          availabilityById,
+        }
+      ),
+  };
 }
 
 /**
@@ -276,10 +328,60 @@ export async function searchCars(c) {
  * page passes the whole fleet; the seller page passes one operator's cars and
  * groups them by branch instead of by city.
  */
-export function searchFleet(fleet, c, { cities = [], groupBy = "city" } = {}) {
+export function searchFleet(
+  fleet,
+  c,
+  {
+    cities = [],
+    groupBy = "city",
+    availabilityById = null,
+  } = {}
+) {
   const days = rentalDays(c);
   // Cars with no stock left on any requested date are not offered at all.
-  const matching = fleet.filter((l) => passes(l, c, days) && !bookedDuring(l, c.from, days).length);
+  const matching =
+  fleet.filter((listing) => {
+    if (
+      !passes(
+        listing,
+        c,
+        days
+      )
+    ) {
+      return false;
+    }
+
+    if (!days) {
+      return true;
+    }
+
+    if (
+      availabilityById
+    ) {
+      const availability =
+        availabilityById.get(
+          Number(
+            listing.id
+          )
+        );
+
+      return (
+        availability?.available ===
+        true
+      );
+    }
+
+    // Temporary compatibility
+    // until the old 90-day
+    // availability data is removed.
+    return (
+      !bookedDuring(
+        listing,
+        c.from,
+        days
+      ).length
+    );
+  });
   const list = sortList(matching, c.sort);
   const anyFilter = isAnyFilter(c);
 
@@ -342,6 +444,39 @@ export function operatorHref(operator) {
 
 export function getCarListing(id) {
   return api.get(`/public/cars/${encodeURIComponent(id)}`);
+}
+
+export function getCarsAvailability(
+  from,
+  to
+) {
+  return api.get(
+    "/public/cars/availability",
+    {
+      params: {
+        from,
+        to,
+      },
+    }
+  );
+}
+
+export function getCarAvailability(
+  listingId,
+  from,
+  to
+) {
+  return api.get(
+    `/public/cars/${encodeURIComponent(
+      listingId
+    )}/availability`,
+    {
+      params: {
+        from,
+        to,
+      },
+    }
+  );
 }
 
 const PLAIN_DATE = /^\d{4}-\d{2}-\d{2}$/;

@@ -19,6 +19,7 @@ import RefundBox from "../../components/public/RefundBox";
 import OperatorStrip from "../../components/public/OperatorStrip";
 import BookingBar from "../../components/public/BookingBar";
 import styles from "../../assets/styles/public/CarDetail.module.css";
+import AvailabilityCalendar from "../../components/public/AvailabilityCalendar";
 
 const TRANSMISSION = { AUTOMATIC: "Automatic", MANUAL: "Manual" };
 
@@ -309,6 +310,40 @@ export default function CarDetail() {
   const update = (changes) => {
     setParams(toBookingParams({ ...sel, pickupPointId, ...changes }), { replace: true });
   };
+  const selectCalendarDate =
+  (date) => {
+    // No pickup selected yet,
+    // or a full trip is already selected:
+    // start a new range.
+    if (
+      !sel.from ||
+      sel.to
+    ) {
+      update({
+        from: date,
+        to: "",
+      });
+
+      return;
+    }
+
+    // Clicking before the pickup date
+    // starts a new range.
+    if (date < sel.from) {
+      update({
+        from: date,
+        to: "",
+      });
+
+      return;
+    }
+
+    // Second click becomes
+    // the return date.
+    update({
+      to: date,
+    });
+  };
   const setAddOn = (id, qty) => update({ addOns: { ...sel.addOns, [id]: qty } });
 
   // Why the request button is off, in priority order.
@@ -510,6 +545,15 @@ export default function CarDetail() {
             />
           </div>
         </div>
+
+        <AvailabilityCalendar
+          listingId={listing.id}
+          selectedFrom={sel.from}
+          selectedTo={sel.to}
+          onSelectDate={
+            selectCalendarDate
+          }
+        />
 
         <fieldset className={styles.points}>
           <legend className={styles.pointsLegend}>Pick-up point</legend>

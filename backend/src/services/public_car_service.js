@@ -20,7 +20,7 @@ import {
   rentalDays,
   toSen,
 } from "./car_pricing_service.js";
-import { horizonAvailability, loadAvailability, loadPeakDates } from "./car_availability_service.js";
+import {calendarAvailability, horizonAvailability, loadAvailability, loadPeakDates } from "./car_availability_service.js";
 
 const DEFAULT_DOWN_PAYMENT_PCT = 30;
 const ACCEPTANCE_WINDOW_DAYS = 180;
@@ -345,10 +345,137 @@ async function loadPublicListing(id) {
   return listing;
 }
 
+export async function getCarAvailability(
+  listingId,
+  fromPlain,
+  toPlainExclusive
+) {
+  const listing =
+    await prisma.listing.findFirst({
+      where: {
+        id: listingId,
+        ...PUBLIC_LISTING_WHERE,
+      },
+    });
+
+  if (!listing) {
+    throw notFound();
+  }
+
+  const days =
+    await calendarAvailability(
+      listing,
+      fromPlain,
+      toPlainExclusive
+    );
+
+  return {
+    listingId:
+      listing.id,
+
+    quantity:
+      listing.quantity,
+
+    from:
+      fromPlain,
+
+    to:
+      toPlainExclusive,
+
+    days,
+  };
+}
+
 export async function getPublicCar(id) {
   const listing = await loadPublicListing(id);
   const [facts, availability] = await Promise.all([loadOperatorFacts([listing.operatorId]), horizonAvailability([listing])]);
   return toCarDto(listing, facts.get(listing.operatorId), availability.get(listing.id));
+}
+
+export async function getPublicCarsAvailability(
+  fromPlain,
+  toPlainExclusive
+) {
+  const listings =
+    await prisma.listing.findMany({
+      where: PUBLIC_LISTING_WHERE,
+
+      select: {
+        id: true,
+        quantity: true,
+      },
+    });
+
+  const availabilityMap =
+    await loadAvailability(
+      listings,
+      fromPlain,
+      toPlainExclusive
+    );
+
+  const items =
+    listings.map((listing) => {
+      const entry =
+        availabilityMap.get(
+          listing.id
+        );
+
+      if (!entry) {
+        return {
+          listingId: listing.id,
+          available: false,
+          remaining: 0,
+          blockedDates: [],
+        };
+      }
+
+      const days =
+        [...entry.remaining];
+
+      const blockedDates =
+        days
+          .filter(
+            ([, remaining]) =>
+              remaining <= 0
+          )
+          .map(([date]) => date);
+
+      const remaining =
+        days.length
+          ? Math.max(
+              0,
+              Math.min(
+                ...days.map(
+                  ([, count]) =>
+                    count
+                )
+              )
+            )
+          : 0;
+
+      return {
+        listingId:
+          listing.id,
+
+        available:
+          blockedDates.length ===
+          0,
+
+        remaining,
+
+        blockedDates,
+      };
+    });
+
+  return {
+    from:
+      fromPlain,
+
+    to:
+      toPlainExclusive,
+
+    items,
+  };
 }
 
 // ── Quote ────────────────────────────────────────────────────────────

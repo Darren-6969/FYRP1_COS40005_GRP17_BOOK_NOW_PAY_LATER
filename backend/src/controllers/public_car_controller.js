@@ -1,7 +1,7 @@
 // Public (signed-out) car catalogue. Read-only; quotes are recomputed on
 // every call and never stored.
 
-import { getPublicCar, listPublicCars, quotePublicCar } from "../services/public_car_service.js";
+import {getCarAvailability, getPublicCarsAvailability, getPublicCar, listPublicCars, quotePublicCar } from "../services/public_car_service.js";
 import { parseId } from "../utils/parseId.js";
 
 // GET /api/public/cars?city=Kuching
@@ -32,6 +32,125 @@ export async function quoteCar(req, res, next) {
   try {
     res.set("Cache-Control", "no-store");
     res.json(await quotePublicCar(parseId(req.params.id, "listing id"), req.body));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getAvailability(
+  req,
+  res,
+  next
+) {
+  try {
+    const listingId =
+      parseId(
+        req.params.id,
+        "listing id"
+      );
+
+    const from =
+      String(
+        req.query.from || ""
+      );
+
+    const to =
+      String(
+        req.query.to || ""
+      );
+
+    const plainDate =
+      /^\d{4}-\d{2}-\d{2}$/;
+
+    if (
+      !plainDate.test(from) ||
+      !plainDate.test(to)
+    ) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "from and to must use YYYY-MM-DD format.",
+        });
+    }
+
+    if (to <= from) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "to must be after from.",
+        });
+    }
+
+    res.set(
+      "Cache-Control",
+      "no-store"
+    );
+
+    res.json(
+      await getCarAvailability(
+        listingId,
+        from,
+        to
+      )
+    );
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getCarsAvailability(
+  req,
+  res,
+  next
+) {
+  try {
+    const from =
+      String(
+        req.query.from || ""
+      );
+
+    const to =
+      String(
+        req.query.to || ""
+      );
+
+    const plainDate =
+      /^\d{4}-\d{2}-\d{2}$/;
+
+    if (
+      !plainDate.test(from) ||
+      !plainDate.test(to)
+    ) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "from and to must use YYYY-MM-DD format.",
+        });
+    }
+
+    if (to <= from) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "to must be after from.",
+        });
+    }
+
+    res.set(
+      "Cache-Control",
+      "no-store"
+    );
+
+    res.json(
+      await getPublicCarsAvailability(
+        from,
+        to
+      )
+    );
   } catch (err) {
     next(err);
   }

@@ -107,6 +107,50 @@ export async function horizonAvailability(listings, db = prisma) {
   return out;
 }
 
+export async function calendarAvailability(
+  listing,
+  fromPlain,
+  toPlainExclusive,
+  db = prisma
+) {
+  const map =
+    await loadAvailability(
+      [listing],
+      fromPlain,
+      toPlainExclusive,
+      db
+    );
+
+  const entry =
+    map.get(listing.id);
+
+  if (!entry) {
+    return [];
+  }
+
+  return [...entry.remaining].map(
+    ([date, remaining]) => {
+      const safeRemaining =
+        Math.max(
+          0,
+          remaining
+        );
+
+      return {
+        date,
+
+        status:
+          safeRemaining > 0
+            ? "AVAILABLE"
+            : "BLOCKED",
+
+        remaining:
+          safeRemaining,
+      };
+    }
+  );
+}
+
 // Dates in a requested rental with no stock left.
 export async function blockedDatesFor(listing, pickupAt, days, db = prisma) {
   const first = klPlainDate(pickupAt);

@@ -1,0 +1,243 @@
+.calendar {
+  margin-top: 20px;
+  padding: 16px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+
+  background: #ffffff;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.eyebrow {
+  margin: 0 0 3px;
+
+  color: #64748b;
+
+  font-size: 11px;
+  font-weight: 800;
+
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+
+  color: #0f172a;
+
+  font-size: 18px;
+}
+
+.navigation {
+  display: flex;
+  gap: 8px;
+}
+
+.navButton {
+  width: 40px;
+  height: 40px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+
+  background: #ffffff;
+
+  color: #334155;
+
+  cursor: pointer;
+}
+
+.navButton:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+
+  margin-top: 14px;
+
+  color: #64748b;
+
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.availableDot,
+.blockedDot {
+  width: 9px;
+  height: 9px;
+
+  border-radius: 50%;
+}
+
+.availableDot {
+  background: #22c55e;
+}
+
+.blockedDot {
+  background: #ef4444;
+}
+
+.weekdays {
+  display: grid;
+  grid-template-columns:
+    repeat(7, minmax(0, 1fr));
+
+  gap: 4px;
+
+  margin-top: 16px;
+  margin-bottom: 5px;
+
+  color: #94a3b8;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  text-align: center;
+}
+
+.grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(7, minmax(0, 1fr));
+
+  gap: 4px;
+}
+
+.empty {
+  min-height: 62px;
+}
+
+.day {
+  min-width: 0;
+  min-height: 62px;
+
+  padding: 7px 3px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 4px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: #ffffff;
+
+  cursor: pointer;
+}
+
+.dayNumber {
+  color: #0f172a;
+
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.stock {
+  max-width: 100%;
+
+  overflow: hidden;
+
+  color: #64748b;
+
+  font-size: 9px;
+  font-weight: 700;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.available {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.available:hover {
+  border-color: #22c55e;
+}
+
+.blocked {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.blocked .dayNumber,
+.blocked .stock {
+  color: #b91c1c;
+}
+
+.selected {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+
+  background: #eff6ff;
+}
+
+.past {
+  opacity: 0.38;
+}
+
+.message,
+.error,
+.help {
+  margin: 12px 0 0;
+
+  font-size: 12px;
+}
+
+.message,
+.help {
+  color: #64748b;
+}
+
+.error {
+  color: #b91c1c;
+}
+
+/* Larger screens */
+@media (min-width: 700px) {
+  .calendar {
+    padding: 20px;
+  }
+
+  .grid,
+  .weekdays {
+    gap: 8px;
+  }
+
+  .day {
+    min-height: 78px;
+    padding: 9px;
+  }
+
+  .dayNumber {
+    font-size: 14px;
+  }
+
+  .stock {
+    font-size: 11px;
+  }
+}
