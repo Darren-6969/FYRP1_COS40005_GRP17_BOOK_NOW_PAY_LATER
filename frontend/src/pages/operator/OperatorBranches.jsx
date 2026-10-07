@@ -16,6 +16,15 @@ const emptyForm = {
   phone: "",
 };
 
+const emptyPointForm = {
+  label: "",
+  address: "",
+  note: "",
+  usage: "BOTH",
+  pickupFee: "0",
+  dropoffFee: "0",
+};
+
 export default function OperatorBranches() {
   const [branches, setBranches] =
     useState([]);
@@ -34,6 +43,26 @@ export default function OperatorBranches() {
 
   const [error, setError] =
     useState("");
+
+  const [
+    selectedBranchId,
+    setSelectedBranchId,
+  ] = useState(null);
+
+  const [
+    pointForm,
+    setPointForm,
+  ] = useState(emptyPointForm);
+
+  const [
+    editingPointId,
+    setEditingPointId,
+  ] = useState(null);
+
+  const [
+    pointSaving,
+    setPointSaving,
+  ] = useState(false);
 
   const loadBranches = async () => {
     try {
@@ -76,6 +105,91 @@ export default function OperatorBranches() {
     setForm(emptyForm);
     setEditingId(null);
     setError("");
+  };
+
+  const resetPointForm = () => {
+    setPointForm(emptyPointForm);
+    setEditingPointId(null);
+  };
+
+  const handlePointChange = (e) => {
+    const {
+      name,
+      value,
+    } = e.target;
+
+    setPointForm((current) => {
+      const next = {
+        ...current,
+        [name]: value,
+      };
+
+      if (
+        name === "usage" &&
+        value === "PICKUP"
+      ) {
+        next.dropoffFee = "0";
+      }
+
+      if (
+        name === "usage" &&
+        value === "DROPOFF"
+      ) {
+        next.pickupFee = "0";
+      }
+
+      return next;
+    });
+  };
+
+  const managePoints = (branch) => {
+    setSelectedBranchId(
+      branch.id
+    );
+
+    resetPointForm();
+    setError("");
+  };
+
+  const handlePointEdit = (
+    point
+  ) => {
+    setEditingPointId(
+      point.id
+    );
+
+    setPointForm({
+      label:
+        point.label || "",
+
+      address:
+        point.address || "",
+
+      note:
+        point.note || "",
+
+      usage:
+        point.usage ||
+        "BOTH",
+
+      pickupFee:
+        String(
+          point.fee ?? 0
+        ),
+
+      dropoffFee:
+        String(
+          point.dropoffFee ??
+            0
+        ),
+    });
+
+    window.scrollTo({
+      top:
+        document.body
+          .scrollHeight,
+      behavior: "smooth",
+    });
   };
 
   const handleEdit = (branch) => {
@@ -193,6 +307,164 @@ export default function OperatorBranches() {
         );
       }
     };
+
+    const handlePointSubmit =
+  async (e) => {
+    e.preventDefault();
+
+    if (
+      !selectedBranchId
+    ) {
+      setError(
+        "Please select a branch."
+      );
+      return;
+    }
+
+    if (
+      !pointForm.label.trim()
+    ) {
+      setError(
+        "Point name is required."
+      );
+      return;
+    }
+
+    const pickupFee =
+      Number(
+        pointForm.pickupFee
+      );
+
+    const dropoffFee =
+      Number(
+        pointForm.dropoffFee
+      );
+
+    if (
+      Number.isNaN(
+        pickupFee
+      ) ||
+      pickupFee < 0
+    ) {
+      setError(
+        "Pickup charge must be 0 or more."
+      );
+      return;
+    }
+
+    if (
+      Number.isNaN(
+        dropoffFee
+      ) ||
+      dropoffFee < 0
+    ) {
+      setError(
+        "Drop-off charge must be 0 or more."
+      );
+      return;
+    }
+
+    const payload = {
+      label:
+        pointForm.label.trim(),
+
+      address:
+        pointForm.address
+          .trim() ||
+        null,
+
+      note:
+        pointForm.note
+          .trim() ||
+        null,
+
+      usage:
+        pointForm.usage,
+
+      pickupFee:
+        pointForm.usage ===
+        "DROPOFF"
+          ? 0
+          : pickupFee,
+
+      dropoffFee:
+        pointForm.usage ===
+        "PICKUP"
+          ? 0
+          : dropoffFee,
+    };
+
+    try {
+      setPointSaving(true);
+      setError("");
+
+      if (
+        editingPointId
+      ) {
+        await operatorService
+          .updateBranchPoint(
+            selectedBranchId,
+            editingPointId,
+            payload
+          );
+      } else {
+        await operatorService
+          .createBranchPoint(
+            selectedBranchId,
+            payload
+          );
+      }
+
+      resetPointForm();
+
+      await loadBranches();
+    } catch (err) {
+      setError(
+        err.response?.data
+          ?.message ||
+          "Failed to save pickup/drop-off point"
+      );
+    } finally {
+      setPointSaving(
+        false
+      );
+    }
+  };
+
+  const togglePointStatus =
+  async (
+    branch,
+    point
+  ) => {
+    try {
+      setError("");
+
+      await operatorService
+        .updateBranchPoint(
+          branch.id,
+          point.id,
+          {
+            isActive:
+              !point.isActive,
+          }
+        );
+
+      await loadBranches();
+    } catch (err) {
+      setError(
+        err.response?.data
+          ?.message ||
+          "Failed to update point"
+      );
+    }
+  };
+
+  const selectedBranch =
+  branches.find(
+    (branch) =>
+      branch.id ===
+      selectedBranchId
+  );
 
   return (
     <div className="operator-page">
@@ -422,6 +694,17 @@ export default function OperatorBranches() {
                           <button
                             type="button"
                             onClick={() =>
+                              managePoints(
+                                branch
+                              )
+                            }
+                          >
+                            Manage Points
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
                               toggleBranchStatus(
                                 branch
                               )
@@ -441,6 +724,315 @@ export default function OperatorBranches() {
           </div>
         )}
       </section>
+      {selectedBranch && (
+        <section className="operator-card">
+          <div className="operator-card-head">
+            <div>
+              <p className="operator-eyebrow">
+                {selectedBranch.name}
+              </p>
+
+              <h2>
+                Pickup & Drop-off Points
+              </h2>
+
+              <p>
+                Add fixed pickup and
+                drop-off points for this
+                branch.
+              </p>
+            </div>
+          </div>
+
+          <form
+            onSubmit={
+              handlePointSubmit
+            }
+          >
+            <div className="operator-form-grid">
+
+              <label className="operator-field">
+                Point Name *
+
+                <input
+                  name="label"
+                  value={
+                    pointForm.label
+                  }
+                  onChange={
+                    handlePointChange
+                  }
+                  placeholder="Kuching Airport Counter"
+                />
+              </label>
+
+              <label className="operator-field">
+                Usage *
+
+                <select
+                  name="usage"
+                  value={
+                    pointForm.usage
+                  }
+                  onChange={
+                    handlePointChange
+                  }
+                >
+                  <option value="PICKUP">
+                    Pickup only
+                  </option>
+
+                  <option value="DROPOFF">
+                    Drop-off only
+                  </option>
+
+                  <option value="BOTH">
+                    Pickup & Drop-off
+                  </option>
+                </select>
+              </label>
+
+              <label className="operator-field operator-field-full">
+                Address
+
+                <input
+                  name="address"
+                  value={
+                    pointForm.address
+                  }
+                  onChange={
+                    handlePointChange
+                  }
+                  placeholder="Full pickup/drop-off address"
+                />
+              </label>
+
+              <label className="operator-field">
+                Pickup Charge (RM)
+
+                <input
+                  type="number"
+                  name="pickupFee"
+                  min="0"
+                  step="0.01"
+                  value={
+                    pointForm.pickupFee
+                  }
+                  onChange={
+                    handlePointChange
+                  }
+                  disabled={
+                    pointForm.usage ===
+                    "DROPOFF"
+                  }
+                />
+              </label>
+
+              <label className="operator-field">
+                Drop-off Charge (RM)
+
+                <input
+                  type="number"
+                  name="dropoffFee"
+                  min="0"
+                  step="0.01"
+                  value={
+                    pointForm.dropoffFee
+                  }
+                  onChange={
+                    handlePointChange
+                  }
+                  disabled={
+                    pointForm.usage ===
+                    "PICKUP"
+                  }
+                />
+              </label>
+
+              <label className="operator-field operator-field-full">
+                Note
+
+                <input
+                  name="note"
+                  value={
+                    pointForm.note
+                  }
+                  onChange={
+                    handlePointChange
+                  }
+                  placeholder="Example: Meet at arrival hall"
+                />
+              </label>
+            </div>
+
+            <div className="operator-form-actions">
+              {editingPointId && (
+                <button
+                  type="button"
+                  className="operator-secondary-btn"
+                  onClick={
+                    resetPointForm
+                  }
+                  disabled={
+                    pointSaving
+                  }
+                >
+                  Cancel Edit
+                </button>
+              )}
+
+              <button
+                type="submit"
+                className="operator-primary-btn"
+                disabled={
+                  pointSaving
+                }
+              >
+                {pointSaving
+                  ? "Saving..."
+                  : editingPointId
+                  ? "Save Point Changes"
+                  : "Add Point"}
+              </button>
+            </div>
+          </form>
+
+          <div
+            className="operator-table-wrap"
+            style={{
+              marginTop: "24px",
+            }}
+          >
+            {!selectedBranch
+              .pickupPoints
+              ?.length ? (
+              <div className="operator-empty-state">
+                No pickup or drop-off
+                points found for this
+                branch.
+              </div>
+            ) : (
+              <table className="operator-table">
+                <thead>
+                  <tr>
+                    <th>Point</th>
+                    <th>Usage</th>
+                    <th>Pickup</th>
+                    <th>Drop-off</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {selectedBranch
+                    .pickupPoints
+                    .map((point) => (
+                      <tr
+                        key={
+                          point.id
+                        }
+                      >
+                        <td>
+                          <strong>
+                            {
+                              point.label
+                            }
+                          </strong>
+
+                          {point.address && (
+                            <div>
+                              {
+                                point.address
+                              }
+                            </div>
+                          )}
+                        </td>
+
+                        <td>
+                          {point.usage ===
+                          "PICKUP"
+                            ? "Pickup"
+                            : point.usage ===
+                              "DROPOFF"
+                            ? "Drop-off"
+                            : "Both"}
+                        </td>
+
+                        <td>
+                          {point.usage ===
+                          "DROPOFF"
+                            ? "-"
+                            : `RM ${Number(
+                                point.fee ||
+                                  0
+                              ).toFixed(
+                                2
+                              )}`}
+                        </td>
+
+                        <td>
+                          {point.usage ===
+                          "PICKUP"
+                            ? "-"
+                            : `RM ${Number(
+                                point.dropoffFee ||
+                                  0
+                              ).toFixed(
+                                2
+                              )}`}
+                        </td>
+
+                        <td>
+                          <span
+                            className={`operator-status ${
+                              point.isActive
+                                ? "success"
+                                : "danger"
+                            }`}
+                          >
+                            {point.isActive
+                              ? "Active"
+                              : "Inactive"}
+                          </span>
+                        </td>
+
+                        <td>
+                          <div className="operator-table-actions">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handlePointEdit(
+                                  point
+                                )
+                              }
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                togglePointStatus(
+                                  selectedBranch,
+                                  point
+                                )
+                              }
+                            >
+                              {point.isActive
+                                ? "Deactivate"
+                                : "Activate"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

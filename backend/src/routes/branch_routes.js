@@ -4,6 +4,8 @@ import {
   getBranches,
   createBranch,
   updateBranch,
+  createBranchPoint,
+  updateBranchPoint,
 } from "../controllers/branch_controller.js";
 
 import { verifyToken } from "../middlewares/auth_middleware.js";
@@ -41,6 +43,18 @@ router.patch(
   "/:id",
   ...ownerOrStaffAccess,
   updateBranch
+);
+
+router.post(
+  "/:branchId/points",
+  ...ownerOrStaffAccess,
+  createBranchPoint
+);
+
+router.patch(
+  "/:branchId/points/:pointId",
+  ...ownerOrStaffAccess,
+  updateBranchPoint
 );
 
 export default router;

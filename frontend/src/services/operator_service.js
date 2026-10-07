@@ -111,6 +111,24 @@ updateBranch(id, payload) {
   );
 },
 
+createBranchPoint(branchId, payload) {
+  return api.post(
+    `/operators/branches/${branchId}/points`,
+    payload
+  );
+},
+
+updateBranchPoint(
+  branchId,
+  pointId,
+  payload
+) {
+  return api.patch(
+    `/operators/branches/${branchId}/points/${pointId}`,
+    payload
+  );
+},
+
   /**
    * Old booking approval APIs.
    * Keep these for now in case another page still uses them.
