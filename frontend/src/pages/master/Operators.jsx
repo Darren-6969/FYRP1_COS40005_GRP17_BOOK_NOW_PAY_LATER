@@ -8,7 +8,6 @@ import {
   getOperators,
   resetOperatorUser,
   updateOperatorStatus,
-  updateOperatorSubscriptionPlan,
   updateOperatorUserStatus,
   uploadOperatorLogo,
 } from "../../services/admin_service";
@@ -390,55 +389,6 @@ export default function Operators() {
     setShowStaffForm(true);
     setShowCompanyForm(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  //Add Operator Subscription Plan Function
-  const changeSubscriptionPlan =
-  async (
-    op,
-    nextPlan
-  ) => {
-    const currentPlan =
-      op.subscriptionPlan ||
-      "FREE";
-
-    if (
-      nextPlan === currentPlan
-    ) {
-      return;
-    }
-
-    const confirmed =
-      window.confirm(
-        `Change ${op.companyName} subscription from ${currentPlan} to ${nextPlan}?`
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setError("");
-      setMessage("");
-
-      const response =
-        await updateOperatorSubscriptionPlan(
-          op.id,
-          nextPlan
-        );
-
-      setMessage(
-        response.data?.message ||
-          `${op.companyName} subscription updated to ${nextPlan}.`
-      );
-
-      await load();
-    } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          "Failed to update subscription plan."
-      );
-    }
   };
 
   // Toggle company status between ACTIVE and SUSPENDED. PENDING status is only for company/owners that are created but have not completed the initial setup, and they can only be activated but not suspended until they are active.
@@ -864,7 +814,6 @@ const toggleUserStatus = async (op, user) => {
                 <th>Pending Verification</th>
                 <th>Overdue</th>
                 <th>Paid</th>
-                <th>Subscription</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -939,108 +888,40 @@ const toggleUserStatus = async (op, user) => {
                       </td>
 
                       <td>{bookingCount}</td>
+                      <td>{countPendingVerification(bookings)}</td>
+                      <td>{countByBookingStatus(bookings, "OVERDUE")}</td>
+                      <td>{countPaidBookings(bookings)}</td>
 
                       <td>
-                        {countPendingVerification(
-                          bookings
-                        )}
-                      </td>
-
-                      <td>
-                        {countByBookingStatus(
-                          bookings,
-                          "OVERDUE"
-                        )}
-                      </td>
-
-                      <td>
-                        {countPaidBookings(
-                          bookings
-                        )}
-                      </td>
-
-                      {/* =========================================
-                          SUBSCRIPTION
-                      ========================================= */}
-
-                      <td className="master-subscription-cell">
-                        <select
-                          className={`master-plan-select ${
-                            String(
-                              op.subscriptionPlan ||
-                                "FREE"
-                            ).toLowerCase()
-                          }`}
-                          value={
-                            op.subscriptionPlan ||
-                            "FREE"
-                          }
-                          onChange={(event) =>
-                            changeSubscriptionPlan(
-                              op,
-                              event.target.value
-                            )
-                          }
-                        >
-                          <option value="FREE">
-                            FREE · 3 Listings
-                          </option>
-
-                          <option value="BASIC">
-                            BASIC · 10 Listings
-                          </option>
-
-                          <option value="PREMIUM">
-                            PREMIUM · 20 Listings
-                          </option>
-                        </select>
-                      </td>
-
-                      {/* =========================================
-                          ACTIONS
-                      ========================================= */}
-
-                      <td className="master-actions-cell">
-                        <div className="master-actions-row">
-
+                        <div className="actions">
                           <button
-                            className="master-action-btn"
+                            className="btn"
                             type="button"
-                            onClick={() =>
-                              openStaffFormForOperator(
-                                op
-                              )
-                            }
+                            onClick={() => openStaffFormForOperator(op)}
                           >
                             Add Staff
                           </button>
 
-                          <button
-                            className="master-action-btn"
-                            type="button"
-                            onClick={() =>
-                              toggleStatus(op)
-                            }
-                          >
-                            {op.status === "ACTIVE"
-                              ? "Suspend"
-                              : "Activate"}
+                          <button className="btn" type="button" onClick={() => toggleStatus(op)}>
+                            {op.status === "ACTIVE" ? "Suspend Company" : "Activate Company"}
                           </button>
 
                           <button
-                            className="master-action-btn danger"
+                            className="btn danger"
                             type="button"
-                            onClick={() =>
-                              handleDelete(op)
+                            disabled={bookingCount > 0}
+                            title={
+                              bookingCount > 0
+                                ? "Cannot delete a company/operator with existing bookings"
+                                : "Delete wrongly created company/operator"
                             }
+                            onClick={() => handleDelete(op)}
                           >
                             Delete
                           </button>
-
                         </div>
                       </td>
-
-                      </tr>
+                    </tr>
 
                     {isExpanded && (
                       <tr key={`${op.id}-accounts`}>
