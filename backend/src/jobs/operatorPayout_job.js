@@ -9,7 +9,7 @@ import {
 
 const DEFAULT_APPEAL_WINDOW_DAYS = 7;
 const LEDGER_INCLUDE = {
-  payment: { select: { status: true } },
+  payment: { select: { status: true, downPaymentStatus: true } },
   booking: {
     select: {
       id: true,
@@ -46,11 +46,14 @@ async function createPendingPayout(database, entry, cutoff) {
         where: {
           id: entry.id,
           payoutId: null,
-          payment: { is: { status: "PAID" } },
+          payment: { is: { OR: [
+            { status: "PAID" },
+            { downPaymentStatus: "PAID" },
+          ] } },
           booking: {
             is: {
               operatorId: entry.booking.operatorId,
-              status: { in: ["COMPLETED", "NO_SHOW"] },
+              status: { in: ["COMPLETED", "NO_SHOW", "NO_SHOW_UNPAID"] },
               serviceResolvedAt: { lte: cutoff },
             },
           },
@@ -158,10 +161,13 @@ export async function runSettleablePayouts({
   const entries = await database.commissionLedgerEntry.findMany({
     where: {
       payoutId: null,
-      payment: { is: { status: "PAID" } },
+      payment: { is: { OR: [
+        { status: "PAID" },
+        { downPaymentStatus: "PAID" },
+      ] } },
       booking: {
         is: {
-          status: { in: ["COMPLETED", "NO_SHOW"] },
+          status: { in: ["COMPLETED", "NO_SHOW", "NO_SHOW_UNPAID"] },
           serviceResolvedAt: { lte: cutoff },
           operator: {
             is: process.env.STRIPE_CONNECTED_ACCOUNT_ID

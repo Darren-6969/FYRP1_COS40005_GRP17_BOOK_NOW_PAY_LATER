@@ -22,6 +22,7 @@ import { runIdempotent } from "../services/idempotency_service.js";
 import { getPlatformSettings, isFeatureEnabled } from "../services/platform_settings_service.js";
 import { assignCreditTier } from "../services/credit_tier_service.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
+import { enforceConcurrentExposureCap } from "../services/concurrent_exposure_service.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -261,6 +262,7 @@ export async function createCustomerBooking(req, res, next) {
     );
 
     const booking = await prisma.$transaction(async (tx) => {
+      await enforceConcurrentExposureCap({ customerId: req.user.id, database: tx });
       const platformSettings = await tx.platformSettings.upsert({
         where: { id: 1 },
         create: { id: 1 },

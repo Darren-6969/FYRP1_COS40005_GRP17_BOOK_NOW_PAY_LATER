@@ -1522,28 +1522,56 @@ export async function markBookingNoShow(req, res, next) {
     const booking = await findOperatorBooking(req, req.params.id);
     if (!booking) return res.status(404).json({ message: "Booking not found" });
 
-    if (booking.status !== "PAID" || booking.payment?.status !== "PAID") {
-      return res.status(400).json({ message: "Only paid bookings can be marked as no-show." });
+    const remark = typeof req.body?.remark === "string" ? req.body.remark.trim() : "";
+    if (!remark) {
+      return res.status(400).json({ message: "A remark is required when marking a booking as no-show." });
     }
 
     const now = new Date();
     const scheduledPickup = booking.pickupDate || booking.bookingDate;
-    if (!scheduledPickup || new Date(scheduledPickup) > now) {
-      return res.status(400).json({ message: "A booking cannot be marked no-show before its scheduled date." });
+    const config = await getOperatorEmailConfig(booking.operatorId);
+    const noShowWindowHours = Number(config?.noShowWindowHours ?? 24);
+    const windowEnd = scheduledPickup
+      ? new Date(new Date(scheduledPickup).getTime() + noShowWindowHours * 60 * 60 * 1000)
+      : null;
+    if (!scheduledPickup || now < new Date(scheduledPickup) || now > windowEnd) {
+      return res.status(400).json({ message: `A booking can only be marked no-show between service start and ${noShowWindowHours} hours after it.` });
     }
 
-    const updatedBooking = await prisma.booking.update({
-      where: { id: booking.id },
-      data: { status: "NO_SHOW", serviceResolvedAt: now },
-      include: includeBookingRelations(),
-    });
+    const payment = booking.payment;
+    const fullyPaid = payment?.status === "PAID";
+    const depositPaid = payment?.downPaymentStatus === "PAID";
+    if (!fullyPaid && !depositPaid) {
+      return res.status(400).json({ message: "Only fully paid or deposit-paid bookings can be marked as no-show." });
+    }
 
-    await createAuditLog({
-      req,
-      action: "BOOKING_MARKED_NO_SHOW",
-      entityType: "Booking",
-      entityId: booking.id,
-      details: { previousStatus: booking.status, status: "NO_SHOW", serviceResolvedAt: now },
+    const updatedBooking = await prisma.$transaction(async (tx) => {
+      const status = fullyPaid ? "NO_SHOW" : "NO_SHOW_UNPAID";
+      const updated = await tx.booking.update({
+        where: { id: booking.id },
+        data: { status, noShowRemark: remark, serviceResolvedAt: now },
+        include: includeBookingRelations(),
+      });
+      if (status === "NO_SHOW_UNPAID") {
+        await tx.paymentScheduleEntry.updateMany({
+          where: { bookingId: booking.id, status: { in: ["DUE", "EXPIRED"] } },
+          data: { status: "VOID", voidedAt: now },
+        });
+      }
+      await createAuditLog({
+        req,
+        action: "BOOKING_MARKED_NO_SHOW",
+        entityType: "Booking",
+        entityId: booking.id,
+        details: {
+          previousStatus: booking.status,
+          status,
+          remark,
+          depositForfeited: status === "NO_SHOW_UNPAID",
+          serviceResolvedAt: now,
+        },
+      }, tx);
+      return updated;
     });
 
     res.json({ booking: mapBooking(updatedBooking) });

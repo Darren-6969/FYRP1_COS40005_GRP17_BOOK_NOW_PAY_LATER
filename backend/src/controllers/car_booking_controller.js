@@ -26,6 +26,7 @@ import {
   readIdempotencyKey,
   releaseIdempotencyKey,
 } from "../services/idempotency_service.js";
+import { enforceConcurrentExposureCap } from "../services/concurrent_exposure_service.js";
 
 const ENDPOINT = "POST /customer/car-bookings";
 const MIN_LEAD_MINUTES = 60;
@@ -122,6 +123,7 @@ export async function createCarBooking(req, res, next) {
     const pointId = (pt) => (pt && /^\d+$/.test(pt.id) ? Number(pt.id) : null);
 
     const booking = await prisma.$transaction(async (tx) => {
+      await enforceConcurrentExposureCap({ customerId: req.user.id, database: tx });
       await tx.$queryRaw`SELECT id FROM "Listing" WHERE id = ${listing.id} FOR UPDATE`;
 
       const platformSettings = await tx.platformSettings.upsert({

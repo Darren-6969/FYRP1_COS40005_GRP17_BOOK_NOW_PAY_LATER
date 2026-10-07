@@ -4,9 +4,11 @@ export const CREDIT_TIERS = {
   NORMAL: "Normal",
   TRUSTED: "Trusted",
   CAUTION: "Caution",
+  HIGH_RISK: "High Risk",
 };
 
 export function resolveCreditTier({ successfulOnTimePayments = 0, expiredBookings = 0 }) {
+  if (expiredBookings >= 3) return CREDIT_TIERS.HIGH_RISK;
   if (expiredBookings >= 2) return CREDIT_TIERS.CAUTION;
   if (successfulOnTimePayments >= 3 && expiredBookings === 0) return CREDIT_TIERS.TRUSTED;
   return CREDIT_TIERS.NORMAL;

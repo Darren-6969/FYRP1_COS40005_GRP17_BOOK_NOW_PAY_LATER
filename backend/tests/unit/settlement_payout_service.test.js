@@ -8,12 +8,15 @@ const appealWindowDays = 7;
 function entry({
   status = "COMPLETED",
   paymentStatus = "PAID",
+  paymentType,
+  downPaymentStatus,
   resolvedAt = "2026-09-25T11:59:59.000Z",
   payoutId = null,
 } = {}) {
   return {
     payoutId,
-    payment: { status: paymentStatus },
+    payment: { status: paymentStatus, downPaymentStatus },
+    paymentType,
     booking: { status, serviceResolvedAt: resolvedAt },
   };
 }
@@ -22,6 +25,18 @@ test("completed and no-show bookings settle after the appeal window", () => {
   assert.equal(isSettleableLedgerEntry(entry(), { now, appealWindowDays }), true);
   assert.equal(
     isSettleableLedgerEntry(entry({ status: "NO_SHOW" }), { now, appealWindowDays }),
+    true
+  );
+  assert.equal(
+    isSettleableLedgerEntry(
+      entry({
+        status: "NO_SHOW_UNPAID",
+        paymentStatus: "PARTIALLY_PAID",
+        paymentType: "DOWN_PAYMENT",
+        downPaymentStatus: "PAID",
+      }),
+      { now, appealWindowDays }
+    ),
     true
   );
 });

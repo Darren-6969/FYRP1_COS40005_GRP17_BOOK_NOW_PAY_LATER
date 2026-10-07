@@ -16,6 +16,7 @@ import bcrypt from "bcryptjs";
 import { generateUserCode } from "../services/userCode.js";
 import { issueTokenPair, sanitizeUser } from "./auth_controller.js";
 import { sendEmail } from "../services/email_service.js";
+import { enforceConcurrentExposureCap } from "../services/concurrent_exposure_service.js";
 
 
 async function mintHandoff(intentId) {
@@ -278,6 +279,7 @@ async function createBookingFromIntent(intent, user) {
 });
 
   const booking = await prisma.$transaction(async (tx) => {
+    await enforceConcurrentExposureCap({ customerId: user.id, database: tx });
     const platformSettings = await tx.platformSettings.upsert({
       where: { id: 1 },
       create: { id: 1 },
