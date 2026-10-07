@@ -247,12 +247,18 @@ export default function OperatorBookingDetail() {
   // Operator may withdraw a confirmed booking.
   // Cancellation reason will be mandatory.
   // =========================================================
+  const hasAnyPayment =
+  paymentStatus === "PAID" ||
+  paymentStatus === "PARTIALLY_PAID" ||
+  booking.payment?.downPaymentStatus === "PAID" ||
+  booking.payment?.finalPaymentStatus === "PAID";
+
   const canCancel =
     [
       "ACCEPTED",
       "PENDING_PAYMENT",
-      "PAID",
     ].includes(bookingStatus) &&
+    !hasAnyPayment &&
     !isClosed;
 
   const shouldShowPaymentVerificationLink =

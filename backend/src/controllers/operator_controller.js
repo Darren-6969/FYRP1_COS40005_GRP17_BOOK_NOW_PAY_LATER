@@ -1089,43 +1089,65 @@ export async function rejectBooking(req, res, next) {
 
 export async function cancelOperatorBooking(req, res, next) {
   try {
-    const booking = await findOperatorBooking(req, req.params.id);
+    const booking = await findOperatorBooking(
+      req,
+      req.params.id
+    );
 
     if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
-    }
-
-    if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
-      return res.status(400).json({
-        message:
-          "Merchant cancellation is only allowed after the booking is accepted and before payment is completed.",
+      return res.status(404).json({
+        message: "Booking not found",
       });
     }
 
-    if (booking.payment?.status === "PAID" || booking.status === "PAID") {
+    // Only these statuses can be cancelled
+    if (
+      ![
+        "ACCEPTED",
+        "PENDING_PAYMENT",
+      ].includes(booking.status)
+    ) {
       return res.status(400).json({
         message:
-          "Paid bookings cannot be cancelled here. Refund process is not implemented.",
+          "Only accepted bookings that have not been paid can be cancelled by the operator.",
+      });
+    }
+
+    const paymentStatus = String(
+      booking.payment?.status || ""
+    ).toUpperCase();
+
+    const downPaymentStatus = String(
+      booking.payment?.downPaymentStatus || ""
+    ).toUpperCase();
+
+    const finalPaymentStatus = String(
+      booking.payment?.finalPaymentStatus || ""
+    ).toUpperCase();
+
+    const hasAnyPayment =
+      paymentStatus === "PAID" ||
+      paymentStatus === "PARTIALLY_PAID" ||
+      downPaymentStatus === "PAID" ||
+      finalPaymentStatus === "PAID";
+
+    if (hasAnyPayment) {
+      return res.status(400).json({
+        message:
+          "This booking cannot be cancelled because payment has already been made.",
       });
     }
 
     const reason = String(
-  req.body?.reason || ""
-).trim();
+      req.body?.reason || ""
+    ).trim();
 
-if (!reason) {
-  return res.status(400).json({
-    message:
-      "Cancellation reason is required.",
-  });
-}
-
-if (reason.length < 5) {
-  return res.status(400).json({
-    message:
-      "Cancellation reason must be at least 5 characters.",
-  });
-}
+    if (reason.length < 5) {
+      return res.status(400).json({
+        message:
+          "A cancellation reason of at least 5 characters is required.",
+      });
+    }
 
     const updatedBooking = await prisma.booking.update({
       where: { id: booking.id },
