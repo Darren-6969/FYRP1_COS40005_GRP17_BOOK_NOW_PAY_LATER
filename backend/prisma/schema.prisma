@@ -661,6 +661,12 @@ model BNPLConfig {
   autoRejectInactiveBooking           Boolean @default(true)
   reminderBeforeAutoRejectMinutes     Int     @default(30)
 
+  // Overtime (SRS 4.3.5): a flat charge for each pickup or return between
+  // 21:00 and 09:00, or block night handovers entirely. Set per operator in
+  // shop settings; replaces Listing.overtimeFee / blockNightHandover.
+  overtimeFee        Decimal? @db.Decimal(10, 2)
+  blockNightHandover Boolean  @default(false)
+
   // Payment settings
   acceptedPaymentMethods Json?
   manualPaymentNote      String?
@@ -845,6 +851,8 @@ model Listing {
 
   // Flat charge for a pickup or return between 21:00 and 09:00, unless the
   // operator blocks night pickups and returns instead.
+  // Retired: overtime is set per operator on BNPLConfig. Nothing reads these;
+  // they are dropped in the Module 5 migration.
   overtimeFee   Decimal? @db.Decimal(10, 2)
   blockNightHandover Boolean @default(false)
 

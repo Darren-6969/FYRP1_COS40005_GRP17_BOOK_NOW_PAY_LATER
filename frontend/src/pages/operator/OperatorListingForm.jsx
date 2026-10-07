@@ -5,6 +5,10 @@ import {
 } from "react";
 
 import {
+  priceDuration,
+} from "../../utils/carPricing";
+
+import {
   useNavigate,
   useParams,
 } from "react-router-dom";
@@ -20,7 +24,13 @@ const initialForm = {
   name: "",
   description: "",
 
-  price: "",
+  // Pricing
+  hourlyRate: "",
+  price: "", // Daily rate
+  weeklyRate: "",
+  monthlyRate: "",
+  cdwDailyPrice: "",
+
   quantity: 1,
 
   vehicleMake: "",
@@ -46,6 +56,23 @@ const initialForm = {
   refundPolicy: "",
   termsAndConditions: "",
 };
+
+function rmToSen(value) {
+  const number = Number(value);
+
+  if (
+    !Number.isFinite(number) ||
+    number < 0
+  ) {
+    return null;
+  }
+
+  return Math.round(number * 100);
+}
+
+function formatPreviewMoney(sen) {
+  return `RM ${(Number(sen || 0) / 100).toFixed(2)}`;
+}
 
 export default function OperatorListingForm() {
   const navigate = useNavigate();
@@ -142,8 +169,24 @@ export default function OperatorListingForm() {
         description:
           listing.description || "",
 
+        // =====================================================
+        // Pricing
+        // =====================================================
+
+        hourlyRate:
+          listing.hourlyRate ?? "",
+
         price:
           listing.price ?? "",
+
+        weeklyRate:
+          listing.weeklyRate ?? "",
+
+        monthlyRate:
+          listing.monthlyRate ?? "",
+
+        cdwDailyPrice:
+          listing.cdwDailyPrice ?? "",
 
         quantity:
           listing.quantity ?? 1,
@@ -257,6 +300,93 @@ export default function OperatorListingForm() {
       [branches]
     );
 
+    const rateCard = useMemo(
+  () => ({
+    hourlySen:
+      form.hourlyRate !== ""
+        ? rmToSen(form.hourlyRate)
+        : null,
+
+    dailySen:
+      form.price !== ""
+        ? rmToSen(form.price)
+        : 0,
+
+    weeklySen:
+      form.weeklyRate !== ""
+        ? rmToSen(form.weeklyRate)
+        : null,
+
+    monthlySen:
+      form.monthlyRate !== ""
+        ? rmToSen(form.monthlyRate)
+        : null,
+  }),
+  [
+    form.hourlyRate,
+    form.price,
+    form.weeklyRate,
+    form.monthlyRate,
+  ]
+);
+
+const pricePreview = useMemo(() => {
+      if (
+        !isCar ||
+        !rateCard.dailySen
+      ) {
+        return [];
+      }
+
+      const examples = [
+        {
+          label: "3 Hours",
+          hours: 3,
+        },
+        {
+          label: "1 Day",
+          hours: 24,
+        },
+        {
+          label: "3 Days",
+          hours: 72,
+        },
+        {
+          label: "1 Week",
+          hours: 7 * 24,
+        },
+        {
+          label: "2 Weeks",
+          hours: 14 * 24,
+        },
+        {
+          label: "1 Month",
+          hours: 30 * 24,
+        },
+      ];
+
+      return examples.map(
+        (example) => {
+          const result =
+            priceDuration(
+              example.hours,
+              rateCard
+            );
+
+          return {
+            ...example,
+            rentalSen:
+              result.rentalSen,
+            lines:
+              result.lines,
+          };
+        }
+      );
+    }, [
+      isCar,
+      rateCard,
+    ]);
+
   // =========================================================
   // VALIDATION
   // =========================================================
@@ -274,8 +404,29 @@ export default function OperatorListingForm() {
       !form.price ||
       Number(form.price) <= 0
     ) {
-      return "Enter a valid price.";
+      return "Enter a valid daily rate.";
     }
+
+    if (isCar) {
+  const optionalRates = [
+    ["Hourly rate", form.hourlyRate],
+    ["Weekly rate", form.weeklyRate],
+    ["Monthly rate", form.monthlyRate],
+    ["CDW daily price", form.cdwDailyPrice],
+  ];
+
+  for (const [label, value] of optionalRates) {
+    if (
+      value !== "" &&
+      (
+        !Number.isFinite(Number(value)) ||
+        Number(value) < 0
+      )
+    ) {
+      return `${label} must be 0 or greater.`;
+    }
+  }
+}
 
     if (
       !Number.isInteger(
@@ -352,6 +503,27 @@ export default function OperatorListingForm() {
 
     if (isCar) {
       Object.assign(payload, {
+
+        hourlyRate:
+          form.hourlyRate !== ""
+            ? Number(form.hourlyRate)
+            : null,
+
+        weeklyRate:
+          form.weeklyRate !== ""
+            ? Number(form.weeklyRate)
+            : null,
+
+        monthlyRate:
+          form.monthlyRate !== ""
+            ? Number(form.monthlyRate)
+            : null,
+
+        cdwDailyPrice:
+          form.cdwDailyPrice !== ""
+            ? Number(form.cdwDailyPrice)
+            : null,
+
         vehicleMake:
           form.vehicleMake.trim(),
 
@@ -966,62 +1138,262 @@ export default function OperatorListingForm() {
         )}
 
         {/* ===================================================
-            PRICE / ALLOCATION
-        ==================================================== */}
+    PRICE / ALLOCATION
+==================================================== */}
 
-        <section className="operator-card">
-          <div className="operator-card-head">
-            <div>
-              <h2>
-                Pricing & Allocation
-              </h2>
+<section className="operator-card">
+  <div className="operator-card-head">
+    <div>
+      <h2>
+        Pricing & Allocation
+      </h2>
 
-              <p>
-                Quantity represents the
-                number of identical units
-                available under this
-                listing.
-              </p>
-            </div>
+      <p>
+        {isCar
+          ? "Set rental rates and the number of cars available under this listing."
+          : "Set the package price and available quantity."}
+      </p>
+    </div>
+  </div>
+
+  <div className="operator-form-grid">
+
+    {/* ===============================================
+          CAR RENTAL PRICING
+      =============================================== */}
+
+      {isCar && (
+        <>
+          <label className="operator-field">
+            Hourly Rate (RM)
+
+            <input
+              type="number"
+              name="hourlyRate"
+              min="0"
+              step="0.01"
+              value={
+                form.hourlyRate
+              }
+              onChange={
+                handleChange
+              }
+              placeholder="Example: 15.00"
+            />
+          </label>
+
+          <label className="operator-field">
+            Daily Rate (RM) *
+
+            <input
+              type="number"
+              name="price"
+              min="0.01"
+              step="0.01"
+              value={
+                form.price
+              }
+              onChange={
+                handleChange
+              }
+              placeholder="Example: 120.00"
+            />
+          </label>
+
+          <label className="operator-field">
+            Weekly Rate (RM)
+
+            <input
+              type="number"
+              name="weeklyRate"
+              min="0"
+              step="0.01"
+              value={
+                form.weeklyRate
+              }
+              onChange={
+                handleChange
+              }
+              placeholder="Example: 700.00"
+            />
+          </label>
+
+          <label className="operator-field">
+            Monthly Rate (RM)
+
+            <input
+              type="number"
+              name="monthlyRate"
+              min="0"
+              step="0.01"
+              value={
+                form.monthlyRate
+              }
+              onChange={
+                handleChange
+              }
+              placeholder="Example: 2400.00"
+            />
+          </label>
+
+          <label className="operator-field">
+            CDW Price / Day (RM)
+
+            <input
+              type="number"
+              name="cdwDailyPrice"
+              min="0"
+              step="0.01"
+              value={
+                form.cdwDailyPrice
+              }
+              onChange={
+                handleChange
+              }
+              placeholder="Example: 25.00"
+            />
+          </label>
+        </>
+      )}
+
+      {/* ===============================================
+          TOUR PRICE
+      =============================================== */}
+
+      {isTour && (
+        <label className="operator-field">
+          Price (RM) *
+
+          <input
+            type="number"
+            name="price"
+            min="0.01"
+            step="0.01"
+            value={
+              form.price
+            }
+            onChange={
+              handleChange
+            }
+          />
+        </label>
+      )}
+
+      {/* ===============================================
+          QUANTITY
+      =============================================== */}
+
+      <label className="operator-field">
+        {isCar
+          ? "Car Count *"
+          : "Allocation / Quantity *"}
+
+        <input
+          type="number"
+          name="quantity"
+          min="1"
+          step="1"
+          value={
+            form.quantity
+          }
+          onChange={
+            handleChange
+          }
+        />
+      </label>
+    </div>
+        {isCar && (
+      <div
+        style={{
+          marginTop: "24px",
+        }}
+      >
+        <div className="operator-card-head">
+          <div>
+            <h3>
+              Duration Price Preview
+            </h3>
+
+            <p>
+              Estimated base rental price using
+              the rates entered above.
+            </p>
           </div>
+        </div>
 
+        {!form.price ? (
+          <div className="operator-empty-state">
+            Enter a daily rate to see the
+            price preview.
+          </div>
+        ) : (
           <div className="operator-form-grid">
 
-            <label className="operator-field">
-              Price (RM) *
+            {pricePreview.map(
+              (preview) => (
+                <div
+                  key={preview.label}
+                  className="operator-card operator-card-secondary"
+                >
+                  <p>
+                    {preview.label}
+                  </p>
 
-              <input
-                type="number"
-                name="price"
-                min="0.01"
-                step="0.01"
-                value={
-                  form.price
-                }
-                onChange={
-                  handleChange
-                }
-              />
-            </label>
+                  <h3>
+                    {formatPreviewMoney(
+                      preview.rentalSen
+                    )}
+                  </h3>
 
-            <label className="operator-field">
-              Allocation / Quantity *
+                  <small>
+                    {preview.lines
+                      .map((line) => {
+                        const name =
+                          line.period
+                            .charAt(0)
+                            .toUpperCase() +
+                          line.period.slice(1);
 
-              <input
-                type="number"
-                name="quantity"
-                min="1"
-                step="1"
-                value={
-                  form.quantity
-                }
-                onChange={
-                  handleChange
-                }
-              />
-            </label>
+                        return `${
+                          line.count
+                        } ${name}${
+                          line.count > 1
+                            ? "s"
+                            : ""
+                        } × ${formatPreviewMoney(
+                          line.rateSen
+                        )}`;
+                      })
+                      .join(" + ")}
+                  </small>
+                </div>
+              )
+            )}
+
           </div>
-        </section>
+        )}
+
+        {form.cdwDailyPrice !== "" && (
+          <p
+            style={{
+              marginTop: "12px",
+            }}
+          >
+            CDW is optional and is not included
+            in the base rental preview.
+            Current CDW rate:{" "}
+            <strong>
+              RM{" "}
+              {Number(
+                form.cdwDailyPrice
+              ).toFixed(2)}
+              {" / day"}
+            </strong>
+          </p>
+        )}
+      </div>
+    )}
+  </section>
 
         {/* ===================================================
             CAR POLICIES

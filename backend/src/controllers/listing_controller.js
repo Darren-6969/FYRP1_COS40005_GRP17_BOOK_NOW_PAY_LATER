@@ -179,7 +179,13 @@ export async function createListing(
       name,
       description,
 
-      price,
+      // Pricing
+      hourlyRate,
+      price, // Daily rate
+      weeklyRate,
+      monthlyRate,
+      cdwDailyPrice,
+
       quantity,
 
       vehicleMake,
