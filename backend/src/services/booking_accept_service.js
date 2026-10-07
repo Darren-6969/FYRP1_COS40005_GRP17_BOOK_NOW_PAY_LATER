@@ -5,6 +5,8 @@ import { notifyCustomerByBooking } from "./notification_email_service.js";
 import { invoiceSentTemplate } from "./email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 import { createAuditLog } from "./log_service.js";
+import { createPaymentScheduleEntries } from "./payment_schedule_entry_service.js";
+import { getDefaultCreditProfile } from "./customer_credit_service.js";
 
 const ACCEPTABLE_STATUSES = [
   "PENDING",
@@ -57,7 +59,6 @@ export async function acceptBookingAndRequestPayment({
   booking,
   actorUserId,
   req,
-  downPaymentPercent = 10,
   downPaymentDueDate = null,
   finalPaymentDueDate = null,
 }) {
@@ -87,11 +88,17 @@ export async function acceptBookingAndRequestPayment({
   // =========================================================
   // 2. Calculate general payment deadline
   // =========================================================
-  const paymentDeadline = await calculatePaymentDeadline(
-    booking.operatorId,
-    booking.paymentDeadline || null,
-    booking.pickupDate
-  );
+  const creditProfile = await prisma.customerCreditProfile.findUnique({
+    where: { customerId: booking.customerId },
+  });
+  const creditTier = creditProfile?.tier || getDefaultCreditProfile(booking.customerId).tier;
+  const paymentDeadline = creditTier === "High Risk"
+    ? new Date()
+    : await calculatePaymentDeadline(
+      booking.operatorId,
+      booking.paymentDeadline || null,
+      booking.pickupDate
+    );
 
   console.log(
     "3️⃣ AUTO ACCEPT: payment deadline",
@@ -102,7 +109,15 @@ export async function acceptBookingAndRequestPayment({
   // 3. Calculate payment amounts
   // =========================================================
   const totalAmount = Number(booking.totalAmount);
-  const parsedPercent = Number(downPaymentPercent);
+  const acceptedAt = new Date();
+  const rentalAmount = Number(booking.rentalAmount ?? (
+    Number(booking.totalAmount) - Number(booking.addonsAmount || 0)
+  ));
+  const parsedPercent = creditTier === "Caution"
+    ? 30
+    : creditTier === "High Risk"
+      ? 100
+      : 0;
 
   // SRS V2.9 (4.3.5): operators set the down payment from 0 to 100 percent.
   // 0 means everything is paid as the balance; 100 means everything is paid
@@ -121,17 +136,10 @@ export async function acceptBookingAndRequestPayment({
   }
 
   // Platform bookings carry the quoted split; charge exactly what was shown.
-  const snapshot = booking.pricingSnapshot;
-  const fromSnapshot =
-    Number.isInteger(snapshot?.depositSen) && Number.isInteger(snapshot?.balanceSen);
-
-  const downAmount = fromSnapshot
-    ? snapshot.depositSen / 100
-    : Number(((totalAmount * parsedPercent) / 100).toFixed(2));
-
-  const finalAmount = fromSnapshot
-    ? snapshot.balanceSen / 100
-    : Number((totalAmount - downAmount).toFixed(2));
+  const downAmount = creditTier === "High Risk"
+    ? totalAmount
+    : Number(((rentalAmount * parsedPercent) / 100).toFixed(2));
+  const finalAmount = Number((totalAmount - downAmount).toFixed(2));
 
   // =========================================================
   // 4. Calculate payment schedule
@@ -141,20 +149,22 @@ export async function acceptBookingAndRequestPayment({
    * Default down-payment deadline:
    * normally 24 hours after acceptance.
    */
-  const defaultDownDueDate = new Date(
-    Date.now() + 24 * 60 * 60 * 1000
-  );
+  const defaultDownDueDate = creditTier === "High Risk"
+    ? acceptedAt
+    : creditTier === "Caution"
+      ? new Date(acceptedAt.getTime() + 12 * 60 * 60 * 1000)
+      : new Date(acceptedAt.getTime() + 24 * 60 * 60 * 1000);
 
   /*
    * Default final-payment deadline:
    * 24 hours before pickup.
    */
-  const defaultFinalDueDate = booking.pickupDate
+  const defaultFinalDueDate = creditTier === "Caution" && booking.pickupDate
     ? new Date(
         new Date(booking.pickupDate).getTime() -
           24 * 60 * 60 * 1000
       )
-    : paymentDeadline;
+    : defaultDownDueDate;
 
   let downDue = downPaymentDueDate
     ? parseMalaysiaLocalDateTime(downPaymentDueDate)
@@ -205,8 +215,8 @@ export async function acceptBookingAndRequestPayment({
   if (
     !downDue ||
     !finalDue ||
-    downDue <= currentTime ||
-    finalDue <= currentTime
+    (creditTier !== "High Risk" && downDue <= currentTime) ||
+    (creditTier !== "High Risk" && finalDue <= currentTime)
   ) {
     const error = new Error(
       "Payment due dates must be valid future dates"
@@ -232,7 +242,6 @@ export async function acceptBookingAndRequestPayment({
   // A part with nothing to pay is settled when the schedule is created, so
   // the customer is only ever asked for the part that carries an amount and
   // the existing PAID / PARTIALLY_PAID rules still apply.
-  const acceptedAt = new Date();
   const downSettled = downAmount <= 0;
   const finalSettled = finalAmount <= 0;
   const zeroParts = {
@@ -302,6 +311,15 @@ export async function acceptBookingAndRequestPayment({
           downPaymentPaidAt: zeroParts.downPaymentPaidAt,
           finalPaymentPaidAt: zeroParts.finalPaymentPaidAt,
         },
+      });
+
+      await tx.paymentScheduleEntry.deleteMany({
+        where: { bookingId: booking.id, status: "DUE" },
+      });
+      const scheduleEntries = await createPaymentScheduleEntries(booking, {
+        database: tx,
+        creditTier,
+        createdAt: acceptedAt,
       });
 
       console.log(
@@ -426,6 +444,7 @@ export async function acceptBookingAndRequestPayment({
         booking: updatedBooking,
         payment,
         invoice,
+        scheduleEntries,
       };
     },
     {

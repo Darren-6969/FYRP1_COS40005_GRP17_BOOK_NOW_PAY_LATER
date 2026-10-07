@@ -150,6 +150,10 @@ export async function updateBNPLConfig(req, res, next) {
         req.body.autoCancelOverdue,
         existing.autoCancelOverdue
       ),
+      noShowWindowHours:
+        req.body.noShowWindowHours === undefined
+          ? existing.noShowWindowHours
+          : Number(req.body.noShowWindowHours),
       invoiceLogoUrl:
         req.body.invoiceLogoUrl === undefined
           ? existing.invoiceLogoUrl
@@ -163,6 +167,10 @@ export async function updateBNPLConfig(req, res, next) {
           ? existing.manualPaymentNote
           : req.body.manualPaymentNote || null,
     };
+
+    if (!Number.isInteger(data.noShowWindowHours) || data.noShowWindowHours < 0) {
+      return res.status(400).json({ message: "noShowWindowHours must be a non-negative integer." });
+    }
 
     if (!validatePublishedDeadline(deadlinePolicy, data.paymentDeadlineDays)) {
       return res.status(400).json({

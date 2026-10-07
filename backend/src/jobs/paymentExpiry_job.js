@@ -4,6 +4,7 @@ import { notifyCustomerByBooking } from "../services/notification_email_service.
 import { bookingStatusTemplate } from "../services/email_templates.js";
 import { runLoggedCronJob } from "../services/cron_job_service.js";
 import { recordCreditEvent } from "../services/customer_credit_service.js";
+import { voidOutstandingScheduleEntries } from "../services/payment_schedule_entry_service.js";
 
 /**
  * Runs every hour.
@@ -30,21 +31,30 @@ export function runPaymentExpiryJob() {
     const expired = await prisma.booking.findMany({
         where: {
           status: { in: ["ACCEPTED", "PENDING_PAYMENT"] },
-          payment: {
-            is: {
-              OR: [
-                {
-                  downPaymentStatus: { in: ["UNPAID", "PENDING_VERIFICATION"] },
-                  downPaymentDueDate: { lt: now },
+          OR: [
+            {
+              payment: {
+                is: {
+                  OR: [
+                    {
+                      downPaymentStatus: { in: ["UNPAID", "PENDING_VERIFICATION"] },
+                      downPaymentDueDate: { lt: now },
+                    },
+                    {
+                      downPaymentStatus: "PAID",
+                      finalPaymentStatus: { in: ["UNPAID", "PENDING_VERIFICATION"] },
+                      finalPaymentDueDate: { lt: now },
+                    },
+                  ],
                 },
-                {
-                  downPaymentStatus: "PAID",
-                  finalPaymentStatus: { in: ["UNPAID", "PENDING_VERIFICATION"] },
-                  finalPaymentDueDate: { lt: now },
-                },
-              ],
+              },
             },
-          },
+            {
+              paymentScheduleEntries: {
+                some: { status: "DUE", dueAt: { lt: now } },
+              },
+            },
+          ],
         },
         include: {
           customer: { select: { id: true, name: true, email: true } },
@@ -62,15 +72,17 @@ export function runPaymentExpiryJob() {
             where: { id: booking.id },
             data: {
               status: "OVERDUE",
-              ...(booking.payment.downPaymentStatus !== "PAID"
+              ...(booking.payment && booking.payment.downPaymentStatus !== "PAID"
                 ? { downPaymentStatus: "OVERDUE" }
-                : { finalPaymentStatus: "OVERDUE" }),
+                : booking.payment ? { finalPaymentStatus: "OVERDUE" } : {}),
             },
           }),
-          tx.payment.update({
-            where: { bookingId: booking.id },
-            data: { status: "OVERDUE" },
-          }),
+          ...(booking.payment
+            ? [tx.payment.update({
+              where: { bookingId: booking.id },
+              data: { status: "OVERDUE" },
+            })]
+            : []),
           tx.auditLog.create({
             data: {
               action: "BOOKING_OVERDUE",
@@ -94,6 +106,7 @@ export function runPaymentExpiryJob() {
           eventType: "EXPIRED_BOOKING",
           database: tx,
         });
+        await voidOutstandingScheduleEntries(booking.id, tx);
       });
 
       // Send email

@@ -25,6 +25,8 @@ export const ACTIVE_BOOKING_STATUSES = [
   "PENDING_PAYMENT",
   "PAID",
   "IN_PROGRESS",
+  "NO_SHOW",
+  "NO_SHOW_UNPAID",
 ];
 
 const HORIZON_DAYS = 90;

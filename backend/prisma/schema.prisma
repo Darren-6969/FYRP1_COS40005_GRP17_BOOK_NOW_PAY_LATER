@@ -58,6 +58,7 @@ enum BookingStatus {
   CANCELLED
   COMPLETED
   NO_SHOW
+  NO_SHOW_UNPAID
 }
 
 enum ListingCategory {
@@ -147,6 +148,18 @@ enum PaymentMethod {
   SPAY
   BANK_TRANSFER
   CASH
+}
+
+enum PaymentScheduleEntryType {
+  PAYMENT
+  LICENCE
+}
+
+enum PaymentScheduleEntryStatus {
+  DUE
+  PAID
+  EXPIRED
+  VOID
 }
 
 enum DiscountFundingSource {
@@ -518,6 +531,7 @@ model Booking {
   pickedUpAt        DateTime?
   returnedAt        DateTime?
   serviceResolvedAt DateTime?
+  noShowRemark      String?
 
   addons BookingAddon[]
 
@@ -532,6 +546,7 @@ model Booking {
 
   payment                 Payment?
   commissionLedgerEntries CommissionLedgerEntry[]
+  paymentScheduleEntries PaymentScheduleEntry[]
   receipt                 Receipt?
   invoice                 Invoice?
 
@@ -608,6 +623,24 @@ model CommissionLedgerEntry {
   @@index([bookingId, createdAt])
   @@index([paymentId])
   @@index([createdAt])
+}
+
+model PaymentScheduleEntry {
+  id          Int                        @id @default(autoincrement())
+  bookingId   Int
+  booking     Booking                    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  type        PaymentScheduleEntryType
+  paymentPart String?
+  amount      Decimal                    @default(0) @db.Decimal(10, 2)
+  dueAt       DateTime
+  status      PaymentScheduleEntryStatus @default(DUE)
+  paidAt      DateTime?
+  voidedAt    DateTime?
+  createdAt   DateTime                   @default(now())
+  updatedAt   DateTime                   @updatedAt
+
+  @@index([bookingId, status, dueAt])
+  @@index([type, status, dueAt])
 }
 
 model OperatorPayout {
@@ -696,6 +729,7 @@ model BNPLConfig {
   partialRefundPercent Int?
   allowReceiptUpload   Boolean @default(true)
   autoCancelOverdue    Boolean @default(true)
+  noShowWindowHours    Int     @default(24)
 
   // Operator booking action settings
   bookingResponseDeadlineMinutes  Int     @default(120)
