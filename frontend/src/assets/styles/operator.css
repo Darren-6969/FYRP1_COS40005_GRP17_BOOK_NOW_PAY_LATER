@@ -4575,3 +4575,61 @@
   color: #64748b;
   line-height: 1.5;
 }
+
+.operator-rate-preview {
+  margin-top: 24px;
+}
+
+.operator-rate-preview-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(160px, 1fr)
+    );
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.operator-rate-preview-item {
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.operator-rate-preview-item span {
+  display: block;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.operator-rate-preview-item strong {
+  display: block;
+  margin-top: 5px;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.operator-rate-warning {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.operator-rate-note {
+  margin-top: 10px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.operator-rate-error {
+  display: block;
+  margin-top: 5px;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+}

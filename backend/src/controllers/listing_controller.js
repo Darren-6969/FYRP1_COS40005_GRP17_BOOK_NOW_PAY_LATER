@@ -1,6 +1,10 @@
 import prisma from "../config/db.js";
 import { parseId } from "../utils/parseId.js";
 
+import {
+  validateRateCard,
+} from "../services/listing_rates.js";
+
 function listingWhere(req) {
   if (req.user.role === "MASTER_SELLER") {
     return {};
@@ -30,10 +34,31 @@ function mapListing(listing) {
 
   return {
     ...listing,
+
     price:
       listing.price == null
         ? 0
         : Number(listing.price),
+
+    hourlyRate:
+      listing.hourlyRate == null
+        ? null
+        : Number(listing.hourlyRate),
+
+    weeklyRate:
+      listing.weeklyRate == null
+        ? null
+        : Number(listing.weeklyRate),
+
+    monthlyRate:
+      listing.monthlyRate == null
+        ? null
+        : Number(listing.monthlyRate),
+
+    cdwDailyPrice:
+      listing.cdwDailyPrice == null
+        ? null
+        : Number(listing.cdwDailyPrice),
   };
 }
 
@@ -226,6 +251,45 @@ export async function createListing(
       });
     }
 
+    const dailyRate = Number(price);
+
+    if (
+      !Number.isFinite(dailyRate) ||
+      dailyRate <= 0
+    ) {
+      return res.status(400).json({
+        message:
+          "Daily rate must be greater than 0.",
+      });
+    }
+
+    const optionalRates = {
+      hourlyRate,
+      weeklyRate,
+      monthlyRate,
+      cdwDailyPrice,
+    };
+
+    for (const [field, value] of Object.entries(optionalRates)) {
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== ""
+      ) {
+        const parsed = Number(value);
+
+        if (
+          !Number.isFinite(parsed) ||
+          parsed < 0
+        ) {
+          return res.status(400).json({
+            message:
+              `${field} must be a valid positive amount.`,
+          });
+        }
+      }
+    }
+
     if (
       ![
         "CAR_RENTAL",
@@ -235,6 +299,18 @@ export async function createListing(
       return res.status(400).json({
         message:
           "Invalid listing category.",
+      });
+    }
+
+    const rates =
+      validateRateCard(req.body);
+
+    if (!rates.ok) {
+      return res.status(400).json({
+        message:
+          "Some rates are not valid.",
+        errors:
+          rates.errors,
       });
     }
 
@@ -288,12 +364,43 @@ export async function createListing(
           description:
             description || null,
 
-          price:
-            Number(price),
+          // =====================================================
+          // Duration pricing
+          // =====================================================
+
+          hourlyRate:
+            hourlyRate !== undefined &&
+            hourlyRate !== null &&
+            hourlyRate !== ""
+              ? Number(hourlyRate)
+              : null,
+
+          ...rates.values,
+
+          weeklyRate:
+            weeklyRate !== undefined &&
+            weeklyRate !== null &&
+            weeklyRate !== ""
+              ? Number(weeklyRate)
+              : null,
+
+          monthlyRate:
+            monthlyRate !== undefined &&
+            monthlyRate !== null &&
+            monthlyRate !== ""
+              ? Number(monthlyRate)
+              : null,
+
+          cdwDailyPrice:
+            cdwDailyPrice !== undefined &&
+            cdwDailyPrice !== null &&
+            cdwDailyPrice !== ""
+              ? Number(cdwDailyPrice)
+              : null,
 
           quantity:
             Math.max(
-              0,
+              1,
               Number(quantity || 1)
             ),
 
@@ -449,11 +556,59 @@ export async function updateListing(
     delete data.images;
     delete data.branch;
 
-    if (
-      data.price !== undefined
-    ) {
-      data.price =
-        Number(data.price);
+    const rates =
+      validateRateCard(
+        req.body,
+        {
+          partial: true,
+        }
+      );
+
+    if (!rates.ok) {
+      return res.status(400).json({
+        message:
+          "Some rates are not valid.",
+        errors:
+          rates.errors,
+      });
+    }
+
+    Object.assign(
+      data,
+      rates.values
+    );
+
+    const optionalPriceFields = [
+      "hourlyRate",
+      "weeklyRate",
+      "monthlyRate",
+      "cdwDailyPrice",
+    ];
+
+    for (const field of optionalPriceFields) {
+      if (data[field] !== undefined) {
+        if (
+          data[field] === "" ||
+          data[field] === null
+        ) {
+          data[field] = null;
+        } else {
+          const parsed =
+            Number(data[field]);
+
+          if (
+            !Number.isFinite(parsed) ||
+            parsed < 0
+          ) {
+            return res.status(400).json({
+              message:
+                `${field} must be a valid positive amount.`,
+            });
+          }
+
+          data[field] = parsed;
+        }
+      }
     }
 
     if (
