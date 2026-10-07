@@ -19,12 +19,6 @@ enum CompanyStatus {
   PENDING
 }
 
-enum SubscriptionPlan {
-  FREE
-  BASIC
-  PREMIUM
-}
-
 enum OperatorApplicationStatus {
   SUBMITTED
   UNDER_REVIEW
@@ -341,8 +335,6 @@ model Operator {
   phone        String?
   logoUrl      String?
   status       CompanyStatus @default(ACTIVE)
-
-   subscriptionPlan SubscriptionPlan @default(FREE)
 
   // Seller page (FR-CUST-007). The slug gives the operator a short link to
   // share (/o/<slug>); the rest is written by the operator.

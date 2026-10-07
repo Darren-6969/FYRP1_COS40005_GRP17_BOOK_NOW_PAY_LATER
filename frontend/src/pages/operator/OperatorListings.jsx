@@ -36,11 +36,6 @@ export default function OperatorListings() {
   const [listings, setListings] =
     useState([]);
 
-  const [
-    subscription,
-    setSubscription
-  ] = useState(null);
-
   const [loading, setLoading] =
     useState(true);
 
@@ -69,10 +64,6 @@ export default function OperatorListings() {
 
       setListings(
         res.data?.listings || []
-      );
-
-      setSubscription(
-        res.data?.subscription || null
       );
     } catch (err) {
       setError(
@@ -300,86 +291,6 @@ export default function OperatorListings() {
           + Create Listing
         </Link>
       </section>
-      {/* =====================================================
-    SUBSCRIPTION USAGE
-====================================================== */}
-
-      {subscription && (
-        <section className="operator-subscription-card">
-
-          <div className="operator-subscription-info">
-
-            <div>
-              <span className="operator-subscription-label">
-                Current Plan
-              </span>
-
-              <strong className="operator-subscription-plan">
-                {subscription.plan}
-              </strong>
-            </div>
-
-            <div>
-              <span className="operator-subscription-label">
-                Published Listings
-              </span>
-
-              <strong>
-                {subscription.publishedCount}
-                {" / "}
-                {subscription.listingLimit}
-              </strong>
-            </div>
-
-            <div>
-              <span className="operator-subscription-label">
-                Remaining Slots
-              </span>
-
-              <strong>
-                {subscription.remaining}
-              </strong>
-            </div>
-
-          </div>
-
-          <div className="operator-subscription-progress">
-            <div
-              className="operator-subscription-progress-bar"
-              style={{
-                width: `${Math.min(
-                  100,
-                  (
-                    subscription.publishedCount /
-                    subscription.listingLimit
-                  ) * 100
-                )}%`,
-              }}
-            />
-          </div>
-
-          {subscription.remaining === 0 ? (
-            <p className="operator-subscription-limit-message">
-              You have reached your publishing limit.
-              Withdraw an existing listing or contact
-              the administrator to upgrade your plan.
-            </p>
-          ) : (
-            <p className="operator-subscription-help">
-              You can publish{" "}
-              <strong>
-                {subscription.remaining}
-              </strong>{" "}
-              more listing
-              {subscription.remaining === 1
-                ? ""
-                : "s"}{" "}
-              under your current plan.
-            </p>
-          )}
-
-        </section>
-      )}
 
       {/* =====================================================
           ERROR

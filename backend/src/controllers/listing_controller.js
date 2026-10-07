@@ -5,10 +5,6 @@ import {
   validateRateCard,
 } from "../services/listing_rates.js";
 
-import {
-  getListingLimit,
-} from "../services/subscription_service.js";
-
 function listingWhere(req) {
   if (req.user.role === "MASTER_SELLER") {
     return {};
@@ -128,80 +124,23 @@ export async function getListings(req, res, next) {
     }
 
     const listings =
-    await prisma.listing.findMany({
-      where,
+      await prisma.listing.findMany({
+        where,
 
-      include:
-        includeListingRelations(),
+        include:
+          includeListingRelations(),
 
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-  let subscription = null;
-
-  if (
-    req.user.role ===
-      "NORMAL_SELLER" &&
-    req.user.operatorId
-  ) {
-    const operator =
-      await prisma.operator.findUnique({
-        where: {
-          id:
-            req.user.operatorId,
-        },
-
-        select: {
-          subscriptionPlan:
-            true,
+        orderBy: {
+          createdAt: "desc",
         },
       });
 
-    if (operator) {
-      const listingLimit =
-        getListingLimit(
-          operator.subscriptionPlan
-        );
-
-      const publishedCount =
-        await prisma.listing.count({
-          where: {
-            operatorId:
-              req.user.operatorId,
-
-            status:
-              "PUBLISHED",
-          },
-        });
-
-      subscription = {
-        plan:
-          operator.subscriptionPlan,
-
-        listingLimit,
-
-        publishedCount,
-
-        remaining:
-          Math.max(
-            0,
-            listingLimit -
-              publishedCount
-          ),
-      };
-    }
-  }
-
-  res.json({
-    listings:
-      listings.map(
-        mapListing
-      ),
-
-    subscription,
-  });
+    res.json({
+      listings:
+        listings.map(
+          mapListing
+        ),
+    });
   } catch (err) {
     next(err);
   }
@@ -960,73 +899,6 @@ export async function publishListing(
       });
     }
 
-    // Already published — no need to count it again.
-    if (
-      listing.status ===
-      "PUBLISHED"
-    ) {
-      return res.status(400).json({
-        message:
-          "Listing is already published.",
-      });
-    }
-
-    // Get the operator's subscription plan.
-    const operator =
-      await prisma.operator.findUnique({
-        where: {
-          id:
-            listing.operatorId,
-        },
-
-        select: {
-          subscriptionPlan:
-            true,
-        },
-      });
-
-    if (!operator) {
-      return res.status(404).json({
-        message:
-          "Operator not found.",
-      });
-    }
-
-    const listingLimit =
-      getListingLimit(
-        operator.subscriptionPlan
-      );
-
-    // Count only currently published listings.
-    const publishedCount =
-      await prisma.listing.count({
-        where: {
-          operatorId:
-            listing.operatorId,
-
-          status:
-            "PUBLISHED",
-        },
-      });
-
-    // Block publishing when the plan limit is reached.
-    if (
-      publishedCount >=
-      listingLimit
-    ) {
-      return res.status(403).json({
-        message:
-          `You have reached your ${operator.subscriptionPlan} plan listing limit of ${listingLimit} published listings.`,
-
-        subscriptionPlan:
-          operator.subscriptionPlan,
-
-        listingLimit,
-
-        publishedCount,
-      });
-    }
-
     const updated =
       await prisma.listing.update({
         where: {
@@ -1048,20 +920,6 @@ export async function publishListing(
 
       listing:
         mapListing(updated),
-
-      subscription: {
-        plan:
-          operator.subscriptionPlan,
-
-        listingLimit,
-
-        publishedCount:
-          publishedCount + 1,
-
-        remaining:
-          listingLimit -
-          (publishedCount + 1),
-      },
     });
   } catch (err) {
     next(err);
@@ -1177,7 +1035,9 @@ export async function bulkUpdateListingStatus(
     } = req.body;
 
     if (
-      !Array.isArray(listingIds) ||
+      !Array.isArray(
+        listingIds
+      ) ||
       listingIds.length === 0
     ) {
       return res.status(400).json({
@@ -1200,149 +1060,9 @@ export async function bulkUpdateListingStatus(
     }
 
     const ids =
-      listingIds.map(Number);
-
-    if (
-      ids.some(
-        (id) =>
-          !Number.isInteger(id) ||
-          id <= 0
-      )
-    ) {
-      return res.status(400).json({
-        message:
-          "One or more listing IDs are invalid.",
-      });
-    }
-
-    // ======================================================
-    // SUBSCRIPTION LIMIT CHECK FOR BULK PUBLISH
-    // ======================================================
-
-    if (status === "PUBLISHED") {
-      const selectedListings =
-        await prisma.listing.findMany({
-          where: {
-            id: {
-              in: ids,
-            },
-
-            ...listingWhere(req),
-          },
-
-          select: {
-            id: true,
-            status: true,
-            operatorId: true,
-
-            operator: {
-              select: {
-                subscriptionPlan:
-                  true,
-              },
-            },
-          },
-        });
-
-      // Group selected listings by operator.
-      const operatorGroups =
-        new Map();
-
-      for (
-        const listing of
-        selectedListings
-      ) {
-        // Already published listings
-        // do not consume another slot.
-        if (
-          listing.status ===
-          "PUBLISHED"
-        ) {
-          continue;
-        }
-
-        const existingGroup =
-          operatorGroups.get(
-            listing.operatorId
-          );
-
-        if (existingGroup) {
-          existingGroup.newPublishCount +=
-            1;
-        } else {
-          operatorGroups.set(
-            listing.operatorId,
-            {
-              subscriptionPlan:
-                listing.operator
-                  ?.subscriptionPlan ||
-                "FREE",
-
-              newPublishCount: 1,
-            }
-          );
-        }
-      }
-
-      // Check every operator involved.
-      for (
-        const [
-          operatorId,
-          group,
-        ] of operatorGroups
-      ) {
-        const listingLimit =
-          getListingLimit(
-            group.subscriptionPlan
-          );
-
-        const publishedCount =
-          await prisma.listing.count({
-            where: {
-              operatorId,
-
-              status:
-                "PUBLISHED",
-            },
-          });
-
-        const remainingSlots =
-          Math.max(
-            0,
-            listingLimit -
-              publishedCount
-          );
-
-        if (
-          publishedCount +
-            group.newPublishCount >
-          listingLimit
-        ) {
-          return res.status(403).json({
-            message:
-              `Cannot publish ${group.newPublishCount} selected listing(s). ` +
-              `Your ${group.subscriptionPlan} plan allows ${listingLimit} published listings, ` +
-              `and you only have ${remainingSlots} slot(s) remaining.`,
-
-            subscriptionPlan:
-              group.subscriptionPlan,
-
-            listingLimit,
-
-            publishedCount,
-
-            requestedPublishCount:
-              group.newPublishCount,
-
-            remainingSlots,
-          });
-        }
-      }
-    }
-
-    // ======================================================
-    // UPDATE STATUS
-    // ======================================================
+      listingIds.map(
+        Number
+      );
 
     const result =
       await prisma.listing.updateMany({
