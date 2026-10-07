@@ -54,9 +54,6 @@ export default function OperatorListings() {
   const [selectedIds, setSelectedIds] =
     useState([]);
 
-  const [quickEditListing, setQuickEditListing] =
-    useState(null);
-
   const loadListings = async () => {
     try {
       setLoading(true);
@@ -451,7 +448,7 @@ export default function OperatorListings() {
         {!loading &&
           filteredListings.map(
             (listing) => (
-              <ListingCard
+             <ListingCard
                 key={listing.id}
                 listing={listing}
                 selected={selectedIds.includes(
@@ -462,10 +459,8 @@ export default function OperatorListings() {
                     listing.id
                   )
                 }
-                onQuickEdit={() =>
-                  setQuickEditListing(
-                    listing
-                  )
+                onUpdated={
+                  loadListings
                 }
                 onPublish={() =>
                   updateListingStatus(
@@ -508,29 +503,7 @@ export default function OperatorListings() {
           )}
       </section>
 
-      {/* =====================================================
-          QUICK EDIT MODAL
-      ====================================================== */}
-
-      {quickEditListing && (
-        <QuickEditListingModal
-          listing={
-            quickEditListing
-          }
-          onClose={() =>
-            setQuickEditListing(
-              null
-            )
-          }
-          onDone={async () => {
-            setQuickEditListing(
-              null
-            );
-
-            await loadListings();
-          }}
-        />
-      )}
+      
     </div>
   );
 }
@@ -543,7 +516,7 @@ function ListingCard({
   listing,
   selected,
   onSelect,
-  onQuickEdit,
+  onUpdated,
   onPublish,
   onWithdraw,
 }) {
@@ -567,6 +540,106 @@ function ListingCard({
 
   const isTour =
     category === "TOUR";
+
+  const [isEditing, setIsEditing] =
+    useState(false);
+
+  const [editPrice, setEditPrice] =
+    useState(
+      listing.price ?? ""
+    );
+
+  const [editQuantity, setEditQuantity] =
+    useState(
+      listing.quantity ?? 0
+    );
+
+  const [savingEdit, setSavingEdit] =
+    useState(false);
+  
+  const startInlineEdit = () => {
+  setEditPrice(
+    listing.price ?? ""
+  );
+
+  setEditQuantity(
+    listing.quantity ?? 0
+  );
+
+  setIsEditing(true);
+};
+
+const cancelInlineEdit = () => {
+  setEditPrice(
+    listing.price ?? ""
+  );
+
+  setEditQuantity(
+    listing.quantity ?? 0
+  );
+
+  setIsEditing(false);
+  };
+
+  const saveInlineEdit = async () => {
+    const parsedPrice =
+      Number(editPrice);
+
+    const parsedQuantity =
+      Number(editQuantity);
+
+    if (
+      !Number.isFinite(
+        parsedPrice
+      ) ||
+      parsedPrice <= 0
+    ) {
+      alert(
+        "Price must be greater than RM 0."
+      );
+
+      return;
+    }
+
+    if (
+      !Number.isInteger(
+        parsedQuantity
+      ) ||
+      parsedQuantity < 0
+    ) {
+      alert(
+        "Quantity must be zero or greater."
+      );
+
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+
+      await operatorService.quickEditListing(
+        listing.id,
+        {
+          price:
+            parsedPrice,
+
+          quantity:
+            parsedQuantity,
+        }
+      );
+
+      setIsEditing(false);
+
+      await onUpdated();
+    } catch (err) {
+      alert(
+        err.response?.data?.message ||
+          "Failed to update listing."
+      );
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   return (
     <article
@@ -659,11 +732,32 @@ function ListingCard({
             </p>
           </div>
 
-          <strong className="operator-listing-price">
-            {formatOperatorMoney(
-              listing.price
-            )}
-          </strong>
+          {isEditing ? (
+            <label className="operator-inline-edit-field">
+              <span>
+                Price (RM)
+              </span>
+
+              <input
+                className="operator-inline-edit-input"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={editPrice}
+                onChange={(e) =>
+                  setEditPrice(
+                    e.target.value
+                  )
+                }
+              />
+            </label>
+          ) : (
+            <strong className="operator-listing-price">
+              {formatOperatorMoney(
+                listing.price
+              )}
+            </strong>
+          )}
         </div>
 
         {/* CAR INFORMATION */}
@@ -750,10 +844,25 @@ function ListingCard({
               Allocation
             </span>
 
-            <strong>
-              {listing.quantity ??
-                0}
-            </strong>
+            {isEditing ? (
+              <input
+                className="operator-inline-edit-input"
+                type="number"
+                min="0"
+                step="1"
+                value={editQuantity}
+                onChange={(e) =>
+                  setEditQuantity(
+                    e.target.value
+                  )
+                }
+              />
+            ) : (
+              <strong>
+                {listing.quantity ??
+                  0}
+              </strong>
+            )}
           </div>
 
           <div>
@@ -786,15 +895,43 @@ function ListingCard({
 
         <div className="operator-listing-actions">
 
+          {isEditing ? (
+          <>
           <button
             type="button"
-            className="operator-secondary-btn"
+            className="operator-primary-btn"
+            disabled={savingEdit}
             onClick={
-              onQuickEdit
+              saveInlineEdit
             }
           >
-            Quick Edit
+            {savingEdit
+              ? "Saving..."
+              : "Save Changes"}
           </button>
+
+          <button
+            type="button"
+            className="operator-muted-btn"
+            disabled={savingEdit}
+            onClick={
+              cancelInlineEdit
+            }
+          >
+            Cancel
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          className="operator-secondary-btn"
+          onClick={
+            startInlineEdit
+          }
+        >
+          Quick Edit
+        </button>
+      )}
 
           <Link
             to={`/operator/listings/${listing.id}/edit`}

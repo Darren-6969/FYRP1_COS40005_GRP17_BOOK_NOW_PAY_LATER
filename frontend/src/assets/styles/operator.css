@@ -4633,3 +4633,42 @@
   font-size: 12px;
   font-weight: 600;
 }
+
+.operator-inline-edit-field {
+  display: grid;
+  gap: 6px;
+  min-width: 120px;
+}
+
+.operator-inline-edit-field span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.operator-inline-edit-input {
+  width: 120px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-weight: 700;
+  outline: none;
+}
+
+.operator-inline-edit-input:focus {
+  border-color: #2563eb;
+  box-shadow:
+    0 0 0 3px
+    rgba(37, 99, 235, 0.1);
+}
+
+.operator-listing-allocation
+.operator-inline-edit-input {
+  width: 100%;
+  min-width: 0;
+  margin-top: 5px;
+}
