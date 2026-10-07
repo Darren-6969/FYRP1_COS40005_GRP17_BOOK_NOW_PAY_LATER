@@ -102,6 +102,16 @@ export default function OperatorListingForm() {
   const [selectedVehicleImage, setSelectedVehicleImage] =
     useState(null);
 
+  const [
+    uploadedVehicleImage,
+    setUploadedVehicleImage,
+  ] = useState(null);
+
+  const [
+    uploadingVehicleImage,
+    setUploadingVehicleImage,
+  ] = useState(false);
+
   const [loadingVehicleImages, setLoadingVehicleImages] =
     useState(false);
 
@@ -497,6 +507,7 @@ const pricePreview = useMemo(() => {
         null,
 
       carsxeImageUrl:
+        uploadedVehicleImage?.url ||
         selectedVehicleImage?.url ||
         null,
     };
@@ -618,6 +629,79 @@ const pricePreview = useMemo(() => {
     }
 
     return payload;
+  };
+
+  const uploadOwnVehicleImage =
+  async (event) => {
+    const file =
+      event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const allowedTypes = [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+    ];
+
+    if (
+      !allowedTypes.includes(
+        file.type
+      )
+    ) {
+      setError(
+        "Please upload a PNG, JPG, JPEG, or WebP image."
+      );
+
+      event.target.value = "";
+      return;
+    }
+
+    if (
+      file.size >
+      5 * 1024 * 1024
+    ) {
+      setError(
+        "Car photo must be 5MB or below."
+      );
+
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      setUploadingVehicleImage(
+        true
+      );
+
+      setError("");
+
+      const res =
+        await operatorService.uploadListingImage(
+          file
+        );
+
+      setUploadedVehicleImage({
+        url: res.data.url,
+      });
+
+      // Uploaded image becomes the selected image.
+      setSelectedVehicleImage(
+        null
+      );
+    } catch (err) {
+      setError(
+        err.response?.data
+          ?.message ||
+          "Failed to upload car photo."
+      );
+    } finally {
+      setUploadingVehicleImage(
+        false
+      );
+    }
   };
 
   //Implement Photo From CARSXE
@@ -1509,6 +1593,98 @@ const pricePreview = useMemo(() => {
         {/* ===================================================
             VEHICLE PHOTOS - CARSXE
         ==================================================== */}
+
+        <div className="operator-field operator-field-full">
+          <strong>
+            Upload Your Own Car Photos
+          </strong>
+
+          <label className="operator-image-upload-box">
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+              onChange={uploadOwnVehicleImage}
+              disabled={uploadingVehicleImage}
+              multiple
+            />
+
+            <span className="operator-image-upload-icon">
+              📷
+            </span>
+
+            <strong>
+              Choose Car Photos
+            </strong>
+
+            <small>
+              PNG, JPG, JPEG or WebP
+              <br />
+              Maximum 5 photos • 5MB per photo
+            </small>
+          </label>
+</div>
+
+          {uploadingVehicleImage && (
+            <div className="operator-empty-state">
+              Uploading car photo...
+            </div>
+          )}
+
+          {uploadedVehicleImage?.url && (
+            <div
+              style={{
+                marginTop: "16px",
+              }}
+            >
+              <p>
+                <strong>
+                  Uploaded Photo
+                </strong>
+              </p>
+
+              <img
+                src={
+                  uploadedVehicleImage.url
+                }
+                alt="Uploaded vehicle"
+                style={{
+                  width: "100%",
+                  maxWidth: "420px",
+                  height: "240px",
+                  objectFit: "cover",
+                  borderRadius: "12px",
+                }}
+              />
+
+              <div
+                style={{
+                  marginTop: "10px",
+                }}
+              >
+                <button
+                  type="button"
+                  className="operator-secondary-btn"
+                  onClick={() =>
+                    setUploadedVehicleImage(
+                      null
+                    )
+                  }
+                >
+                  Remove Uploaded Photo
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div
+            style={{
+              margin: "24px 0",
+            }}
+          >
+            <strong>
+              OR
+            </strong>
+          </div>
 
         {isCar && (
         <section className="operator-card">

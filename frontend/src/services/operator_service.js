@@ -318,6 +318,27 @@ updateBranch(id, payload) {
     );
   },
 
+  uploadListingImage(file) {
+    const formData =
+      new FormData();
+
+    formData.append(
+      "image",
+      file
+    );
+
+    return api.post(
+      "/uploads/listing-image",
+      formData,
+      {
+        headers: {
+          "Content-Type":
+            "multipart/form-data",
+        },
+      }
+    );
+  },
+
   previewEmailTemplate(
     template,
     overrides = {}

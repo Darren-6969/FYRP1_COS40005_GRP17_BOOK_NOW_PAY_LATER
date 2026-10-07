@@ -64,4 +64,95 @@ router.post(
   }
 );
 
+const listingImageUpload = multer({
+  storage: multer.memoryStorage(),
+
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+    ];
+
+    if (!allowedTypes.includes(file.mimetype)) {
+      cb(
+        new Error(
+          "Car photo must be PNG, JPG, JPEG, or WebP."
+        )
+      );
+      return;
+    }
+
+    cb(null, true);
+  },
+});
+
+router.post(
+  "/listing-image",
+
+  verifyToken,
+
+  allowRoles(
+    "MASTER_SELLER",
+    "NORMAL_SELLER"
+  ),
+
+  listingImageUpload.single("image"),
+
+  async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          message:
+            "Car photo is required",
+        });
+      }
+
+      const MIME_EXT = {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/webp": ".webp",
+      };
+
+      const ext =
+        MIME_EXT[
+          req.file.mimetype
+        ] ?? "";
+
+      const safeName =
+        `listing-${Date.now()}-${crypto
+          .randomBytes(12)
+          .toString("hex")}${ext}`;
+
+      const blob = await put(
+        `listing-images/${safeName}`,
+        req.file.buffer,
+        {
+          access: "public",
+          contentType:
+            req.file.mimetype,
+
+          addRandomSuffix: false,
+        }
+      );
+
+      res.status(201).json({
+        message:
+          "Car photo uploaded successfully",
+
+        url: blob.url,
+
+        pathname:
+          blob.pathname,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 export default router;

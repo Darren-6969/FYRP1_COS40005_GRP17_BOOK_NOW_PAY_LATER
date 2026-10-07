@@ -4535,3 +4535,43 @@
   border-radius: 16px;
   background: #f7f9fc;
 }
+
+.operator-image-upload-box {
+  margin-top: 10px;
+  min-height: 150px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 16px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 24px;
+  cursor: pointer;
+  text-align: center;
+  transition: 0.2s ease;
+}
+
+.operator-image-upload-box:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.operator-image-upload-box input {
+  display: none;
+}
+
+.operator-image-upload-icon {
+  font-size: 30px;
+}
+
+.operator-image-upload-box strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.operator-image-upload-box small {
+  color: #64748b;
+  line-height: 1.5;
+}
