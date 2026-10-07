@@ -3039,6 +3039,8 @@ export async function updateOperatorSettings(req, res, next) {
       alternativeSuggestedEmailText,
       emailFooterText,
       paymentDeadlineDays,
+      overtimeFee,
+      blockNightHandover,
     } = req.body || {};
 
     const parsedBookingDeadline = Number(bookingResponseDeadlineMinutes);
@@ -3136,6 +3138,23 @@ export async function updateOperatorSettings(req, res, next) {
     }
     if (emailFooterText !== undefined) {
       configData.emailFooterText = emailFooterText || null;
+    }
+
+    // Overtime (SRS 4.3.5). Empty means no overtime charge.
+    if (overtimeFee !== undefined) {
+      const text = overtimeFee === null ? "" : String(overtimeFee).trim();
+      if (text === "") {
+        configData.overtimeFee = null;
+      } else if (!/^\d+(\.\d{1,2})?$/.test(text) || Number(text) > 99999999.99) {
+        return res.status(400).json({
+          message: "Overtime charge must be an amount in RM with up to 2 decimal places.",
+        });
+      } else {
+        configData.overtimeFee = Number(text) > 0 ? text : null;
+      }
+    }
+    if (blockNightHandover !== undefined) {
+      configData.blockNightHandover = blockNightHandover === true || blockNightHandover === "true";
     }
 
     const updatedConfig = await prisma.bNPLConfig.update({
