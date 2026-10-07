@@ -53,7 +53,7 @@ export function depositFor(rentalSen, pct) {
 const WORD = { month: "month", week: "week", day: "day", hour: "hour" };
 
 function plural(n, word) {
-  return ${n} ${word}${n === 1 ? "" : "s"};
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
 // 51 -> "2 days 3 hours", 240 -> "10 days", 5 -> "5 hours".
@@ -64,7 +64,7 @@ export function durationText(hours) {
   const left = hours % 24;
   if (!days) return "1 day";
   if (left >= HOURLY_LIMIT_HOURS) return plural(days + 1, "day");
-  return left ? ${plural(days, "day")} ${plural(left, "hour")} : plural(days, "day");
+  return `${plural(days, "day")} ${plural(left, "hour")}`;
 }
 
 // [{period:"week",count:1,...},{period:"day",count:3,...}] -> "1 week + 3 days"
@@ -74,5 +74,5 @@ export function rateLinesText(lines = []) {
 
 // One line per charged period, e.g. "1 week × RM 700".
 export function rateLineLabel(line, formatSen) {
-  return ${plural(line.count, WORD[line.period])} × ${formatSen(line.rateSen)};
+  return `${plural(line.count, WORD[line.period])} × ${formatSen(line.rateSen)}`;
 }
