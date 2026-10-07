@@ -12,6 +12,7 @@ import {
   reactivateListing,
   bulkUpdateListingStatus,
 } from "../controllers/listing_controller.js";
+import { previewListingRates } from "../controllers/listing_rates_controller.js";
 
 import { verifyToken } from "../middlewares/auth_middleware.js";
 
@@ -47,6 +48,13 @@ router.post(
   "/",
   ...ownerOrStaffAccess,
   createListing
+);
+
+// Price preview for the rate fields in the listing form. Writes nothing.
+router.post(
+  "/rate-preview",
+  ...ownerOrStaffAccess,
+  previewListingRates
 );
 
 router.patch(

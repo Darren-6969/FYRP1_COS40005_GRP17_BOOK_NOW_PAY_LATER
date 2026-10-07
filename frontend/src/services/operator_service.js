@@ -50,6 +50,13 @@ export const operatorService = {
     return api.post("/operators/listings", payload);
   },
 
+  // payload: { price, hourlyRate, weeklyRate, monthlyRate } in RM.
+  // Returns { samples: [{ key, label, hours, total, totalSen, lines }], warnings: [{ code, field, message }] }.
+  // A 400 response carries { errors: { field: message } }.
+  previewListingRates(payload) {
+    return api.post("/operators/listings/rate-preview", payload);
+  },
+
   updateListing(id, payload) {
     return api.patch(
       `/operators/listings/${id}`,
