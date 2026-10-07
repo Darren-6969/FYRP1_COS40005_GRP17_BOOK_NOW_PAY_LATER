@@ -8,7 +8,7 @@ import {
   notifyOperatorUsersByBooking,
   notifyMasterUsers,
 } from "./notification_email_service.js";
-import { bookingStatusTemplate } from "./email_templates.js";
+import { bookingStatusTemplate, autoRejectedBookingTemplate } from "./email_templates.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
 import { withDbRetry, ensureDbConnection } from "../utils/dbRetry.js"; // <-- add
 import { runLoggedCronJob } from "./cron_job_service.js";
@@ -397,7 +397,7 @@ async function performOverdueBookingCheck({
           updatedBooking.bookingCode || updatedBooking.id
         } was not received before the payment deadline and has been marked as overdue.`,
         type: "PAYMENT_OVERDUE",
-        emailSubject: `Payment Overdue - Booking ${
+        emailSubject: `Payment Overdue - ${
           updatedBooking.bookingCode || updatedBooking.id
         }`,
         emailHtml: bookingStatusTemplate({
@@ -869,18 +869,19 @@ async function performNoMerchantResponseCheck({
 
       await notifyCustomerByBooking({
         booking: updatedBooking,
-        title: "Booking rejected",
+        title: "Booking request expired",
         message: `Booking ${
           updatedBooking.bookingCode || updatedBooking.id
-        } was automatically rejected because the merchant did not respond within the configured deadline.`,
+        } was cancelled because the operator did not respond in time. Nothing was charged.`,
         type: "BOOKING_AUTO_REJECTED_NO_RESPONSE",
-        emailSubject: `Booking Rejected - ${
+        emailSubject: `Booking Request Expired - ${
           updatedBooking.bookingCode || updatedBooking.id
         }`,
-        emailHtml: bookingStatusTemplate({
+        emailHtml: autoRejectedBookingTemplate({
           booking: updatedBooking,
-          status: "REJECTED",
           customerUrl: frontendBookingUrl(booking.id),
+          autoRejectedEmailText:
+            "The operator did not respond to your request before the response deadline, so it was cancelled. Nothing was charged. You can search again for other cars on the same dates.",
         }),
       });
 

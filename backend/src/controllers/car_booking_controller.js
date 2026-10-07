@@ -13,7 +13,7 @@
 import prisma from "../config/db.js";
 import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
 import { notifyCustomerByBooking, notifyOperatorUsersByBooking } from "../services/notification_email_service.js";
-import { bookingSubmittedTemplate } from "../services/email_templates.js";
+import { bookingSubmittedTemplate, bookingRequestReceivedTemplate } from "../services/email_templates.js";
 import { tempBookingCode, formatBookingCode } from "../utils/bookingCode.js";
 import { addDays, fromSen, klHhmm, klPlainDate, rateCardFor, rentalDays } from "../services/car_pricing_service.js";
 import { loadAvailability, loadPeakDates } from "../services/car_availability_service.js";
@@ -232,7 +232,12 @@ export async function createCarBooking(req, res, next) {
         booking,
         title: "Booking request sent",
         message: `Your request for ${listing.name} was sent to ${listing.operator.companyName}.`,
-        type: "BOOKING_SUBMITTED",
+        type: "BOOKING_REQUEST_RECEIVED",
+        emailSubject: `Booking Request Sent - ${booking.bookingCode}`,
+        emailHtml: bookingRequestReceivedTemplate({
+          booking,
+          customerUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`,
+        }),
       }),
       notifyOperatorUsersByBooking({
         booking,

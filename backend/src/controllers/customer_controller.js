@@ -6,6 +6,7 @@ import {
 } from "../services/notification_email_service.js";
 import {
   bookingSubmittedTemplate,
+  bookingRequestReceivedTemplate,
   customerAlternativeResponseTemplate,
   receiptUploadedTemplate,
 } from "../services/email_templates.js";
@@ -314,9 +315,14 @@ export async function createCustomerBooking(req, res, next) {
 
     const notifications = [notifyCustomerByBooking({
       booking,
-      title: "Booking submitted",
+      title: "Booking request sent",
       message: `Your booking request for ${serviceName} has been submitted.`,
-      type: "BOOKING_SUBMITTED",
+      type: "BOOKING_REQUEST_RECEIVED",
+      emailSubject: `Booking Request Sent - ${booking.bookingCode || booking.id}`,
+      emailHtml: bookingRequestReceivedTemplate({
+        booking,
+        customerUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`,
+      }),
     })];
 
     const operatorUrl = `${

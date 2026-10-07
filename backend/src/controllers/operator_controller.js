@@ -946,14 +946,15 @@ async function updateBookingStatus(req, res, next, status, action) {
 
     await createCustomerNotification({
       booking: updatedBooking,
-      title: `Booking ${status.replace("_", " ").toLowerCase()}`,
-      message: `Your booking ${
-        booking.bookingCode || booking.id
-      } has been updated to ${status}.`,
+      title: status === "REJECTED" ? "Booking declined" : `Booking ${status.replace("_", " ").toLowerCase()}`,
+      message:
+        status === "REJECTED"
+          ? `${updatedBooking.operator?.companyName || "The operator"} declined your booking ${booking.bookingCode || booking.id}. Nothing was charged.`
+          : `Your booking ${booking.bookingCode || booking.id} has been updated.`,
       type: action,
       emailSubject:
         status === "REJECTED"
-          ? `Booking Rejected - ${booking.bookingCode || booking.id}`
+          ? `Booking Declined - ${booking.bookingCode || booking.id}`
           : `Booking Update - ${booking.bookingCode || booking.id}`,
       emailHtml: bookingStatusTemplate({
         booking: updatedBooking,
@@ -1181,7 +1182,7 @@ export async function handoverBooking(req, res, next) {
     await createCustomerNotification({
       booking: updatedBooking,
 
-      title: "Booking handover completed",
+      title: "Booking in progress",
 
       message: `Your booking ${
         updatedBooking.bookingCode ||
@@ -1390,7 +1391,7 @@ export async function confirmBooking(req, res, next) {
       message: `Your booking ${
         booking.bookingCode || booking.id
       } has been completed.`,
-      type: "BOOKING_CONFIRMED",
+      type: "BOOKING_COMPLETED",
       emailSubject: `Booking Completed - ${booking.bookingCode || booking.id}`,
       emailHtml: bookingStatusTemplate({
         booking: updatedBooking,
@@ -1656,9 +1657,10 @@ export async function sendPaymentRequest(req, res, next) {
       emailHtml: paymentRequestTemplate({
         booking: updatedBooking,
         customerUrl: customerPaymentUrl,
-        paymentRequestEmailText: config?.paymentRequestEmailText,
         paymentInstructions: config?.manualPaymentNote,
         emailFooterText: config?.emailFooterText,
+        title: "Payment Deadline Updated",
+        intro: "The operator has changed the payment deadline for your booking. The new deadline is shown below.",
       }),
     });
 

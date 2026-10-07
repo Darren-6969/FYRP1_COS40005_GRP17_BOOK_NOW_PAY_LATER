@@ -71,10 +71,11 @@ export async function notifyCustomerByBooking({
 
 /**
  * Notify:
- * - Normal seller users under this booking's operator
- * - All master seller/admin users
- *
- * This is what makes the admin notification bell actually receive updates.
+ * - Normal seller users under this booking's operator (in-app and email)
+ * - The operator's company email, when it differs from every user email
+ * - Platform admins (MASTER_SELLER): in-app only by default, so the admin
+ *   bell still shows booking activity. Pass emailMaster: true only when the
+ *   admin has to act on the event (for example a refund).
  */
 export async function notifyOperatorUsersByBooking({
   booking,
@@ -85,6 +86,7 @@ export async function notifyOperatorUsersByBooking({
   emailHtml,
   emailText,
   notifyMaster = true,
+  emailMaster = false,
 }) {
   const operatorUsers = await prisma.user.findMany({
     where: {
@@ -122,7 +124,8 @@ export async function notifyOperatorUsersByBooking({
       type,
     });
 
-    if (user.email && emailSubject && emailHtml) {
+    const isAdmin = user.role === "MASTER_SELLER";
+    if (user.email && emailSubject && emailHtml && (!isAdmin || emailMaster)) {
       await sendEmail({
         to: user.email,
         subject: emailSubject,
@@ -143,6 +146,7 @@ export async function notifyOperatorUsersByBooking({
   if (booking.operator?.email && emailSubject && emailHtml) {
     const alreadySentToOperatorEmail = operatorUsers.some(
       (user) =>
+        (user.role !== "MASTER_SELLER" || emailMaster) &&
         user.email?.toLowerCase() === booking.operator.email.toLowerCase()
     );
 

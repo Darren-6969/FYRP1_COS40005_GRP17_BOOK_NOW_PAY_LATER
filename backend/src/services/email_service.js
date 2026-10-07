@@ -1,50 +1,75 @@
-// TEMPORARY DEMO EMAIL SERVICE USING GMAIL SMTP
-// ------------------------------------------------
-// Resend is commented out for now because resend.dev testing domain
-// can only send to the verified Resend account email.
-// After buying/verifying a domain, you can restore Resend later.
+// Email delivery for the platform.
+//
+// Provider choice (EMAIL_PROVIDER):
+//   "resend" - Resend HTTP API. Use this on Vercel and DigitalOcean, which
+//              blocks outbound SMTP ports. Needs RESEND_API_KEY and an
+//              EMAIL_FROM address on a domain verified in Resend.
+//   "smtp"   - Any SMTP server (SMTP_HOST), or Gmail with an App Password
+//              (GMAIL_SMTP_USER / GMAIL_SMTP_PASS). For local development.
+//   unset    - Resend when RESEND_API_KEY is set, otherwise SMTP.
+//
+// Every attempt is written to EmailLog, including emails that are skipped.
 
-// import { Resend } from "resend";
+import { Resend } from "resend";
 import nodemailer from "nodemailer";
 import prisma from "../config/db.js";
+import { preferenceColumnFor, optOutReason } from "./email_preferences.js";
+import { isReservedTestAddress, resolveProvider } from "./email_provider.js";
 
-// const resend = process.env.RESEND_API_KEY
-//   ? new Resend(process.env.RESEND_API_KEY)
-//   : null;
+export { isReservedTestAddress, getSmtpConfiguration, resolveProvider } from "./email_provider.js";
 
-function getSmtpConfiguration() {
-  const host = process.env.SMTP_HOST;
+let resendClient = null;
+let resendKey = null;
 
-  if (host) {
-    const user = process.env.SMTP_USER || process.env.GMAIL_SMTP_PASS;
-    const pass = process.env.SMTP_PASS || process.env.GMAIL_SMTP_PASS;;
-    const port = Number(process.env.SMTP_PORT || 587);
-    const secure = process.env.SMTP_SECURE
-      ? ["true", "1", "yes"].includes(process.env.SMTP_SECURE.toLowerCase())
-      : port === 465;
+function getResend(apiKey) {
+  if (!resendClient || resendKey !== apiKey) {
+    resendClient = new Resend(apiKey);
+    resendKey = apiKey;
+  }
+  return resendClient;
+}
 
-    return {
-      host,
-      port,
-      secure,
-      auth: user && pass ? { user, pass } : undefined,
-      user,
-    };
+async function deliver(provider, message) {
+  if (provider.name === "resend") {
+    const { data, error } = await getResend(provider.apiKey).emails.send({
+      from: provider.from,
+      to: message.to,
+      subject: message.subject,
+      html: message.html,
+      text: message.text,
+      ...(process.env.EMAIL_REPLY_TO ? { replyTo: process.env.EMAIL_REPLY_TO } : {}),
+    });
+    if (error) throw new Error(`Resend: ${error.message || error.name || "send failed"}`);
+    return data;
   }
 
-  if (process.env.GMAIL_SMTP_USER && process.env.GMAIL_SMTP_PASS) {
-    return {
-      service: "gmail",
-      auth: { user: process.env.GMAIL_SMTP_USER, pass: process.env.GMAIL_SMTP_PASS },
-      user: process.env.GMAIL_SMTP_USER,
-    };
+  return nodemailer.createTransport(provider.smtp).sendMail({
+    from: provider.from,
+    to: message.to,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    ...(process.env.EMAIL_REPLY_TO ? { replyTo: process.env.EMAIL_REPLY_TO } : {}),
+  });
+}
+
+async function skipReasonFor({ recipients, type, userId }) {
+  if (recipients.length === 0) return "No recipient address.";
+
+  if (recipients.every(isReservedTestAddress)) {
+    return "Recipient uses a reserved test domain that cannot receive email.";
+  }
+
+  const column = userId ? preferenceColumnFor(type) : null;
+  if (column) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { [column]: true },
+    });
+    if (user && user[column] === false) return optOutReason(type);
   }
 
   return null;
-}
-
-function getTransporter(configuration) {
-  return nodemailer.createTransport(configuration);
 }
 
 export async function sendEmail({
@@ -57,8 +82,14 @@ export async function sendEmail({
   relatedEntityId,
   userId,
 }) {
-  const toEmail = Array.isArray(to) ? to.join(",") : to;
-  const smtpConfiguration = getSmtpConfiguration();
+  const recipients = (Array.isArray(to) ? to : [to]).filter(Boolean);
+  const deliverable = recipients.filter((address) => !isReservedTestAddress(address));
+  const toEmail = recipients.join(",");
+
+  const provider = resolveProvider();
+  const skipReason = provider.name
+    ? await skipReasonFor({ recipients, type, userId })
+    : provider.reason;
 
   const emailLog = await prisma.emailLog.create({
     data: {
@@ -71,27 +102,19 @@ export async function sendEmail({
           ? null
           : String(relatedEntityId),
       userId: userId || null,
-      status: smtpConfiguration ? "PENDING" : "SKIPPED",
-      error: smtpConfiguration
-        ? null
-        : "SMTP_HOST or Gmail SMTP credentials are not configured. Email was skipped.",
+      status: skipReason ? "SKIPPED" : "PENDING",
+      error: skipReason,
     },
   });
 
-  if (!smtpConfiguration) {
-    console.warn(`[EMAIL SKIPPED] ${subject} -> ${toEmail}`);
-    return {
-      skipped: true,
-      emailLog,
-    };
+  if (skipReason) {
+    console.warn(`[EMAIL SKIPPED] ${subject} -> ${toEmail}: ${skipReason}`);
+    return { skipped: true, reason: skipReason, emailLog };
   }
 
   try {
-    const transporter = getTransporter(smtpConfiguration);
-
-    const providerResponse = await transporter.sendMail({
-      from: process.env.EMAIL_FROM || (smtpConfiguration.user ? `BNPL System <${smtpConfiguration.user}>` : undefined),
-      to,
+    const providerResponse = await deliver(provider, {
+      to: deliverable,
       subject,
       html,
       text,
@@ -99,32 +122,18 @@ export async function sendEmail({
 
     const updatedLog = await prisma.emailLog.update({
       where: { id: emailLog.id },
-      data: {
-        status: "SENT",
-        sentAt: new Date(),
-      },
+      data: { status: "SENT", sentAt: new Date() },
     });
 
-    return {
-      sent: true,
-      providerResponse,
-      emailLog: updatedLog,
-    };
+    return { sent: true, provider: provider.name, providerResponse, emailLog: updatedLog };
   } catch (err) {
     const updatedLog = await prisma.emailLog.update({
       where: { id: emailLog.id },
-      data: {
-        status: "FAILED",
-        error: err.message,
-      },
+      data: { status: "FAILED", error: err.message },
     });
 
     console.error(`[EMAIL FAILED] ${subject} -> ${toEmail}:`, err.message);
 
-    return {
-      sent: false,
-      emailLog: updatedLog,
-      error: err,
-    };
+    return { sent: false, emailLog: updatedLog, error: err };
   }
 }

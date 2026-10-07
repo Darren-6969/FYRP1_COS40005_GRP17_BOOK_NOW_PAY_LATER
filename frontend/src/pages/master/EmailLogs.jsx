@@ -12,7 +12,11 @@ const EMAIL_TYPES = [
   { value: "PAYMENT_RECEIPT_RESENT", label: "Receipt Resent" },
   { value: "BOOKING_ACCEPTED_PAYMENT_AVAILABLE", label: "Booking Accepted" },
   { value: "BOOKING_AUTO_REJECTED_NO_RESPONSE", label: "Auto-Rejected (No Response)" },
-  { value: "BOOKING_CONFIRMED", label: "Booking Confirmed" },
+  { value: "BOOKING_REQUEST_RECEIVED", label: "Booking Request Sent" },
+  { value: "BOOKING_SUBMITTED", label: "New Booking Request (Operator)" },
+  { value: "BOOKING_REJECTED", label: "Booking Declined" },
+  { value: "BOOKING_HANDED_OVER", label: "Booking In Progress" },
+  { value: "BOOKING_CONFIRMED", label: "Booking Completed (old type)" },
   { value: "BOOKING_COMPLETED", label: "Booking Completed" },
   { value: "OPERATOR_BOOKING_CANCELLED", label: "Booking Cancelled" },
   { value: "ALTERNATIVE_SUGGESTED", label: "Alternative Suggested" },
@@ -45,6 +49,7 @@ export default function EmailLogs() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, []);
 

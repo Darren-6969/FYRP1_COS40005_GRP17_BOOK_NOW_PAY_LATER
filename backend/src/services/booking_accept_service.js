@@ -462,17 +462,17 @@ export async function acceptBookingAndRequestPayment({
       booking: updatedBooking,
 
       title:
-        "Booking confirmed - payment available",
+        "Booking accepted - payment due",
 
       message: `Your booking ${
         updatedBooking.bookingCode ||
         updatedBooking.id
-      } has been confirmed. Please complete payment before the deadline.`,
+      } has been accepted. Please complete payment before the deadline.`,
 
       type:
         "BOOKING_ACCEPTED_PAYMENT_AVAILABLE",
 
-      emailSubject: `Payment Available - ${
+      emailSubject: `Booking Accepted - Payment Due - ${
         updatedBooking.bookingCode ||
         updatedBooking.id
       }`,
@@ -492,6 +492,8 @@ export async function acceptBookingAndRequestPayment({
 
           emailFooterText:
             emailConfig?.emailFooterText,
+
+          title: "Booking Accepted - Payment Due",
         }),
     });
 

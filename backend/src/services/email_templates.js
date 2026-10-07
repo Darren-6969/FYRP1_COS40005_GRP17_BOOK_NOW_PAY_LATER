@@ -352,9 +352,11 @@ export function paymentRequestTemplate({
   paymentRequestEmailText,
   paymentInstructions,
   emailFooterText,
+  title = "Payment Required",
+  intro = "Your booking has been accepted. Please complete the payment before the deadline.",
 }) {
   return baseTemplate({
-    title: "Payment Required",
+    title,
     buttonText: "Proceed to Payment",
     buttonUrl: customerUrl,
     operator: booking?.operator,
@@ -364,7 +366,7 @@ export function paymentRequestTemplate({
       ${
         paymentRequestEmailText
           ? `<p>${escapeHtml(paymentRequestEmailText)}</p>`
-          : `<p>Your booking has been accepted. Please complete the payment before the deadline.</p>`
+          : `<p>${escapeHtml(intro)}</p>`
       }
       ${bookingTable(booking)}
       ${
@@ -536,7 +538,7 @@ export function paymentConfirmedTemplate({ booking, customerUrl }) {
   });
 }
 
-export function invoiceSentTemplate({ invoice, booking, customerUrl, paymentInstructions, emailFooterText }) {  const operator = booking?.operator || {};
+export function invoiceSentTemplate({ invoice, booking, customerUrl, paymentInstructions, emailFooterText, title = "Invoice Issued" }) {  const operator = booking?.operator || {};
   const status = getInvoiceStatus(invoice, booking);
 
   const subtotal = Number(invoice?.amount || booking?.totalAmount || 0);
@@ -546,7 +548,7 @@ export function invoiceSentTemplate({ invoice, booking, customerUrl, paymentInst
   const totalAmountDue = balanceRemaining || subtotal;
 
   return baseTemplate({
-    title: "Invoice Issued",
+    title,
     buttonText: "View Invoice",
     buttonUrl: customerUrl,
     footerText: emailFooterText,
@@ -764,7 +766,7 @@ export function autoRejectedBookingTemplate({
   autoRejectedEmailText,
 }) {
   return baseTemplate({
-    title: "Booking Auto-Rejected",
+    title: "Booking Request Expired",
     buttonText: "View Booking",
     buttonUrl: customerUrl,
     operator: booking?.operator,
@@ -783,6 +785,46 @@ export function autoRejectedBookingTemplate({
       }
 
       ${bookingTable(booking)}
+    `,
+  });
+}
+
+// Sent to the customer as soon as a booking request is recorded. No payment
+// is taken at this point; the operator accepts, suggests an alternative or
+// declines, and each of those sends its own email.
+export function bookingRequestReceivedTemplate({ booking, customerUrl }) {
+  const operatorName = safe(booking?.operator?.companyName, "the operator");
+  return baseTemplate({
+    title: "Booking Request Sent",
+    buttonText: "View Booking",
+    buttonUrl: customerUrl,
+    operator: booking?.operator,
+    body: `
+      <p style="margin-top:0;">Dear ${safe(booking?.customer?.name, "Customer")},</p>
+      <p>Your booking request has been sent to <strong>${operatorName}</strong>.
+        Nothing has been charged yet.</p>
+      <p>We will email you when the operator accepts your request, suggests an alternative or declines it.
+        Once it is accepted, you can pay the deposit from your booking page.</p>
+      ${breakdownTable([
+        { label: "Booking Reference", value: getBookingRef(booking) },
+        { label: "Service", value: safe(booking?.serviceName) },
+        { label: "Pick-up / Check-in", value: formatDateTime(booking?.pickupDate) },
+        { label: "Return / Check-out", value: formatDateTime(booking?.returnDate) },
+        { label: "Booking Total", value: formatMoney(booking?.totalAmount), strong: true },
+      ])}
+    `,
+  });
+}
+
+// Plain notice for platform admins when something needs them to act.
+export function adminActionTemplate({ title, intro, rows = [], buttonText, buttonUrl }) {
+  return baseTemplate({
+    title,
+    buttonText,
+    buttonUrl,
+    body: `
+      <p style="margin-top:0;">${escapeHtml(intro)}</p>
+      ${rows.length ? breakdownTable(rows.map((row) => ({ label: row.label, value: escapeHtml(String(row.value ?? "-")) }))) : ""}
     `,
   });
 }

@@ -10,6 +10,7 @@ import {
 import {
   merchantPaymentConfirmedTemplate,
   paymentReceiptTemplate,
+  adminActionTemplate,
 } from "../services/email_templates.js";
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import { allowOperatorAccess, allowRoles } from "../middlewares/rbac_middleware.js";
@@ -131,6 +132,16 @@ export async function applyPaidState(
       type: "STRIPE_PAYMENT_ON_TERMINAL_BOOKING",
       relatedEntityType: "Booking",
       relatedEntityId: bookingId,
+      emailSubject: `Action Needed: Payment on Closed Booking - ${booking.bookingCode || bookingId}`,
+      emailHtml: adminActionTemplate({
+        title: "Payment on a Closed Booking",
+        intro: "Stripe took a payment for a booking that was already closed. An automatic refund was attempted. Please confirm the refund in the Stripe dashboard.",
+        rows: [
+          { label: "Booking", value: booking.bookingCode || bookingId },
+          { label: "Booking status", value: booking.status },
+          { label: "Payment intent", value: transactionId || "-" },
+        ],
+      }),
     });
 
     // Attempt an automatic refund of the just-captured payment intent.
@@ -606,6 +617,8 @@ export async function processStripeWebhookEvent(event, requestIp = null, databas
                 refundedBooking.bookingCode || refundedBooking.id
               }.`,
               type: "PAYMENT_REFUNDED",
+              // Refunds under Stripe Connect come out of the platform account
+              emailMaster: true,
               emailSubject: `Refund Issued - ${refundedBooking.bookingCode || refundedBooking.id}`,
               emailHtml: `
                 <p>A Stripe refund of <strong>MYR ${refundAmount.toFixed(2)}</strong> was issued for booking <strong>${

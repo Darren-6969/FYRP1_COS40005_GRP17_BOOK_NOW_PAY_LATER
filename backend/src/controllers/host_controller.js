@@ -6,7 +6,7 @@ import {
   notifyCustomerByBooking,
   notifyOperatorUsersByBooking,
 } from "../services/notification_email_service.js";
-import { bookingSubmittedTemplate } from "../services/email_templates.js";
+import { bookingSubmittedTemplate, bookingRequestReceivedTemplate } from "../services/email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
 import { assignCreditTier } from "../services/credit_tier_service.js";
@@ -355,9 +355,14 @@ async function createBookingFromIntent(intent, user) {
 
   await notifyCustomerByBooking({
     booking,
-    title: "Booking submitted",
+    title: "Booking request sent",
     message: `Your BNPL booking ${booking.bookingCode} has been submitted and is waiting for operator review.`,
-    type: "BOOKING_SUBMITTED",
+    type: "BOOKING_REQUEST_RECEIVED",
+    emailSubject: `Booking Request Sent - ${booking.bookingCode}`,
+    emailHtml: bookingRequestReceivedTemplate({
+      booking,
+      customerUrl: frontendUrl(`/customer/bookings/${booking.id}`),
+    }),
   });
 
   await notifyOperatorUsersByBooking({
@@ -365,7 +370,7 @@ async function createBookingFromIntent(intent, user) {
     title: "New booking request",
     message: `${booking.bookingCode} requires your review.`,
     type: "BOOKING_SUBMITTED",
-    emailSubject: `New BNPL Booking Request - ${booking.bookingCode}`,
+    emailSubject: `New Booking Request (Partner Site) - ${booking.bookingCode}`,
     emailHtml: bookingSubmittedTemplate({
       booking,
       operatorUrl,
