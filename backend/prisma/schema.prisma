@@ -237,6 +237,9 @@ model User {
   licenceDocuments         CustomerLicenceDocument[]
   reviewedLicenceDocuments CustomerLicenceDocument[]   @relation("LicenceReviewer")
   creditProfile            CustomerCreditProfile?
+  creditEventActor         CreditProfileEvent[] @relation("CreditEventActor")
+  creditAppeals            CreditAppeal[] @relation("CreditAppealCustomer")
+  reviewedCreditAppeals    CreditAppeal[] @relation("CreditAppealReviewer")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -273,15 +276,42 @@ model CustomerCreditProfile {
 }
 
 model CreditProfileEvent {
-  id         Int                   @id @default(autoincrement())
-  customerId Int
-  customer   CustomerCreditProfile @relation(fields: [customerId], references: [customerId], onDelete: Cascade)
-  eventKey   String
-  eventType  String
-  createdAt  DateTime              @default(now())
+  id             Int                   @id @default(autoincrement())
+  customerId     Int
+  customer       CustomerCreditProfile @relation(fields: [customerId], references: [customerId], onDelete: Cascade)
+  actorUserId    Int?
+  actor          User?                 @relation("CreditEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  eventKey       String
+  eventType      String
+  reason         String                @default("Credit profile event")
+  beforeTier     String?
+  afterTier      String?
+  reversalOfId   Int?
+  reversalOf     CreditProfileEvent?   @relation("CreditEventReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversals      CreditProfileEvent[]   @relation("CreditEventReversal")
+  appeals        CreditAppeal[]
+  createdAt      DateTime              @default(now())
 
   @@unique([customerId, eventKey])
   @@index([customerId, eventType])
+}
+
+model CreditAppeal {
+  id           Int      @id @default(autoincrement())
+  customerId   Int
+  customer     User     @relation("CreditAppealCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  eventId      Int
+  event        CreditProfileEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  reason       String
+  status       String   @default("PENDING")
+  resolution   String?
+  upheldById   Int?
+  upheldBy     User?    @relation("CreditAppealReviewer", fields: [upheldById], references: [id], onDelete: SetNull)
+  resolvedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
 }
 
 model PasswordSetupToken {
