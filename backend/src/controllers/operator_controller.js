@@ -999,8 +999,92 @@ export async function acceptBooking(req, res, next) {
   }
 }
 
-export function rejectBooking(req, res, next) {
-  return updateBookingStatus(req, res, next, "REJECTED", "BOOKING_REJECTED");
+export async function rejectBooking(req, res, next) {
+  try {
+    const booking = await findOperatorBooking(
+      req,
+      req.params.id
+    );
+
+    if (!booking) {
+      return res.status(404).json({
+        message: "Booking not found",
+      });
+    }
+
+    if (booking.status !== "PENDING") {
+      return res.status(400).json({
+        message:
+          "Only pending bookings can be rejected.",
+      });
+    }
+
+    const reason = String(
+      req.body?.reason || ""
+    ).trim();
+
+    if (reason.length < 5) {
+      return res.status(400).json({
+        message:
+          "A rejection reason of at least 5 characters is required.",
+      });
+    }
+
+    const updatedBooking =
+      await prisma.booking.update({
+        where: {
+          id: booking.id,
+        },
+
+        data: {
+          status: "REJECTED",
+        },
+
+        include: includeBookingRelations(),
+      });
+
+    await createAuditLog({
+      req,
+
+      action: "BOOKING_REJECTED",
+
+      entityType: "Booking",
+
+      entityId: booking.id,
+
+      before: {
+        status: booking.status,
+      },
+
+      after: {
+        status: updatedBooking.status,
+      },
+
+      details: {
+        reason,
+      },
+    });
+
+    await notifyCustomerByBooking({
+      booking: updatedBooking,
+
+      title: "Booking rejected",
+
+      message: `Your booking ${
+        updatedBooking.bookingCode ||
+        updatedBooking.id
+      } was rejected by the operator. Reason: ${reason}`,
+
+      type: "BOOKING_REJECTED",
+    });
+
+    res.json({
+      message: "Booking rejected successfully",
+      booking: mapBooking(updatedBooking),
+    });
+  } catch (err) {
+    next(err);
+  }
 }
 
 export async function cancelOperatorBooking(req, res, next) {

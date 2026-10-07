@@ -116,9 +116,12 @@ updateBranch(id, payload) {
     );
   },
 
-  rejectBooking(id) {
+  rejectBooking(id, reason) {
     return api.patch(
-      `/operators/bookings/${id}/reject`
+      `/operators/bookings/${id}/reject`,
+      {
+        reason,
+      }
     );
   },
 
