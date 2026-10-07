@@ -4,6 +4,7 @@ import {
   createOperator,
   createOperatorUser,
   updateOperatorUserStatus,
+  updateOperatorSubscriptionPlan,
   resetOperatorUser,
   deleteOperatorUser,
   getOperators,
@@ -119,6 +120,7 @@ router.get("/", ...masterOnly, getOperators);
 router.get("/applications", ...masterOnly, getOperatorApplications);
 router.patch("/applications/:id/review", ...masterOnly, reviewOperatorApplication);
 router.get("/applications/documents/:documentId", ...masterOnly, downloadOperatorDocument);
+router.patch("/:id/subscription-plan", ...masterOnly, updateOperatorSubscriptionPlan);
 router.patch("/:id/status", ...masterOnly, updateOperatorStatus);
 router.delete("/:id", ...masterOnly, deleteOperator);
 
