@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useCustomerBooking } from "../../hooks/useBookings";
 import { submitCustomerPayment } from "../../hooks/usePayments";
 import { createStripeCheckoutSession } from "../../services/customer_service";
 import { formatCustomerDate, formatMoney } from "../../utils/customerUtils";
 import duitnowQr from "../../assets/images/duitnow-qr.png";
+import { useFeatureFlag } from "../../hooks/useFeatureFlag";
 
 const PAYMENT_TYPES = {
   DOWN_PAYMENT: "DOWN_PAYMENT",
@@ -33,6 +34,10 @@ export default function Checkout() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { booking, loading, error } = useCustomerBooking(id);
+  const { enabled: receiptUploadEnabled } = useFeatureFlag(
+    "allowReceiptUpload",
+    booking?.operatorId
+  );
   const [searchParams] = useSearchParams();
   const requestedType = PAYMENT_TYPES[searchParams.get("type")] || null;
 
@@ -41,7 +46,6 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
-  const isManualPayment = method === "DUITNOW_SPAY";
   const downPaymentPaid = booking?.payment?.downPaymentStatus === "PAID";
   const finalPaymentPaid = booking?.payment?.finalPaymentStatus === "PAID";
   // The first part still owed, unless the customer picked one. A 0% deposit
@@ -61,37 +65,27 @@ const paymentOptions = useMemo(() => {
       "Stripe",
       "Card payment using Stripe sandbox",
     ],
-    acceptedPaymentMethods.duitnowSpay && [
+    acceptedPaymentMethods.duitnowSpay && receiptUploadEnabled && [
       "DUITNOW_SPAY",
       "DuitNow / SPay",
       "Scan DuitNow QR and upload receipt for verification",
     ],
   ].filter(Boolean);
-}, [acceptedPaymentMethods]);
+}, [acceptedPaymentMethods, receiptUploadEnabled]);
 
-useEffect(() => {
-  if (!method && paymentOptions.length > 0) {
-    setMethod(paymentOptions[0][0]);
-  }
-
-  if (
-    method &&
-    paymentOptions.length > 0 &&
-    !paymentOptions.some(([value]) => value === method)
-  ) {
-    setMethod(paymentOptions[0][0]);
-  }
-}, [method, paymentOptions]);
+const effectiveMethod = paymentOptions.some(([value]) => value === method)
+  ? method
+  : paymentOptions[0]?.[0] || "";
 
   const handlePay = async () => {
     setSubmitError("");
 
-    if (isManualPayment) {
+    if (effectiveMethod === "DUITNOW_SPAY") {
       navigate(`/customer/upload-receipt/${id}?method=DUITNOW_SPAY&paymentType=${paymentType}`);
       return;
     }
 
-    if (method === "STRIPE") {
+    if (effectiveMethod === "STRIPE") {
       setSubmitting(true);
 
       try {
@@ -111,8 +105,8 @@ useEffect(() => {
 
     try {
       await submitCustomerPayment(id, {
-        method,
-        transactionId: `${method}-${Date.now()}`,
+        method: effectiveMethod,
+        transactionId: `${effectiveMethod}-${Date.now()}`,
       });
 
       navigate(`/customer/payment-status/${id}`);
@@ -227,11 +221,11 @@ useEffect(() => {
                 key={value}
                 type="button"
                 className={`customer-payment-option ${
-                  method === value ? "selected" : ""
+                  effectiveMethod === value ? "selected" : ""
                 }`}
                 onClick={() => setMethod(value)}
               >
-                <span>{method === value ? "●" : "○"}</span>
+                <span>{effectiveMethod === value ? "●" : "○"}</span>
 
                 <div>
                   <strong>{label}</strong>
@@ -246,7 +240,7 @@ useEffect(() => {
             )}
           </div>
 
-          {method === "STRIPE" && (
+          {effectiveMethod === "STRIPE" && (
             <p className="customer-payment-note">
               You will be redirected to Stripe&apos;s secure checkout. Use card{" "}
               <strong>4242 4242 4242 4242</strong>, any future expiry, and any
@@ -254,7 +248,7 @@ useEffect(() => {
             </p>
           )}
 
-          {isManualPayment && (
+          {effectiveMethod === "DUITNOW_SPAY" && (
             <div className="customer-manual-payment-panel">
               <div className="customer-manual-payment-header">
                 <div>
@@ -333,7 +327,7 @@ useEffect(() => {
             disabled={submitting || paymentOptions.length === 0}
             onClick={handlePay}
           >
-            {isManualPayment
+            {effectiveMethod === "DUITNOW_SPAY"
               ? "Continue to Receipt Upload"
               : submitting
               ? "Processing..."

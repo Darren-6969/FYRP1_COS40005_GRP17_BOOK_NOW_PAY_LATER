@@ -495,7 +495,7 @@ export async function uploadCustomerReceipt(req, res, next) {
       getPlatformSettings(),
       prisma.bNPLConfig.findFirst({ where: { operatorId: booking.operatorId } }),
     ]);
-    if (!isFeatureEnabled(platformSettings, "allowReceiptUpload") || operatorConfig?.allowReceiptUpload === false) {
+    if (!await isFeatureEnabled(platformSettings, "allowReceiptUpload", booking.operatorId) || operatorConfig?.allowReceiptUpload === false) {
       return { status: 403, body: { message: "Manual receipt upload is disabled for this platform or operator." } };
     }
 

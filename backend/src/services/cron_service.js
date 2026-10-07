@@ -13,6 +13,7 @@ import { escapeHtml } from "../utils/escapeHTML.js";
 import { withDbRetry, ensureDbConnection } from "../utils/dbRetry.js"; // <-- add
 import { runLoggedCronJob } from "./cron_job_service.js";
 import { getPlatformSettings, isFeatureEnabled } from "./platform_settings_service.js";
+import { recordCreditEvent } from "./customer_credit_service.js";
 
 let lastOverdueRun = null;
 let lastOverdueResult = null;
@@ -316,7 +317,7 @@ async function performOverdueBookingCheck({
     const now = new Date();
 
     const platformSettings = await getPlatformSettings();
-    const overdueCandidates = isFeatureEnabled(platformSettings, "automaticOverdueHandling")
+    const overdueCandidates = await isFeatureEnabled(platformSettings, "automaticOverdueHandling")
       ? await prisma.booking.findMany({
       where: {
         paymentDeadline: {
@@ -387,6 +388,12 @@ async function performOverdueBookingCheck({
             cronRunId: cronRun?.id || null,
           },
         },
+      });
+
+      await recordCreditEvent({
+        customerId: booking.customerId,
+        eventKey: `expiry:${booking.id}`,
+        eventType: "EXPIRED_BOOKING",
       });
 
       // Notify customer that their payment deadline passed and booking is now overdue

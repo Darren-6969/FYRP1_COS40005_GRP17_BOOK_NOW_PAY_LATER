@@ -22,6 +22,7 @@ import {
   getPaymentSpec,
   PAYMENT_TYPES,
 } from "../services/payment_schedule_service.js";
+import { recordSuccessfulPaymentEvents } from "../services/customer_credit_service.js";
 import { requireIdempotencyKey, runIdempotent } from "../services/idempotency_service.js";
 import { createAuditLog } from "../services/log_service.js";
 import { createCommissionLedgerSnapshot } from "../services/commission_ledger_service.js";
@@ -191,6 +192,14 @@ export async function applyPaidState(
       data: paymentData,
     });
 
+    await recordSuccessfulPaymentEvents({
+      customerId: booking.customerId,
+      bookingId,
+      payment: paidPayment,
+      previousPayment: booking.payment,
+      database: tx,
+    });
+
     await tx.commissionLedgerEntry.upsert({
       where: { transactionId },
       create: {
@@ -215,7 +224,6 @@ export async function applyPaidState(
   if (auditAction) {
     ({ payment, updatedBooking } = await prisma.$transaction(async (tx) => {
       const paidState = await persistPaidState(tx);
-
       await tx.auditLog.create({
         data: {
           userId: null,

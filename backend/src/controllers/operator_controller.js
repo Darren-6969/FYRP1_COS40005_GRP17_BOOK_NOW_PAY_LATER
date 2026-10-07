@@ -30,6 +30,7 @@ import {
   getPaymentConfirmationData,
   PAYMENT_TYPES,
 } from "../services/payment_schedule_service.js";
+import { recordSuccessfulPaymentEvents } from "../services/customer_credit_service.js";
 import { getPlatformDeadlinePolicy, validatePublishedDeadline } from "../services/platform_policy_service.js";
 import { createAuditLog as writeAuditLog } from "../services/log_service.js";
 import { getPlatformSettings } from "../services/platform_settings_service.js";
@@ -1918,6 +1919,13 @@ export async function approvePayment(req, res, next) {
         paymentType,
         `MANUAL-${payment.id}-${Date.now()}`
       ),
+    });
+
+    await recordSuccessfulPaymentEvents({
+      customerId: payment.booking.customerId,
+      bookingId: payment.bookingId,
+      payment: updatedPayment,
+      previousPayment: payment,
     });
 
     const existingReceipt = await prisma.receipt.findUnique({

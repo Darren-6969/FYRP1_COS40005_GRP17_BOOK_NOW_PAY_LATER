@@ -3,6 +3,7 @@ import prisma from "../config/db.js";
 import { notifyCustomerByBooking } from "../services/notification_email_service.js";
 import { bookingStatusTemplate } from "../services/email_templates.js";
 import { runLoggedCronJob } from "../services/cron_job_service.js";
+import { recordCreditEvent } from "../services/customer_credit_service.js";
 
 /**
  * Runs every hour.
@@ -55,8 +56,9 @@ export function runPaymentExpiryJob() {
 
     let processedCount = 0;
     for (const booking of expired) {
-      await prisma.$transaction([
-          prisma.booking.update({
+      await prisma.$transaction(async (tx) => {
+        await Promise.all([
+          tx.booking.update({
             where: { id: booking.id },
             data: {
               status: "OVERDUE",
@@ -65,11 +67,11 @@ export function runPaymentExpiryJob() {
                 : { finalPaymentStatus: "OVERDUE" }),
             },
           }),
-          prisma.payment.update({
+          tx.payment.update({
             where: { bookingId: booking.id },
             data: { status: "OVERDUE" },
           }),
-          prisma.auditLog.create({
+          tx.auditLog.create({
             data: {
               action: "BOOKING_OVERDUE",
               entityType: "Booking",
@@ -77,7 +79,7 @@ export function runPaymentExpiryJob() {
               details: { reason: "Payment deadline passed" },
             },
           }),
-          prisma.notification.create({
+          tx.notification.create({
             data: {
               userId: booking.customer.id,
               title: "Booking Overdue",
@@ -86,6 +88,13 @@ export function runPaymentExpiryJob() {
             },
           }),
         ]);
+        await recordCreditEvent({
+          customerId: booking.customer.id,
+          eventKey: `expiry:${booking.id}`,
+          eventType: "EXPIRED_BOOKING",
+          database: tx,
+        });
+      });
 
       // Send email
       const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;

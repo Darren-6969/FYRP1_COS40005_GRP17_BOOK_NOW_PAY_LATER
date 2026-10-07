@@ -196,33 +196,34 @@ model User {
   phone           String?
   profileImageUrl String? @db.Text
 
-  notifyBookingUpdates Boolean @default(true)
+  notifyBookingUpdates   Boolean @default(true)
   notifyPaymentReminders Boolean @default(true)
-  notifyInvoices Boolean @default(true)
-  notifyPromotions Boolean @default(false)
+  notifyInvoices         Boolean @default(true)
+  notifyPromotions       Boolean @default(false)
 
   operatorAccessLevel OperatorAccessLevel?
-  operatorUserStatus OperatorUserStatus @default(ACTIVE)
+  operatorUserStatus  OperatorUserStatus   @default(ACTIVE)
 
-  provisionedVia String?                        // "HOST" for auto-provisioned customers
-  customerStatus String   @default("ACTIVE")   // "RESTRICTED" until OTP step-up
+  provisionedVia String? // "HOST" for auto-provisioned customers
+  customerStatus String    @default("ACTIVE") // "RESTRICTED" until OTP step-up
   otpCodeHash    String?
   otpExpiresAt   DateTime?
-  otpAttempts    Int      @default(0)
+  otpAttempts    Int       @default(0)
 
   operatorId Int?
   operator   Operator? @relation(fields: [operatorId], references: [id])
 
-  bookings      Booking[]
-  notifications Notification[]
-  auditLogs     AuditLog[]
-  refreshTokens RefreshToken[]
-  passwordSetupTokens PasswordSetupToken[]
-  applicationReviews OperatorApplicationReview[] @relation("ApplicationReviewer")
-  documentReviews OperatorDocument[] @relation("DocumentReviewer")
-  reviewedApplications OperatorApplication[] @relation("ApplicationReviewerUser")
-  licenceDocuments CustomerLicenceDocument[]
-  reviewedLicenceDocuments CustomerLicenceDocument[] @relation("LicenceReviewer")
+  bookings                 Booking[]
+  notifications            Notification[]
+  auditLogs                AuditLog[]
+  refreshTokens            RefreshToken[]
+  passwordSetupTokens      PasswordSetupToken[]
+  applicationReviews       OperatorApplicationReview[] @relation("ApplicationReviewer")
+  documentReviews          OperatorDocument[]          @relation("DocumentReviewer")
+  reviewedApplications     OperatorApplication[]       @relation("ApplicationReviewerUser")
+  licenceDocuments         CustomerLicenceDocument[]
+  reviewedLicenceDocuments CustomerLicenceDocument[]   @relation("LicenceReviewer")
+  creditProfile            CustomerCreditProfile?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -245,55 +246,81 @@ model RefreshToken {
   @@index([expiresAt])
 }
 
+model CustomerCreditProfile {
+  id                       Int      @id @default(autoincrement())
+  customerId               Int      @unique
+  customer                 User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  successfulOnTimePayments Int      @default(0)
+  expiredBookings          Int      @default(0)
+  tier                     String   @default("Normal")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  events CreditProfileEvent[]
+}
+
+model CreditProfileEvent {
+  id         Int                   @id @default(autoincrement())
+  customerId Int
+  customer   CustomerCreditProfile @relation(fields: [customerId], references: [customerId], onDelete: Cascade)
+  eventKey   String
+  eventType  String
+  createdAt  DateTime              @default(now())
+
+  @@unique([customerId, eventKey])
+  @@index([customerId, eventType])
+}
+
 model PasswordSetupToken {
-  id        Int      @id @default(autoincrement())
-  tokenHash String   @unique
+  id        Int       @id @default(autoincrement())
+  tokenHash String    @unique
   userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([userId])
   @@index([expiresAt])
 }
 
 model Operator {
-  id           Int            @id @default(autoincrement())
-  operatorCode String         @unique
+  id           Int           @id @default(autoincrement())
+  operatorCode String        @unique
   companyName  String
-  email        String         @unique
+  email        String        @unique
   phone        String?
   logoUrl      String?
   status       CompanyStatus @default(ACTIVE)
 
   // Seller page (FR-CUST-007). The slug gives the operator a short link to
   // share (/o/<slug>); the rest is written by the operator.
-  slug            String?  @unique
-  about           String?  @db.Text
-  coverImageUrl   String?
-  establishedYear Int?
-  languages       String[] @default([])
-  stripeAccountId String?
-  stripeOnboardingStatus String @default("NOT_STARTED")
-  stripeRequirements Json?
+  slug                   String?  @unique
+  about                  String?  @db.Text
+  coverImageUrl          String?
+  establishedYear        Int?
+  languages              String[] @default([])
+  stripeAccountId        String?
+  stripeOnboardingStatus String   @default("NOT_STARTED")
+  stripeRequirements     Json?
 
   // ── Phase 1: per-operator host integration ──────────────────────────
-  apiKeyHash      String?   @unique   // sha-256 of the active host API key
-  apiKeyPrefix    String?             // masked label for dashboard display
-  apiKeyRotatedAt DateTime?           // when the active key was last issued
+  apiKeyHash      String?   @unique // sha-256 of the active host API key
+  apiKeyPrefix    String? // masked label for dashboard display
+  apiKeyRotatedAt DateTime? // when the active key was last issued
   allowedOrigins  String[]  @default([]) // embed frame-ancestors + postMessage allowlist
 
-  users    User[]
-  bookings Booking[]
-  configs  BNPLConfig[]
+  users        User[]
+  bookings     Booking[]
+  configs      BNPLConfig[]
+  featureFlags FeatureFlag[]
 
   branches Branch[]
   listings Listing[]
 
   applications OperatorApplication[]
-  documents OperatorDocument[]
-  payouts   OperatorPayout[]
+  documents    OperatorDocument[]
+  payouts      OperatorPayout[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -303,19 +330,19 @@ model Operator {
 }
 
 model OperatorApplication {
-  id                          Int                       @id @default(autoincrement())
-  operatorId                  Int                       @unique
-  operator                    Operator                  @relation(fields: [operatorId], references: [id], onDelete: Cascade)
-  status                      OperatorApplicationStatus @default(SUBMITTED)
-  businessRegistrationNumber  String
-  businessAddress             String                    @db.Text
-  submittedAt                 DateTime                  @default(now())
-  reviewedAt                  DateTime?
-  reviewedById                Int?
-  reviewedBy                  User?                     @relation("ApplicationReviewerUser", fields: [reviewedById], references: [id], onDelete: SetNull)
-  rejectionReason             String?                   @db.Text
-  createdAt                   DateTime                  @default(now())
-  updatedAt                   DateTime                  @updatedAt
+  id                         Int                       @id @default(autoincrement())
+  operatorId                 Int                       @unique
+  operator                   Operator                  @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  status                     OperatorApplicationStatus @default(SUBMITTED)
+  businessRegistrationNumber String
+  businessAddress            String                    @db.Text
+  submittedAt                DateTime                  @default(now())
+  reviewedAt                 DateTime?
+  reviewedById               Int?
+  reviewedBy                 User?                     @relation("ApplicationReviewerUser", fields: [reviewedById], references: [id], onDelete: SetNull)
+  rejectionReason            String?                   @db.Text
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
 
   documents OperatorDocument[]
   reviews   OperatorApplicationReview[]
@@ -325,25 +352,25 @@ model OperatorApplication {
 }
 
 model OperatorDocument {
-  id              Int                   @id @default(autoincrement())
+  id              Int                    @id @default(autoincrement())
   operatorId      Int
-  operator        Operator              @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  operator        Operator               @relation(fields: [operatorId], references: [id], onDelete: Cascade)
   applicationId   Int
-  application     OperatorApplication   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application     OperatorApplication    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   documentType    String
   originalName    String
-  storageKey      String                @unique
-  content         Bytes                 @db.ByteA
+  storageKey      String                 @unique
+  content         Bytes                  @db.ByteA
   mimeType        String
   sizeBytes       Int
   status          OperatorDocumentStatus @default(UNDER_REVIEW)
   expiresAt       DateTime?
-  rejectionReason String?               @db.Text
+  rejectionReason String?                @db.Text
   reviewedAt      DateTime?
   reviewedById    Int?
-  reviewedBy      User?                 @relation("DocumentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  reviewedBy      User?                  @relation("DocumentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
 
   @@index([operatorId])
   @@index([applicationId])
@@ -366,22 +393,22 @@ model OperatorApplicationReview {
 }
 
 model CustomerLicenceDocument {
-  id              Int                      @id @default(autoincrement())
+  id              Int                       @id @default(autoincrement())
   customerId      Int
-  customer        User                     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer        User                      @relation(fields: [customerId], references: [id], onDelete: Cascade)
   originalName    String
   mimeType        String
   sizeBytes       Int
-  content         Bytes                    @db.ByteA
+  content         Bytes                     @db.ByteA
   status          LicenceVerificationStatus @default(UNDER_REVIEW)
-  rejectionReason String?                  @db.Text
-  submittedAt     DateTime                 @default(now())
+  rejectionReason String?                   @db.Text
+  submittedAt     DateTime                  @default(now())
   reviewDueAt     DateTime
   reviewedAt      DateTime?
   reviewedById    Int?
-  reviewedBy      User?                    @relation("LicenceReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
+  reviewedBy      User?                     @relation("LicenceReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
 
   @@index([status])
   @@index([reviewDueAt])
@@ -400,11 +427,11 @@ model PlatformPeakDate {
 }
 
 model PlatformDeadlinePolicy {
-  id                  Int      @id @default(1)
-  publishedTiers      Int[]    @default([1, 3, 7])
-  mostLenientDays     Int      @default(7)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id              Int      @id @default(1)
+  publishedTiers  Int[]    @default([1, 3, 7])
+  mostLenientDays Int      @default(7)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model PlatformSettings {
@@ -419,11 +446,26 @@ model PlatformSettings {
   updatedAt                  DateTime @updatedAt
 }
 
+model FeatureFlag {
+  id          Int       @id @default(autoincrement())
+  key         String
+  environment String
+  enabled     Boolean   @default(false)
+  operatorId  Int?
+  operator    Operator? @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([key, environment, operatorId])
+  @@index([environment, key])
+  @@index([operatorId, environment, key])
+}
+
 model Booking {
-  id          Int    @id @default(autoincrement())
+  id             Int     @id @default(autoincrement())
   hostBookingRef String?
-  bookingCode String @unique
-  
+  bookingCode    String  @unique
+
   customerId Int
   customer   User @relation(fields: [customerId], references: [id])
 
@@ -464,17 +506,17 @@ model Booking {
 
   // Server-computed. totalAmount stays the amount owed:
   // rentalAmount + addonsAmount + feesAmount - discountAmount
-  rentalAmount   Decimal? @db.Decimal(10, 2)
-  addonsAmount   Decimal  @default(0) @db.Decimal(10, 2)
-  feesAmount     Decimal  @default(0) @db.Decimal(10, 2)
-  discountAmount Decimal  @default(0) @db.Decimal(10, 2)
+  rentalAmount     Decimal?              @db.Decimal(10, 2)
+  addonsAmount     Decimal               @default(0) @db.Decimal(10, 2)
+  feesAmount       Decimal               @default(0) @db.Decimal(10, 2)
+  discountAmount   Decimal               @default(0) @db.Decimal(10, 2)
   discountFundedBy DiscountFundingSource @default(OPERATOR)
 
   pricingSnapshot Json? // per-day rates, surcharges and fees as quoted
   bookingDetails  Json? // contact, driver and agreement timestamps
 
-  pickedUpAt DateTime?
-  returnedAt DateTime?
+  pickedUpAt        DateTime?
+  returnedAt        DateTime?
   serviceResolvedAt DateTime?
 
   addons BookingAddon[]
@@ -486,12 +528,12 @@ model Booking {
   alternativeReturnDate  DateTime?
   alternativeReason      String?
   alternativeSuggestedAt DateTime?
-  alternativeUsed        Boolean  @default(false)
+  alternativeUsed        Boolean   @default(false)
 
-  payment Payment?
+  payment                 Payment?
   commissionLedgerEntries CommissionLedgerEntry[]
-  receipt Receipt?
-  invoice Invoice?
+  receipt                 Receipt?
+  invoice                 Invoice?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -504,7 +546,6 @@ model Booking {
   @@index([paymentDeadline])
   @@index([listingId, status])
   @@index([pickupDate, returnDate])
-
   @@index([dropoffPointId])
 }
 
@@ -520,15 +561,15 @@ model Payment {
   paidAt        DateTime?
   transactionId String?
 
-  downPaymentAmount       Decimal       @default(0) @db.Decimal(10, 2)
-  finalPaymentAmount      Decimal       @default(0) @db.Decimal(10, 2)
-  downPaymentDueDate      DateTime?
-  finalPaymentDueDate     DateTime?
-  downPaymentStatus       PaymentStatus @default(UNPAID)
-  finalPaymentStatus      PaymentStatus @default(UNPAID)
-  downPaymentPaidAt       DateTime?
-  finalPaymentPaidAt      DateTime?
-  downPaymentTransactionId String?
+  downPaymentAmount         Decimal       @default(0) @db.Decimal(10, 2)
+  finalPaymentAmount        Decimal       @default(0) @db.Decimal(10, 2)
+  downPaymentDueDate        DateTime?
+  finalPaymentDueDate       DateTime?
+  downPaymentStatus         PaymentStatus @default(UNPAID)
+  finalPaymentStatus        PaymentStatus @default(UNPAID)
+  downPaymentPaidAt         DateTime?
+  finalPaymentPaidAt        DateTime?
+  downPaymentTransactionId  String?
   finalPaymentTransactionId String?
 
   createdAt DateTime @default(now())
@@ -549,20 +590,20 @@ model CommissionLedgerEntry {
   payment   Payment @relation(fields: [paymentId], references: [id])
 
   transactionId           String                @unique
-  paymentType              String
-  grossAmountSen           Int
-  netAmountSen             Int
-  discountAmountSen        Int
-  feeRateBps               Int
-  fundedBy                 DiscountFundingSource
-  feeAmountSen             Int
-  stripeFeeAmountSen       Int                   @default(0)
-  operatorPayoutAmountSen  Int
-  platformMarginSen        Int
-  payoutId                 Int?                  @unique
-  payout                   OperatorPayout?        @relation(fields: [payoutId], references: [id], onDelete: Restrict)
-  currency                 String                @default("MYR")
-  createdAt                DateTime              @default(now())
+  paymentType             String
+  grossAmountSen          Int
+  netAmountSen            Int
+  discountAmountSen       Int
+  feeRateBps              Int
+  fundedBy                DiscountFundingSource
+  feeAmountSen            Int
+  stripeFeeAmountSen      Int                   @default(0)
+  operatorPayoutAmountSen Int
+  platformMarginSen       Int
+  payoutId                Int?                  @unique
+  payout                  OperatorPayout?       @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  currency                String                @default("MYR")
+  createdAt               DateTime              @default(now())
 
   @@index([bookingId, createdAt])
   @@index([paymentId])
@@ -576,13 +617,13 @@ model OperatorPayout {
   operator   Operator @relation(fields: [operatorId], references: [id])
 
   destinationAccountId String
-  amountSen        Int
-  status           OperatorPayoutStatus @default(PENDING)
-  idempotencyKey   String               @unique
-  stripeTransferId String?              @unique
-  lastError        String?              @db.Text
-  createdAt        DateTime             @default(now())
-  transferredAt    DateTime?
+  amountSen            Int
+  status               OperatorPayoutStatus @default(PENDING)
+  idempotencyKey       String               @unique
+  stripeTransferId     String?              @unique
+  lastError            String?              @db.Text
+  createdAt            DateTime             @default(now())
+  transferredAt        DateTime?
 
   ledgerEntry CommissionLedgerEntry?
 
@@ -600,7 +641,7 @@ model Receipt {
   status   ReceiptStatus @default(PENDING)
   remarks  String?
 
-  uploadedAt DateTime @default(now())
+  uploadedAt DateTime  @default(now())
   verifiedAt DateTime?
 
   @@index([status])
@@ -617,7 +658,7 @@ model Invoice {
   status    InvoiceStatus @default(GENERATED)
   pdfUrl    String?
 
-  issuedAt DateTime @default(now())
+  issuedAt DateTime  @default(now())
   sentAt   DateTime?
 
   @@index([invoiceNo])
@@ -647,19 +688,19 @@ model BNPLConfig {
   operatorId Int
   operator   Operator @relation(fields: [operatorId], references: [id])
 
-  paymentDeadlineDays Int     @default(3)
+  paymentDeadlineDays Int @default(3)
 
   // Public platform: deposit and missed-balance refund rule
   downPaymentPercent   Int     @default(30)
   partialRefundElected Boolean @default(false)
   partialRefundPercent Int?
-  allowReceiptUpload  Boolean @default(true)
-  autoCancelOverdue   Boolean @default(true)
+  allowReceiptUpload   Boolean @default(true)
+  autoCancelOverdue    Boolean @default(true)
 
   // Operator booking action settings
-  bookingResponseDeadlineMinutes      Int     @default(120)
-  autoRejectInactiveBooking           Boolean @default(true)
-  reminderBeforeAutoRejectMinutes     Int     @default(30)
+  bookingResponseDeadlineMinutes  Int     @default(120)
+  autoRejectInactiveBooking       Boolean @default(true)
+  reminderBeforeAutoRejectMinutes Int     @default(30)
 
   // Overtime (SRS 4.3.5): a flat charge for each pickup or return between
   // 21:00 and 09:00, or block night handovers entirely. Set per operator in
@@ -678,7 +719,7 @@ model BNPLConfig {
   // Email branding
   invoiceLogoUrl    String?
   invoiceFooterText String?
-  
+
   // Rejection email custom text
   bookingRejectedEmailText String?
   autoRejectedEmailText    String?
@@ -701,8 +742,8 @@ model BNPLConfig {
 model AuditLog {
   id Int @id @default(autoincrement())
 
-  userId Int?
-  user   User? @relation(fields: [userId], references: [id])
+  userId    Int?
+  user      User?   @relation(fields: [userId], references: [id])
   actorId   Int?
   actorType String?
   requestId String?
@@ -738,9 +779,9 @@ model EmailLog {
   userId Int?
   error  String?
 
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   sentAt    DateTime?
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime  @updatedAt
 
   @@index([toEmail])
   @@index([type])
@@ -753,7 +794,7 @@ model EmailLog {
 model HostBookingIntent {
   id Int @id @default(autoincrement())
 
-  token          String  @unique
+  token          String @unique
   operatorId     Int
   operatorCode   String
   hostBookingRef String
@@ -766,7 +807,7 @@ model HostBookingIntent {
   pickupDate  DateTime?
   returnDate  DateTime?
   location    String?
-  totalAmount Decimal  @db.Decimal(10, 2)
+  totalAmount Decimal   @db.Decimal(10, 2)
 
   payload Json?
 
@@ -775,9 +816,9 @@ model HostBookingIntent {
   claimedBookingId Int?
   expiresAt        DateTime
 
-  handoffTokenHash String?   @unique   // single-use token handed to the browser
-  handoffExpiresAt DateTime?            // ~3 min TTL
-  handoffUsedAt    DateTime?            // burned on first exchange
+  handoffTokenHash String?   @unique // single-use token handed to the browser
+  handoffExpiresAt DateTime? // ~3 min TTL
+  handoffUsedAt    DateTime? // burned on first exchange
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -800,7 +841,7 @@ model Branch {
 
   city    String?
   state   String?
-  country String @default("Malaysia")
+  country String  @default("Malaysia")
 
   phone String?
 
@@ -834,7 +875,7 @@ model Listing {
   branch   Branch @relation(fields: [branchId], references: [id])
 
   category ListingCategory
-  status   ListingStatus @default(DRAFT)
+  status   ListingStatus   @default(DRAFT)
 
   name        String
   description String? @db.Text
@@ -853,8 +894,8 @@ model Listing {
   // operator blocks night pickups and returns instead.
   // Retired: overtime is set per operator on BNPLConfig. Nothing reads these;
   // they are dropped in the Module 5 migration.
-  overtimeFee   Decimal? @db.Decimal(10, 2)
-  blockNightHandover Boolean @default(false)
+  overtimeFee        Decimal? @db.Decimal(10, 2)
+  blockNightHandover Boolean  @default(false)
 
   // Collision Damage Waiver: default add-on, priced per day per listing,
   // optional for the customer. Null means the operator has not priced it yet.
@@ -910,10 +951,10 @@ model Listing {
   refundPolicy       String? @db.Text
   termsAndConditions String? @db.Text
 
-  images       ListingImage[]
-  addons       ListingAddon[]
-  allocations  ListingAllocation[]
-  bookings     Booking[]
+  images      ListingImage[]
+  addons      ListingAddon[]
+  allocations ListingAllocation[]
+  bookings    Booking[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -922,7 +963,6 @@ model Listing {
   @@index([branchId])
   @@index([category])
   @@index([status])
-
   @@index([vehicleMake])
   @@index([vehicleModel])
   @@index([transmission])
@@ -938,7 +978,7 @@ model ListingImage {
   imageUrl   String
   storageKey String?
 
-  sortOrder Int @default(0)
+  sortOrder Int     @default(0)
   isPrimary Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -956,12 +996,12 @@ model CronJobRun {
   status  String @default("SUCCESS")
 
   triggeredByUserId Int?
-  triggerSource      String?
+  triggerSource     String?
 
-  startedAt  DateTime @default(now())
+  startedAt  DateTime  @default(now())
   finishedAt DateTime?
 
-  affectedCount Int @default(0)
+  affectedCount Int     @default(0)
   result        Json?
   error         String?
 
@@ -974,14 +1014,14 @@ model CronJobRun {
 }
 
 model CronJobLog {
-  id             Int      @id @default(autoincrement())
-  jobName        String   @map("job_name")
-  startedAt      DateTime @default(now()) @map("started_at")
+  id             Int       @id @default(autoincrement())
+  jobName        String    @map("job_name")
+  startedAt      DateTime  @default(now()) @map("started_at")
   endedAt        DateTime? @map("ended_at")
-  processedCount Int      @default(0) @map("processed_count")
-  failureCount   Int      @default(0) @map("failure_count")
-  errors         Json     @default("[]") @db.JsonB
-  status         String   @default("RUNNING")
+  processedCount Int       @default(0) @map("processed_count")
+  failureCount   Int       @default(0) @map("failure_count")
+  errors         Json      @default("[]") @db.JsonB
+  status         String    @default("RUNNING")
 
   @@index([jobName, startedAt])
   @@map("cron_job_logs")
@@ -1042,18 +1082,18 @@ model PickupPoint {
   branchId Int
   branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
-  label   String
-  address String?
-  note    String?
-  usage   PointUsage @default(BOTH)
-  fee        Decimal @default(0) @db.Decimal(10, 2) // pickup charge
-  dropoffFee Decimal @default(0) @db.Decimal(10, 2)
+  label      String
+  address    String?
+  note       String?
+  usage      PointUsage @default(BOTH)
+  fee        Decimal    @default(0) @db.Decimal(10, 2) // pickup charge
+  dropoffFee Decimal    @default(0) @db.Decimal(10, 2)
 
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
-  bookings         Booking[] @relation("BookingPickupPoint")
-  dropoffBookings  Booking[] @relation("BookingDropoffPoint")
+  bookings        Booking[] @relation("BookingPickupPoint")
+  dropoffBookings Booking[] @relation("BookingDropoffPoint")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1113,4 +1153,3 @@ model StripeWebhookEvent {
 
   @@index([status, nextAttemptAt, receivedAt])
 }
-

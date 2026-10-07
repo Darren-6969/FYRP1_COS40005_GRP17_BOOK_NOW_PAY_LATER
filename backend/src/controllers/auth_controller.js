@@ -74,9 +74,15 @@ async function createCustomerWithRetry({ name, email, password }) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       const userCode = await generateUserCode(safeRole);
-      return await prisma.user.create({
+      const user = await prisma.user.create({
         data: { userCode, name, email, password: hashedPassword, role: safeRole },
       });
+      if (safeRole === "CUSTOMER") {
+        await prisma.customerCreditProfile.create({
+          data: { customerId: user.id },
+        });
+      }
+      return user;
     } catch (err) {
       lastError = err;
       if (err.code !== "P2002") throw err;

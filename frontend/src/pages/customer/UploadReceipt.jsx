@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { submitCustomerReceipt } from "../../hooks/useReceipts";
 import { refreshNotifications } from "../../utils/notifyRefresh";
+import { useCustomerBooking } from "../../hooks/useBookings";
+import { useFeatureFlag } from "../../hooks/useFeatureFlag";
 
 function compressImageToDataUrl(file, maxWidth = 900, quality = 0.72) {
   return new Promise((resolve, reject) => {
@@ -37,6 +39,11 @@ export default function UploadReceipt() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { booking, loading: bookingLoading } = useCustomerBooking(id);
+  const { enabled: receiptUploadEnabled, loading: flagLoading } = useFeatureFlag(
+    "allowReceiptUpload",
+    booking?.operatorId
+  );
 
   const [form, setForm] = useState({
     method: "DUITNOW",
@@ -49,6 +56,14 @@ export default function UploadReceipt() {
   const [fileName, setFileName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!bookingLoading && !flagLoading && !receiptUploadEnabled) {
+      navigate(`/customer/bookings/${id}`, { replace: true });
+    }
+  }, [bookingLoading, flagLoading, receiptUploadEnabled, navigate, id]);
+
+  if (bookingLoading || flagLoading || !receiptUploadEnabled) return null;
 
 const handleFileChange = async (event) => {
   const file = event.target.files?.[0];

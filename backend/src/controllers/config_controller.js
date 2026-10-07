@@ -6,6 +6,7 @@ import {
   DEFAULT_PLATFORM_FEATURE_FLAGS,
   getPlatformSettings as loadPlatformSettings,
 } from "../services/platform_settings_service.js";
+import { setFeatureFlag } from "../services/feature_flag_service.js";
 
 function canManageOperator(req, operatorId) {
   if (req.user.role === "MASTER_SELLER") return true;
@@ -193,6 +194,12 @@ export async function updateBNPLConfig(req, res, next) {
       return updated;
     });
 
+    await setFeatureFlag({
+      key: "allowReceiptUpload",
+      enabled: config.allowReceiptUpload,
+      operatorId,
+    });
+
     res.json(config);
   } catch (err) {
     next(err);
@@ -362,6 +369,12 @@ export async function updatePlatformSettings(req, res, next) {
       }, tx);
       return { settings: updated, updatedDefaultConfigs };
     });
+
+    if (req.body.featureFlags !== undefined) {
+      await Promise.all(Object.entries(featureFlags).map(([key, enabled]) =>
+        setFeatureFlag({ key, enabled })
+      ));
+    }
 
     res.json(result);
   } catch (err) {
