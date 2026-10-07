@@ -15,7 +15,12 @@ export function rentalHours(startIso, endIso) {
 export function priceDuration(hours, card) {
   let days = Math.floor(hours / 24);
   let leftHours = hours % 24;
-  if (leftHours >= HOURLY_LIMIT_HOURS || (leftHours > 0 && !card.hourlySen)) {
+  // Leftover hours become a day when there are 6 or more, when there is no
+  // hourly rate, or when charging them hourly would cost more than a day.
+  if (
+    leftHours >= HOURLY_LIMIT_HOURS ||
+    (leftHours > 0 && (!card.hourlySen || leftHours * card.hourlySen > card.dailySen))
+  ) {
     days += 1;
     leftHours = 0;
   }

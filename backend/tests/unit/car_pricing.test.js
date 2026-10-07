@@ -11,6 +11,7 @@ import {
   klPlainDate,
   nightHandovers,
   occupiedDates,
+  overtimePolicyFor,
   paymentTiming,
   priceDuration,
   priceRental,
@@ -170,4 +171,24 @@ test("balance collected at once when pick-up is too close", () => {
   const now = new Date("2026-10-01T00:00:00Z");
   assert.equal(paymentTiming(new Date("2026-10-02T12:00:00Z"), now).payInFull, true);
   assert.equal(paymentTiming(new Date("2026-10-05T12:00:00Z"), now).payInFull, false);
+});
+
+test("hours charged hourly never cost more than one day", () => {
+  const dear = { hourlySen: 3000, dailySen: 10000, weeklySen: null, monthlySen: null };
+  // 3 h = RM 90, under a day: stays hourly
+  assert.equal(priceDuration(3, dear).rentalSen, 9000);
+  // 4 h = RM 120 hourly, so one day instead
+  assert.deepEqual(periods(priceDuration(4, dear)), { day: 1 });
+  assert.equal(priceDuration(4, dear).rentalSen, 10000);
+  // leftover hours after whole days follow the same cap: 2 days + 4 h = 3 days
+  assert.deepEqual(periods(priceDuration(2 * 24 + 4, dear)), { day: 3 });
+  // 2 days + 3 h stays 2 days + 3 hours
+  assert.deepEqual(periods(priceDuration(2 * 24 + 3, dear)), { day: 2, hour: 3 });
+});
+
+test("overtime policy comes from the operator config", () => {
+  assert.deepEqual(overtimePolicyFor({ overtimeFee: "30.00", blockNightHandover: false }), { nightBlocked: false, feeSen: 3000 });
+  assert.deepEqual(overtimePolicyFor({ overtimeFee: "30.00", blockNightHandover: true }), { nightBlocked: true, feeSen: 0 });
+  assert.deepEqual(overtimePolicyFor({ overtimeFee: null }), { nightBlocked: false, feeSen: 0 });
+  assert.deepEqual(overtimePolicyFor(null), { nightBlocked: false, feeSen: 0 });
 });

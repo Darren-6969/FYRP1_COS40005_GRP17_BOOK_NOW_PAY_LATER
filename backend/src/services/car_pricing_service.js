@@ -88,6 +88,8 @@ export function klHhmm(now = new Date()) {
 //     as one further day
 //   - an empty weekly or monthly rate falls back to the next shorter rate;
 //     an empty hourly rate charges short periods as one day
+//   - hours charged hourly never cost more than one day: when they would,
+//     they are charged as one day instead
 
 export const HOURLY_LIMIT_HOURS = 6;
 export const WEEK_DAYS = 7;
@@ -117,7 +119,12 @@ export function priceDuration(hours, card) {
   let days = Math.floor(hours / 24);
   let leftHours = hours % 24;
 
-  if (leftHours >= HOURLY_LIMIT_HOURS || (leftHours > 0 && !card.hourlySen)) {
+  // Leftover hours become a day when there are 6 or more, when there is no
+  // hourly rate, or when charging them hourly would cost more than a day.
+  if (
+    leftHours >= HOURLY_LIMIT_HOURS ||
+    (leftHours > 0 && (!card.hourlySen || leftHours * card.hourlySen > card.dailySen))
+  ) {
     days += 1;
     leftHours = 0;
   }
@@ -137,6 +144,16 @@ export function priceDuration(hours, card) {
     .map((l) => ({ ...l, amountSen: l.count * l.rateSen }));
 
   return { lines, rentalSen: lines.reduce((sum, l) => sum + l.amountSen, 0) };
+}
+
+// Overtime policy from the operator's shop settings (BNPLConfig, SRS 4.3.5).
+// A blocked night means no handover can happen then, so there is no fee.
+export function overtimePolicyFor(config) {
+  const nightBlocked = Boolean(config?.blockNightHandover);
+  return {
+    nightBlocked,
+    feeSen: nightBlocked ? 0 : toSen(config?.overtimeFee) ?? 0,
+  };
 }
 
 // True when "HH:mm" falls in the overtime window (21:00 to 09:00).

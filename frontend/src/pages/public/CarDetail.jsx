@@ -378,7 +378,7 @@ export default function CarDetail() {
   // Rates the operator has set, shortest period first. Weekly and monthly are
   // optional; when empty, longer rentals use the next shorter rate.
   const rateRows = [
-    ["Per hour", b.rateCard.hourlySen, "Rentals under 6 hours, and leftover hours under 6"],
+    ["Per hour", b.rateCard.hourlySen, "Rentals under 6 hours, and leftover hours under 6, never more than one day"],
     ["Per day", b.rateCard.dailySen, "6 to 24 hours counts as one day"],
     ["Per week", b.rateCard.weeklySen, "Each full 7 days"],
     ["Per month", b.rateCard.monthlySen, "Each full 30 days"],

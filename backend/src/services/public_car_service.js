@@ -12,6 +12,7 @@ import {
   NIGHT_END,
   NIGHT_START,
   nightHandovers,
+  overtimePolicyFor,
   paymentTiming,
   priceRental,
   rateCardFor,
@@ -111,7 +112,9 @@ async function loadOperatorFacts(operatorIds) {
   const since = new Date(Date.now() - ACCEPTANCE_WINDOW_DAYS * 86400000);
   const [verified, responseMins] = await Promise.all([verifiedOperatorIds(ids), responseTimes(ids, since)]);
   const [configs, branchCounts, completed, decided, rejected] = await Promise.all([
-    prisma.bNPLConfig.findMany({ where: { operatorId: { in: ids } }, orderBy: { id: "asc" } }),
+    // Newest first: the shop settings page saves to an operator's newest
+    // config row, so pricing must read that same row.
+    prisma.bNPLConfig.findMany({ where: { operatorId: { in: ids } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }),
     prisma.branch.groupBy({ by: ["operatorId"], where: { operatorId: { in: ids }, isActive: true }, _count: { _all: true } }),
     prisma.booking.groupBy({ by: ["operatorId"], where: { operatorId: { in: ids }, status: "COMPLETED" }, _count: { _all: true } }),
     prisma.booking.groupBy({
@@ -292,9 +295,9 @@ export function toCarDto(listing, facts, availability) {
       dailyRateSen: toSen(listing.price),
       rateCard: rateCardFor(listing),
       overtime: {
-        feeSen: toSen(listing.overtimeFee) ?? 0,
+        feeSen: toSen(config?.overtimeFee) ?? 0,
         window: { from: NIGHT_START, to: NIGHT_END },
-        nightBlocked: listing.blockNightHandover,
+        nightBlocked: overtimePolicyFor(config).nightBlocked,
       },
       cdw: cdwFor(listing),
       downPaymentPct: config?.downPaymentPercent ?? DEFAULT_DOWN_PAYMENT_PCT,
@@ -391,8 +394,9 @@ export function priceSelection(listing, config, sel, peakDates) {
   if (!point) problems.push({ code: "PICKUP_POINT_INVALID", message: "This car has no pickup point" });
   if (!dropoff) problems.push({ code: "DROPOFF_POINT_INVALID", message: "This car has no drop-off point" });
 
+  const overtime = overtimePolicyFor(config);
   const nights = nightHandovers(pickupAt, returnAt);
-  if (nights && listing.blockNightHandover) {
+  if (nights && overtime.nightBlocked) {
     problems.push({
       code: "NIGHT_HANDOVER_BLOCKED",
       message: `This operator does not hand over or receive cars between ${NIGHT_START} and ${NIGHT_END}`,
@@ -411,7 +415,7 @@ export function priceSelection(listing, config, sel, peakDates) {
     pickupAt,
     returnAt,
     downPaymentPct,
-    overtimeFeeSen: listing.blockNightHandover ? 0 : toSen(listing.overtimeFee) ?? 0,
+    overtimeFeeSen: overtime.feeSen,
     addOns: chosen,
     pickupFeeSen: point?.pickupFeeSen ?? 0,
     dropoffFeeSen: dropoff?.dropoffFeeSen ?? 0,

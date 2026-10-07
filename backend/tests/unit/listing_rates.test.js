@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { previewRates, rateWarnings, validateRateCard } from "../../src/services/listing_rates.js";
+import { previewRates, rateNotes, rateWarnings, validateRateCard } from "../../src/services/listing_rates.js";
 
 const card = (rates) => validateRateCard(rates).card;
 const totals = (preview) => Object.fromEntries(preview.samples.map((s) => [s.key, s.total]));
@@ -59,18 +59,19 @@ test("partial validation leaves absent fields out", () => {
   assert.deepEqual(result.values, { weeklyRate: "650.00" });
 });
 
-test("warns when a packaged rate costs more than the shorter rate", () => {
+test("warns when a weekly or monthly rate costs more than the shorter rate", () => {
   const codes = (rates) => rateWarnings(card(rates)).map((w) => w.code);
-  assert.deepEqual(codes({ price: "100", hourlyRate: "30" }), ["HOURLY_ABOVE_DAILY"]);
-  assert.deepEqual(codes({ price: "100", hourlyRate: "20" }), []); // 5 h = RM 100, not more
+  assert.deepEqual(codes({ price: "100", hourlyRate: "30" }), []); // hourly is capped, not a warning
   assert.deepEqual(codes({ price: "100", weeklyRate: "750" }), ["WEEKLY_ABOVE_DAILY"]);
   assert.deepEqual(codes({ price: "100", weeklyRate: "600", monthlyRate: "2700" }), ["MONTHLY_ABOVE_SHORTER"]);
   assert.deepEqual(codes({ price: "100", monthlyRate: "2900" }), []); // below 30 x RM 100
 });
 
-test("hourly warning names the first hour count that costs more", () => {
-  const [warning] = rateWarnings(card({ price: "100", hourlyRate: "30" }));
-  assert.match(warning.message, /^4 hours/);
-  const [edge] = rateWarnings(card({ price: "100", hourlyRate: "21" }));
-  assert.match(edge.message, /a 5-hour rental/);
+test("a high hourly rate is capped at one day and explained in a note", () => {
+  const preview = previewRates(card({ price: "100", hourlyRate: "30" }));
+  assert.equal(totals(preview)["4h"], "100.00"); // 4 x RM 30 = RM 120, capped at the day
+  assert.deepEqual(preview.samples.find((s) => s.key === "4h").lines.map((l) => l.period), ["day"]);
+  assert.match(preview.notes[0].message, /^Rentals of 4 to 5 hours are charged as one day/);
+  assert.match(rateNotes(card({ price: "100", hourlyRate: "21" }))[0].message, /^Rentals of 5 hours/);
+  assert.deepEqual(rateNotes(card({ price: "100", hourlyRate: "20" })), []); // 5 h = RM 100, not more
 });

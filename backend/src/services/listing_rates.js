@@ -109,28 +109,14 @@ function money(senValue) {
 }
 
 /**
- * Rate combinations where a longer or packaged rental costs more than paying
+ * Rate combinations where a weekly or monthly rental costs more than paying
  * the shorter rate. They are allowed, because the operator may intend them,
  * but the form should point them out.
  */
 export function rateWarnings(card) {
   const warnings = [];
-  const { hourlySen, dailySen, weeklySen, monthlySen } = card;
+  const { dailySen, weeklySen, monthlySen } = card;
   if (!dailySen) return warnings;
-
-  // Hours are charged hourly only below the 6-hour limit.
-  const longestHourly = HOURLY_LIMIT_HOURS - 1;
-  if (hourlySen && hourlySen * longestHourly > dailySen) {
-    const firstDearer = Math.floor(dailySen / hourlySen) + 1;
-    warnings.push({
-      code: "HOURLY_ABOVE_DAILY",
-      field: "hourlyRate",
-      message:
-        firstDearer === longestHourly
-          ? `${longestHourly} hours at the hourly rate costs more than one day (RM ${money(dailySen)}), so a ${longestHourly}-hour rental costs more than a full day.`
-          : `${firstDearer} hours at the hourly rate costs more than one day (RM ${money(dailySen)}), so rentals of ${firstDearer} to ${longestHourly} hours cost more than a full day.`,
-    });
-  }
 
   if (weeklySen && weeklySen > dailySen * WEEK_DAYS) {
     warnings.push({
@@ -154,6 +140,28 @@ export function rateWarnings(card) {
   return warnings;
 }
 
+/**
+ * Facts the operator should know about how their rates combine, which are
+ * not mistakes. Hourly charges are capped at one day, so a high hourly rate
+ * makes short rentals cost a full day sooner.
+ */
+export function rateNotes(card) {
+  const notes = [];
+  const { hourlySen, dailySen } = card;
+  const longestHourly = HOURLY_LIMIT_HOURS - 1;
+
+  if (hourlySen && dailySen && hourlySen * longestHourly > dailySen) {
+    const fromHours = Math.floor(dailySen / hourlySen) + 1;
+    notes.push({
+      code: "HOURLY_CAPPED_AT_DAILY",
+      field: "hourlyRate",
+      message: `Rentals of ${fromHours === longestHourly ? fromHours : `${fromHours} to ${longestHourly}`} hours are charged as one day (RM ${money(dailySen)}), because charging them by the hour would cost more.`,
+    });
+  }
+
+  return notes;
+}
+
 /** Price each sample rental length with the checkout pricing engine. */
 export function previewRates(card) {
   const samples = PREVIEW_SAMPLES.map(({ key, label, hours }) => {
@@ -173,5 +181,5 @@ export function previewRates(card) {
     };
   });
 
-  return { samples, warnings: rateWarnings(card) };
+  return { samples, warnings: rateWarnings(card), notes: rateNotes(card) };
 }
