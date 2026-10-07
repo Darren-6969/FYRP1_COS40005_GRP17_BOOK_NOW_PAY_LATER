@@ -13,10 +13,9 @@ export function rentalHours(startIso, endIso) {
 }
 
 export function priceDuration(hours, card) {
-  let days = Math.floor(hours / 24);
-  let leftHours = hours % 24;
-<<<<<<< HEAD
-  if (
+      let days = Math.floor(hours / 24);
+      let leftHours = hours % 24;
+      if (
       leftHours >= HOURLY_LIMIT_HOURS ||
       (
         leftHours > 0 &&
@@ -30,17 +29,6 @@ export function priceDuration(hours, card) {
       days += 1;
       leftHours = 0;
     }
-=======
-  // Leftover hours become a day when there are 6 or more, when there is no
-  // hourly rate, or when charging them hourly would cost more than a day.
-  if (
-    leftHours >= HOURLY_LIMIT_HOURS ||
-    (leftHours > 0 && (!card.hourlySen || leftHours * card.hourlySen > card.dailySen))
-  ) {
-    days += 1;
-    leftHours = 0;
-  }
->>>>>>> fb39bb957afd795d3d66ee381ce03b6888af655e
   const months = card.monthlySen ? Math.floor(days / MONTH_DAYS) : 0;
   days -= months * MONTH_DAYS;
   const weeks = card.weeklySen ? Math.floor(days / WEEK_DAYS) : 0;
@@ -65,7 +53,7 @@ export function depositFor(rentalSen, pct) {
 const WORD = { month: "month", week: "week", day: "day", hour: "hour" };
 
 function plural(n, word) {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
+  return ${n} ${word}${n === 1 ? "" : "s"};
 }
 
 // 51 -> "2 days 3 hours", 240 -> "10 days", 5 -> "5 hours".
@@ -76,7 +64,7 @@ export function durationText(hours) {
   const left = hours % 24;
   if (!days) return "1 day";
   if (left >= HOURLY_LIMIT_HOURS) return plural(days + 1, "day");
-  return left ? `${plural(days, "day")} ${plural(left, "hour")}` : plural(days, "day");
+  return left ? ${plural(days, "day")} ${plural(left, "hour")} : plural(days, "day");
 }
 
 // [{period:"week",count:1,...},{period:"day",count:3,...}] -> "1 week + 3 days"
@@ -86,5 +74,5 @@ export function rateLinesText(lines = []) {
 
 // One line per charged period, e.g. "1 week × RM 700".
 export function rateLineLabel(line, formatSen) {
-  return `${plural(line.count, WORD[line.period])} × ${formatSen(line.rateSen)}`;
+  return ${plural(line.count, WORD[line.period])} × ${formatSen(line.rateSen)};
 }
