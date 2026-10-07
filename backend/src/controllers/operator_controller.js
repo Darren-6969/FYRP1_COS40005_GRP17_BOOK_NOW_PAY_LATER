@@ -38,6 +38,9 @@ import {
   buildOperatorSettlementReport,
   createSettlementCsv,
 } from "../services/operator_settlement_report_service.js";
+import {
+  getListingLimit,
+} from "../services/subscription_service.js";
 
 const SETUP_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
@@ -430,6 +433,150 @@ export async function getOperators(req, res, next) {
     });
 
     res.json(operators);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/// Add Operator Subscription Function
+export async function updateOperatorSubscriptionPlan(
+  req,
+  res,
+  next
+) {
+  try {
+    const id = parseId(
+      req.params.id,
+      "operator id"
+    );
+
+    const subscriptionPlan =
+      String(
+        req.body.subscriptionPlan || ""
+      ).toUpperCase();
+
+    if (
+      ![
+        "FREE",
+        "BASIC",
+        "PREMIUM",
+      ].includes(subscriptionPlan)
+    ) {
+      return res.status(400).json({
+        message:
+          "Invalid subscription plan.",
+      });
+    }
+
+    const currentOperator =
+      await prisma.operator.findUnique({
+        where: {
+          id,
+        },
+
+        select: {
+          id: true,
+          companyName: true,
+          subscriptionPlan: true,
+        },
+      });
+
+    if (!currentOperator) {
+      return res.status(404).json({
+        message:
+          "Operator/company not found.",
+      });
+    }
+
+    const listingLimit =
+      getListingLimit(
+        subscriptionPlan
+      );
+
+    const publishedCount =
+      await prisma.listing.count({
+        where: {
+          operatorId: id,
+          status: "PUBLISHED",
+        },
+      });
+
+    // Do not allow downgrade when the
+    // operator already exceeds the new limit.
+    if (
+      publishedCount >
+      listingLimit
+    ) {
+      return res.status(409).json({
+        message:
+          `Cannot change ${currentOperator.companyName} to the ${subscriptionPlan} plan. ` +
+          `The operator currently has ${publishedCount} published listings, ` +
+          `but this plan only allows ${listingLimit}.`,
+
+        subscriptionPlan,
+        listingLimit,
+        publishedCount,
+      });
+    }
+
+    const operator =
+      await prisma.operator.update({
+        where: {
+          id,
+        },
+
+        data: {
+          subscriptionPlan,
+        },
+      });
+
+    await createAuditLog({
+      req,
+
+      action:
+        "OPERATOR_SUBSCRIPTION_UPDATED",
+
+      entityType:
+        "Operator",
+
+      entityId:
+        id,
+
+      before: {
+        subscriptionPlan:
+          currentOperator.subscriptionPlan,
+      },
+
+      after: {
+        subscriptionPlan:
+          operator.subscriptionPlan,
+      },
+
+      details: {
+        listingLimit,
+        publishedCount,
+      },
+    });
+
+    res.json({
+      message:
+        `${currentOperator.companyName} subscription plan updated to ${subscriptionPlan}.`,
+
+      operator,
+
+      subscription: {
+        plan:
+          subscriptionPlan,
+
+        listingLimit,
+
+        publishedCount,
+
+        remaining:
+          listingLimit -
+          publishedCount,
+      },
+    });
   } catch (err) {
     next(err);
   }
