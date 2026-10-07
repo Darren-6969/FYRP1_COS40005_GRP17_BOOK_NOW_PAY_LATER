@@ -60,6 +60,38 @@ export default function OperatorBookingDetail() {
     loadBooking();
   }, [id]);
 
+  const handleBookingDecision = async (action) => {
+  try {
+    if (
+      action === "reject" &&
+      !window.confirm(
+        "Are you sure you want to reject this booking?"
+      )
+    ) {
+      return;
+    }
+
+    setActionLoading(action);
+
+    if (action === "accept") {
+      await operatorService.acceptBooking(id);
+    }
+
+    if (action === "reject") {
+      await operatorService.rejectBooking(id);
+    }
+
+    await loadBooking();
+  } catch (err) {
+    alert(
+      err.response?.data?.message ||
+        "Booking action failed"
+    );
+  } finally {
+    setActionLoading("");
+  }
+};
+
   // =========================================================
   // Handover
   // Backend/service will be added in Step 2
@@ -155,6 +187,9 @@ export default function OperatorBookingDetail() {
   const bookingStatus = String(
     booking.status || ""
   ).toUpperCase();
+
+  const canAcceptReject =
+  bookingStatus === "PENDING";
 
   const paymentStatus = String(
     booking.payment?.status || ""
@@ -262,6 +297,7 @@ export default function OperatorBookingDetail() {
     null;
 
   const hasAnyAction =
+    canAcceptReject ||
     canSuggestAlternative ||
     canHandover ||
     canReturn ||
@@ -614,6 +650,37 @@ export default function OperatorBookingDetail() {
           </h2>
 
           <div className="operator-action-stack">
+
+          {/* Accept / Reject */}
+              {canAcceptReject && (
+                <>
+                  <button
+                    type="button"
+                    className="operator-primary-btn"
+                    disabled={!!actionLoading}
+                    onClick={() =>
+                      handleBookingDecision("accept")
+                    }
+                  >
+                    {actionLoading === "accept"
+                      ? "Accepting..."
+                      : "Accept Booking"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="operator-danger-btn"
+                    disabled={!!actionLoading}
+                    onClick={() =>
+                      handleBookingDecision("reject")
+                    }
+                  >
+                    {actionLoading === "reject"
+                      ? "Rejecting..."
+                      : "Reject Booking"}
+                  </button>
+                </>
+              )}
 
             {/* Suggest Alternative */}
               {canSuggestAlternative && (
