@@ -108,46 +108,119 @@ export async function acceptBookingAndRequestPayment({
   // =========================================================
   // 3. Calculate payment amounts
   // =========================================================
-  const totalAmount = Number(booking.totalAmount);
-  const acceptedAt = new Date();
-  const rentalAmount = Number(booking.rentalAmount ?? (
-    Number(booking.totalAmount) - Number(booking.addonsAmount || 0)
-  ));
-      const operatorConfig =
-      await prisma.bNPLConfig.findFirst({
-        where: {
-          operatorId: booking.operatorId,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
+  const totalAmount = Number(
+  booking.totalAmount
+);
 
-    const parsedPercent = Number(
-      operatorConfig?.downPaymentPercent ?? 30
-    );
+const acceptedAt = new Date();
 
-  // SRS V2.9 (4.3.5): operators set the down payment from 0 to 100 percent.
-  // 0 means everything is paid as the balance; 100 means everything is paid
-  // on acceptance.
-  if (
-    !Number.isFinite(parsedPercent) ||
-    parsedPercent < 0 ||
-    parsedPercent > 100
-  ) {
-    const error = new Error(
-      "downPaymentPercent must be between 0 and 100"
-    );
+const addonsAmount = Number(
+  booking.addonsAmount || 0
+);
 
-    error.statusCode = 400;
-    throw error;
+/*
+ * Some older/newly-created bookings may contain
+ * rentalAmount = 0.
+ *
+ * In that case, calculate the rental portion from
+ * totalAmount - addonsAmount.
+ */
+const storedRentalAmount = Number(
+  booking.rentalAmount
+);
+
+const rentalAmount =
+  Number.isFinite(storedRentalAmount) &&
+  storedRentalAmount > 0
+    ? storedRentalAmount
+    : Number(
+        (
+          totalAmount -
+          addonsAmount
+        ).toFixed(2)
+      );
+
+
+const operatorConfig =
+  await prisma.bNPLConfig.findFirst({
+    where: {
+      operatorId:
+        booking.operatorId,
+    },
+
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+
+const parsedPercent = Number(
+  operatorConfig
+    ?.downPaymentPercent ?? 30
+);
+
+
+if (
+  !Number.isFinite(parsedPercent) ||
+  parsedPercent < 0 ||
+  parsedPercent > 100
+) {
+  const error = new Error(
+    "downPaymentPercent must be between 0 and 100"
+  );
+
+  error.statusCode = 400;
+  throw error;
+}
+
+
+/*
+ * BNPLB-85:
+ * Operator shop setting controls the
+ * down-payment percentage.
+ *
+ * Add-ons remain in the final payment.
+ */
+const downAmount = Number(
+  (
+    (
+      rentalAmount *
+      parsedPercent
+    ) /
+    100
+  ).toFixed(2)
+);
+
+const finalAmount = Number(
+  (
+    totalAmount -
+    downAmount
+  ).toFixed(2)
+);
+
+
+console.log(
+  "BNPLB-85 PAYMENT SPLIT",
+  {
+    bookingId: booking.id,
+    operatorId:
+      booking.operatorId,
+
+    totalAmount,
+    addonsAmount,
+    storedRentalAmount,
+    rentalAmount,
+
+    savedDownPaymentPercent:
+      operatorConfig
+        ?.downPaymentPercent,
+
+    parsedPercent,
+
+    downAmount,
+    finalAmount,
   }
-
-  // Platform bookings carry the quoted split; charge exactly what was shown.
-  const downAmount = creditTier === "High Risk"
-    ? totalAmount
-    : Number(((rentalAmount * parsedPercent) / 100).toFixed(2));
-  const finalAmount = Number((totalAmount - downAmount).toFixed(2));
+);
 
   // =========================================================
   // 4. Calculate payment schedule
@@ -250,14 +323,45 @@ export async function acceptBookingAndRequestPayment({
   // A part with nothing to pay is settled when the schedule is created, so
   // the customer is only ever asked for the part that carries an amount and
   // the existing PAID / PARTIALLY_PAID rules still apply.
-  const downSettled = downAmount <= 0;
-  const finalSettled = finalAmount <= 0;
+  const downSettled =
+  downAmount <= 0;
+
+  const finalSettled =
+    finalAmount <= 0;
+
   const zeroParts = {
-    downPaymentStatus: downSettled ? "PAID" : "UNPAID",
-    finalPaymentStatus: finalSettled ? "PAID" : "UNPAID",
-    downPaymentPaidAt: downSettled ? acceptedAt : null,
-    finalPaymentPaidAt: finalSettled ? acceptedAt : null,
-    status: downSettled && !finalSettled ? "PARTIALLY_PAID" : "UNPAID",
+    downPaymentStatus:
+      downSettled
+        ? "PAID"
+        : "UNPAID",
+
+    finalPaymentStatus:
+      finalSettled
+        ? "PAID"
+        : "UNPAID",
+
+    downPaymentPaidAt:
+      downSettled
+        ? acceptedAt
+        : null,
+
+    finalPaymentPaidAt:
+      finalSettled
+        ? acceptedAt
+        : null,
+
+    /*
+    * RM0 does not mean the customer
+    * has actually paid money.
+    *
+    * Overall payment only starts as
+    * PAID when both parts are zero.
+    */
+    status:
+      downSettled &&
+      finalSettled
+        ? "PAID"
+        : "UNPAID",
   };
 
   // =========================================================
