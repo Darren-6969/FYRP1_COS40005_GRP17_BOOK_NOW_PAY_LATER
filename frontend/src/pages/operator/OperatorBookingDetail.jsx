@@ -327,16 +327,6 @@ export default function OperatorBookingDetail() {
     booking.customer?.drivingLicense?.verifiedAt ||
     null;
 
-  const hasAnyAction =
-    canAcceptReject ||
-    canSuggestAlternative ||
-    canHandover ||
-    canReturn ||
-    canEditDeadline ||
-    canCancel ||
-    canCreateRefund ||
-    shouldShowPaymentVerificationLink;
-
   const paidToDate =
   (
     booking.payment
@@ -407,6 +397,16 @@ export default function OperatorBookingDetail() {
     !finalPaymentPaid &&
     downPaymentAmount > 0 &&
     !activeRefund;  
+
+  const hasAnyAction =
+    canAcceptReject ||
+    canSuggestAlternative ||
+    canHandover ||
+    canReturn ||
+    canEditDeadline ||
+    canCancel ||
+    canCreateRefund ||
+    shouldShowPaymentVerificationLink;
 
   return (
     <div className="operator-page">
