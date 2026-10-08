@@ -17,7 +17,6 @@ import {
   Wallet,
   UserRound,
   ClipboardCheck,
-  ScanLine,
   Store,
 } from "lucide-react";
 
@@ -30,7 +29,6 @@ const links = [
   { to: "/master/operators", label: "Operators", icon: Users },
   { to: "/master/listings", label: "Listings", icon: Store },
   { to: "/master/operator-applications", label: "Application Review", icon: ClipboardCheck },
-  { to: "/master/licence-verification", label: "Licence Queue", icon: ScanLine },
   { to: "/master/sales-report", label: "Sales Report", icon: BarChart2 },
   { to: "/master/analytics", label: "Analytics & Demand Forecast", icon: TrendingUp },
   { to: "/master/settlements", label: "Settlements", icon: Wallet },

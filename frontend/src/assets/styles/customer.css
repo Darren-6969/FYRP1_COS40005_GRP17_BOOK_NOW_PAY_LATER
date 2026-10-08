@@ -1463,7 +1463,10 @@
   .operator-settings-drawer {
     width: 100%;
   }
-}
+
+  .customer-invoice-row-card {
+    grid-template-columns: 1fr;
+  }
 
   .customer-invoice-actions {
     flex-direction: row;

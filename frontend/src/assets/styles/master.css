@@ -3431,3 +3431,126 @@
   background: #fef2f2;
   border-color: #f87171;
 }
+
+/* =========================================================
+   Administrator Settings (operator-style menu cards and drawer)
+========================================================= */
+
+.admin-settings-summary {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-settings-summary.on {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.admin-settings-summary.off {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.admin-settings-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-settings-subcard {
+  padding: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.admin-settings-subcard h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: #2563eb;
+}
+
+.admin-settings-inline-action {
+  display: flex;
+  align-items: flex-end;
+}
+
+.admin-settings-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.admin-settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.admin-settings-row strong {
+  display: block;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.admin-settings-row span {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.admin-settings-row-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.admin-settings-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-settings-stats > div {
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.admin-settings-stats span {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.admin-settings-stats strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+  color: #0f172a;
+}
+
+@media (max-width: 700px) {
+  .admin-settings-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-settings-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
