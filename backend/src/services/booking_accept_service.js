@@ -184,7 +184,7 @@ if (
 const downAmount = Number(
   (
     (
-      rentalAmount *
+      totalAmount *
       parsedPercent
     ) /
     100
