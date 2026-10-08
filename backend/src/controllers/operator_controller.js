@@ -99,6 +99,24 @@ function includeBookingRelations() {
         totalPrice: true,
       },
     },
+
+        pickupPoint: {
+      select: {
+        id: true,
+        label: true,
+        address: true,
+        note: true,
+      },
+    },
+
+    dropoffPoint: {
+      select: {
+        id: true,
+        label: true,
+        address: true,
+        note: true,
+      },
+    },
   };
 }
 
@@ -3262,6 +3280,10 @@ export async function updateOperatorSettings(req, res, next) {
       paymentDeadlineDays,
       overtimeFee,
       blockNightHandover,
+      downPaymentPercent,
+      allowReceiptUpload,
+      partialRefundElected,
+      partialRefundPercent,
     } = req.body || {};
 
     const parsedBookingDeadline = Number(bookingResponseDeadlineMinutes);
@@ -3329,6 +3351,81 @@ export async function updateOperatorSettings(req, res, next) {
       enableOperatorReminderAlerts: Boolean(enableOperatorReminderAlerts),
       paymentDeadlineDays: parsedPaymentDeadlineDays,
     };
+
+    // =========================================================
+    // BNPLB-85 - Down payment
+    // =========================================================
+    if (downPaymentPercent !== undefined) {
+      const value = Number(
+        downPaymentPercent
+      );
+
+      if (
+        !Number.isInteger(value) ||
+        value < 0 ||
+        value > 100
+      ) {
+        return res.status(400).json({
+          message:
+            "Down payment percentage must be between 0 and 100.",
+        });
+      }
+
+      configData.downPaymentPercent =
+        value;
+    }
+
+
+    // =========================================================
+    // BNPLB-85 - Receipt upload
+    // =========================================================
+    if (allowReceiptUpload !== undefined) {
+      configData.allowReceiptUpload =
+        allowReceiptUpload === true ||
+        allowReceiptUpload === "true";
+    }
+
+
+    // =========================================================
+    // BNPLB-85 - Partial refund
+    // =========================================================
+    if (partialRefundElected !== undefined) {
+      configData.partialRefundElected =
+        partialRefundElected === true ||
+        partialRefundElected === "true";
+    }
+
+    if (
+      partialRefundPercent !== undefined &&
+      partialRefundPercent !== null &&
+      partialRefundPercent !== ""
+    ) {
+      const value = Number(
+        partialRefundPercent
+      );
+
+      if (
+        !Number.isInteger(value) ||
+        value < 1 ||
+        value > 99
+      ) {
+        return res.status(400).json({
+          message:
+            "Partial refund percentage must be between 1 and 99.",
+        });
+      }
+
+      configData.partialRefundPercent =
+        value;
+    }
+
+    if (
+      configData.partialRefundElected ===
+      false
+    ) {
+      configData.partialRefundPercent =
+        null;
+    }
 
     if (manualPaymentNote !== undefined) {
       configData.manualPaymentNote = manualPaymentNote || null;

@@ -333,6 +333,28 @@ export default function OperatorBookingDetail() {
     canCancel ||
     shouldShowPaymentVerificationLink;
 
+  const paidToDate =
+  (
+    booking.payment
+      ?.downPaymentStatus === "PAID"
+      ? Number(
+          booking.payment
+            ?.downPaymentAmount || 0
+        )
+      : 0
+  ) +
+  (
+    booking.payment
+      ?.finalPaymentStatus === "PAID"
+      ? Number(
+          booking.payment
+            ?.finalPaymentAmount || 0
+        )
+      : 0
+  );
+
+    
+
   return (
     <div className="operator-page">
 
@@ -345,293 +367,386 @@ export default function OperatorBookingDetail() {
         </Link>
       </div>
 
-      <section className="operator-detail-grid">
+      {/* =====================================================
+    Compact Booking Header
+====================================================== */}
+<section className="booking-clean-header">
+  <div>
+    <div className="booking-clean-title-row">
+      <div>
+        <h1>
+          {booking.bookingCode ||
+            `BNPL-${String(
+              booking.id
+            ).padStart(4, "0")}`}
+        </h1>
 
-        {/* ===================================================
-            Booking Summary
-        ==================================================== */}
-        <div className="operator-card operator-booking-summary">
-          <div className="operator-card-head">
-            <div>
-              <h2>
-                {booking.bookingCode ||
-                  `BNPL-${String(
-                    booking.id
-                  ).padStart(4, "0")}`}
-              </h2>
+        <p className="booking-clean-vehicle">
+          {booking.serviceName || "-"}
+        </p>
+      </div>
 
-              <p>
-                Booked on{" "}
-                {formatOperatorDateTime(
-                  booking.createdAt
-                )}
-              </p>
-            </div>
+      <span
+        className={`operator-status ${operatorStatusClass(
+          booking.status
+        )}`}
+      >
+        {operatorStatusLabel(
+          booking.status
+        )}
+      </span>
+    </div>
 
-            <span
-              className={`operator-status ${operatorStatusClass(
-                booking.status
-              )}`}
-            >
-              {operatorStatusLabel(
-                booking.status
-              )}
-            </span>
-          </div>
+    <div className="booking-clean-meta">
+      <span>
+        {booking.customer?.name || "-"}
+      </span>
 
-          <div className="operator-service-preview">
-            <div className="operator-car-thumb">
-              BN
-            </div>
+      <span>•</span>
 
-            <div>
-              <strong>
-                {booking.serviceName || "-"}
-              </strong>
+      <span>
+        {formatOperatorDateTime(
+          booking.pickupDate
+        )}
+      </span>
 
-              <p>
-                {booking.serviceType ||
-                  "Service"}
-              </p>
-            </div>
-          </div>
+      <span>→</span>
 
-          <InfoRow
-            label="Booking Date"
-            value={formatOperatorDateTime(
-              booking.createdAt
-            )}
-          />
+      <span>
+        {formatOperatorDateTime(
+          booking.returnDate
+        )}
+      </span>
 
-          <InfoRow
-            label="Pickup / Check-in"
-            value={formatOperatorDateTime(
+      {booking.location && (
+        <>
+          <span>•</span>
+          <span>
+            {booking.location}
+          </span>
+        </>
+      )}
+    </div>
+
+    <p className="booking-clean-created">
+      Created{" "}
+      {formatOperatorDateTime(
+        booking.createdAt
+      )}
+    </p>
+  </div>
+</section>
+
+
+{/* =====================================================
+    Main Layout
+====================================================== */}
+<div className="booking-clean-layout">
+
+  {/* ===================================================
+      LEFT - ONE MAIN CARD
+  ==================================================== */}
+  <main className="booking-clean-main">
+
+    <section className="operator-card booking-clean-details">
+
+      <div className="booking-clean-card-title">
+        <div>
+          <span>Booking</span>
+          <h2>Booking Details</h2>
+        </div>
+      </div>
+
+
+      {/* =========================
+          Trip
+      ========================== */}
+      <div className="booking-clean-section">
+        <h3>Trip</h3>
+
+        <div className="booking-clean-trip-grid">
+
+        <div>
+          <span>
+            Pickup / Check-in
+          </span>
+
+          <strong>
+            {formatOperatorDateTime(
               booking.pickupDate
             )}
-          />
+          </strong>
+        </div>
 
-          <InfoRow
-            label="Return / Check-out"
-            value={formatOperatorDateTime(
+        <div>
+          <span>
+            Return / Check-out
+          </span>
+
+          <strong>
+            {formatOperatorDateTime(
               booking.returnDate
             )}
-          />
+          </strong>
+        </div>
 
-          <InfoRow
-            label="Location"
-            value={
-              booking.location || "-"
-            }
-          />
+        <div>
+          <span>
+            Pickup Point
+          </span>
 
-          <InfoRow
-            label="Total Amount"
-            value={formatOperatorMoney(
-              booking.totalAmount
-            )}
-            strong
-          />
+          <strong>
+            {booking.pickupPoint?.label ||
+              booking.requestedLocation ||
+              "-"}
+          </strong>
 
-          <InfoRow
-            label="Payment Deadline"
-            value={formatOperatorDateTime(
+          {booking.pickupPoint?.address && (
+            <small className="booking-clean-location-note">
+              {booking.pickupPoint.address}
+            </small>
+          )}
+        </div>
+
+        <div>
+          <span>
+            Drop-off Point
+          </span>
+
+          <strong>
+            {booking.dropoffPoint?.label ||
+              booking.requestedLocation ||
+              "-"}
+          </strong>
+
+          {booking.dropoffPoint?.address && (
+            <small className="booking-clean-location-note">
+              {booking.dropoffPoint.address}
+            </small>
+          )}
+        </div>
+
+        <div>
+          <span>
+            Branch / Area
+          </span>
+
+          <strong>
+            {booking.location || "-"}
+          </strong>
+        </div>
+
+        <div>
+          <span>
+            Payment Deadline
+          </span>
+
+          <strong>
+            {formatOperatorDateTime(
               booking.paymentDeadline
             )}
-          />
+          </strong>
         </div>
 
-        {/* ===================================================
-            Customer Information
-        ==================================================== */}
-        <div className="operator-card operator-card-secondary">
-          <h2>Customer Information</h2>
+      </div>
+      </div>
 
-          <div className="operator-customer-box">
-            <div className="operator-avatar-large">
-              {(booking.customer?.name ||
-                "C").charAt(0)}
-            </div>
 
-            <div>
-              <strong>
-                {booking.customer?.name ||
-                  "-"}
-              </strong>
+      {/* =========================
+          Customer
+      ========================== */}
+      <div className="booking-clean-section">
+        <h3>Customer</h3>
 
-              <p>
-                {booking.customer?.email ||
-                  "-"}
-              </p>
-            </div>
+        <div className="booking-clean-customer">
+          <div className="operator-avatar-large">
+            {(booking.customer?.name ||
+              "C").charAt(0)}
           </div>
 
-          {/* =================================================
-              Licence Verification
-          ================================================== */}
-          <h2 className="operator-section-title">
-            Licence Verification
-          </h2>
+          <div>
+            <strong>
+              {booking.customer?.name ||
+                "-"}
+            </strong>
 
-          <InfoRow
-            label="Verification Status"
-            value={
-              <span
-                className={`operator-status ${getLicenceStatusClass(
-                  licenceStatus
-                )}`}
-              >
-                {getLicenceStatusLabel(
-                  licenceStatus
-                )}
-              </span>
-            }
-          />
-
-          <InfoRow
-            label="Licence Number"
-            value={licenceNumber}
-          />
-
-          <InfoRow
-            label="Expiry Date"
-            value={
-              licenceExpiry
-                ? formatOperatorDateTime(
-                    licenceExpiry
-                  )
-                : "-"
-            }
-          />
-
-          <InfoRow
-            label="Verified At"
-            value={
-              licenceVerifiedAt
-                ? formatOperatorDateTime(
-                    licenceVerifiedAt
-                  )
-                : "-"
-            }
-          />
-
-          <h2 className="operator-section-title">
-            Booking Information
-          </h2>
-
-          <InfoRow
-            label="Created By"
-            value={
-              booking.operator
-                ?.companyName || "-"
-            }
-          />
-
-          <InfoRow
-            label="Operator Email"
-            value={
-              booking.operator?.email ||
-              "-"
-            }
-          />
-
-          <InfoRow
-            label="Updated At"
-            value={formatOperatorDateTime(
-              booking.updatedAt
-            )}
-          />
+            <p>
+              {booking.customer?.email ||
+                "-"}
+            </p>
+          </div>
         </div>
 
-        {/* ===================================================
-              Additional Requests
-          ==================================================== */}
-          <div className="operator-card operator-card-secondary">
-            <h2>
-              Additional Requests & Add-ons
-            </h2>
+        <div className="booking-clean-status-row">
+          <div>
+            <span>
+              Driving Licence
+            </span>
 
-            {/* Chauffeur Request */}
-            <InfoRow
-              label="Chauffeur"
-              value={
-                chauffeurRequested
-                  ? "Requested"
-                  : "Not requested"
-              }
-            />
+            <strong>
+              {getLicenceStatusLabel(
+                licenceStatus
+              )}
+            </strong>
+          </div>
 
-            {chauffeurRequested && (
-              <>
-                <InfoRow
-                  label="Customer Note"
-                  value={
-                    chauffeurNote ||
-                    "No note provided."
-                  }
-                />
+          <span
+            className={`operator-status ${getLicenceStatusClass(
+              licenceStatus
+            )}`}
+          >
+            {getLicenceStatusLabel(
+              licenceStatus
+            )}
+          </span>
+        </div>
 
-                <InfoRow
-                  label="Chauffeur Pricing"
-                  value="Not included in booking price"
-                />
-              </>
+        {(licenceNumber !== "-" ||
+          licenceExpiry ||
+          licenceVerifiedAt) && (
+          <div className="booking-clean-licence-details">
+
+            {licenceNumber !== "-" && (
+              <InfoRow
+                label="Licence Number"
+                value={licenceNumber}
+              />
             )}
 
-            <h2 className="operator-section-title">
-              Selected Add-ons
-            </h2>
-
-            {!selectedAddons.length ? (
+            {licenceExpiry && (
               <InfoRow
-                label="Add-ons"
-                value="None selected"
+                label="Expiry Date"
+                value={formatOperatorDateTime(
+                  licenceExpiry
+                )}
               />
-            ) : (
-              selectedAddons.map(
-                (addon) => {
-                  const unitLabel =
-                    addon.unit ===
+            )}
+
+            {licenceVerifiedAt && (
+              <InfoRow
+                label="Verified At"
+                value={formatOperatorDateTime(
+                  licenceVerifiedAt
+                )}
+              />
+            )}
+
+          </div>
+        )}
+      </div>
+
+
+      {/* =========================
+          Add-ons
+      ========================== */}
+      <div className="booking-clean-section">
+        <h3>
+          Add-ons & Requests
+        </h3>
+
+        <div className="booking-clean-addon-list">
+
+          {!selectedAddons.length && (
+            <div className="booking-clean-simple-row">
+              <span>
+                Paid Add-ons
+              </span>
+
+              <strong>
+                None selected
+              </strong>
+            </div>
+          )}
+
+          {selectedAddons.map(
+            (addon) => (
+              <div
+                key={addon.id}
+                className="booking-clean-addon-row"
+              >
+                <div>
+                  <strong>
+                    {addon.name}
+                  </strong>
+
+                  <span>
+                    {formatOperatorMoney(
+                      addon.unitPrice
+                    )}
+
+                    {addon.unit ===
                     "PER_DAY"
                       ? " / day"
-                      : " / booking";
+                      : " / booking"}
 
-                  const quantityText =
-                    addon.quantity > 1
+                    {addon.quantity > 1
                       ? ` × ${addon.quantity}`
-                      : "";
+                      : ""}
+                  </span>
+                </div>
 
-                  return (
-                    <InfoRow
-                      key={addon.id}
-                      label={addon.name}
-                      value={
-                        `${formatOperatorMoney(
-                          addon.unitPrice
-                        )}${unitLabel}` +
-                        `${quantityText} · Total ${formatOperatorMoney(
-                          addon.totalPrice
-                        )}`
-                      }
-                    />
-                  );
-                }
-              )
-            )}
+                <strong className="booking-clean-addon-price">
+                  {formatOperatorMoney(
+                    addon.totalPrice
+                  )}
+                </strong>
+              </div>
+            )
+          )}
+
+          <div className="booking-clean-simple-row">
+            <span>
+              Chauffeur
+            </span>
+
+            <strong>
+              {chauffeurRequested
+                ? "Requested"
+                : "Not requested"}
+            </strong>
           </div>
 
-        {/* ===================================================
-            Timeline
-        ==================================================== */}
-        <div className="operator-card operator-card-secondary">
-          <h2>Booking Timeline</h2>
+          {chauffeurRequested && (
+            <div className="booking-clean-note">
+              <span>
+                Customer note
+              </span>
 
-          <div className="operator-timeline">
-            {timeline.map((item) => (
+              <p>
+                {chauffeurNote ||
+                  "No note provided."}
+              </p>
+
+              <small>
+                Chauffeur pricing is
+                arranged separately and
+                is not included in the
+                booking total.
+              </small>
+            </div>
+          )}
+
+        </div>
+      </div>
+
+
+      {/* =========================
+          Timeline
+      ========================== */}
+      <div className="booking-clean-section booking-clean-section-last">
+        <h3>
+          Activity
+        </h3>
+
+        <div className="booking-clean-activity">
+
+          {timeline.map(
+            (item) => (
               <div
                 key={item.id}
-                className="operator-timeline-item done"
+                className="booking-clean-activity-row"
               >
-                <span />
+                <span className="booking-clean-dot" />
 
                 <div>
                   <strong>
@@ -647,237 +762,278 @@ export default function OperatorBookingDetail() {
                   </p>
                 </div>
               </div>
-            ))}
+            )
+          )}
 
-            {!timeline.length && (
-              <div className="operator-empty-state">
-                No timeline records yet.
-              </div>
-            )}
-          </div>
+          {!timeline.length && (
+            <p className="booking-clean-muted">
+              No activity recorded yet.
+            </p>
+          )}
+
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+
+  {/* ===================================================
+      RIGHT SIDEBAR
+  ==================================================== */}
+  <aside className="booking-clean-sidebar">
+
+    {/* Payment */}
+    <section className="operator-card booking-clean-side-card">
+
+      <div className="booking-clean-side-head">
+        <div>
+          <span>Payment</span>
+          <h2>
+            Payment Summary
+          </h2>
         </div>
 
-        {/* ===================================================
-            Payment + Actions
-        ==================================================== */}
-        <div className="operator-card operator-card-secondary">
-          <h2>Payment Status</h2>
+        <span
+          className={`operator-status ${operatorStatusClass(
+            booking.payment?.status ||
+              "UNPAID"
+          )}`}
+        >
+          {operatorStatusLabel(
+            booking.payment?.status ||
+              "UNPAID"
+          )}
+        </span>
+      </div>
 
-          <InfoRow
-            label="Amount"
-            value={formatOperatorMoney(
-              booking.payment?.amount ||
-                booking.totalAmount
-            )}
-            strong
-          />
+      <div className="booking-clean-total">
+        <span>
+          Total Booking Amount
+        </span>
 
-          <InfoRow
-            label="Paid to Date"
-            value={formatOperatorMoney(
-              (
-                booking.payment
-                  ?.downPaymentStatus ===
-                "PAID"
-                  ? Number(
-                      booking.payment
-                        ?.downPaymentAmount ||
-                        0
-                    )
-                  : 0
-              ) +
-                (booking.payment
-                  ?.finalPaymentStatus ===
-                "PAID"
-                  ? Number(
-                      booking.payment
-                        ?.finalPaymentAmount ||
-                        0
-                    )
-                  : 0)
-            )}
-            strong
-          />
+        <strong>
+          {formatOperatorMoney(
+            booking.payment?.amount ||
+              booking.totalAmount
+          )}
+        </strong>
 
-          <InfoRow
-            label="Payment Status"
-            value={operatorStatusLabel(
-              booking.payment?.status ||
-                "UNPAID"
-            )}
-          />
+        <small>
+          {formatOperatorMoney(
+            paidToDate
+          )}{" "}
+          paid to date
+        </small>
+      </div>
 
-          <InfoRow
-            label="Down-payment"
-            value={`${operatorStatusLabel(
-              booking.payment
-                ?.downPaymentStatus ||
-                "UNPAID"
-            )} · ${formatOperatorMoney(
-              booking.payment
-                ?.downPaymentAmount
-            )}`}
-          />
+      <div className="booking-clean-payment-lines">
 
-          <InfoRow
-            label="Final Payment"
-            value={`${operatorStatusLabel(
-              booking.payment
-                ?.finalPaymentStatus ||
-                "UNPAID"
-            )} · ${formatOperatorMoney(
-              booking.payment
-                ?.finalPaymentAmount
-            )}`}
-          />
+        <InfoRow
+          label="Down-payment"
+          value={`${operatorStatusLabel(
+            booking.payment
+              ?.downPaymentStatus ||
+              "UNPAID"
+          )} · ${formatOperatorMoney(
+            booking.payment
+              ?.downPaymentAmount
+          )}`}
+        />
 
+        <InfoRow
+          label="Final Payment"
+          value={`${operatorStatusLabel(
+            booking.payment
+              ?.finalPaymentStatus ||
+              "UNPAID"
+          )} · ${formatOperatorMoney(
+            booking.payment
+              ?.finalPaymentAmount
+          )}`}
+        />
+
+        {booking.payment?.method && (
           <InfoRow
             label="Payment Method"
             value={
-              booking.payment?.method ||
-              "-"
+              booking.payment.method
             }
           />
+        )}
 
+        {booking.payment
+          ?.transactionId && (
           <InfoRow
             label="Transaction ID"
             value={
               booking.payment
-                ?.transactionId || "-"
+                .transactionId
             }
           />
+        )}
 
-          {/* =================================================
-              NEW V2.6 ACTIONS
-          ================================================== */}
-          <h2 className="operator-section-title">
+      </div>
+
+    </section>
+
+
+    {/* Actions */}
+    <section className="operator-card booking-clean-side-card">
+
+      <div className="booking-clean-side-head">
+        <div>
+          <span>Workflow</span>
+          <h2>
             Booking Actions
           </h2>
-
-          <div className="operator-action-stack">
-
-          {/* Accept / Reject */}
-              {canAcceptReject && (
-                <>
-                  <button
-                    type="button"
-                    className="operator-primary-btn"
-                    disabled={!!actionLoading}
-                    onClick={() =>
-                      handleBookingDecision("accept")
-                    }
-                  >
-                    {actionLoading === "accept"
-                      ? "Accepting..."
-                      : "Accept Booking"}
-                  </button>
-
-                  <button
-                      type="button"
-                      className="operator-danger-btn"
-                      disabled={!!actionLoading}
-                      onClick={() =>
-                        setShowReject(true)
-                      }
-                    >
-                      Reject Booking
-                    </button>
-                </>
-              )}
-
-            {/* Suggest Alternative */}
-              {canSuggestAlternative && (
-                <button
-                  type="button"
-                  className="operator-secondary-btn"
-                  disabled={!!actionLoading}
-                  onClick={() =>
-                    setShowAlternative(true)
-                  }
-                >
-                  Suggest Alternative
-                </button>
-              )}
-
-            {/* Handover */}
-            {canHandover && (
-              <button
-                type="button"
-                className="operator-primary-btn"
-                disabled={!!actionLoading}
-                onClick={handleHandover}
-              >
-                {actionLoading ===
-                "handover"
-                  ? "Processing Handover..."
-                  : "Handover Booking"}
-              </button>
-            )}
-
-            {/* Return */}
-            {canReturn && (
-              <button
-                type="button"
-                className="operator-primary-btn"
-                disabled={!!actionLoading}
-                onClick={handleReturn}
-              >
-                {actionLoading ===
-                "return"
-                  ? "Processing Return..."
-                  : "Complete Return"}
-              </button>
-            )}
-
-            {/* Payment verification */}
-            {shouldShowPaymentVerificationLink && (
-              <Link
-                className="operator-primary-btn"
-                to={`/operator/payments?bookingId=${booking.id}`}
-              >
-                View Payment Verification
-              </Link>
-            )}
-
-            {/* Payment deadline */}
-            {canEditDeadline && (
-              <button
-                type="button"
-                className="operator-secondary-btn"
-                disabled={!!actionLoading}
-                onClick={() =>
-                  setShowPaymentDeadline(
-                    true
-                  )
-                }
-              >
-                Edit Payment Deadline
-              </button>
-            )}
-
-            {/* Cancellation */}
-            {canCancel && (
-              <button
-                type="button"
-                className="operator-danger-btn"
-                disabled={!!actionLoading}
-                onClick={() =>
-                  setShowCancel(true)
-                }
-              >
-                Cancel This Booking
-              </button>
-            )}
-
-            {!hasAnyAction && (
-              <div className="operator-empty-state compact">
-                No further action is
-                available for this booking.
-              </div>
-            )}
-          </div>
         </div>
-      </section>
+      </div>
+
+      <div className="operator-action-stack">
+
+        {canAcceptReject && (
+          <>
+            <button
+              type="button"
+              className="operator-primary-btn"
+              disabled={
+                !!actionLoading
+              }
+              onClick={() =>
+                handleBookingDecision(
+                  "accept"
+                )
+              }
+            >
+              {actionLoading ===
+              "accept"
+                ? "Accepting..."
+                : "Accept Booking"}
+            </button>
+
+            <button
+              type="button"
+              className="operator-danger-btn"
+              disabled={
+                !!actionLoading
+              }
+              onClick={() =>
+                setShowReject(true)
+              }
+            >
+              Reject Booking
+            </button>
+          </>
+        )}
+
+        {canSuggestAlternative && (
+          <button
+            type="button"
+            className="operator-secondary-btn"
+            disabled={
+              !!actionLoading
+            }
+            onClick={() =>
+              setShowAlternative(
+                true
+              )
+            }
+          >
+            Suggest Alternative
+          </button>
+        )}
+
+        {canHandover && (
+          <button
+            type="button"
+            className="operator-primary-btn"
+            disabled={
+              !!actionLoading
+            }
+            onClick={
+              handleHandover
+            }
+          >
+            {actionLoading ===
+            "handover"
+              ? "Processing Handover..."
+              : "Handover Booking"}
+          </button>
+        )}
+
+        {canReturn && (
+          <button
+            type="button"
+            className="operator-primary-btn"
+            disabled={
+              !!actionLoading
+            }
+            onClick={
+              handleReturn
+            }
+          >
+            {actionLoading ===
+            "return"
+              ? "Processing Return..."
+              : "Complete Return"}
+          </button>
+        )}
+
+        {shouldShowPaymentVerificationLink && (
+          <Link
+            className="operator-primary-btn"
+            to={`/operator/payments?bookingId=${booking.id}`}
+          >
+            View Payment Verification
+          </Link>
+        )}
+
+        {canEditDeadline && (
+          <button
+            type="button"
+            className="operator-secondary-btn"
+            disabled={
+              !!actionLoading
+            }
+            onClick={() =>
+              setShowPaymentDeadline(
+                true
+              )
+            }
+          >
+            Edit Payment Deadline
+          </button>
+        )}
+
+        {canCancel && (
+          <button
+            type="button"
+            className="operator-danger-btn"
+            disabled={
+              !!actionLoading
+            }
+            onClick={() =>
+              setShowCancel(true)
+            }
+          >
+            Cancel This Booking
+          </button>
+        )}
+
+        {!hasAnyAction && (
+          <div className="operator-empty-state compact">
+            No further action is
+            available for this booking.
+          </div>
+        )}
+
+      </div>
+
+    </section>
+
+  </aside>
+</div>
 
       {showAlternative && (
         <AlternativeModal

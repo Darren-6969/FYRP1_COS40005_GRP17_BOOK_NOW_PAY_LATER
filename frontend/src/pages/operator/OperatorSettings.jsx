@@ -57,19 +57,35 @@ const EMAIL_TEMPLATES = [
 ];
 
 const DEFAULT_SETTINGS = {
+  // Booking rules
+  downPaymentPercent: 30,
+
   bookingResponseDeadlineMinutes: 120,
   autoRejectInactiveBooking: true,
   reminderBeforeAutoRejectMinutes: 30,
 
+  // Pickup / return
+  overtimeFee: "",
+  blockNightHandover: false,
+
+  // Payment
   acceptedPaymentMethods: {
     stripe: true,
     duitnowSpay: true,
   },
 
+  allowReceiptUpload: true,
+
+  // Refund
+  partialRefundElected: false,
+  partialRefundPercent: 50,
+
   operatorReminderBeforeAutoRejectMinutes: 30,
   enableOperatorReminderAlerts: true,
 
-  selectedEmailTemplate: "booking_accepted",
+  selectedEmailTemplate:
+    "booking_accepted",
+
   companyLogo: "",
 
   bookingRejectedEmailText: "",
@@ -119,6 +135,31 @@ export default function OperatorSettings() {
 
         setForm((prev) => ({
           ...prev,
+
+        downPaymentPercent:
+          config?.downPaymentPercent ??
+          prev.downPaymentPercent,
+
+        overtimeFee:
+          config?.overtimeFee != null
+            ? String(config.overtimeFee)
+            : "",
+
+        blockNightHandover:
+          config?.blockNightHandover ??
+          prev.blockNightHandover,
+
+        allowReceiptUpload:
+          config?.allowReceiptUpload ??
+          prev.allowReceiptUpload,
+
+        partialRefundElected:
+          config?.partialRefundElected ??
+          prev.partialRefundElected,
+
+        partialRefundPercent:
+          config?.partialRefundPercent ??
+          prev.partialRefundPercent,
 
           bookingResponseDeadlineMinutes:
             config?.bookingResponseDeadlineMinutes ?? prev.bookingResponseDeadlineMinutes,
@@ -259,6 +300,31 @@ const handleSave = async () => {
 
   try {
     const res = await operatorService.updateSettings({
+      downPaymentPercent:
+        Number(
+          form.downPaymentPercent
+        ),
+
+      overtimeFee:
+        form.blockNightHandover
+          ? ""
+          : form.overtimeFee,
+
+      blockNightHandover:
+        form.blockNightHandover,
+
+      allowReceiptUpload:
+        form.allowReceiptUpload,
+
+      partialRefundElected:
+        form.partialRefundElected,
+
+      partialRefundPercent:
+        form.partialRefundElected
+          ? Number(
+              form.partialRefundPercent
+            )
+          : null,
       bookingResponseDeadlineMinutes: form.bookingResponseDeadlineMinutes,
       autoRejectInactiveBooking: form.autoRejectInactiveBooking,
       reminderBeforeAutoRejectMinutes: form.reminderBeforeAutoRejectMinutes,
@@ -366,6 +432,26 @@ const handleSave = async () => {
             description="Control how long an operator can leave a booking request without action."
           >
             <div className="operator-settings-form-grid">
+
+              <FormField
+                label="Down payment"
+                helper="Percentage of the booking total the customer must pay first. Default is 30%."
+              >
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={form.downPaymentPercent}
+                  onChange={(event) =>
+                    updateField(
+                      "downPaymentPercent",
+                      Number(event.target.value)
+                    )
+                  }
+                />
+              </FormField>
+
               <FormField
                 label="Booking response deadline"
                 helper="Time allowed for operator to accept, reject, or suggest an alternative."
@@ -421,6 +507,54 @@ const handleSave = async () => {
           </SettingsSection>
 
           <SettingsSection
+            id="pickup-return-rules"
+            icon={<Clock size={20} />}
+            title="Pickup & Return Rules"
+            description="Configure pickup and return rules for night hours between 21:00 and 09:00."
+          >
+            <div className="operator-settings-form-grid">
+
+              <ToggleField
+                label="Block night pickups and returns"
+                helper="Prevent customers from selecting pickup or return times between 21:00 and 09:00."
+                checked={
+                  form.blockNightHandover
+                }
+                onChange={(checked) =>
+                  updateField(
+                    "blockNightHandover",
+                    checked
+                  )
+                }
+              />
+
+              {!form.blockNightHandover && (
+                <FormField
+                  label="Night overtime flat charge (RM)"
+                  helper="Flat charge applied to each night pickup or return between 21:00 and 09:00."
+                >
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={
+                      form.overtimeFee
+                    }
+                    onChange={(event) =>
+                      updateField(
+                        "overtimeFee",
+                        event.target.value
+                      )
+                    }
+                    placeholder="30.00"
+                  />
+                </FormField>
+              )}
+
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
             id="payment-settings"
             icon={<CreditCard size={20} />}
             title="Payment Settings"
@@ -438,7 +572,71 @@ const handleSave = async () => {
                 checked={Boolean(form.acceptedPaymentMethods.duitnowSpay)}
                 onChange={(checked) => updatePaymentMethod("duitnowSpay", checked)}
               />
+
+              <ToggleField
+                label="Allow receipt upload"
+                helper="Allow customers using manual payment methods to upload a payment receipt for operator verification."
+                checked={
+                  form.allowReceiptUpload
+                }
+                onChange={(checked) =>
+                  updateField(
+                    "allowReceiptUpload",
+                    checked
+                  )
+                }
+              />
             </div>
+
+            <SettingsSection
+              id="refund-settings"
+              icon={<ShieldCheck size={20} />}
+              title="Refund Settings"
+              description="Configure the refund rule applied when the remaining balance is not completed."
+            >
+              <div className="operator-settings-form-grid">
+
+                <ToggleField
+                  label="Allow partial refund"
+                  helper="Allow part of the paid amount to be refunded instead of forfeiting the full amount."
+                  checked={
+                    form.partialRefundElected
+                  }
+                  onChange={(checked) =>
+                    updateField(
+                      "partialRefundElected",
+                      checked
+                    )
+                  }
+                />
+
+                {form.partialRefundElected && (
+                  <FormField
+                    label="Partial refund percentage"
+                    helper="Percentage returned to the customer. Must be between 1% and 99%."
+                  >
+                    <input
+                      type="number"
+                      min="1"
+                      max="99"
+                      step="1"
+                      value={
+                        form.partialRefundPercent
+                      }
+                      onChange={(event) =>
+                        updateField(
+                          "partialRefundPercent",
+                          Number(
+                            event.target.value
+                          )
+                        )
+                      }
+                    />
+                  </FormField>
+                )}
+
+              </div>
+            </SettingsSection>
 
             {form.acceptedPaymentMethods.duitnowSpay && (
               <FormField
@@ -736,12 +934,38 @@ const handleSave = async () => {
 
         <aside className="operator-settings-toc">
           <strong>Settings Menu</strong>
-          <a href="#booking-rules">Booking Action Rules</a>
-          <a href="#payment-settings">Payment Settings</a>
-          <a href="#notification-settings">Notification Settings</a>
-          <a href="#email-template-settings">Email Templates</a>
-          <a href="#security-settings">Security</a>
-          <a href="#integration-settings">Integration / API Keys</a>
+
+          <a href="#booking-rules">
+            Booking Rules
+          </a>
+
+          <a href="#pickup-return-rules">
+            Pickup & Return Rules
+          </a>
+
+          <a href="#payment-settings">
+            Payment Settings
+          </a>
+
+          <a href="#refund-settings">
+            Refund Settings
+          </a>
+
+          <a href="#notification-settings">
+            Notification Settings
+          </a>
+
+          <a href="#email-template-settings">
+            Email Templates
+          </a>
+
+          <a href="#security-settings">
+            Security
+          </a>
+
+          <a href="#integration-settings">
+            Integration / API Keys
+          </a>
         </aside>
       </div>
     </div>

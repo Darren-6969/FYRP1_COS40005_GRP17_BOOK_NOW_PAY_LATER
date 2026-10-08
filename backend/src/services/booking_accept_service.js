@@ -113,11 +113,19 @@ export async function acceptBookingAndRequestPayment({
   const rentalAmount = Number(booking.rentalAmount ?? (
     Number(booking.totalAmount) - Number(booking.addonsAmount || 0)
   ));
-  const parsedPercent = creditTier === "Caution"
-    ? 30
-    : creditTier === "High Risk"
-      ? 100
-      : 0;
+      const operatorConfig =
+      await prisma.bNPLConfig.findFirst({
+        where: {
+          operatorId: booking.operatorId,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+    const parsedPercent = Number(
+      operatorConfig?.downPaymentPercent ?? 30
+    );
 
   // SRS V2.9 (4.3.5): operators set the down payment from 0 to 100 percent.
   // 0 means everything is paid as the balance; 100 means everything is paid
@@ -316,11 +324,18 @@ export async function acceptBookingAndRequestPayment({
       await tx.paymentScheduleEntry.deleteMany({
         where: { bookingId: booking.id, status: "DUE" },
       });
-      const scheduleEntries = await createPaymentScheduleEntries(booking, {
-        database: tx,
-        creditTier,
-        createdAt: acceptedAt,
-      });
+      
+      const scheduleEntries =
+        await createPaymentScheduleEntries(
+          booking,
+          {
+            database: tx,
+            creditTier,
+            downPaymentPercent:
+              parsedPercent,
+            createdAt: acceptedAt,
+          }
+        );
 
       console.log(
         "6️⃣ AUTO ACCEPT: payment created",
