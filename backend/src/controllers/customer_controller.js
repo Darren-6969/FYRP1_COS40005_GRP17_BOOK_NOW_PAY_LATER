@@ -23,6 +23,7 @@ import { getPlatformSettings, isFeatureEnabled } from "../services/platform_sett
 import { assignCreditTier } from "../services/credit_tier_service.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 import { enforceConcurrentExposureCap } from "../services/concurrent_exposure_service.js";
+import { transitionBookingStatus } from "../services/booking_status_service.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -444,9 +445,15 @@ export async function cancelCustomerBooking(req, res, next) {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      const cancelled = await tx.booking.update({
+      await transitionBookingStatus({
+        bookingId: booking.id,
+        newStatus: "CANCELLED",
+        actorId: req.user.id,
+        remark: "Cancelled by customer.",
+        database: tx,
+      });
+      const cancelled = await tx.booking.findUnique({
         where: { id: booking.id },
-        data: { status: "CANCELLED" },
         include: {
           customer: {
             select: {

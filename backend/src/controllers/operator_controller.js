@@ -33,6 +33,7 @@ import {
 import { recordSuccessfulPaymentEvents } from "../services/customer_credit_service.js";
 import { getPlatformDeadlinePolicy, validatePublishedDeadline } from "../services/platform_policy_service.js";
 import { createAuditLog as writeAuditLog } from "../services/log_service.js";
+import { transitionBookingStatus } from "../services/booking_status_service.js";
 import { getPlatformSettings } from "../services/platform_settings_service.js";
 import {
   buildOperatorSettlementReport,
@@ -1371,12 +1372,18 @@ export async function cancelOperatorBooking(req, res, next) {
       });
     }
 
-    const updatedBooking = await prisma.booking.update({
-      where: { id: booking.id },
-      data: {
-        status: "CANCELLED",
-      },
-      include: includeBookingRelations(),
+    const updatedBooking = await prisma.$transaction(async (tx) => {
+      await transitionBookingStatus({
+        bookingId: booking.id,
+        newStatus: "CANCELLED",
+        actorId: req.user.id,
+        remark: reason,
+        database: tx,
+      });
+      return tx.booking.findUnique({
+        where: { id: booking.id },
+        include: includeBookingRelations(),
+      });
     });
 
     await createAuditLog({
@@ -1457,32 +1464,25 @@ export async function handoverBooking(req, res, next) {
       });
     }
 
-    if (
-      [
-        "COMPLETED",
-        "NO_SHOW",
-        "CANCELLED",
-        "REJECTED",
-        "OVERDUE",
-      ].includes(booking.status)
-    ) {
+    if (booking.status !== "READY_FOR_PICKUP") {
       return res.status(400).json({
-        message: `Handover is not available when booking status is ${booking.status}.`,
+        message: "Handover is available only after payment and licence verification.",
       });
     }
 
-    const updatedBooking =
-      await prisma.booking.update({
-        where: {
-          id: booking.id,
-        },
-
-        data: {
-          status: "IN_PROGRESS",
-        },
-
+    const updatedBooking = await prisma.$transaction(async (tx) => {
+      await transitionBookingStatus({
+        bookingId: booking.id,
+        newStatus: "IN_PROGRESS",
+        actorId: req.user.id,
+        remark: "Vehicle handed over to customer.",
+        database: tx,
+      });
+      return tx.booking.findUnique({
+        where: { id: booking.id },
         include: includeBookingRelations(),
       });
+    });
 
     await createAuditLog({
       req,
@@ -1690,10 +1690,16 @@ export async function confirmBooking(req, res, next) {
       });
     }
 
-    const updatedBooking = await prisma.booking.update({
-      where: { id: booking.id },
-      data: { status: "COMPLETED", serviceResolvedAt: new Date() },
-      include: includeBookingRelations(),
+    const updatedBooking = await prisma.$transaction(async (tx) => {
+      await transitionBookingStatus({
+        bookingId: booking.id,
+        newStatus: "COMPLETED",
+        actorId: req.user.id,
+        remark: String(req.body?.remark || "Operator confirmed service completion."),
+        extraData: { serviceResolvedAt: new Date() },
+        database: tx,
+      });
+      return tx.booking.findUnique({ where: { id: booking.id }, include: includeBookingRelations() });
     });
 
     await createAuditLog({
@@ -1768,10 +1774,13 @@ export async function markBookingNoShow(req, res, next) {
 
     const updatedBooking = await prisma.$transaction(async (tx) => {
       const status = fullyPaid ? "NO_SHOW" : "NO_SHOW_UNPAID";
-      const updated = await tx.booking.update({
-        where: { id: booking.id },
-        data: { status, noShowRemark: remark, serviceResolvedAt: now },
-        include: includeBookingRelations(),
+      await transitionBookingStatus({
+        bookingId: booking.id,
+        newStatus: status,
+        actorId: req.user.id,
+        remark,
+        extraData: { noShowRemark: remark, serviceResolvedAt: now },
+        database: tx,
       });
       if (status === "NO_SHOW_UNPAID") {
         await tx.paymentScheduleEntry.updateMany({
@@ -1779,20 +1788,7 @@ export async function markBookingNoShow(req, res, next) {
           data: { status: "VOID", voidedAt: now },
         });
       }
-      await createAuditLog({
-        req,
-        action: "BOOKING_MARKED_NO_SHOW",
-        entityType: "Booking",
-        entityId: booking.id,
-        details: {
-          previousStatus: booking.status,
-          status,
-          remark,
-          depositForfeited: status === "NO_SHOW_UNPAID",
-          serviceResolvedAt: now,
-        },
-      }, tx);
-      return updated;
+      return tx.booking.findUnique({ where: { id: booking.id }, include: includeBookingRelations() });
     });
 
     res.json({ booking: mapBooking(updatedBooking) });

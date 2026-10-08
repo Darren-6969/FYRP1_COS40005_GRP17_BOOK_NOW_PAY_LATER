@@ -1,6 +1,7 @@
 import prisma from "../config/db.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 import { createAuditLog } from "../services/log_service.js";
+import { getBookingStatusHistory, transitionBookingStatus } from "../services/booking_status_service.js";
 
 // Shared include spec for full booking relations
 const bookingInclude = {
@@ -47,6 +48,26 @@ export async function getBookings(req, res, next) {
   }
 }
 
+export async function getBookingHistory(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      select: { id: true, operatorId: true, customerId: true },
+    });
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+    if (req.user.role === "NORMAL_SELLER" && booking.operatorId !== req.user.operatorId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    if (req.user.role === "CUSTOMER" && booking.customerId !== req.user.id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    res.json({ history: await getBookingStatusHistory(id) });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function overrideBookingStatus(req, res, next) {
   try {
     const id = Number(req.params.id);
@@ -74,9 +95,15 @@ export async function overrideBookingStatus(req, res, next) {
       if (!booking) return { notFound: true };
       if (booking.status === status) return { unchanged: true };
 
-      const updated = await tx.booking.update({
+      await transitionBookingStatus({
+        bookingId: id,
+        newStatus: status,
+        actorId: req.user.id,
+        remark: reason,
+        database: tx,
+      });
+      const updated = await tx.booking.findUnique({
         where: { id },
-        data: { status },
         include: bookingInclude,
       });
       const isForcedCancellation = status === "CANCELLED";
@@ -182,10 +209,18 @@ export async function rejectBooking(req, res, next) {
       });
     }
 
-    const updated = await prisma.booking.update({
-      where: { id },
-      data: { status: "REJECTED" },
-      include: { customer: true, operator: true, payment: true },
+    const updated = await prisma.$transaction(async (tx) => {
+      await transitionBookingStatus({
+        bookingId: Number(id),
+        newStatus: "REJECTED",
+        actorId: req.user.id,
+        remark: String(req.body?.reason || "Rejected by operator."),
+        database: tx,
+      });
+      return tx.booking.findUnique({
+        where: { id },
+        include: { customer: true, operator: true, payment: true },
+      });
     });
 
     await createAuditLog({

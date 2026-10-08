@@ -27,6 +27,7 @@ import { requireIdempotencyKey, runIdempotent } from "../services/idempotency_se
 import { createAuditLog } from "../services/log_service.js";
 import { createCommissionLedgerSnapshot } from "../services/commission_ledger_service.js";
 import { getPlatformSettings } from "../services/platform_settings_service.js";
+import { transitionBookingStatus, isValidBookingTransition } from "../services/booking_status_service.js";
 import {
   createExpressOnboardingLink,
   getStripeAccountState,
@@ -221,15 +222,37 @@ export async function applyPaidState(
       update: {},
     });
 
-    const paidBooking = await tx.booking.update({
+    const paidStatus = paidPayment.status === "PAID"
+      ? "PAID"
+      : paymentType === PAYMENT_TYPES.DOWN_PAYMENT
+        ? "CONFIRMED"
+        : "PENDING_PAYMENT";
+    await transitionBookingStatus({
+      bookingId,
+      newStatus: paidStatus,
+      actorId: null,
+      remark: paymentType === PAYMENT_TYPES.DOWN_PAYMENT
+        ? "Down payment captured."
+        : "Balance payment captured.",
+      database: tx,
+    });
+    if (paidStatus === "PAID") {
+      const approvedLicence = await tx.customerLicenceDocument.findFirst({
+        where: { customerId: booking.customerId, status: "APPROVED" },
+        select: { id: true },
+      });
+      if (approvedLicence) {
+        await transitionBookingStatus({
+          bookingId,
+          newStatus: "READY_FOR_PICKUP",
+          actorId: null,
+          remark: "Balance paid and driving licence verified.",
+          database: tx,
+        });
+      }
+    }
+    const paidBooking = await tx.booking.findUnique({
       where: { id: bookingId },
-      data: {
-        status: paidPayment.status === "PAID"
-          ? "PAID"
-          : paymentType === PAYMENT_TYPES.DOWN_PAYMENT
-            ? "CONFIRMED"
-            : "PENDING_PAYMENT",
-      },
       include: includeBookingRelations(),
     });
 
@@ -570,10 +593,14 @@ export async function processStripeWebhookEvent(event, requestIp = null, databas
             data: { status: "FAILED" },
           });
 
-          await prisma.booking.update({
-            where: { id: refundedPayment.bookingId },
-            data: { status: "CANCELLED" },
-          });
+          if (isValidBookingTransition(bookingBefore?.status, "CANCELLED")) {
+            await transitionBookingStatus({
+              bookingId: refundedPayment.bookingId,
+              newStatus: "CANCELLED",
+              actorId: null,
+              remark: "Booking cancelled after payment refund.",
+            });
+          }
 
           await prisma.invoice.updateMany({
             where: { bookingId: refundedPayment.bookingId },

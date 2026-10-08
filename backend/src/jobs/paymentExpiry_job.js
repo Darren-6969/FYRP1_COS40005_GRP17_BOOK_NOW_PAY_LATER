@@ -5,6 +5,7 @@ import { bookingStatusTemplate } from "../services/email_templates.js";
 import { runLoggedCronJob } from "../services/cron_job_service.js";
 import { recordCreditEvent } from "../services/customer_credit_service.js";
 import { voidOutstandingScheduleEntries } from "../services/payment_schedule_entry_service.js";
+import { transitionBookingStatus } from "../services/booking_status_service.js";
 
 /**
  * Runs every hour.
@@ -47,20 +48,21 @@ export function runPaymentExpiryJob() {
     let processedCount = 0;
     for (const booking of expired) {
       const cancelled = await prisma.$transaction(async (tx) => {
-        const claimed = await tx.booking.updateMany({
-          where: {
-            id: booking.id,
-            status: { in: ["PENDING", "ACCEPTED", "PENDING_PAYMENT", "CONFIRMED", "PAID"] },
-          },
-          data: { status: "CANCELLED" },
+        const current = await tx.booking.findUnique({ where: { id: booking.id }, select: { status: true } });
+        if (!current || !["PENDING", "ACCEPTED", "PENDING_PAYMENT", "CONFIRMED", "PAID"].includes(current.status)) return false;
+        await transitionBookingStatus({
+          bookingId: booking.id,
+          newStatus: "EXPIRED",
+          actorId: null,
+          remark: "Payment or driving licence obligation expired.",
+          database: tx,
         });
-        if (claimed.count !== 1) return false;
 
         await Promise.all([
           ...(booking.payment
             ? [tx.payment.update({
               where: { bookingId: booking.id },
-              data: { status: "OVERDUE" },
+              data: { status: "EXPIRED" },
             })]
             : []),
           tx.auditLog.create({

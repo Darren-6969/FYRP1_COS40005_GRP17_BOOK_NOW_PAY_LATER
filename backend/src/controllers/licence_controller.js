@@ -1,5 +1,6 @@
 import multer from "multer";
 import prisma from "../config/db.js";
+import { transitionBookingStatus } from "../services/booking_status_service.js";
 import { createInAppNotification } from "../services/notification_email_service.js";
 import { sendEmail } from "../services/email_service.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
@@ -192,6 +193,28 @@ export async function reviewLicenceDocument(req, res, next) {
         reviewedById: req.user.id,
       },
     });
+
+    if (decision === "APPROVED") {
+      await prisma.$transaction(async (tx) => {
+        const readyBookings = await tx.booking.findMany({
+          where: {
+            customerId: document.customerId,
+            status: "PAID",
+            payment: { is: { status: "PAID" } },
+          },
+          select: { id: true },
+        });
+        for (const booking of readyBookings) {
+          await transitionBookingStatus({
+            bookingId: booking.id,
+            newStatus: "READY_FOR_PICKUP",
+            actorId: req.user.id,
+            remark: "Driving licence verified after balance payment.",
+            database: tx,
+          });
+        }
+      });
+    }
 
     await prisma.auditLog.create({
       data: {

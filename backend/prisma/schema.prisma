@@ -60,8 +60,10 @@ enum BookingStatus {
   PENDING_PAYMENT
   CONFIRMED
   PAID
+  READY_FOR_PICKUP
   IN_PROGRESS
   OVERDUE
+  EXPIRED
   CANCELLED
   COMPLETED
   NO_SHOW
@@ -254,6 +256,7 @@ model User {
   creditEventActor         CreditProfileEvent[]        @relation("CreditEventActor")
   creditAppeals            CreditAppeal[]              @relation("CreditAppealCustomer")
   reviewedCreditAppeals    CreditAppeal[]              @relation("CreditAppealReviewer")
+  bookingStatusChanges     BookingStatusHistory[] @relation("BookingStatusActor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -594,6 +597,7 @@ model Booking {
   refunds                 Refund[]
   commissionLedgerEntries CommissionLedgerEntry[]
   paymentScheduleEntries  PaymentScheduleEntry[]
+  statusHistory         BookingStatusHistory[]
   receipt                 Receipt?
   invoice                 Invoice?
 
@@ -609,6 +613,21 @@ model Booking {
   @@index([listingId, status])
   @@index([pickupDate, returnDate])
   @@index([dropoffPointId])
+}
+
+model BookingStatusHistory {
+  id          Int          @id @default(autoincrement())
+  bookingId   Int
+  booking     Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  actorId     Int?
+  actor       User?        @relation("BookingStatusActor", fields: [actorId], references: [id], onDelete: SetNull)
+  oldStatus   BookingStatus?
+  newStatus   BookingStatus
+  remark      String
+  createdAt   DateTime     @default(now())
+
+  @@index([bookingId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model Payment {

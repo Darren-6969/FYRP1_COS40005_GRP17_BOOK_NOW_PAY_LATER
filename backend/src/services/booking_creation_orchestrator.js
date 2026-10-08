@@ -146,6 +146,15 @@ export async function createBookingOrchestrator({
         payment: true,
       },
     });
+    await tx.bookingStatusHistory.create({
+      data: {
+        bookingId: created.id,
+        actorId: customerId,
+        oldStatus: null,
+        newStatus: "PENDING_PAYMENT",
+        remark: "Booking created by customer.",
+      },
+    });
 
     await tx.payment.create({
       data: {
