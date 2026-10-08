@@ -12,6 +12,7 @@ import { bookingStatusTemplate, autoRejectedBookingTemplate } from "./email_temp
 import { escapeHtml } from "../utils/escapeHTML.js";
 import { withDbRetry, ensureDbConnection } from "../utils/dbRetry.js"; // <-- add
 import { runLoggedCronJob } from "./cron_job_service.js";
+import { runPaymentExpiryJob } from "../jobs/paymentExpiry_job.js";
 import { getPlatformSettings, isFeatureEnabled } from "./platform_settings_service.js";
 import { recordCreditEvent } from "./customer_credit_service.js";
 
@@ -442,12 +443,15 @@ async function performOverdueBookingCheck({
   }
 }
 
-export function runOverdueBookingCheck(options = {}) {
-  return runLoggedCronJob(
-    "OVERDUE_CHECK",
-    () => performOverdueBookingCheck(options)
-  );
+export function runOverdueBookingCheck(_options = {}) {
+  return runPaymentExpiryJob().then((result) => ({
+    ...result,
+    expiredCount: result.processedCount || 0,
+    expiredBookings: [],
+  }));
 }
+
+void performOverdueBookingCheck;
 
 /**
  * 2. Auto-completion check
