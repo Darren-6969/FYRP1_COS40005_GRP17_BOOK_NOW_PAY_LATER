@@ -88,6 +88,17 @@ function includeBookingRelations() {
     payment: true,
     receipt: true,
     invoice: true,
+    addons: {
+      select: {
+        id: true,
+        listingAddonId: true,
+        name: true,
+        unit: true,
+        unitPrice: true,
+        quantity: true,
+        totalPrice: true,
+      },
+    },
   };
 }
 
@@ -116,9 +127,36 @@ function mapBooking(booking) {
 
   return {
     ...booking,
-    totalAmount: toNumber(booking.totalAmount),
-    payment: mapPayment(booking.payment),
-    invoice: mapInvoice(booking.invoice),
+
+    totalAmount:
+      toNumber(booking.totalAmount),
+
+    addons:
+      (booking.addons || []).map(
+        (addon) => ({
+          ...addon,
+
+          unitPrice:
+            toNumber(
+              addon.unitPrice
+            ),
+
+          totalPrice:
+            toNumber(
+              addon.totalPrice
+            ),
+        })
+      ),
+
+    payment:
+      mapPayment(
+        booking.payment
+      ),
+
+    invoice:
+      mapInvoice(
+        booking.invoice
+      ),
   };
 }
 

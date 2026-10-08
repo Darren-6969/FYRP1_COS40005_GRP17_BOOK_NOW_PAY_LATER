@@ -194,6 +194,25 @@ export default function OperatorBookingDetail() {
   const canAcceptReject =
   bookingStatus === "PENDING";
 
+  const bookingDetails =
+    booking.bookingDetails || {};
+
+  const chauffeur =
+    bookingDetails.chauffeur || {};
+
+  const chauffeurRequested =
+    chauffeur.requested === true;
+
+  const chauffeurNote =
+    chauffeur.note || "";
+
+    const selectedAddons =
+      Array.isArray(
+        booking.addons
+      )
+        ? booking.addons
+        : [];
+
   const paymentStatus = String(
     booking.payment?.status || ""
   ).toUpperCase();
@@ -522,6 +541,83 @@ export default function OperatorBookingDetail() {
             )}
           />
         </div>
+
+        {/* ===================================================
+              Additional Requests
+          ==================================================== */}
+          <div className="operator-card operator-card-secondary">
+            <h2>
+              Additional Requests & Add-ons
+            </h2>
+
+            {/* Chauffeur Request */}
+            <InfoRow
+              label="Chauffeur"
+              value={
+                chauffeurRequested
+                  ? "Requested"
+                  : "Not requested"
+              }
+            />
+
+            {chauffeurRequested && (
+              <>
+                <InfoRow
+                  label="Customer Note"
+                  value={
+                    chauffeurNote ||
+                    "No note provided."
+                  }
+                />
+
+                <InfoRow
+                  label="Chauffeur Pricing"
+                  value="Not included in booking price"
+                />
+              </>
+            )}
+
+            <h2 className="operator-section-title">
+              Selected Add-ons
+            </h2>
+
+            {!selectedAddons.length ? (
+              <InfoRow
+                label="Add-ons"
+                value="None selected"
+              />
+            ) : (
+              selectedAddons.map(
+                (addon) => {
+                  const unitLabel =
+                    addon.unit ===
+                    "PER_DAY"
+                      ? " / day"
+                      : " / booking";
+
+                  const quantityText =
+                    addon.quantity > 1
+                      ? ` × ${addon.quantity}`
+                      : "";
+
+                  return (
+                    <InfoRow
+                      key={addon.id}
+                      label={addon.name}
+                      value={
+                        `${formatOperatorMoney(
+                          addon.unitPrice
+                        )}${unitLabel}` +
+                        `${quantityText} · Total ${formatOperatorMoney(
+                          addon.totalPrice
+                        )}`
+                      }
+                    />
+                  );
+                }
+              )
+            )}
+          </div>
 
         {/* ===================================================
             Timeline
