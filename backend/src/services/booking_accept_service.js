@@ -7,6 +7,11 @@ import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 import { createAuditLog } from "./log_service.js";
 import { createPaymentScheduleEntries } from "./payment_schedule_entry_service.js";
 import { getDefaultCreditProfile } from "./customer_credit_service.js";
+import {
+  applyDownPaymentFloor,
+  getPlatformSettings,
+  isCreditTierPolicyEnabled,
+} from "./platform_settings_service.js";
 
 const ACCEPTABLE_STATUSES = [
   "PENDING",
@@ -154,9 +159,17 @@ const operatorConfig =
   });
 
 
-const parsedPercent = Number(
+const operatorPercent = Number(
   operatorConfig
     ?.downPaymentPercent ?? 30
+);
+
+// The platform down payment floor applies only while the E17 tier policy is on.
+const platformSettings = await getPlatformSettings();
+const parsedPercent = applyDownPaymentFloor(
+  operatorPercent,
+  platformSettings.downPaymentFloorPercent,
+  await isCreditTierPolicyEnabled(platformSettings, booking.operatorId)
 );
 
 

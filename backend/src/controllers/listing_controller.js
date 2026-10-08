@@ -8,6 +8,7 @@ import {
 import {
   getListingLimit,
 } from "../services/subscription_service.js";
+import { getPlatformSettings } from "../services/platform_settings_service.js";
 
 function listingWhere(req) {
   if (req.user.role === "MASTER_SELLER") {
@@ -161,9 +162,7 @@ export async function getListings(req, res, next) {
 
     if (operator) {
       const listingLimit =
-        getListingLimit(
-          operator.subscriptionPlan
-        );
+        getListingLimit(operator.subscriptionPlan, (await getPlatformSettings()).subscriptionTiers);
 
       const publishedCount =
         await prisma.listing.count({
@@ -993,9 +992,7 @@ export async function publishListing(
     }
 
     const listingLimit =
-      getListingLimit(
-        operator.subscriptionPlan
-      );
+      getListingLimit(operator.subscriptionPlan, (await getPlatformSettings()).subscriptionTiers);
 
     // Count only currently published listings.
     const publishedCount =
@@ -1284,6 +1281,8 @@ export async function bulkUpdateListingStatus(
         }
       }
 
+      const { subscriptionTiers } = await getPlatformSettings();
+
       // Check every operator involved.
       for (
         const [
@@ -1292,9 +1291,7 @@ export async function bulkUpdateListingStatus(
         ] of operatorGroups
       ) {
         const listingLimit =
-          getListingLimit(
-            group.subscriptionPlan
-          );
+          getListingLimit(group.subscriptionPlan, subscriptionTiers);
 
         const publishedCount =
           await prisma.listing.count({

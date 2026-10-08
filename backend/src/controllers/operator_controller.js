@@ -564,9 +564,7 @@ export async function updateOperatorSubscriptionPlan(
     }
 
     const listingLimit =
-      getListingLimit(
-        subscriptionPlan
-      );
+      getListingLimit(subscriptionPlan, (await getPlatformSettings()).subscriptionTiers);
 
     const publishedCount =
       await prisma.listing.count({

@@ -498,12 +498,15 @@ model PlatformDeadlinePolicy {
 
 model PlatformSettings {
   id                         Int      @id @default(1)
-  commissionRate             Decimal  @default(5) @db.Decimal(5, 2)
+  commissionRate             Decimal  @default(10) @db.Decimal(5, 2)
   defaultPaymentDeadlineDays Int      @default(3)
   creditTierThresholds       Json     @default("{}") @db.JsonB
   exposureLimits             Json     @default("{}") @db.JsonB
-  licenceReuploadWindowHours Int      @default(48)
+  licenceReuploadWindowHours Int      @default(24)
   featureFlags               Json     @default("{\"allowReceiptUpload\":true,\"automaticOverdueHandling\":true}") @db.JsonB
+  reminderTiming             Json     @default("{\"paymentFirstHours\":24,\"paymentFinalHours\":6,\"licenceReminderHours\":24}") @db.JsonB
+  downPaymentFloorPercent    Int      @default(0)
+  subscriptionTiers          Json     @default("{\"FREE\":{\"label\":\"Starter\",\"listingLimit\":5,\"monthlyPriceRm\":0,\"termDays\":90},\"BASIC\":{\"label\":\"Standard\",\"listingLimit\":10,\"monthlyPriceRm\":20,\"termDays\":null},\"PREMIUM\":{\"label\":\"Premium\",\"listingLimit\":20,\"monthlyPriceRm\":null,\"termDays\":null}}") @db.JsonB
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }

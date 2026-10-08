@@ -13,7 +13,7 @@ import { escapeHtml } from "../utils/escapeHTML.js";
 import { withDbRetry, ensureDbConnection } from "../utils/dbRetry.js"; // <-- add
 import { runLoggedCronJob } from "./cron_job_service.js";
 import { runPaymentExpiryJob } from "../jobs/paymentExpiry_job.js";
-import { getPlatformSettings, isFeatureEnabled } from "./platform_settings_service.js";
+import { getPlatformSettings, isFeatureEnabled, normalizeReminderTiming } from "./platform_settings_service.js";
 import { recordCreditEvent } from "./customer_credit_service.js";
 
 let lastOverdueRun = null;
@@ -621,9 +621,9 @@ export function runCompletedBookingCheck(options = {}) {
 
 /**
  * 3. Payment reminder check
- * Reminder strategy:
- * - 24-hour reminder when deadline is within 24 hours
- * - 6-hour final reminder when deadline is within 6 hours
+ * Reminder strategy (timing is set in system settings, defaulting to 24 and 6):
+ * - first reminder when the deadline is within the first-reminder window
+ * - final reminder when the deadline is within the final-reminder window
  *
  * Uses audit logs to prevent duplicate reminders.
  */
@@ -644,13 +644,16 @@ async function performPaymentReminderCheck({
     }
 
     const now = new Date();
-    const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const { paymentFirstHours, paymentFinalHours } = normalizeReminderTiming(
+      (await getPlatformSettings()).reminderTiming
+    );
+    const firstReminderWindowEnd = new Date(now.getTime() + paymentFirstHours * 60 * 60 * 1000);
 
     const reminderCandidates = await prisma.booking.findMany({
       where: {
         paymentDeadline: {
           gt: now,
-          lte: next24Hours,
+          lte: firstReminderWindowEnd,
         },
         status: {
           in: ["ACCEPTED", "PENDING_PAYMENT"],
@@ -678,7 +681,7 @@ async function performPaymentReminderCheck({
     for (const booking of reminderCandidates) {
       const remainingHours = hoursUntil(booking.paymentDeadline, now);
 
-      const isFinalReminder = remainingHours <= 6;
+      const isFinalReminder = remainingHours <= paymentFinalHours;
       const action = isFinalReminder
         ? "FINAL_PAYMENT_REMINDER_SENT"
         : "PAYMENT_REMINDER_SENT";
