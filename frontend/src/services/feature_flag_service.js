@@ -14,3 +14,7 @@ export function getManagedFeatureFlags() {
 export function updateFeatureFlag(payload) {
   return api.patch("/config/feature-flags", payload);
 }
+
+export function deleteFeatureFlagOverride({ key, operatorId }) {
+  return api.delete("/config/feature-flags", { params: { key, operatorId } });
+}

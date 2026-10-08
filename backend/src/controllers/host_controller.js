@@ -17,6 +17,7 @@ import { generateUserCode } from "../services/userCode.js";
 import { issueTokenPair, sanitizeUser } from "./auth_controller.js";
 import { sendEmail } from "../services/email_service.js";
 import { enforceConcurrentExposureCap } from "../services/concurrent_exposure_service.js";
+import { isCreditTierPolicyEnabled } from "../services/platform_settings_service.js";
 
 
 async function mintHandoff(intentId) {
@@ -279,12 +280,16 @@ async function createBookingFromIntent(intent, user) {
 });
 
   const booking = await prisma.$transaction(async (tx) => {
-    await enforceConcurrentExposureCap({ customerId: user.id, database: tx });
     const platformSettings = await tx.platformSettings.upsert({
       where: { id: 1 },
       create: { id: 1 },
       update: {},
     });
+    // Exposure limits and credit thresholds act only while the E17 tier policy is on.
+    const tierPolicyOn = await isCreditTierPolicyEnabled(platformSettings, intent.operatorId);
+    if (tierPolicyOn) {
+      await enforceConcurrentExposureCap({ customerId: user.id, database: tx });
+    }
     const created = await tx.booking.create({
       data: {
         bookingCode: tempBookingCode(),
@@ -298,7 +303,7 @@ async function createBookingFromIntent(intent, user) {
         returnDate: intent.returnDate,
         location: intent.location,
         totalAmount: intent.totalAmount,
-        creditTier: assignCreditTier(intent.totalAmount, platformSettings.creditTierThresholds),
+        creditTier: assignCreditTier(intent.totalAmount, tierPolicyOn ? platformSettings.creditTierThresholds : {}),
         // No operator acceptance queue.
       // Once the customer claims the host booking,
       // the booking is confirmed and awaits payment.

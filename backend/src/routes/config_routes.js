@@ -12,6 +12,7 @@ import {
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import { allowRoles } from "../middlewares/rbac_middleware.js";
 import {
+  deleteFeatureFlagOverride,
   getEffectiveFeatureFlags,
   getManagedFeatureFlags,
   updateFeatureFlag,
@@ -22,6 +23,7 @@ const router = express.Router();
 router.get("/feature-flags", verifyToken, allowRoles("MASTER_SELLER", "NORMAL_SELLER", "CUSTOMER"), getEffectiveFeatureFlags);
 router.get("/feature-flags/manage", verifyToken, allowRoles("MASTER_SELLER"), getManagedFeatureFlags);
 router.patch("/feature-flags", verifyToken, allowRoles("MASTER_SELLER"), updateFeatureFlag);
+router.delete("/feature-flags", verifyToken, allowRoles("MASTER_SELLER"), deleteFeatureFlagOverride);
 
 router.get("/platform-deadlines", verifyToken, allowRoles("MASTER_SELLER"), getPlatformDeadlineSettings);
 router.patch("/platform-deadlines", verifyToken, allowRoles("MASTER_SELLER"), updatePlatformDeadlineSettings);

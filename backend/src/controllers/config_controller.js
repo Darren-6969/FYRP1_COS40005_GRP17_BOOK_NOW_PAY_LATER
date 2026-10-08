@@ -5,8 +5,10 @@ import { createAuditLog } from "../services/log_service.js";
 import {
   DEFAULT_PLATFORM_FEATURE_FLAGS,
   getPlatformSettings as loadPlatformSettings,
+  normalizeReminderTiming,
+  normalizeSubscriptionTiers,
 } from "../services/platform_settings_service.js";
-import { setFeatureFlag } from "../services/feature_flag_service.js";
+import { clearFeatureFlagCache, setFeatureFlag } from "../services/feature_flag_service.js";
 
 function canManageOperator(req, operatorId) {
   if (req.user.role === "MASTER_SELLER") return true;
@@ -321,6 +323,23 @@ export async function updatePlatformSettings(req, res, next) {
       return res.status(400).json({ message: validationError.message });
     }
 
+    let downPaymentFloorPercent = existing.downPaymentFloorPercent;
+    if (req.body.downPaymentFloorPercent !== undefined) {
+      downPaymentFloorPercent = Number(req.body.downPaymentFloorPercent);
+      if (!Number.isInteger(downPaymentFloorPercent) || downPaymentFloorPercent < 0 || downPaymentFloorPercent > 100) {
+        return res.status(400).json({ message: "Down payment floor must be a whole percentage between 0 and 100." });
+      }
+    }
+
+    let reminderTiming;
+    let subscriptionTiers;
+    try {
+      reminderTiming = normalizeReminderTiming(req.body.reminderTiming, existing.reminderTiming);
+      subscriptionTiers = normalizeSubscriptionTiers(req.body.subscriptionTiers, existing.subscriptionTiers);
+    } catch (validationError) {
+      return res.status(400).json({ message: validationError.message });
+    }
+
     let featureFlags = existing.featureFlags;
     if (req.body.featureFlags !== undefined) {
       const submittedFlags = req.body.featureFlags;
@@ -343,6 +362,9 @@ export async function updatePlatformSettings(req, res, next) {
       exposureLimits,
       licenceReuploadWindowHours,
       featureFlags,
+      reminderTiming,
+      downPaymentFloorPercent,
+      subscriptionTiers,
     };
     const before = {
       ...existing,
@@ -362,6 +384,13 @@ export async function updatePlatformSettings(req, res, next) {
         });
         updatedDefaultConfigs = updateResult.count;
       }
+      // Global flag rows are written in the same transaction as the settings
+      // row, so the two stores cannot disagree if either write fails.
+      if (req.body.featureFlags !== undefined) {
+        for (const [key, enabled] of Object.entries(featureFlags)) {
+          await setFeatureFlag({ key, enabled }, tx);
+        }
+      }
       const after = {
         ...updated,
         commissionRate: Number(updated.commissionRate),
@@ -378,12 +407,7 @@ export async function updatePlatformSettings(req, res, next) {
       return { settings: updated, updatedDefaultConfigs };
     });
 
-    if (req.body.featureFlags !== undefined) {
-      await Promise.all(Object.entries(featureFlags).map(([key, enabled]) =>
-        setFeatureFlag({ key, enabled })
-      ));
-    }
-
+    clearFeatureFlagCache();
     res.json(result);
   } catch (err) {
     next(err);

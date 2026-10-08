@@ -19,7 +19,7 @@ import {
   PAYMENT_TYPES,
 } from "../services/payment_schedule_service.js";
 import { runIdempotent } from "../services/idempotency_service.js";
-import { getPlatformSettings, isFeatureEnabled } from "../services/platform_settings_service.js";
+import { getPlatformSettings, isCreditTierPolicyEnabled, isFeatureEnabled } from "../services/platform_settings_service.js";
 import { assignCreditTier } from "../services/credit_tier_service.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 import { enforceConcurrentExposureCap } from "../services/concurrent_exposure_service.js";
@@ -287,12 +287,16 @@ export async function createCustomerBooking(req, res, next) {
     );
 
     const booking = await prisma.$transaction(async (tx) => {
-      await enforceConcurrentExposureCap({ customerId: req.user.id, database: tx });
       const platformSettings = await tx.platformSettings.upsert({
         where: { id: 1 },
         create: { id: 1 },
         update: {},
       });
+      // Exposure limits and credit thresholds act only while the E17 tier policy is on.
+      const tierPolicyOn = await isCreditTierPolicyEnabled(platformSettings, resolvedOperatorId);
+      if (tierPolicyOn) {
+        await enforceConcurrentExposureCap({ customerId: req.user.id, database: tx });
+      }
       const created = await tx.booking.create({
         data: {
           bookingCode: tempBookingCode(),
@@ -306,7 +310,7 @@ export async function createCustomerBooking(req, res, next) {
           paymentDeadline: defaultPaymentDeadline,
           location: location || null,
           totalAmount,
-          creditTier: assignCreditTier(totalAmount, platformSettings.creditTierThresholds),
+          creditTier: assignCreditTier(totalAmount, tierPolicyOn ? platformSettings.creditTierThresholds : {}),
           status: "PENDING",
         },
       });

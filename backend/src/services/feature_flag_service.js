@@ -6,6 +6,7 @@ export const DEFAULT_FEATURE_FLAGS = {
   allowReceiptUpload: true,
   automaticOverdueHandling: true,
   showRating: false,
+  creditTierPolicy: false,
 };
 
 let cache = null;
@@ -59,6 +60,16 @@ export async function getFeatureFlags(operatorId = null, database = prisma) {
 export async function isFeatureEnabled(key, operatorId = null, database = prisma) {
   const flags = await getFeatureFlags(operatorId, database);
   return flags[key] === true;
+}
+
+export async function removeFeatureFlag({ key, operatorId }, database = prisma) {
+  const environment = environmentName();
+  const existing = await database.featureFlag.findFirst({
+    where: { key, environment, operatorId },
+  });
+  if (existing) await database.featureFlag.delete({ where: { id: existing.id } });
+  cache = null;
+  return existing;
 }
 
 export async function setFeatureFlag({ key, enabled, operatorId = null }, database = prisma) {

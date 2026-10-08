@@ -2,6 +2,7 @@ import prisma from "../config/db.js";
 import { addDays, fromSen, rateCardFor } from "./car_pricing_service.js";
 import { loadAvailability } from "./car_availability_service.js";
 import { enforceConcurrentExposureCap } from "./concurrent_exposure_service.js";
+import { isCreditTierPolicyEnabled } from "./platform_settings_service.js";
 import { createPaymentScheduleEntries, getScheduleForCreditTier } from "./payment_schedule_entry_service.js";
 import { formatBookingCode, tempBookingCode } from "../utils/bookingCode.js";
 
@@ -46,14 +47,18 @@ export async function createBookingOrchestrator({
     serviceStart: pickupAt,
   });
   const totalAmount = fromSen(pricing.totalSen);
+  // Exposure limits act only while the E17 tier policy is on.
+  const tierPolicyOn = await isCreditTierPolicyEnabled(platformSettings, listing.operatorId);
 
   return database.$transaction(async (tx) => {
-    await enforceConcurrentExposureCap({
-      customerId,
-      tier: customerTier,
-      exposureLimits: platformSettings.exposureLimits,
-      database: tx,
-    });
+    if (tierPolicyOn) {
+      await enforceConcurrentExposureCap({
+        customerId,
+        tier: customerTier,
+        exposureLimits: platformSettings.exposureLimits,
+        database: tx,
+      });
+    }
     await tx.$queryRaw`SELECT id FROM "Listing" WHERE id = ${listing.id} FOR UPDATE`;
 
     const stock = (await loadAvailability(
