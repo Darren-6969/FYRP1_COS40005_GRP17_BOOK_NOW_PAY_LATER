@@ -39,6 +39,17 @@ export const operatorService = {
     );
   },
 
+  completeBookingRefund(
+    bookingId,
+    refundId,
+    payload = {}
+  ) {
+    return api.patch(
+      `/operators/bookings/${bookingId}/refunds/${refundId}/complete`,
+      payload
+    );
+  },
+
   /**New Listings function */
   getListings(params = {}) {
     return api.get("/operators/listings", {

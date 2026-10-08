@@ -294,3 +294,100 @@ export async function getRefundsForBooking({
     },
   });
 }
+
+export async function completeManualRefund({
+  refundId,
+  operatorId = null,
+  manualReference = null,
+}) {
+  const id = Number(refundId);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    throw refundError(
+      "Invalid refund id."
+    );
+  }
+
+  return prisma.$transaction(
+    async (tx) => {
+      const refund =
+        await tx.refund.findFirst({
+          where: {
+            id,
+
+            ...(operatorId
+              ? {
+                  booking: {
+                    operatorId,
+                  },
+                }
+              : {}),
+          },
+
+          include: {
+            booking: true,
+            payment: true,
+          },
+        });
+
+      if (!refund) {
+        throw refundError(
+          "Refund not found.",
+          404
+        );
+      }
+
+      if (
+        refund.status === "REFUNDED"
+      ) {
+        throw refundError(
+          "This refund has already been completed.",
+          409
+        );
+      }
+
+      if (
+        ![
+          "PENDING",
+          "PROCESSING",
+        ].includes(refund.status)
+      ) {
+        throw refundError(
+          `Refund cannot be completed when status is ${refund.status}.`
+        );
+      }
+
+      if (
+        refund.method === "STRIPE"
+      ) {
+        throw refundError(
+          "Stripe refunds must be processed through the Stripe refund workflow."
+        );
+      }
+
+      const updated =
+        await tx.refund.update({
+          where: {
+            id: refund.id,
+          },
+
+          data: {
+            status: "REFUNDED",
+
+            processedAt:
+              new Date(),
+
+            providerRefundId:
+              manualReference?.trim()
+                ? manualReference.trim()
+                : refund.providerRefundId,
+          },
+        });
+
+      return {
+        refund: updated,
+        booking: refund.booking,
+      };
+    }
+  );
+}

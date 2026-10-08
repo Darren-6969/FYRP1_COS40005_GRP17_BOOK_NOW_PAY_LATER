@@ -93,6 +93,25 @@ function mapBooking(booking) {
               : 0),
         }
       : null,
+
+      refunds: Array.isArray(booking.refunds)
+  ? booking.refunds.map((refund) => ({
+      ...refund,
+
+      paidAmount:
+        toNumber(refund.paidAmount),
+
+      amount:
+        toNumber(refund.amount),
+
+      refundReference:
+        `RF-${String(refund.id).padStart(
+          6,
+          "0"
+        )}`,
+    }))
+  : [],
+  
     receipt: booking.receipt,
     invoice: booking.invoice
       ? {
@@ -178,6 +197,11 @@ async function assertCustomerBooking(bookingId, customerId) {
         },
       },
       payment: true,
+      refunds: {
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
       receipt: true,
       invoice: true,
       listing: {

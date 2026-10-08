@@ -65,6 +65,7 @@ import {
 import {
   createBookingRefund,
   getBookingRefunds,
+  completeBookingRefund,
 } from "../controllers/refund_controller.js";
 
 const router = express.Router();
@@ -130,6 +131,7 @@ router.patch("/:id/status", ...masterOnly, updateOperatorStatus);
 router.delete("/:id", ...masterOnly, deleteOperator);
 router.get("/bookings/:id/refunds",...ownerOrStaffAccess,getBookingRefunds);
 router.post("/bookings/:id/refunds",...ownerOnlyAccess,createBookingRefund);
+router.patch("/bookings/:id/refunds/:refundId/complete",...ownerOnlyAccess,completeBookingRefund);
 
 
 /**

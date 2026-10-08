@@ -1,6 +1,7 @@
 import {
   createPartialRefundForBooking,
   getRefundsForBooking,
+  completeManualRefund,
 } from "../services/refund_service.js";
 
 function operatorScope(req) {
@@ -81,6 +82,38 @@ export async function getBookingRefunds(
     res.json(
       refunds.map(mapRefund)
     );
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function completeBookingRefund(
+  req,
+  res,
+  next
+) {
+  try {
+    const result =
+      await completeManualRefund({
+        refundId:
+          req.params.refundId,
+
+        operatorId:
+          operatorScope(req),
+
+        manualReference:
+          req.body?.manualReference,
+      });
+
+    res.json({
+      message:
+        "Refund marked as completed.",
+
+      refund:
+        mapRefund(
+          result.refund
+        ),
+    });
   } catch (err) {
     next(err);
   }

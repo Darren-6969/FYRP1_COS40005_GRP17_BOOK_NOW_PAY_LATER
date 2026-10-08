@@ -65,6 +65,8 @@ export default function BookingDetail() {
   const bookingCode = booking.bookingCode || `#${booking.id}`;
   const isHostBooking = Boolean(booking.hostBookingRef);
   const isCarBooking = Boolean(booking.car);
+  const refunds = Array.isArray(booking.refunds) ? booking.refunds: [];
+  const latestRefund =refunds.length > 0? refunds[0]: null;
 
   return (
     <div className="customer-page customer-booking-detail-page">
@@ -177,6 +179,164 @@ export default function BookingDetail() {
         </article>
 
         {isCarBooking && <CarBookingPanel booking={booking} />}
+        {latestRefund && (
+          <article className="customer-glass-card">
+
+            <div className="customer-card-head">
+              <div>
+                <p className="customer-eyebrow">
+                  Refund
+                </p>
+
+                <h2>
+                  Refund Details
+                </h2>
+              </div>
+
+              <span
+                className={`customer-status status-${customerStatusClass(
+                  latestRefund.status
+                )}`}
+              >
+                {statusLabel(
+                  latestRefund.status
+                )}
+              </span>
+            </div>
+
+            <div className="customer-info-list detail customer-booking-info-grid">
+
+              <div>
+                <span>
+                  Refund Reference
+                </span>
+
+                <strong>
+                  {latestRefund.refundReference ||
+                    `RF-${String(
+                      latestRefund.id
+                    ).padStart(6, "0")}`}
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Original Deposit
+                </span>
+
+                <strong>
+                  {formatMoney(
+                    latestRefund.paidAmount
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Refund Percentage
+                </span>
+
+                <strong>
+                  {latestRefund.refundPercent != null
+                    ? `${latestRefund.refundPercent}%`
+                    : "-"}
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Refund Amount
+                </span>
+
+                <strong>
+                  {formatMoney(
+                    latestRefund.amount
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Refund Method
+                </span>
+
+                <strong>
+                  {latestRefund.method || "-"}
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Refund Status
+                </span>
+
+                <strong>
+                  {statusLabel(
+                    latestRefund.status
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Requested
+                </span>
+
+                <strong>
+                  {formatCustomerDate(
+                    latestRefund.createdAt
+                  )}
+                </strong>
+              </div>
+
+              {latestRefund.processedAt && (
+                <div>
+                  <span>
+                    Refunded At
+                  </span>
+
+                  <strong>
+                    {formatCustomerDate(
+                      latestRefund.processedAt
+                    )}
+                  </strong>
+                </div>
+              )}
+
+            </div>
+
+            {latestRefund.reason && (
+              <div className="customer-alternative-reason">
+                <strong>
+                  Refund Reason
+                </strong>
+
+                <p>
+                  {latestRefund.reason}
+                </p>
+              </div>
+            )}
+
+            {latestRefund.status ===
+              "PENDING" &&
+              latestRefund.method !==
+                "STRIPE" && (
+                <div className="customer-alert">
+                  Your refund is awaiting
+                  processing by the operator.
+                </div>
+              )}
+
+            {latestRefund.status ===
+              "REFUNDED" && (
+                <div className="customer-alert">
+                  Your refund has been
+                  completed.
+                </div>
+              )}
+
+          </article>
+        )}
 
         {booking.status === "ALTERNATIVE_SUGGESTED" && (
           <article className="customer-glass-card customer-alternative-card">

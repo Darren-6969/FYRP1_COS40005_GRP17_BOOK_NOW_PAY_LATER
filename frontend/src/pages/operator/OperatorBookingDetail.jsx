@@ -1017,6 +1017,56 @@ export default function OperatorBookingDetail() {
             </div>
           )}
 
+          {["PENDING", "PROCESSING"].includes(
+            String(
+              latestRefund.status || ""
+            ).toUpperCase()
+          ) &&
+            latestRefund.method !== "STRIPE" && (
+              <button
+                type="button"
+                className="operator-primary-btn"
+                disabled={!!actionLoading}
+                onClick={async () => {
+                  const confirmed =
+                    window.confirm(
+                      `Confirm that ${formatOperatorMoney(
+                        latestRefund.amount
+                      )} has already been refunded to the customer?`
+                    );
+
+                  if (!confirmed) {
+                    return;
+                  }
+
+                  try {
+                    setActionLoading(
+                      "complete-refund"
+                    );
+
+                    await operatorService.completeBookingRefund(
+                      booking.id,
+                      latestRefund.id
+                    );
+
+                    await loadBooking();
+                  } catch (err) {
+                    alert(
+                      err.response?.data?.message ||
+                        "Failed to complete refund"
+                    );
+                  } finally {
+                    setActionLoading("");
+                  }
+                }}
+              >
+                {actionLoading ===
+                "complete-refund"
+                  ? "Completing Refund..."
+                  : "Mark as Refunded"}
+              </button>
+            )}
+
         </div>
       ) : (
         <>
