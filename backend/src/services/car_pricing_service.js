@@ -195,6 +195,9 @@ export function priceRental({
   returnAt,
   downPaymentPct,
   overtimeFeeSen = 0,
+
+  youngDriverDailySurchargeSen = 0,
+
   addOns = [],
   pickupFeeSen = 0,
   dropoffFeeSen = 0,
@@ -205,6 +208,7 @@ export function priceRental({
 
   const nightCount = overtimeFeeSen ? nightHandovers(pickupAt, returnAt) : 0;
   const overtimeSen = nightCount * overtimeFeeSen;
+  const youngDriverSurchargeSen = youngDriverDailySurchargeSen * days;
 
   const addOnLines = addOns.map((a) => ({
     id: a.id,
@@ -216,7 +220,7 @@ export function priceRental({
   }));
   const addOnsSen = addOnLines.reduce((sum, a) => sum + a.amountSen, 0);
 
-  const extrasSen = overtimeSen + addOnsSen + pickupFeeSen + dropoffFeeSen;
+  const extrasSen = overtimeSen + youngDriverSurchargeSen + addOnsSen + pickupFeeSen + dropoffFeeSen;
 
   // 100% means the customer pays everything on acceptance (4.3.5), so the
   // extras move onto the deposit and nothing is left for a balance.
@@ -232,6 +236,8 @@ export function priceRental({
     rentalSen,
     nightHandovers: nightCount,
     overtimeSen,
+    youngDriverDailySurchargeSen,
+    youngDriverSurchargeSen,
     depositPct: downPaymentPct,
     depositSen,
     rentalBalanceSen,

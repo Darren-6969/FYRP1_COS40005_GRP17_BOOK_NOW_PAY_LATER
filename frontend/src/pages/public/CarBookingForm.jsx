@@ -17,12 +17,13 @@ const FIELD_ID = {
   name: "bf-name",
   phone: "bf-phone",
   driverName: "bf-driver",
+  driverDob: "bf-driver-dob",
   location: "bf-location",
   chauffeurNote: "bf-chauffeur-note",
   agree: "bf-agree",
   forfeit: "bf-forfeit",
 };
-const ORDER = ["name", "phone", "driverName", "location", "chauffeurNote", "agree", "forfeit"];
+const ORDER = ["name", "phone", "driverName","driverDob", "location", "chauffeurNote", "agree", "forfeit"];
 const MAX_NOTE = 500;
 const DRAFT_PREFIX = "bnpl_booking_draft:";
 
@@ -40,6 +41,19 @@ function validate(key, f, agreed, forfeitAgreed) {
     return /^1\d{8,9}$/.test(n) ? "" : "Enter a Malaysian mobile number, for example 12-345 6789.";
   }
   if (key === "driverName") return f.isDriver || f.driverName.trim() ? "" : "Enter the driver's full name.";
+  if (key === "driverDob") {
+  if (!f.driverDateOfBirth) {
+    return "Enter the driver's date of birth.";
+  }
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      f.driverDateOfBirth
+    )
+  ) {
+    return "Enter a valid date of birth.";
+  }
+  return "";
+}
   if (key === "location") {
     if (!f.requestOther) return "";
     return f.requestedLocation.trim().length >= 3 ? "" : "Enter the place you'd like to pick up from, for example a hotel name.";
@@ -92,6 +106,7 @@ function initialForm(listingId) {
     phone: user.phone ? phoneDigits(String(user.phone)) : "",
     isDriver: true,
     driverName: "",
+    driverDateOfBirth: "",
     licence: "MY",
     requestOther: false,
     requestedLocation: "",
@@ -249,7 +264,10 @@ export default function CarBookingForm() {
   const [quotedLocation, setQuotedLocation] = useState(() =>
     form.requestOther && form.requestedLocation.trim().length >= 3 ? form.requestedLocation.trim() : ""
   );
-  const quoteKey = `${listingId}?${key}&rl=${quotedLocation}`;
+  const quotedDriverDob =
+  form.driverDateOfBirth || "";
+
+  const quoteKey =`${listingId}?${key}` + `&rl=${quotedLocation}` + `&dob=${quotedDriverDob}`;
 
   useEffect(() => {
     let alive = true;
@@ -264,13 +282,24 @@ export default function CarBookingForm() {
   useEffect(() => {
     let alive = true;
     const s = parseBookingSelection(new URLSearchParams(key));
-    quoteCarBooking(listingId, { ...s, requestedLocation: quotedLocation })
+    quoteCarBooking(
+  listingId,
+  {
+    ...s,
+
+    requestedLocation:
+      quotedLocation,
+
+    driverDateOfBirth:
+      quotedDriverDob || null,
+  }
+)
       .then((r) => alive && setQuoteRes({ key: quoteKey, data: r.data }))
       .catch(() => alive && setQuoteRes({ key: quoteKey, data: null }));
     return () => {
       alive = false;
     };
-  }, [listingId, key, quotedLocation, quoteKey]);
+  }, [listingId, key, quotedLocation, quotedDriverDob, quoteKey]);
 
   useEffect(() => {
     writeDraft(listingId, form);
@@ -313,6 +342,7 @@ export default function CarBookingForm() {
   const detailHref = `/cars/${listing.id}?${toBookingParams({ ...sel, pickupPointId })}`;
   const setSel = (changes) => setParams(toBookingParams({ ...sel, pickupPointId, ...changes }), { replace: true });
   const problems = q?.problems || [];
+  const driverProblem = problems.find((p) => p.code === "DRIVER_TOO_YOUNG" || p.code === "DRIVER_DOB_INVALID");
   const nightBlocked = problems.some((p) => p.code === "NIGHT_HANDOVER_BLOCKED");
   const similarHref = `/cars?${new URLSearchParams({
     city: listing.branch.city,
@@ -326,11 +356,19 @@ export default function CarBookingForm() {
   const showUnavailable = status.kind === "unavailable" || unavailableOnLoad;
 
   let blockReason = "";
-  if (!quote)
-    blockReason = "Choose your pick-up and return dates on the car page before sending a request.";
-  else if (nightBlocked)
-    blockReason = `${op} doesn't hand over or receive cars between ${b.overtime.window.from} and ${b.overtime.window.to}. Change the times on the car page.`;
-  else if (showUnavailable) blockReason = "You can't request these dates. Choose other dates or a similar car above.";
+  if (!quote) {
+    blockReason =
+      "Choose your pick-up and return dates on the car page before sending a request.";
+  } else if (driverProblem) {
+    blockReason =
+      driverProblem.message;
+  } else if (nightBlocked) {
+    blockReason =
+      `${op} doesn't hand over or receive cars between ${b.overtime.window.from} and ${b.overtime.window.to}. Change the times on the car page.`;
+  } else if (showUnavailable) {
+    blockReason =
+      "You can't request these dates. Choose other dates or a similar car above.";
+  }
 
   // Once a field has shown an error, re-check it as the user types.
   const change = (field, errKey, value) => {
@@ -387,9 +425,19 @@ export default function CarBookingForm() {
       bookingDetails: {
         contact: { fullName: form.name.trim(), email: user.email || null, phone: `+60${digits}` },
         driver: {
-          isBooker: form.isDriver,
-          fullName: form.isDriver ? form.name.trim() : form.driverName.trim(),
-          licenceIssuedIn: form.licence,
+          isBooker:
+            form.isDriver,
+
+          fullName:
+            form.isDriver
+              ? form.name.trim()
+              : form.driverName.trim(),
+
+          dateOfBirth:
+            form.driverDateOfBirth,
+
+          licenceIssuedIn:
+            form.licence,
         },
         chauffeur: { requested: form.chauffeur, note: form.chauffeur ? form.chauffeurNote.trim() || null : null },
         agreements: {
@@ -485,7 +533,34 @@ export default function CarBookingForm() {
           ? `One authorised driver. Additional drivers ${formatSen(b.additionalDriverSen)}/day, each with a valid licence.`
           : "One authorised driver. Ask the operator about additional drivers.",
     },
-    { k: "Driving licence", v: "A valid driving licence for each driver. No minimum age." },
+    {
+      k: "Driver age",
+      v:
+        b.driverRules?.youngDriver
+          ?.enabled
+          ? `Minimum age ${
+              b.driverRules.minAge
+            }. Drivers aged ${
+              b.driverRules.minAge
+            }–${
+              b.driverRules.youngDriver
+                .maxAge
+            } pay ${formatSen(
+              b.driverRules.youngDriver
+                .surchargeSen
+            )}/day.`
+          : `Minimum age ${
+              b.driverRules?.minAge ??
+              21
+            }. No young driver surcharge.`,
+    },
+
+    {
+      k: "Driving licence",
+
+      v:
+        "A valid driving licence is required for each authorised driver.",
+    },
     {
       k: "Night pickup and return",
       v: b.overtime.nightBlocked
@@ -725,6 +800,109 @@ export default function CarBookingForm() {
               )}
 
               <fieldset className={styles.group}>
+                <div className={styles.field}>
+                  <label
+                    htmlFor={FIELD_ID.driverDob}
+                    className={styles.label}
+                  >
+                    Driver date of birth
+                  </label>
+
+                  <input
+                    id={FIELD_ID.driverDob}
+                    type="date"
+                    autoComplete="bday"
+                    value={
+                      form.driverDateOfBirth
+                    }
+                    onChange={(e) =>
+                      change(
+                        "driverDateOfBirth",
+                        "driverDob",
+                        e.target.value
+                      )
+                    }
+                    onBlur={() =>
+                      blur("driverDob")
+                    }
+                    aria-invalid={
+                      Boolean(errors.driverDob)
+                    }
+                    aria-describedby={describe(
+                      "bf-driver-dob-hint",
+                      errors.driverDob &&
+                        "bf-driver-dob-err"
+                    )}
+                    className={`${styles.input} ${
+                      errors.driverDob
+                        ? styles.inputInvalid
+                        : ""
+                    }`}
+                  />
+
+                  <p
+                    id="bf-driver-dob-hint"
+                    className={styles.hint}
+                  >
+                    Your age is checked on the
+                    pick-up date. A young driver
+                    surcharge may apply depending
+                    on this operator&apos;s rules.
+                  </p>
+
+                  <FieldError id="bf-driver-dob-err">
+                    {errors.driverDob}
+                  </FieldError>
+                </div>
+
+                {quote?.driverAge != null &&
+                  !problems.some(
+                    (p) =>
+                      p.code ===
+                        "DRIVER_TOO_YOUNG" ||
+                      p.code ===
+                        "DRIVER_DOB_INVALID"
+                  ) && (
+                    <p
+                      role="status"
+                      className={styles.noteInfo}
+                    >
+                      <Info
+                        size={16}
+                        aria-hidden="true"
+                        className={
+                          styles.inlineIcon
+                        }
+                      />
+
+                      <span>
+                        Driver age at pick-up:{" "}
+                        <strong>
+                          {quote.driverAge}
+                        </strong>
+                        .
+
+                        {quote
+                          .youngDriverSurchargeSen >
+                        0
+                          ? ` Young driver surcharge: ${formatSen(
+                              quote
+                                .youngDriverDailySurchargeSen
+                            )}/day × ${
+                              quote.days
+                            } day${
+                              quote.days === 1
+                                ? ""
+                                : "s"
+                            } = ${formatSen(
+                              quote
+                                .youngDriverSurchargeSen
+                            )}.`
+                          : " No young driver surcharge applies."}
+                      </span>
+                    </p>
+                  )}
+
                 <legend className={styles.label}>Licence issued in</legend>
                 <div className={styles.radioRow}>
                   {[

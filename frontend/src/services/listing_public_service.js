@@ -487,10 +487,8 @@ const HHMM = /^\d{2}:\d{2}$/;
 // defaults and validates everything again.
 export function quoteCarBooking(listingId, sel) {
   const body = { addOns: sel.addOns || {} };
-  if (PLAIN_DATE.test(sel.from || "") && PLAIN_DATE.test(sel.to || "")) {
-    body.from = sel.from;
-    body.to = sel.to;
-  }
+  if (PLAIN_DATE.test(sel.driverDateOfBirth || "")) {body.driverDateOfBirth = sel.driverDateOfBirth;}
+  if (PLAIN_DATE.test(sel.from || "") && PLAIN_DATE.test(sel.to || "")) {body.from = sel.from;body.to = sel.to;}
   if (HHMM.test(sel.ft || "")) body.ft = sel.ft;
   if (HHMM.test(sel.tt || "")) body.tt = sel.tt;
   if (sel.pickupPointId) body.pickupPointId = String(sel.pickupPointId);

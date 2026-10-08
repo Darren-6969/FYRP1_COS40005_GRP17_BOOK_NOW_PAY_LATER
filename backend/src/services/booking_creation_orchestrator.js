@@ -94,7 +94,17 @@ export async function createBookingOrchestrator({
         quantity: 1,
         rentalAmount: fromSen(pricing.rentalSen),
         addonsAmount: fromSen(pricing.addOnsSen),
-        feesAmount: fromSen(pricing.overtimeSen + pricing.pickupFeeSen + pricing.dropoffFeeSen),
+        feesAmount:
+          fromSen(
+            pricing.overtimeSen +
+            (
+              pricing
+                .youngDriverSurchargeSen ||
+              0
+            ) +
+            pricing.pickupFeeSen +
+            pricing.dropoffFeeSen
+          ),
         discountAmount: "0.00",
         totalAmount,
         creditTier: customerTier,
@@ -111,6 +121,16 @@ export async function createBookingOrchestrator({
           rentalSen: pricing.rentalSen,
           nightHandovers: pricing.nightHandovers,
           overtimeSen: pricing.overtimeSen,
+          driverAge:
+            pricing.driverAge ?? null,
+          youngDriverDailySurchargeSen:
+            pricing
+              .youngDriverDailySurchargeSen ||
+            0,
+          youngDriverSurchargeSen:
+            pricing
+              .youngDriverSurchargeSen ||
+            0,
           depositPct: pricing.depositPct,
           depositSen: pricing.depositSen,
           addOnLines: pricing.addOnLines,

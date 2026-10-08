@@ -51,6 +51,7 @@ function selectionFrom(body) {
       ft: klHhmm(pickupAt),
       to: klPlainDate(returnAt),
       tt: klHhmm(returnAt),
+      driverDateOfBirth: body.bookingDetails ?.driver ?.dateOfBirth ?? null,
       pickupPointId: body.pickupPointId ?? null,
       dropoffPointId: body.dropoffPointId ?? null,
       requestedLocation: body.requestedLocation ?? null,

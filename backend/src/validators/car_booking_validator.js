@@ -12,6 +12,7 @@ export const carQuoteSchema = z.object({
   pickupPointId: z.union([z.string(), z.number()]).optional().nullable(),
   dropoffPointId: z.union([z.string(), z.number()]).optional().nullable(),
   requestedLocation: z.string().trim().max(300).optional().nullable(),
+  driverDateOfBirth: plainDate.optional().nullable(),
   cdw: z.boolean().default(false),
   addOns: z.record(z.string(), z.number().int().min(0).max(20)).default({}),
 });
@@ -38,12 +39,23 @@ export const carBookingSchema = z.object({
       phone: z.string().regex(/^\+60\d{8,11}$/, "Expected a Malaysian number, e.g. +60123456789"),
     }),
     driver: z.object({
-      isBooker: z.boolean(),
-      fullName: z.string().trim().min(2).max(120),
-      // No date of birth or age: a valid driving licence is the only driver
-      // requirement (client decision, Oct 2026).
-      licenceIssuedIn: z.string().trim().min(2).max(60),
-    }),
+  isBooker: z.boolean(),
+
+  fullName:
+    z.string()
+      .trim()
+      .min(2)
+      .max(120),
+
+  dateOfBirth:
+    plainDate,
+
+  licenceIssuedIn:
+    z.string()
+      .trim()
+      .min(2)
+      .max(60),
+}),
     // A request, not an add-on: no price, arranged by the operator (FR-LIST-003).
     chauffeur: z
       .object({ requested: z.boolean(), note: z.string().trim().max(500).optional().nullable() })

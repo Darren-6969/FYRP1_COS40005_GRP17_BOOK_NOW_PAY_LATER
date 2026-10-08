@@ -3292,13 +3292,21 @@ export async function updateOperatorSettings(req, res, next) {
       alternativeSuggestedEmailText,
       emailFooterText,
       paymentDeadlineDays,
+
       overtimeFee,
       blockNightHandover,
+
+      // BNPLB-85 - Driver rules
+      minDriverAge,
+      youngDriverSurchargeEnabled,
+      youngDriverMaxAge,
+      youngDriverSurcharge,
+
       downPaymentPercent,
       allowReceiptUpload,
       partialRefundElected,
       partialRefundPercent,
-    } = req.body || {};
+      } = req.body || {};
 
     const parsedBookingDeadline = Number(bookingResponseDeadlineMinutes);
     const parsedReminderBeforeReject = Number(reminderBeforeAutoRejectMinutes);
@@ -3487,6 +3495,136 @@ export async function updateOperatorSettings(req, res, next) {
     }
     if (blockNightHandover !== undefined) {
       configData.blockNightHandover = blockNightHandover === true || blockNightHandover === "true";
+    }
+
+    // =========================================================
+    // BNPLB-85 - Driver rules
+    // =========================================================
+
+    if (minDriverAge !== undefined) {
+      const value = Number(minDriverAge);
+
+      if (
+        !Number.isInteger(value) ||
+        value < 17 ||
+        value > 99
+      ) {
+        return res.status(400).json({
+          message:
+            "Minimum driver age must be a whole number between 17 and 99.",
+        });
+      }
+
+      configData.minDriverAge = value;
+    }
+
+
+    if (youngDriverSurchargeEnabled !== undefined) {
+      configData.youngDriverSurchargeEnabled =
+        youngDriverSurchargeEnabled === true ||
+        youngDriverSurchargeEnabled === "true";
+    }
+
+
+    if (youngDriverMaxAge !== undefined) {
+      const value = Number(
+        youngDriverMaxAge
+      );
+
+      if (
+        !Number.isInteger(value) ||
+        value < 17 ||
+        value > 99
+      ) {
+        return res.status(400).json({
+          message:
+            "Young driver maximum age must be a whole number between 17 and 99.",
+        });
+      }
+
+      configData.youngDriverMaxAge =
+        value;
+    }
+
+
+    if (youngDriverSurcharge !== undefined) {
+      const text =
+        String(
+          youngDriverSurcharge ?? ""
+        ).trim();
+
+      if (text === "") {
+        configData.youngDriverSurcharge =
+          null;
+      } else {
+        const value = Number(text);
+
+        if (
+          !Number.isFinite(value) ||
+          value < 0
+        ) {
+          return res.status(400).json({
+            message:
+              "Young driver surcharge must be RM0 or more.",
+          });
+        }
+
+        configData.youngDriverSurcharge =
+          value.toFixed(2);
+      }
+    }
+
+
+    // Validate the final combination using either
+    // the new request values or the existing config.
+    const effectiveMinDriverAge =
+      configData.minDriverAge ??
+      configForValidation.minDriverAge ??
+      21;
+
+    const effectiveYoungDriverMaxAge =
+      configData.youngDriverMaxAge ??
+      configForValidation.youngDriverMaxAge ??
+      24;
+
+    const effectiveYoungDriverEnabled =
+      configData.youngDriverSurchargeEnabled ??
+      configForValidation.youngDriverSurchargeEnabled ??
+      false;
+
+    const effectiveYoungDriverSurcharge =
+      configData.youngDriverSurcharge ??
+      configForValidation.youngDriverSurcharge;
+
+
+    if (
+      effectiveYoungDriverEnabled &&
+      effectiveYoungDriverMaxAge <
+        effectiveMinDriverAge
+    ) {
+      return res.status(400).json({
+        message:
+          "Young driver maximum age cannot be lower than the minimum driver age.",
+      });
+    }
+
+
+    if (
+      effectiveYoungDriverEnabled &&
+      (
+        effectiveYoungDriverSurcharge ===
+          null ||
+        effectiveYoungDriverSurcharge ===
+          undefined ||
+        Number(
+          effectiveYoungDriverSurcharge
+        ) <= 0
+      )
+    ) {
+      return res.status(400).json({
+        message:
+          "Enter a young driver surcharge greater than RM0 when the surcharge is enabled.",
+      });
     }
 
     const updatedConfig = await prisma.bNPLConfig.update({
