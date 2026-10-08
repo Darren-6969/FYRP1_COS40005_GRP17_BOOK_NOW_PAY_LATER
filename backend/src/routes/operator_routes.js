@@ -62,6 +62,11 @@ import {
   allowMasterOrOperatorAccess,
 } from "../middlewares/rbac_middleware.js";
 
+import {
+  createBookingRefund,
+  getBookingRefunds,
+} from "../controllers/refund_controller.js";
+
 const router = express.Router();
 
 /**
@@ -123,6 +128,8 @@ router.get("/applications/documents/:documentId", ...masterOnly, downloadOperato
 router.patch("/:id/subscription-plan", ...masterOnly, updateOperatorSubscriptionPlan);
 router.patch("/:id/status", ...masterOnly, updateOperatorStatus);
 router.delete("/:id", ...masterOnly, deleteOperator);
+router.get("/bookings/:id/refunds",...ownerOrStaffAccess,getBookingRefunds);
+router.post("/bookings/:id/refunds",...ownerOnlyAccess,createBookingRefund);
 
 
 /**

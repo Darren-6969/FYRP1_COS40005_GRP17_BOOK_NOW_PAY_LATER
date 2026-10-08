@@ -27,6 +27,9 @@ export default function OperatorBookingDetail() {
   const [showCancel, setShowCancel] =
     useState(false);
 
+  const [showRefund, setShowRefund] =
+  useState(false);
+
   const [loading, setLoading] =
     useState(true);
 
@@ -331,6 +334,7 @@ export default function OperatorBookingDetail() {
     canReturn ||
     canEditDeadline ||
     canCancel ||
+    canCreateRefund ||
     shouldShowPaymentVerificationLink;
 
   const paidToDate =
@@ -353,7 +357,56 @@ export default function OperatorBookingDetail() {
       : 0
   );
 
-    
+  const refunds =
+    Array.isArray(booking.refunds)
+      ? booking.refunds
+      : [];
+
+  const latestRefund =
+    refunds.length > 0
+      ? refunds[0]
+      : null;
+
+  const activeRefund =
+    refunds.find((refund) =>
+      [
+        "PENDING",
+        "PROCESSING",
+        "REFUNDED",
+      ].includes(
+        String(
+          refund.status || ""
+        ).toUpperCase()
+      )
+    );
+
+  const downPaymentPaid =
+    booking.payment?.downPaymentStatus ===
+    "PAID";
+
+  const finalPaymentPaid =
+    booking.payment?.finalPaymentStatus ===
+    "PAID";
+
+  const downPaymentAmount =
+    Number(
+      booking.payment?.downPaymentAmount ||
+        0
+    );
+
+  const refundableBookingStatus = [
+    "PENDING_PAYMENT",
+    "CANCELLED",
+    "OVERDUE",
+    "NO_SHOW_UNPAID",
+  ].includes(bookingStatus);
+
+  const canCreateRefund =
+    refundableBookingStatus &&
+    downPaymentPaid &&
+    !finalPaymentPaid &&
+    downPaymentAmount > 0 &&
+    !activeRefund;  
 
   return (
     <div className="operator-page">
@@ -877,6 +930,141 @@ export default function OperatorBookingDetail() {
 
     </section>
 
+    {/* Refund */}
+    <section className="operator-card booking-clean-side-card">
+
+      <div className="booking-clean-side-head">
+        <div>
+          <span>Payment</span>
+          <h2>Refund</h2>
+        </div>
+
+        {latestRefund && (
+          <span
+            className={`operator-status ${operatorStatusClass(
+              latestRefund.status
+            )}`}
+          >
+            {operatorStatusLabel(
+              latestRefund.status
+            )}
+          </span>
+        )}
+      </div>
+
+      {latestRefund ? (
+        <div className="booking-clean-payment-lines">
+
+          <InfoRow
+            label="Paid Deposit"
+            value={formatOperatorMoney(
+              latestRefund.paidAmount
+            )}
+          />
+
+          <InfoRow
+            label="Refund Percentage"
+            value={
+              latestRefund.refundPercent != null
+                ? `${latestRefund.refundPercent}%`
+                : "-"
+            }
+          />
+
+          <InfoRow
+            label="Refund Amount"
+            value={formatOperatorMoney(
+              latestRefund.amount
+            )}
+            strong
+          />
+
+          <InfoRow
+            label="Method"
+            value={
+              latestRefund.method || "-"
+            }
+          />
+
+          <InfoRow
+            label="Reason"
+            value={
+              latestRefund.reason || "-"
+            }
+          />
+
+          {latestRefund.processedAt && (
+            <InfoRow
+              label="Processed"
+              value={formatOperatorDateTime(
+                latestRefund.processedAt
+              )}
+            />
+          )}
+
+          {latestRefund.providerRefundId && (
+            <InfoRow
+              label="Refund Reference"
+              value={
+                latestRefund.providerRefundId
+              }
+            />
+          )}
+
+          {latestRefund.lastError && (
+            <div className="operator-alert danger">
+              {latestRefund.lastError}
+            </div>
+          )}
+
+        </div>
+      ) : (
+        <>
+          <div className="booking-clean-payment-lines">
+
+            <InfoRow
+              label="Down-payment"
+              value={`${operatorStatusLabel(
+                booking.payment
+                  ?.downPaymentStatus ||
+                  "UNPAID"
+              )} · ${formatOperatorMoney(
+                downPaymentAmount
+              )}`}
+            />
+
+            <InfoRow
+              label="Final Payment"
+              value={operatorStatusLabel(
+                booking.payment
+                  ?.finalPaymentStatus ||
+                  "UNPAID"
+              )}
+            />
+
+          </div>
+
+          {canCreateRefund ? (
+            <button
+              type="button"
+              className="operator-danger-btn"
+              disabled={!!actionLoading}
+              onClick={() =>
+                setShowRefund(true)
+              }
+            >
+              Process Partial Refund
+            </button>
+          ) : (
+            <div className="operator-empty-state compact">
+              This booking is not currently
+              eligible for a partial refund.
+            </div>
+          )}
+        </>
+      )}
+
+    </section>
 
     {/* Actions */}
     <section className="operator-card booking-clean-side-card">
@@ -1080,6 +1268,166 @@ export default function OperatorBookingDetail() {
           onDone={loadBooking}
         />
       )}
+
+      {showRefund && (
+        <RefundModal
+          booking={booking}
+          onClose={() =>
+            setShowRefund(false)
+          }
+          onDone={loadBooking}
+        />
+      )}
+    </div>
+  );
+}
+
+function RefundModal({
+  booking,
+  onClose,
+  onDone,
+}) {
+  const [reason, setReason] =
+    useState(
+      "Customer cancellation"
+    );
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const handleRefund = async () => {
+    const cleanReason =
+      reason.trim();
+
+    if (cleanReason.length < 5) {
+      alert(
+        "Please provide a refund reason of at least 5 characters."
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "Create this partial refund request? This action will cancel the booking if it is still awaiting final payment."
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await operatorService.createBookingRefund(
+        booking.id,
+        {
+          reason: cleanReason,
+        }
+      );
+
+      await onDone();
+
+      onClose();
+    } catch (err) {
+      alert(
+        err.response?.data?.message ||
+          "Failed to create refund"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="operator-modal-backdrop">
+      <div className="operator-modal">
+
+        <div className="operator-card-head">
+          <div>
+            <h2>
+              Process Partial Refund
+            </h2>
+
+            <p>
+              Create a partial refund for{" "}
+              {booking.bookingCode}.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="booking-clean-payment-lines">
+
+          <InfoRow
+            label="Paid Deposit"
+            value={formatOperatorMoney(
+              booking.payment
+                ?.downPaymentAmount
+            )}
+          />
+
+          <InfoRow
+            label="Payment Method"
+            value={
+              booking.payment?.method ||
+              "-"
+            }
+          />
+
+        </div>
+
+        <label className="operator-field">
+          Refund Reason *
+
+          <textarea
+            value={reason}
+            placeholder="Example: Customer cancelled before final payment."
+            onChange={(e) =>
+              setReason(
+                e.target.value
+              )
+            }
+          />
+        </label>
+
+        <p className="booking-clean-muted">
+          The refund amount will be
+          calculated automatically using
+          the operator's Partial Refund
+          setting.
+        </p>
+
+        <div className="operator-modal-actions">
+
+          <button
+            type="button"
+            className="operator-secondary-btn"
+            onClick={onClose}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            className="operator-danger-btn"
+            onClick={handleRefund}
+            disabled={loading}
+          >
+            {loading
+              ? "Creating Refund..."
+              : "Process Partial Refund"}
+          </button>
+
+        </div>
+      </div>
     </div>
   );
 }

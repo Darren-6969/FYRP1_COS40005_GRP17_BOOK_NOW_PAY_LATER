@@ -26,6 +26,19 @@ export const operatorService = {
     return api.get(`/operators/bookings/${id}`);
   },
 
+  getBookingRefunds(id) {
+  return api.get(
+    `/operators/bookings/${id}/refunds`
+  );
+},
+
+  createBookingRefund(id, payload = {}) {
+    return api.post(
+      `/operators/bookings/${id}/refunds`,
+      payload
+    );
+  },
+
   /**New Listings function */
   getListings(params = {}) {
     return api.get("/operators/listings", {

@@ -146,6 +146,13 @@ enum PaymentStatus {
   OVERDUE
 }
 
+enum RefundStatus {
+  PENDING
+  PROCESSING
+  REFUNDED
+  FAILED
+}
+
 enum PaymentMethod {
   PENDING
   PAYPAL
@@ -243,9 +250,9 @@ model User {
   licenceDocuments         CustomerLicenceDocument[]
   reviewedLicenceDocuments CustomerLicenceDocument[]   @relation("LicenceReviewer")
   creditProfile            CustomerCreditProfile?
-  creditEventActor         CreditProfileEvent[] @relation("CreditEventActor")
-  creditAppeals            CreditAppeal[] @relation("CreditAppealCustomer")
-  reviewedCreditAppeals    CreditAppeal[] @relation("CreditAppealReviewer")
+  creditEventActor         CreditProfileEvent[]        @relation("CreditEventActor")
+  creditAppeals            CreditAppeal[]              @relation("CreditAppealCustomer")
+  reviewedCreditAppeals    CreditAppeal[]              @relation("CreditAppealReviewer")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -282,39 +289,39 @@ model CustomerCreditProfile {
 }
 
 model CreditProfileEvent {
-  id             Int                   @id @default(autoincrement())
-  customerId     Int
-  customer       CustomerCreditProfile @relation(fields: [customerId], references: [customerId], onDelete: Cascade)
-  actorUserId    Int?
-  actor          User?                 @relation("CreditEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
-  eventKey       String
-  eventType      String
-  reason         String                @default("Credit profile event")
-  beforeTier     String?
-  afterTier      String?
-  reversalOfId   Int?
-  reversalOf     CreditProfileEvent?   @relation("CreditEventReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
-  reversals      CreditProfileEvent[]   @relation("CreditEventReversal")
-  appeals        CreditAppeal[]
-  createdAt      DateTime              @default(now())
+  id           Int                   @id @default(autoincrement())
+  customerId   Int
+  customer     CustomerCreditProfile @relation(fields: [customerId], references: [customerId], onDelete: Cascade)
+  actorUserId  Int?
+  actor        User?                 @relation("CreditEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  eventKey     String
+  eventType    String
+  reason       String                @default("Credit profile event")
+  beforeTier   String?
+  afterTier    String?
+  reversalOfId Int?
+  reversalOf   CreditProfileEvent?   @relation("CreditEventReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversals    CreditProfileEvent[]  @relation("CreditEventReversal")
+  appeals      CreditAppeal[]
+  createdAt    DateTime              @default(now())
 
   @@unique([customerId, eventKey])
   @@index([customerId, eventType])
 }
 
 model CreditAppeal {
-  id           Int      @id @default(autoincrement())
-  customerId   Int
-  customer     User     @relation("CreditAppealCustomer", fields: [customerId], references: [id], onDelete: Cascade)
-  eventId      Int
-  event        CreditProfileEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
-  reason       String
-  status       String   @default("PENDING")
-  resolution   String?
-  upheldById   Int?
-  upheldBy     User?    @relation("CreditAppealReviewer", fields: [upheldById], references: [id], onDelete: SetNull)
-  resolvedAt   DateTime?
-  createdAt    DateTime @default(now())
+  id         Int                @id @default(autoincrement())
+  customerId Int
+  customer   User               @relation("CreditAppealCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  eventId    Int
+  event      CreditProfileEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  reason     String
+  status     String             @default("PENDING")
+  resolution String?
+  upheldById Int?
+  upheldBy   User?              @relation("CreditAppealReviewer", fields: [upheldById], references: [id], onDelete: SetNull)
+  resolvedAt DateTime?
+  createdAt  DateTime           @default(now())
 
   @@index([customerId, createdAt])
   @@index([status, createdAt])
@@ -342,7 +349,7 @@ model Operator {
   logoUrl      String?
   status       CompanyStatus @default(ACTIVE)
 
-   subscriptionPlan SubscriptionPlan @default(FREE)
+  subscriptionPlan SubscriptionPlan @default(FREE)
 
   // Seller page (FR-CUST-007). The slug gives the operator a short link to
   // share (/o/<slug>); the rest is written by the operator.
@@ -583,8 +590,9 @@ model Booking {
   alternativeUsed        Boolean   @default(false)
 
   payment                 Payment?
+  refunds                 Refund[]
   commissionLedgerEntries CommissionLedgerEntry[]
-  paymentScheduleEntries PaymentScheduleEntry[]
+  paymentScheduleEntries  PaymentScheduleEntry[]
   receipt                 Receipt?
   invoice                 Invoice?
 
@@ -628,19 +636,69 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  refunds                 Refund[]
   commissionLedgerEntries CommissionLedgerEntry[]
 
   @@index([status])
   @@index([method])
 }
 
+model Refund {
+  id Int @id @default(autoincrement())
+
+  bookingId Int
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  paymentId Int
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  // Usually DOWN_PAYMENT for BNPLB-85 partial refund.
+  paymentPart String @default("DOWN_PAYMENT")
+
+  // Original amount paid by the customer.
+  paidAmount Decimal @db.Decimal(10, 2)
+
+  // Percentage selected in Operator Settings.
+  refundPercent Int?
+
+  // Actual amount returned to customer.
+  amount Decimal @db.Decimal(10, 2)
+
+  method PaymentMethod
+
+  status RefundStatus @default(PENDING)
+
+  reason String @db.Text
+
+  // Stripe PaymentIntent ID or manual-payment transaction reference.
+  originalTransactionId String?
+
+  // Stripe refund ID such as re_xxx.
+  // Manual refunds can leave this empty.
+  providerRefundId String? @unique
+
+  // Used when Stripe/manual processing fails.
+  lastError String? @db.Text
+
+  processedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookingId, status])
+  @@index([paymentId])
+  @@index([status])
+  @@index([createdAt])
+}
+
 model CommissionLedgerEntry {
   id Int @id @default(autoincrement())
 
   bookingId Int
-  booking   Booking @relation(fields: [bookingId], references: [id])
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
   paymentId Int
-  payment   Payment @relation(fields: [paymentId], references: [id])
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
 
   transactionId           String                @unique
   paymentType             String

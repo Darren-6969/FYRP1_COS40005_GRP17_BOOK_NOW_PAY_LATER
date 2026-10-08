@@ -86,6 +86,11 @@ function includeBookingRelations() {
       },
     },
     payment: true,
+    refunds: {
+      orderBy: {
+        createdAt: "desc",
+      },
+    },
     receipt: true,
     invoice: true,
     addons: {
@@ -169,6 +174,19 @@ function mapBooking(booking) {
     payment:
       mapPayment(
         booking.payment
+      ),
+
+    refunds:
+      (booking.refunds || []).map(
+        (refund) => ({
+          ...refund,
+
+          paidAmount:
+            Number(refund.paidAmount),
+
+          amount:
+            Number(refund.amount),
+        })
       ),
 
     invoice:
