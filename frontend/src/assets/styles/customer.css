@@ -1460,9 +1460,10 @@
 }
 
 @media (max-width: 900px) {
-  .customer-invoice-row-card {
-    grid-template-columns: 1fr;
+  .operator-settings-drawer {
+    width: 100%;
   }
+}
 
   .customer-invoice-actions {
     flex-direction: row;
@@ -2761,9 +2762,9 @@
 
 .operator-payment-methods {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
 }
 
 .operator-checkbox-card {
@@ -3293,3 +3294,218 @@
     text-align: center;
   }
 }
+
+/* =========================================================
+   Operator Settings - Pop-out Drawer
+========================================================= */
+
+.operator-settings-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  display: flex;
+  justify-content: flex-end;
+
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(4px);
+}
+
+.operator-settings-drawer {
+  width: min(820px, 92vw);
+  height: 100vh;
+
+  display: flex;
+  flex-direction: column;
+
+  background: #f8fafc;
+
+  box-shadow:
+    -20px 0 50px
+    rgba(15, 23, 42, 0.18);
+
+  animation: operatorSettingsDrawerIn 0.25s ease;
+}
+
+@keyframes operatorSettingsDrawerIn {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+.operator-settings-drawer-head {
+  padding: 28px 30px;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+
+  border-bottom: 1px solid #e2e8f0;
+
+  background: white;
+}
+
+.operator-settings-drawer-head h2 {
+  margin: 4px 0 8px;
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.operator-settings-drawer-head p {
+  margin-bottom: 0;
+  color: #64748b;
+}
+
+.operator-settings-close {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  border: 0;
+  border-radius: 14px;
+
+  background: #eef2f7;
+  color: #475569;
+
+  font-size: 27px;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+.operator-settings-close:hover {
+  background: #e2e8f0;
+}
+
+.operator-settings-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+
+  padding: 28px 30px;
+}
+
+.operator-settings-drawer-footer {
+  padding: 20px 30px;
+
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+
+  border-top: 1px solid #e2e8f0;
+
+  background: white;
+}
+
+@media (max-width: 700px) {
+  .operator-settings-drawer {
+    width: 100%;
+  }
+
+  .operator-settings-drawer-head,
+  .operator-settings-drawer-body,
+  .operator-settings-drawer-footer {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+/* =========================================================
+   Operator Settings Menu Cards
+========================================================= */
+
+.operator-settings-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin: 0 0 28px;
+}
+
+.operator-settings-menu-card {
+  width: 100%;
+  min-height: 135px;
+  padding: 24px;
+
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+
+  text-align: left;
+
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 26px;
+
+  background: rgba(255, 255, 255, 0.9);
+
+  cursor: pointer;
+
+  box-shadow:
+    0 10px 28px rgba(15, 23, 42, 0.05);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.operator-settings-menu-card:hover {
+  transform: translateY(-2px);
+
+  border-color: rgba(37, 99, 235, 0.35);
+
+  box-shadow:
+    0 16px 38px rgba(15, 23, 42, 0.1);
+}
+
+.operator-settings-menu-icon {
+  width: 52px;
+  height: 52px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 17px;
+
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.operator-settings-menu-card h3 {
+  margin: 0 0 7px;
+
+  font-size: 18px;
+  font-weight: 800;
+
+  color: #0f172a;
+}
+
+.operator-settings-menu-card p {
+  margin: 0;
+
+  font-size: 14px;
+  line-height: 1.5;
+
+  color: #64748b;
+}
+
+.operator-settings-arrow {
+  font-size: 24px;
+  color: #2563eb;
+}
+
+@media (max-width: 800px) {
+  .operator-settings-menu-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+

@@ -1,281 +1,569 @@
 import { useEffect, useMemo, useState } from "react";
+
 import { useSearchParams } from "react-router-dom";
+
 import {
+
   Bell,
+
   Clock,
+
   CreditCard,
+
   Eye,
+
   ImagePlus,
+
   KeyRound,
+
   Mail,
+
   MonitorSmartphone,
+
   Save,
+
   ShieldCheck,
+
   Upload,
+
 } from "lucide-react";
+
 import { operatorService } from "../../services/operator_service";
+
 import IntegrationSettings from "../../components/operator/IntegrationSettings";
 
 const SETTINGS_STORAGE_KEY = "bnpl_operator_settings_v1";
 
 const EMAIL_TEMPLATES = [
+
   {
+
     value: "booking_accepted",
+
     label: "Booking Accepted",
+
     subject: "Your booking has been accepted",
+
   },
+
   {
+
     value: "booking_rejected",
+
     label: "Booking Rejected",
+
     subject: "Your booking request was rejected",
+
   },
+
   {
+
     value: "booking_cancelled",
+
     label: "Booking Cancelled",
+
     subject: "Your booking has been cancelled",
+
   },
+
   {
+
     value: "booking_completed",
+
     label: "Booking Completed",
+
     subject: "Your booking is complete",
+
   },
+
   {
+
     value: "alternative_suggested",
+
     label: "Alternative Suggested",
+
     subject: "An alternative option is available for your booking",
+
   },
+
   {
+
     value: "payment_receipt",
+
     label: "Booking Confirmed & Official Receipt",
+
     subject: "Your booking is confirmed and your receipt is ready",
+
   },
+
   {
+
     value: "auto_rejected",
+
     label: "Auto-Rejected Booking",
+
     subject: "Your booking request has expired",
+
   },
+
 ];
 
 const DEFAULT_SETTINGS = {
+
   // Booking rules
+
   downPaymentPercent: 30,
 
   bookingResponseDeadlineMinutes: 120,
+
   autoRejectInactiveBooking: true,
+
   reminderBeforeAutoRejectMinutes: 30,
 
   // Pickup / return
+
   overtimeFee: "",
+
   blockNightHandover: false,
 
   // Payment
+
   acceptedPaymentMethods: {
+
     stripe: true,
+
     duitnowSpay: true,
+
   },
 
   allowReceiptUpload: true,
 
   // Refund
+
   partialRefundElected: false,
+
   partialRefundPercent: 50,
 
   operatorReminderBeforeAutoRejectMinutes: 30,
+
   enableOperatorReminderAlerts: true,
 
   selectedEmailTemplate:
+
     "booking_accepted",
 
   companyLogo: "",
 
   bookingRejectedEmailText: "",
+
   autoRejectedEmailText: "",
+
   bookingCancelledEmailText: "",
+
   bookingCompletedEmailText: "",
+
   paymentRequestEmailText: "",
+
   alternativeSuggestedEmailText: "",
+
   emailFooterText: "",
+
   manualPaymentInstructions: "",
 
   mfaEnabled: false,
+
 };
 
+const SETTINGS_MENU = [
+
+  {
+
+    id: "booking-rules",
+
+    title: "Booking Rules",
+
+    description:
+
+      "Down payment, response deadline and auto-reject.",
+
+    icon: Clock,
+
+  },
+
+  {
+
+    id: "pickup-return-rules",
+
+    title: "Pickup & Return",
+
+    description:
+
+      "Night pickup, return and overtime rules.",
+
+    icon: Clock,
+
+  },
+
+  {
+
+    id: "payment-settings",
+
+    title: "Payment Settings",
+
+    description:
+
+      "Payment methods and receipt uploads.",
+
+    icon: CreditCard,
+
+  },
+
+  {
+
+    id: "refund-settings",
+
+    title: "Refund Settings",
+
+    description:
+
+      "Partial refund policy and percentage.",
+
+    icon: ShieldCheck,
+
+  },
+
+  {
+
+    id: "notification-settings",
+
+    title: "Notifications",
+
+    description:
+
+      "Operator reminders and alerts.",
+
+    icon: Bell,
+
+  },
+
+  {
+
+    id: "email-templates",
+
+    title: "Email Templates",
+
+    description:
+
+      "Customer emails and branding.",
+
+    icon: Mail,
+
+  },
+
+  {
+
+    id: "security-settings",
+
+    title: "Security",
+
+    description:
+
+      "Account and authentication settings.",
+
+    icon: ShieldCheck,
+
+  },
+
+  {
+
+    id: "integration-settings",
+
+    title: "Integration / API Keys",
+
+    description:
+
+      "API keys, origins and integrations.",
+
+    icon: KeyRound,
+
+  },
+
+];
+
 export default function OperatorSettings() {
+
   const [settings, setSettings] = useState(null);
+
   const [form, setForm] = useState(DEFAULT_SETTINGS);
+
   const [loading, setLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
+
   const [error, setError] = useState("");
+
   const [successMessage, setSuccessMessage] = useState("");
+
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const [activeSection, setActiveSection] = useState(null);
+
   const loadSettings = async () => {
+
     try {
+
       setLoading(true);
+
       setError("");
 
       const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
 
       if (savedSettings) {
+
         setForm({
+
           ...DEFAULT_SETTINGS,
+
           ...JSON.parse(savedSettings),
+
           acceptedPaymentMethods: {
+
             ...DEFAULT_SETTINGS.acceptedPaymentMethods,
+
             ...JSON.parse(savedSettings).acceptedPaymentMethods,
+
           },
+
         });
+
       }
 
       const res = await operatorService.getSettings();
+
       setSettings(res.data);
 
         const config = res.data.config;
+
         const operator = res.data.operator;
 
         setForm((prev) => ({
+
           ...prev,
 
         downPaymentPercent:
+
           config?.downPaymentPercent ??
+
           prev.downPaymentPercent,
 
         overtimeFee:
+
           config?.overtimeFee != null
+
             ? String(config.overtimeFee)
+
             : "",
 
         blockNightHandover:
+
           config?.blockNightHandover ??
+
           prev.blockNightHandover,
 
         allowReceiptUpload:
+
           config?.allowReceiptUpload ??
+
           prev.allowReceiptUpload,
 
         partialRefundElected:
+
           config?.partialRefundElected ??
+
           prev.partialRefundElected,
 
         partialRefundPercent:
+
           config?.partialRefundPercent ??
+
           prev.partialRefundPercent,
 
           bookingResponseDeadlineMinutes:
+
             config?.bookingResponseDeadlineMinutes ?? prev.bookingResponseDeadlineMinutes,
 
           autoRejectInactiveBooking:
+
             config?.autoRejectInactiveBooking ?? prev.autoRejectInactiveBooking,
 
           reminderBeforeAutoRejectMinutes:
+
             config?.reminderBeforeAutoRejectMinutes ?? prev.reminderBeforeAutoRejectMinutes,
 
           acceptedPaymentMethods:
+
             config?.acceptedPaymentMethods ?? prev.acceptedPaymentMethods,
 
           manualPaymentInstructions:
+
             config?.manualPaymentNote ?? prev.manualPaymentInstructions,
 
           operatorReminderBeforeAutoRejectMinutes:
+
             config?.operatorReminderBeforeAutoRejectMinutes ??
+
             prev.operatorReminderBeforeAutoRejectMinutes,
 
           enableOperatorReminderAlerts:
+
             config?.enableOperatorReminderAlerts ?? prev.enableOperatorReminderAlerts,
 
           companyLogo:
+
             operator?.logoUrl || config?.invoiceLogoUrl || prev.companyLogo || "",
 
           bookingRejectedEmailText:
+
             config?.bookingRejectedEmailText || "",
 
           autoRejectedEmailText:
+
             config?.autoRejectedEmailText || "",
 
           bookingCancelledEmailText:
+
             config?.bookingCancelledEmailText || "",
 
           bookingCompletedEmailText:
+
             config?.bookingCompletedEmailText || "",
 
           paymentRequestEmailText:
+
             config?.paymentRequestEmailText || "",
 
           alternativeSuggestedEmailText:
+
             config?.alternativeSuggestedEmailText || "",
 
           emailFooterText:
+
             config?.emailFooterText || "",
+
         }));
+
     } catch (err) {
+
       setError(
+
         err.response?.data?.message ||
+
           "Settings backend is not available yet. Demo settings are loaded locally."
+
       );
+
     } finally {
+
       setLoading(false);
+
     }
+
   };
 
   useEffect(() => {
+
     loadSettings();
+
   }, []);
 
   // Strip the ?stripe= param from the URL after reading it once
+
   const stripeReturn = searchParams.get("stripe");
 
   useEffect(() => {
+
     if (stripeReturn) {
+
       const t = setTimeout(() => setSearchParams({}, { replace: true }), 4000);
+
       return () => clearTimeout(t);
+
     }
+
   }, [stripeReturn, setSearchParams]);
 
   const user = settings?.user;
+
   const operator = settings?.operator;
 
   const selectedTemplate = useMemo(() => {
+
     return (
+
       EMAIL_TEMPLATES.find(
+
         (template) => template.value === form.selectedEmailTemplate
+
       ) || EMAIL_TEMPLATES[0]
+
     );
+
   }, [form.selectedEmailTemplate]);
 
   const updateField = (field, value) => {
+
     setForm((prev) => ({
+
       ...prev,
+
       [field]: value,
+
     }));
+
   };
 
   const updatePaymentMethod = (method, checked) => {
+
     setForm((prev) => ({
+
       ...prev,
+
       acceptedPaymentMethods: {
+
         ...prev.acceptedPaymentMethods,
+
         [method]: checked,
+
       },
+
     }));
+
   };
 
   const handleLogoUpload = async (event) => {
+
     const file = event.target.files?.[0];
 
     if (!file) return;
 
     try {
+
       setError("");
+
       setSuccessMessage("");
 
       const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
 
       if (!allowedTypes.includes(file.type)) {
+
         throw new Error("Logo must be a PNG, JPG, JPEG, or WebP image.");
+
       }
 
       if (file.size > 500 * 1024) {
+
         throw new Error("Logo file size must be 500KB or below.");
+
       }
 
       const res = await operatorService.uploadOperatorLogo(file);
@@ -283,148 +571,165 @@ export default function OperatorSettings() {
       updateField("companyLogo", res.data.url);
 
       setSuccessMessage("Logo uploaded successfully. Click Save Settings to apply it.");
+
     } catch (err) {
+
       event.target.value = "";
+
       setError(
+
         err.response?.data?.message ||
+
           err.message ||
+
           "Failed to upload logo."
+
       );
+
     }
+
   };
 
 const handleSave = async () => {
+
   setSaving(true);
+
   setSuccessMessage("");
+
   setError("");
 
   try {
+
     const res = await operatorService.updateSettings({
+
       downPaymentPercent:
+
         Number(
+
           form.downPaymentPercent
+
         ),
 
       overtimeFee:
+
         form.blockNightHandover
+
           ? ""
+
           : form.overtimeFee,
 
       blockNightHandover:
+
         form.blockNightHandover,
 
       allowReceiptUpload:
+
         form.allowReceiptUpload,
 
       partialRefundElected:
+
         form.partialRefundElected,
 
       partialRefundPercent:
+
         form.partialRefundElected
+
           ? Number(
+
               form.partialRefundPercent
+
             )
+
           : null,
+
       bookingResponseDeadlineMinutes: form.bookingResponseDeadlineMinutes,
+
       autoRejectInactiveBooking: form.autoRejectInactiveBooking,
+
       reminderBeforeAutoRejectMinutes: form.reminderBeforeAutoRejectMinutes,
+
       acceptedPaymentMethods: form.acceptedPaymentMethods,
+
       manualPaymentNote: form.manualPaymentInstructions,
+
       operatorReminderBeforeAutoRejectMinutes:
+
         form.operatorReminderBeforeAutoRejectMinutes,
+
       enableOperatorReminderAlerts: form.enableOperatorReminderAlerts,
+
       companyLogo: form.companyLogo,
+
       invoiceFooterText: form.invoiceFooterText || null,
+
       bookingRejectedEmailText: form.bookingRejectedEmailText,
+
       autoRejectedEmailText: form.autoRejectedEmailText,
+
       bookingCancelledEmailText: form.bookingCancelledEmailText,
+
       bookingCompletedEmailText: form.bookingCompletedEmailText,
+
       paymentRequestEmailText: form.paymentRequestEmailText,
+
       alternativeSuggestedEmailText: form.alternativeSuggestedEmailText,
+
       emailFooterText: form.emailFooterText || null,
+
     });
 
     setSettings((prev) => ({
+
       ...prev,
+
       operator: res.data.operator,
+
       config: res.data.config,
+
     }));
 
     setSuccessMessage("Operator settings saved successfully.");
+
     setTimeout(() => {
+
     setSuccessMessage("");
+
     }, 3500);
+
   } catch (err) {
+
     setError(err.response?.data?.message || "Failed to save operator settings.");
+
   } finally {
+
     setSaving(false);
+
   }
+
 };
 
   if (loading) {
+
     return (
+
       <div className="operator-page">
+
         <div className="operator-card">Loading settings...</div>
+
       </div>
+
     );
+
   }
 
-  return (
-    <div className="operator-page">
-      <section className="operator-page-head">
-        <div>
-          <p className="operator-eyebrow">Operator Control Centre</p>
-          <h1>Operator Settings</h1>
-          <p>
-            Configure booking response rules, payment options, operator alerts,
-            email branding, and security settings.
-          </p>
-        </div>
+const activeMenu = SETTINGS_MENU.find(
+    (item) => item.id === activeSection
+  );
 
-        <button
-          type="button"
-          className="operator-primary-btn"
-          onClick={handleSave}
-          disabled={saving}
-        >
-          <Save size={16} />
-          {saving ? "Saving..." : "Save Settings"}
-        </button>
-      </section>
-
-      {error && (
-        <div className="operator-alert warning">
-          {error}
-          <button type="button" onClick={loadSettings}>
-            Retry
-          </button>
-        </div>
-      )}
-
-      {successMessage && (
-        <div className="operator-toast success" role="status" aria-live="polite">
-          <strong>Success</strong>
-          <span>{successMessage}</span>
-        </div>
-      )}
-
-      {/* Stripe return banners */}
-      {stripeReturn === "connected" && (
-        <div className="operator-alert success">
-          Stripe onboarding completed. Your account restrictions should now be
-          lifted.
-        </div>
-      )}
-
-      {stripeReturn === "refresh" && (
-        <div className="operator-alert warning">
-          The onboarding link expired. Click "Complete Stripe Onboarding" below
-          to get a new one.
-        </div>
-      )}
-
-      <div className="operator-settings-layout">
-        <main className="operator-settings-content">
+  const renderActiveSection = () => {
+    switch (activeSection) {
+      case "booking-rules":
+        return (
           <SettingsSection
             id="booking-rules"
             icon={<Clock size={20} />}
@@ -432,7 +737,6 @@ const handleSave = async () => {
             description="Control how long an operator can leave a booking request without action."
           >
             <div className="operator-settings-form-grid">
-
               <FormField
                 label="Down payment"
                 helper="Percentage of the booking total the customer must pay first. Default is 30%."
@@ -505,7 +809,10 @@ const handleSave = async () => {
               </FormField>
             </div>
           </SettingsSection>
+        );
 
+      case "pickup-return-rules":
+        return (
           <SettingsSection
             id="pickup-return-rules"
             icon={<Clock size={20} />}
@@ -513,18 +820,12 @@ const handleSave = async () => {
             description="Configure pickup and return rules for night hours between 21:00 and 09:00."
           >
             <div className="operator-settings-form-grid">
-
               <ToggleField
                 label="Block night pickups and returns"
                 helper="Prevent customers from selecting pickup or return times between 21:00 and 09:00."
-                checked={
-                  form.blockNightHandover
-                }
+                checked={form.blockNightHandover}
                 onChange={(checked) =>
-                  updateField(
-                    "blockNightHandover",
-                    checked
-                  )
+                  updateField("blockNightHandover", checked)
                 }
               />
 
@@ -537,23 +838,20 @@ const handleSave = async () => {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={
-                      form.overtimeFee
-                    }
+                    value={form.overtimeFee}
                     onChange={(event) =>
-                      updateField(
-                        "overtimeFee",
-                        event.target.value
-                      )
+                      updateField("overtimeFee", event.target.value)
                     }
                     placeholder="30.00"
                   />
                 </FormField>
               )}
-
             </div>
           </SettingsSection>
+        );
 
+      case "payment-settings":
+        return (
           <SettingsSection
             id="payment-settings"
             icon={<CreditCard size={20} />}
@@ -564,79 +862,28 @@ const handleSave = async () => {
               <CheckboxField
                 label="Stripe"
                 checked={Boolean(form.acceptedPaymentMethods.stripe)}
-                onChange={(checked) => updatePaymentMethod("stripe", checked)}
+                onChange={(checked) =>
+                  updatePaymentMethod("stripe", checked)
+                }
               />
 
               <CheckboxField
                 label="DuitNow / SPay"
                 checked={Boolean(form.acceptedPaymentMethods.duitnowSpay)}
-                onChange={(checked) => updatePaymentMethod("duitnowSpay", checked)}
+                onChange={(checked) =>
+                  updatePaymentMethod("duitnowSpay", checked)
+                }
               />
 
               <ToggleField
                 label="Allow receipt upload"
                 helper="Allow customers using manual payment methods to upload a payment receipt for operator verification."
-                checked={
-                  form.allowReceiptUpload
-                }
+                checked={form.allowReceiptUpload}
                 onChange={(checked) =>
-                  updateField(
-                    "allowReceiptUpload",
-                    checked
-                  )
+                  updateField("allowReceiptUpload", checked)
                 }
               />
             </div>
-
-            <SettingsSection
-              id="refund-settings"
-              icon={<ShieldCheck size={20} />}
-              title="Refund Settings"
-              description="Configure the refund rule applied when the remaining balance is not completed."
-            >
-              <div className="operator-settings-form-grid">
-
-                <ToggleField
-                  label="Allow partial refund"
-                  helper="Allow part of the paid amount to be refunded instead of forfeiting the full amount."
-                  checked={
-                    form.partialRefundElected
-                  }
-                  onChange={(checked) =>
-                    updateField(
-                      "partialRefundElected",
-                      checked
-                    )
-                  }
-                />
-
-                {form.partialRefundElected && (
-                  <FormField
-                    label="Partial refund percentage"
-                    helper="Percentage returned to the customer. Must be between 1% and 99%."
-                  >
-                    <input
-                      type="number"
-                      min="1"
-                      max="99"
-                      step="1"
-                      value={
-                        form.partialRefundPercent
-                      }
-                      onChange={(event) =>
-                        updateField(
-                          "partialRefundPercent",
-                          Number(
-                            event.target.value
-                          )
-                        )
-                      }
-                    />
-                  </FormField>
-                )}
-
-              </div>
-            </SettingsSection>
 
             {form.acceptedPaymentMethods.duitnowSpay && (
               <FormField
@@ -647,14 +894,62 @@ const handleSave = async () => {
                   rows={5}
                   value={form.manualPaymentInstructions}
                   onChange={(event) =>
-                    updateField("manualPaymentInstructions", event.target.value)
+                    updateField(
+                      "manualPaymentInstructions",
+                      event.target.value
+                    )
                   }
                   placeholder="Enter manual payment instructions..."
                 />
               </FormField>
             )}
           </SettingsSection>
+        );
 
+      case "refund-settings":
+        return (
+          <SettingsSection
+            id="refund-settings"
+            icon={<ShieldCheck size={20} />}
+            title="Refund Settings"
+            description="Configure the refund rule applied when the remaining balance is not completed."
+          >
+            <div className="operator-settings-form-grid">
+              <ToggleField
+                label="Allow partial refund"
+                helper="Allow part of the paid amount to be refunded instead of forfeiting the full amount."
+                checked={form.partialRefundElected}
+                onChange={(checked) =>
+                  updateField("partialRefundElected", checked)
+                }
+              />
+
+              {form.partialRefundElected && (
+                <FormField
+                  label="Partial refund percentage"
+                  helper="Percentage returned to the customer. Must be between 1% and 99%."
+                >
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    step="1"
+                    value={form.partialRefundPercent}
+                    onChange={(event) =>
+                      updateField(
+                        "partialRefundPercent",
+                        Number(event.target.value)
+                      )
+                    }
+                  />
+                </FormField>
+              )}
+            </div>
+          </SettingsSection>
+        );
+
+      case "notification-settings":
+        return (
           <SettingsSection
             id="notification-settings"
             icon={<Bell size={20} />}
@@ -692,18 +987,21 @@ const handleSave = async () => {
               />
             </div>
           </SettingsSection>
+        );
 
+      case "email-templates":
+        return (
           <SettingsSection
             id="email-template-settings"
             icon={<Mail size={20} />}
             title="Email Template Settings"
-            description="Preview default system emails and upload a company logo for email branding."
+            description="Preview customer emails, customise messages, and upload your company logo."
           >
             <div className="operator-email-template-grid">
               <div>
                 <FormField
                   label="Select email template"
-                  helper="The email content remains default. Only the company logo is customizable for now."
+                  helper="Choose an email type to preview and customise."
                 >
                   <select
                     value={form.selectedEmailTemplate}
@@ -722,7 +1020,10 @@ const handleSave = async () => {
                 <div className="operator-logo-upload-box">
                   <div className="operator-logo-preview">
                     {form.companyLogo ? (
-                      <img src={form.companyLogo} alt="Company logo preview" />
+                      <img
+                        src={form.companyLogo}
+                        alt="Company logo preview"
+                      />
                     ) : (
                       <ImagePlus size={34} />
                     )}
@@ -766,7 +1067,10 @@ const handleSave = async () => {
                       rows={5}
                       value={form.bookingRejectedEmailText}
                       onChange={(event) =>
-                        updateField("bookingRejectedEmailText", event.target.value)
+                        updateField(
+                          "bookingRejectedEmailText",
+                          event.target.value
+                        )
                       }
                       placeholder="Example: Unfortunately, your requested booking is unavailable. Please contact us for further assistance."
                     />
@@ -782,7 +1086,10 @@ const handleSave = async () => {
                       rows={5}
                       value={form.autoRejectedEmailText}
                       onChange={(event) =>
-                        updateField("autoRejectedEmailText", event.target.value)
+                        updateField(
+                          "autoRejectedEmailText",
+                          event.target.value
+                        )
                       }
                       placeholder="Example: Your booking request has expired because no operator response was made before the deadline."
                     />
@@ -792,13 +1099,16 @@ const handleSave = async () => {
                 {form.selectedEmailTemplate === "booking_accepted" && (
                   <FormField
                     label="Custom payment request message"
-                    helper="Shown in the 'Payment Required' email. Manual payment instructions are set in the Payment section above."
+                    helper="Shown in the Payment Required email. Manual payment instructions are configured in Payment Settings."
                   >
                     <textarea
                       rows={5}
                       value={form.paymentRequestEmailText}
                       onChange={(event) =>
-                        updateField("paymentRequestEmailText", event.target.value)
+                        updateField(
+                          "paymentRequestEmailText",
+                          event.target.value
+                        )
                       }
                       placeholder="Example: Your booking is accepted. Please complete payment before the deadline to secure it."
                     />
@@ -814,7 +1124,10 @@ const handleSave = async () => {
                       rows={5}
                       value={form.bookingCancelledEmailText}
                       onChange={(event) =>
-                        updateField("bookingCancelledEmailText", event.target.value)
+                        updateField(
+                          "bookingCancelledEmailText",
+                          event.target.value
+                        )
                       }
                       placeholder="Example: We regret to inform you that your booking has been cancelled. Please contact us for assistance."
                     />
@@ -830,7 +1143,10 @@ const handleSave = async () => {
                       rows={5}
                       value={form.bookingCompletedEmailText}
                       onChange={(event) =>
-                        updateField("bookingCompletedEmailText", event.target.value)
+                        updateField(
+                          "bookingCompletedEmailText",
+                          event.target.value
+                        )
                       }
                       placeholder="Example: Thank you for choosing us! Your booking is now complete. We hope to serve you again."
                     />
@@ -846,7 +1162,10 @@ const handleSave = async () => {
                       rows={5}
                       value={form.alternativeSuggestedEmailText}
                       onChange={(event) =>
-                        updateField("alternativeSuggestedEmailText", event.target.value)
+                        updateField(
+                          "alternativeSuggestedEmailText",
+                          event.target.value
+                        )
                       }
                       placeholder="Example: The option you selected is unavailable, but we'd like to offer you the following alternative."
                     />
@@ -875,7 +1194,8 @@ const handleSave = async () => {
                   bookingRejectedEmailText: form.bookingRejectedEmailText,
                   bookingCancelledEmailText: form.bookingCancelledEmailText,
                   bookingCompletedEmailText: form.bookingCompletedEmailText,
-                  alternativeSuggestedEmailText: form.alternativeSuggestedEmailText,
+                  alternativeSuggestedEmailText:
+                    form.alternativeSuggestedEmailText,
                   autoRejectedEmailText: form.autoRejectedEmailText,
                   emailFooterText: form.emailFooterText,
                   manualPaymentNote: form.manualPaymentInstructions,
@@ -884,7 +1204,10 @@ const handleSave = async () => {
               />
             </div>
           </SettingsSection>
+        );
 
+      case "security-settings":
+        return (
           <SettingsSection
             id="security-settings"
             icon={<ShieldCheck size={20} />}
@@ -896,7 +1219,9 @@ const handleSave = async () => {
                 label="Enable 2FA / MFA"
                 helper="Add an extra verification step when signing in."
                 checked={form.mfaEnabled}
-                onChange={(checked) => updateField("mfaEnabled", checked)}
+                onChange={(checked) =>
+                  updateField("mfaEnabled", checked)
+                }
               />
 
               <SecurityInfoCard
@@ -914,381 +1239,738 @@ const handleSave = async () => {
               />
             </div>
           </SettingsSection>
+        );
 
-          <div id="integration-settings">
-            <IntegrationSettings />
+      case "integration-settings":
+        return (
+          <div>
+            <div id="integration-settings">
+              <IntegrationSettings />
+            </div>
+
+            <StripeConnectCard />
           </div>
+        );
 
-          {/*
-            SANDBOX BYPASS — Stripe Express Onboarding Card
-            ------------------------------------------------
-            This card lets the merchant complete (or "fake") Stripe's identity
-            verification in test mode. Clicking the button generates a Stripe Express
-            Account Link that opens Stripe's hosted onboarding form. In sandbox, Stripe
-            accepts dummy data (SSN 000-00-0000, any address / DOB) to immediately lift
-            the RESTRICTED status on the connected account — no real documents needed.
-            In live mode this would collect genuine KYC information.
-          */}
-          <StripeConnectCard />
-        </main>
+      default:
+        return null;
+    }
+  };
 
-        <aside className="operator-settings-toc">
-          <strong>Settings Menu</strong>
+  return (
+    <div className="operator-page">
+      <section className="operator-page-head">
+        <div>
+          <p className="operator-eyebrow">Operator Control Centre</p>
+          <h1>Operator Settings</h1>
+          <p>
+            Choose a settings category below. Each category opens in a focused
+            side panel so the page stays clean and easy to manage.
+          </p>
+        </div>
 
-          <a href="#booking-rules">
-            Booking Rules
-          </a>
+        <button
+          type="button"
+          className="operator-primary-btn"
+          onClick={handleSave}
+          disabled={saving}
+        >
+          <Save size={16} />
+          {saving ? "Saving..." : "Save Settings"}
+        </button>
+      </section>
 
-          <a href="#pickup-return-rules">
-            Pickup & Return Rules
-          </a>
+      {error && (
+        <div className="operator-alert warning">
+          {error}
+          <button type="button" onClick={loadSettings}>
+            Retry
+          </button>
+        </div>
+      )}
 
-          <a href="#payment-settings">
-            Payment Settings
-          </a>
+      {successMessage && (
+        <div
+          className="operator-toast success"
+          role="status"
+          aria-live="polite"
+        >
+          <strong>Success</strong>
+          <span>{successMessage}</span>
+        </div>
+      )}
 
-          <a href="#refund-settings">
-            Refund Settings
-          </a>
+      {stripeReturn === "connected" && (
+        <div className="operator-alert success">
+          Stripe onboarding completed. Your account restrictions should now be
+          lifted.
+        </div>
+      )}
 
-          <a href="#notification-settings">
-            Notification Settings
-          </a>
+      {stripeReturn === "refresh" && (
+        <div className="operator-alert warning">
+          The onboarding link expired. Open Integration / API Keys and click
+          Complete Stripe Onboarding to get a new one.
+        </div>
+      )}
 
-          <a href="#email-template-settings">
-            Email Templates
-          </a>
+      <div className="operator-settings-menu-grid">
+        {SETTINGS_MENU.map((item) => {
+          const MenuIcon = item.icon;
 
-          <a href="#security-settings">
-            Security
-          </a>
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className="operator-settings-menu-card"
+              onClick={() => setActiveSection(item.id)}
+            >
+              <div className="operator-settings-menu-icon">
+                <MenuIcon size={22} />
+              </div>
 
-          <a href="#integration-settings">
-            Integration / API Keys
-          </a>
-        </aside>
+              <div className="operator-settings-menu-text">
+                <h3>{item.title}</h3>
+                <p>{item.description}</p>
+              </div>
+
+              <span className="operator-settings-arrow">→</span>
+            </button>
+          );
+        })}
       </div>
+
+      {activeSection && activeMenu && (
+        <div
+          className="operator-settings-drawer-backdrop"
+          onClick={() => setActiveSection(null)}
+        >
+          <aside
+            className="operator-settings-drawer"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="operator-settings-drawer-head">
+              <div>
+                <p className="operator-eyebrow">Operator Settings</p>
+                <h2>{activeMenu.title}</h2>
+                <p>{activeMenu.description}</p>
+              </div>
+
+              <button
+                type="button"
+                className="operator-settings-close"
+                onClick={() => setActiveSection(null)}
+                aria-label="Close settings panel"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="operator-settings-drawer-body">
+              {renderActiveSection()}
+            </div>
+
+            <div className="operator-settings-drawer-footer">
+              <button
+                type="button"
+                className="operator-secondary-btn"
+                onClick={() => setActiveSection(null)}
+              >
+                {activeSection === "integration-settings" ? "Close" : "Cancel"}
+              </button>
+
+              {activeSection !== "integration-settings" && (
+                <button
+                  type="button"
+                  className="operator-primary-btn"
+                  disabled={saving}
+                  onClick={async () => {
+                    await handleSave();
+                    setActiveSection(null);
+                  }}
+                >
+                  <Save size={16} />
+                  {saving ? "Saving..." : "Save Changes"}
+                </button>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }
 
 function SettingsSection({ id, icon, title, description, children }) {
+
   return (
+
     <section id={id} className="operator-card operator-settings-section">
+
       <div className="operator-settings-section-head">
+
         <div className="operator-settings-section-icon">{icon}</div>
+
         <div>
+
           <h2>{title}</h2>
+
           <p>{description}</p>
+
         </div>
+
       </div>
 
       {children}
+
     </section>
+
   );
+
 }
 
 function FormField({ label, helper, children }) {
+
   return (
+
     <label className="operator-settings-field">
+
       <span>{label}</span>
+
       {children}
+
       {helper && <small>{helper}</small>}
+
     </label>
+
   );
+
 }
 
 function ToggleField({ label, helper, checked, onChange }) {
+
   return (
+
     <div className="operator-toggle-row">
+
       <div>
+
         <strong>{label}</strong>
+
         {helper && <p>{helper}</p>}
+
       </div>
 
       <button
+
         type="button"
+
         className={`operator-toggle ${checked ? "active" : ""}`}
+
         onClick={() => onChange(!checked)}
+
         aria-pressed={checked}
+
       >
+
         <span />
+
       </button>
+
     </div>
+
   );
+
 }
 
 function CheckboxField({ label, checked, onChange }) {
+
   return (
+
     <label className="operator-checkbox-card">
+
       <input
+
         type="checkbox"
+
         checked={checked}
+
         onChange={(event) => onChange(event.target.checked)}
+
       />
+
       <span>{label}</span>
+
     </label>
+
   );
+
 }
 
 function BackendEmailPreview({ template, overrides = {} }) {
+
   const [preview, setPreview] = useState(null);
+
   const [loadingPreview, setLoadingPreview] = useState(false);
+
   const [previewError, setPreviewError] = useState("");
 
   // Re-run whenever the template OR any customization field changes.
+
   const overridesKey = JSON.stringify({ template, ...overrides });
 
   useEffect(() => {
+
     const handle = setTimeout(async () => {
+
       setLoadingPreview(true);
+
       setPreviewError("");
 
       try {
+
         const res = await operatorService.previewEmailTemplate(template, overrides);
+
         setPreview(res.data);
+
       } catch (err) {
+
         setPreviewError(
+
           err.response?.data?.message || "Failed to load email preview."
+
         );
+
       } finally {
+
         setLoadingPreview(false);
+
       }
+
     }, 400);
 
     return () => clearTimeout(handle);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [overridesKey]);
 
   return (
+
     <div className="operator-email-preview">
+
       <div className="operator-email-preview-toolbar">
+
         <span>Actual Sent Email Preview</span>
+
         <strong>{preview?.subject || template}</strong>
+
       </div>
 
       {loadingPreview ? (
+
         <div className="operator-email-preview-placeholder">
+
           Loading actual email preview...
+
         </div>
+
       ) : previewError ? (
+
         <div className="operator-alert danger">{previewError}</div>
+
       ) : (
+
         <iframe
+
           title="Actual email preview"
+
           className="operator-email-preview-frame"
+
           srcDoc={preview?.html || ""}
+
         />
+
       )}
+
     </div>
+
   );
+
 }
 
 function SecurityInfoCard({ icon, title, value, description }) {
+
   return (
+
     <div className="operator-security-card">
+
       <div className="operator-security-card-head">
+
         {icon}
+
         <div>
+
           <h3>{title}</h3>
+
           <p>{description}</p>
+
         </div>
+
       </div>
 
       <strong>{value}</strong>
+
     </div>
+
   );
+
 }
 
 // ── Stripe Connect onboarding card ────────────────────────────────────────────
+
 // This part is kept from your existing code and should not be removed.
+
 function StripeConnectCard() {
+
   const [status, setStatus] = useState(null); // null = not loaded yet
+
   const [loadingStatus, setLoadingStatus] = useState(true);
+
   const [launching, setLaunching] = useState(false);
+
   const [statusError, setStatusError] = useState("");
 
   const fetchStatus = async () => {
+
     setLoadingStatus(true);
+
     setStatusError("");
 
     try {
+
       const res = await operatorService.getStripeAccountStatus();
+
       setStatus(res.data);
+
     } catch (err) {
+
       setStatusError(
+
         err.response?.data?.message || "Could not load Stripe account status."
+
       );
+
     } finally {
+
       setLoadingStatus(false);
+
     }
+
   };
 
   useEffect(() => {
+
     fetchStatus();
+
   }, []);
 
   // Stripe hosts the onboarding form and returns the operator here.
+
   const handleStartOnboarding = async () => {
+
     setLaunching(true);
+
     setStatusError("");
 
     try {
+
       const res = await operatorService.createStripeOnboardingLink();
+
       window.location.href = res.data.url;
+
     } catch (err) {
+
       setStatusError(
+
         err.response?.data?.message || "Failed to generate onboarding link."
+
       );
+
       setLaunching(false);
+
     }
+
   };
 
   const transfersActive = status?.capabilities?.transfers === "active";
 
   const isRestricted =
+
     status?.configured &&
+
     (!status.chargesEnabled || !status.payoutsEnabled || !transfersActive);
 
   const isReady =
+
     status?.configured &&
+
     status.chargesEnabled &&
+
     status.payoutsEnabled &&
+
     transfersActive;
 
   return (
+
     <div className="operator-card" style={{ marginTop: "1.5rem" }}>
+
       <div style={{ marginBottom: "0.75rem" }}>
+
         <h2 style={{ marginBottom: "0.25rem" }}>Stripe Connect</h2>
+
         <p style={{ fontSize: "0.875rem", opacity: 0.7 }}>
+
           Your merchant payout account. Complete onboarding so Stripe can
+
           transfer your share of each payment.
+
         </p>
+
       </div>
 
       <div
+
         className="operator-alert info"
+
         style={{ fontSize: "0.8rem", marginBottom: "1rem" }}
+
       >
+
         Stripe securely collects your business, identity, and bank details on
+
         its hosted onboarding page.
+
       </div>
 
       {statusError && (
+
         <div
+
           className="operator-alert danger"
+
           style={{ marginBottom: "0.75rem" }}
+
         >
+
           {statusError}
+
         </div>
+
       )}
 
       {loadingStatus ? (
+
         <p style={{ opacity: 0.6 }}>Loading account status…</p>
+
       ) : !status?.configured ? (
+
         <p style={{ opacity: 0.6 }}>
+
           Connect a Stripe Express account to receive booking payouts.
+
         </p>
+
       ) : (
+
         <div
+
           style={{
+
             display: "grid",
+
             gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+
             gap: "0.75rem",
+
             marginBottom: "1rem",
+
           }}
+
         >
+
           <StatusPill label="Charges" active={status.chargesEnabled} />
+
           <StatusPill label="Payouts" active={status.payoutsEnabled} />
+
           <StatusPill
+
             label="Details Submitted"
+
             active={status.detailsSubmitted}
+
           />
+
           <StatusPill
+
             label="Transfers capability"
+
             active={status.capabilities?.transfers === "active"}
+
           />
+
         </div>
+
       )}
 
       {/* Transfers capability is required for Destination Charges (the split payment model).
+
           If inactive, the customer checkout will throw a Stripe error. */}
+
       {status?.configured && status.capabilities?.transfers !== "active" && (
+
         <div
+
           className="operator-alert danger"
+
           style={{ fontSize: "0.8rem", marginBottom: "1rem" }}
+
         >
+
           <strong>Transfers capability inactive.</strong> Customers cannot pay
+
           until this is enabled. Click <em>Complete Stripe Onboarding</em> below
+
           — it will request the capability automatically. In sandbox mode it
+
           activates instantly.
+
         </div>
+
       )}
 
       {/* Requirements list — only shown when there are outstanding items */}
+
       {status?.requirements?.currentlyDue?.length > 0 && (
+
         <div style={{ marginBottom: "1rem", fontSize: "0.8rem" }}>
+
           <strong>Required by Stripe:</strong>
+
           <ul style={{ marginTop: "0.25rem", paddingLeft: "1.25rem" }}>
+
             {status.requirements.currentlyDue.map((item) => (
+
               <li key={item}>{item.replaceAll(".", " › ")}</li>
+
             ))}
+
           </ul>
+
         </div>
+
       )}
 
       {/* Onboarding button — always shown so the merchant can re-enter the form */}
+
       <button
+
         className="operator-btn"
+
         onClick={handleStartOnboarding}
+
         disabled={launching}
+
         style={{ minWidth: "220px" }}
+
       >
+
         {launching
+
           ? "Redirecting to Stripe…"
+
           : isReady
+
           ? "Manage Stripe Account"
+
           : status?.configured
+
           ? "Complete Stripe Onboarding"
+
           : "Connect Stripe Account"}
+
       </button>
 
       {isReady && (
+
         <p
+
           className="operator-status success"
+
           style={{ marginTop: "0.5rem", display: "inline-block" }}
+
         >
+
           Account active — charges and payouts enabled
+
         </p>
+
       )}
 
       {isRestricted && (
+
         <p
+
           className="operator-status danger"
+
           style={{ marginTop: "0.5rem", display: "inline-block" }}
+
         >
+
           Account restricted — complete onboarding to enable payouts
+
         </p>
+
       )}
+
     </div>
+
   );
+
 }
 
 function StatusPill({ label, active }) {
+
   return (
+
     <div
+
       style={{
+
         padding: "0.5rem 0.75rem",
+
         borderRadius: "0.5rem",
+
         background: active ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+
         border: `1px solid ${
+
           active ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"
+
         }`,
+
         fontSize: "0.8rem",
+
       }}
+
     >
+
       <span style={{ marginRight: "0.35rem" }}>{active ? "✓" : "✗"}</span>
+
       <span>{label}</span>
+
     </div>
+
   );
+
 }
