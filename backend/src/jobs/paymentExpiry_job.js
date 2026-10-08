@@ -31,7 +31,7 @@ export function runPaymentExpiryJob() {
     // the Malaysia-time deadline represented by the stored DateTime.
     const expired = await prisma.booking.findMany({
         where: {
-          status: { in: ["PENDING", "ACCEPTED", "PENDING_PAYMENT", "PAID"] },
+          status: { in: ["PENDING", "ACCEPTED", "PENDING_PAYMENT", "CONFIRMED", "PAID"] },
           paymentScheduleEntries: {
             some: { status: "DUE", dueAt: { lt: now } },
           },
@@ -50,7 +50,7 @@ export function runPaymentExpiryJob() {
         const claimed = await tx.booking.updateMany({
           where: {
             id: booking.id,
-            status: { in: ["PENDING", "ACCEPTED", "PENDING_PAYMENT", "PAID"] },
+            status: { in: ["PENDING", "ACCEPTED", "PENDING_PAYMENT", "CONFIRMED", "PAID"] },
           },
           data: { status: "CANCELLED" },
         });

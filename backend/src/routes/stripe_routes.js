@@ -191,6 +191,15 @@ export async function applyPaidState(
       where: { bookingId },
       data: paymentData,
     });
+    await tx.paymentScheduleEntry.updateMany({
+      where: {
+        bookingId,
+        type: "PAYMENT",
+        paymentPart: paymentType === PAYMENT_TYPES.DOWN_PAYMENT ? "DOWN_PAYMENT" : undefined,
+        status: "DUE",
+      },
+      data: { status: "PAID", paidAt: new Date() },
+    });
 
     await recordSuccessfulPaymentEvents({
       customerId: booking.customerId,
@@ -214,7 +223,13 @@ export async function applyPaidState(
 
     const paidBooking = await tx.booking.update({
       where: { id: bookingId },
-      data: { status: paidPayment.status === "PAID" ? "PAID" : "PENDING_PAYMENT" },
+      data: {
+        status: paidPayment.status === "PAID"
+          ? "PAID"
+          : paymentType === PAYMENT_TYPES.DOWN_PAYMENT
+            ? "CONFIRMED"
+            : "PENDING_PAYMENT",
+      },
       include: includeBookingRelations(),
     });
 
@@ -808,8 +823,8 @@ router.post(
         return { status: 400, body: { message: "This booking is already paid" } };
       }
 
-      if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
-        return { status: 400, body: { message: "Payment is only available after the booking is accepted." } };
+      if (!["ACCEPTED", "PENDING_PAYMENT", "CONFIRMED"].includes(booking.status)) {
+        return { status: 400, body: { message: "Payment is not available for this booking." } };
       }
 
       // F6 fix: refuse to start a checkout once the payment deadline has passed.

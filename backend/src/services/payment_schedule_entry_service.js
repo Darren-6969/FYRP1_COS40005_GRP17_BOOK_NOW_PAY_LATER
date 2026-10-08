@@ -44,7 +44,7 @@ export function getScheduleForCreditTier({
 }
 
 export async function createPaymentScheduleEntries(booking, options = {}) {
-  const entries = getScheduleForCreditTier({
+  const entries = options.entries || getScheduleForCreditTier({
     creditTier: options.creditTier || "Normal",
     rentalAmount: booking.rentalAmount ?? booking.totalAmount,
     addonAmount: booking.addonsAmount ?? 0,

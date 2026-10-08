@@ -7,7 +7,7 @@ export const DEFAULT_EXPOSURE_LIMITS = Object.freeze({
   "High Risk": 0,
 });
 
-const OPEN_UNPAID_STATUSES = ["PENDING", "ACCEPTED", "PENDING_PAYMENT"];
+const OPEN_UNPAID_STATUSES = ["PENDING", "ACCEPTED", "PENDING_PAYMENT", "CONFIRMED"];
 
 function configuredLimit(exposureLimits, tier) {
   const configured = exposureLimits && typeof exposureLimits === "object"
@@ -30,25 +30,29 @@ export function getExposureLimit(exposureLimits, tier = "Normal") {
  */
 export async function enforceConcurrentExposureCap({
   customerId,
+  tier: suppliedTier = null,
+  exposureLimits: suppliedExposureLimits = null,
   database = prisma,
 }) {
   await database.$queryRaw`SELECT id FROM "User" WHERE id = ${customerId} FOR UPDATE`;
 
-  const [profile, settings] = await Promise.all([
-    database.customerCreditProfile.findUnique({
-      where: { customerId },
-      select: { tier: true },
-    }),
-    database.platformSettings.upsert({
-      where: { id: 1 },
-      create: { id: 1 },
-      update: {},
-      select: { exposureLimits: true },
-    }),
-  ]);
+  const [profile, settings] = suppliedTier && suppliedExposureLimits
+    ? [null, { exposureLimits: suppliedExposureLimits }]
+    : await Promise.all([
+      database.customerCreditProfile.findUnique({
+        where: { customerId },
+        select: { tier: true },
+      }),
+      database.platformSettings.upsert({
+        where: { id: 1 },
+        create: { id: 1 },
+        update: {},
+        select: { exposureLimits: true },
+      }),
+    ]);
 
-  const tier = profile?.tier || "Normal";
-  const limit = getExposureLimit(settings.exposureLimits, tier);
+  const tier = suppliedTier || profile?.tier || "Normal";
+  const limit = getExposureLimit(suppliedExposureLimits || settings.exposureLimits, tier);
   const openUnpaidCount = await database.booking.count({
     where: {
       customerId,
