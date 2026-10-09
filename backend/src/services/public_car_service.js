@@ -301,6 +301,27 @@ export function toCarDto(listing, facts, availability) {
       },
       cdw: cdwFor(listing),
       downPaymentPct: config?.downPaymentPercent ?? DEFAULT_DOWN_PAYMENT_PCT,
+      driverRules: {
+        minAge:
+          config?.minDriverAge ?? 21,
+
+        youngDriver: {
+          enabled: Boolean(
+            config?.youngDriverSurchargeEnabled
+          ),
+
+          maxAge:
+            config?.youngDriverMaxAge ?? 24,
+
+          surchargeSen:
+            config?.youngDriverSurchargeEnabled
+              ? toSen(
+                  config?.youngDriverSurcharge
+                ) ?? 0
+              : 0,
+          unit: "per_day",
+        },
+      },
       refundRule: refundRuleFor(config),
       pickupPoints: pickupPointsFor(listing.branch),
       dropoffPoints: dropoffPointsFor(listing.branch),
@@ -494,6 +515,70 @@ export async function getPublicCarsAvailability(
  * Returns problems[] instead of throwing, so the quote endpoint can show them
  * and booking creation can refuse with the first one.
  */
+
+function driverAgeOnDate(
+  dateOfBirth,
+  onPlainDate
+) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      dateOfBirth || ""
+    ) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      onPlainDate || ""
+    )
+  ) {
+    return null;
+  }
+
+  const birth =
+    new Date(
+      `${dateOfBirth}T00:00:00Z`
+    );
+
+  if (
+    Number.isNaN(
+      birth.getTime()
+    ) ||
+    birth
+      .toISOString()
+      .slice(0, 10) !==
+      dateOfBirth
+  ) {
+    return null;
+  }
+
+  const [
+    birthYear,
+    birthMonth,
+    birthDay,
+  ] =
+    dateOfBirth
+      .split("-")
+      .map(Number);
+
+  const [
+    year,
+    month,
+    day,
+  ] =
+    onPlainDate
+      .split("-")
+      .map(Number);
+  let age =
+    year - birthYear;
+  if (
+    month < birthMonth ||
+    (
+      month === birthMonth &&
+      day < birthDay
+    )
+  ) {
+    age -= 1;
+  }
+  return age;
+}
+
 export function priceSelection(listing, config, sel, peakDates) {
   const pickupAt = klDateTimeToUtc(sel.from, sel.ft);
   const returnAt = klDateTimeToUtc(sel.to, sel.tt);
@@ -504,6 +589,77 @@ export function priceSelection(listing, config, sel, peakDates) {
   if (!days) return { days: 0, downPaymentPct, problems: [] };
 
   const problems = [];
+  const driverDateOfBirth =
+  typeof sel.driverDateOfBirth ===
+  "string"
+    ? sel.driverDateOfBirth.trim()
+    : "";
+
+  let driverAge = null;
+
+  let youngDriverDailySurchargeSen =
+    0;
+
+
+  if (driverDateOfBirth) {
+    driverAge =
+      driverAgeOnDate(
+        driverDateOfBirth,
+        klPlainDate(pickupAt)
+      );
+
+    if (
+      driverAge === null ||
+      driverAge < 0
+    ) {
+      problems.push({
+        code:
+          "DRIVER_DOB_INVALID",
+
+        message:
+          "Enter a valid driver date of birth.",
+      });
+    } else {
+      const minimumAge =
+        config?.minDriverAge ??
+        21;
+
+      if (
+        driverAge <
+        minimumAge
+      ) {
+        problems.push({
+          code:
+            "DRIVER_TOO_YOUNG",
+
+          message:
+            `The driver must be at least ${minimumAge} years old at pick-up.`,
+        });
+      }
+
+      const surchargeEnabled =
+        Boolean(
+          config
+            ?.youngDriverSurchargeEnabled
+        );
+
+      const maximumAge =
+        config?.youngDriverMaxAge ??
+        24;
+
+      if (
+        surchargeEnabled &&
+        driverAge >= minimumAge &&
+        driverAge <= maximumAge
+      ) {
+        youngDriverDailySurchargeSen =
+          toSen(
+            config
+              ?.youngDriverSurcharge
+          ) ?? 0;
+      }
+    }
+  }
   const pickupPoints = pickupPointsFor(listing.branch);
   const dropoffPoints = dropoffPointsFor(listing.branch);
   const requestedLocation = typeof sel.requestedLocation === "string" ? sel.requestedLocation.trim().slice(0, 300) : "";
@@ -538,22 +694,34 @@ export function priceSelection(listing, config, sel, peakDates) {
 
   const dates = rentalDates(pickupAt, days);
   const priced = priceRental({
-    card: rateCardFor(listing),
-    pickupAt,
-    returnAt,
-    downPaymentPct,
-    overtimeFeeSen: overtime.feeSen,
-    addOns: chosen,
-    pickupFeeSen: point?.pickupFeeSen ?? 0,
-    dropoffFeeSen: dropoff?.dropoffFeeSen ?? 0,
-  });
+  card:
+    rateCardFor(listing),
 
+  pickupAt,
+  returnAt,
+  downPaymentPct,
+
+  overtimeFeeSen:
+    overtime.feeSen,
+
+  youngDriverDailySurchargeSen,
+
+  addOns:
+    chosen,
+
+  pickupFeeSen:
+    point?.pickupFeeSen ?? 0,
+
+  dropoffFeeSen:
+    dropoff
+      ?.dropoffFeeSen ?? 0,
+});
   // The peak calendar now only affects refunds: a peak date in the rental
   // removes the partial refund election (SRS V2.9, 4.1.2).
   const peakDays = dates.filter((d) => peakDates.has(d)).length;
   const refundRule = peakDays > 0 ? { type: "FORFEIT" } : refundRuleFor(config);
 
-  return { days, downPaymentPct, pickupAt, returnAt, dates, point, dropoff, requestedLocation, priced, peakDays, refundRule, problems };
+  return { days, downPaymentPct, driverAge, driverDateOfBirth, pickupAt, returnAt, dates, point, dropoff, requestedLocation, priced, peakDays, refundRule, problems };
 }
 
 function hoursFor(branch) {
@@ -629,6 +797,9 @@ export async function quotePublicCar(id, sel) {
       rentalSen: p.rentalSen,
       nightHandovers: p.nightHandovers,
       overtimeSen: p.overtimeSen,
+      driverAge:r.driverAge,
+      youngDriverDailySurchargeSen: p.youngDriverDailySurchargeSen,
+      youngDriverSurchargeSen: p.youngDriverSurchargeSen,
       depositPct: p.depositPct,
       depositSen: p.depositSen,
       rentalBalanceSen: p.rentalBalanceSen,

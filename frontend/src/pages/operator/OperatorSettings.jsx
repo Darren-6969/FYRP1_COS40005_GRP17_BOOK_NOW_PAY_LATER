@@ -120,338 +120,235 @@ const DEFAULT_SETTINGS = {
 
   reminderBeforeAutoRejectMinutes: 30,
 
+  // Driver rules
+  minDriverAge: 21,
+  youngDriverSurchargeEnabled: false,
+  youngDriverMaxAge: 24,
+  youngDriverSurcharge: "",
+
   // Pickup / return
-
   overtimeFee: "",
-
   blockNightHandover: false,
 
   // Payment
-
   acceptedPaymentMethods: {
-
     stripe: true,
-
     duitnowSpay: true,
-
   },
-
   allowReceiptUpload: true,
 
   // Refund
-
   partialRefundElected: false,
-
   partialRefundPercent: 50,
-
   operatorReminderBeforeAutoRejectMinutes: 30,
-
   enableOperatorReminderAlerts: true,
-
   selectedEmailTemplate:
-
     "booking_accepted",
-
   companyLogo: "",
-
   bookingRejectedEmailText: "",
-
   autoRejectedEmailText: "",
-
   bookingCancelledEmailText: "",
-
   bookingCompletedEmailText: "",
-
   paymentRequestEmailText: "",
-
   alternativeSuggestedEmailText: "",
-
   emailFooterText: "",
-
   manualPaymentInstructions: "",
-
   mfaEnabled: false,
-
 };
 
 const SETTINGS_MENU = [
-
   {
-
     id: "booking-rules",
-
     title: "Booking Rules",
-
     description:
-
       "Down payment, response deadline and auto-reject.",
-
     icon: Clock,
-
   },
 
   {
+    id: "driver-rules",
+    title: "Driver Rules",
+    description:
+      "Minimum driver age and young driver surcharge.",
+    icon: ShieldCheck,
+  },
 
+  {
     id: "pickup-return-rules",
-
     title: "Pickup & Return",
-
     description:
-
       "Night pickup, return and overtime rules.",
-
     icon: Clock,
-
   },
 
   {
-
     id: "payment-settings",
-
     title: "Payment Settings",
-
     description:
-
       "Payment methods and receipt uploads.",
-
     icon: CreditCard,
-
   },
 
   {
-
     id: "refund-settings",
-
     title: "Refund Settings",
-
     description:
-
       "Partial refund policy and percentage.",
-
     icon: ShieldCheck,
-
   },
 
   {
-
     id: "notification-settings",
-
     title: "Notifications",
-
     description:
-
       "Operator reminders and alerts.",
-
     icon: Bell,
-
   },
 
   {
-
     id: "email-templates",
-
     title: "Email Templates",
-
     description:
-
       "Customer emails and branding.",
-
     icon: Mail,
-
   },
 
   {
-
     id: "security-settings",
-
     title: "Security",
-
     description:
-
       "Account and authentication settings.",
-
     icon: ShieldCheck,
-
   },
 
   {
-
     id: "integration-settings",
-
     title: "Integration / API Keys",
-
     description:
-
       "API keys, origins and integrations.",
-
     icon: KeyRound,
-
   },
-
 ];
 
 export default function OperatorSettings() {
-
   const [settings, setSettings] = useState(null);
-
   const [form, setForm] = useState(DEFAULT_SETTINGS);
-
   const [loading, setLoading] = useState(true);
-
   const [saving, setSaving] = useState(false);
-
   const [error, setError] = useState("");
-
   const [successMessage, setSuccessMessage] = useState("");
-
   const [searchParams, setSearchParams] = useSearchParams();
-
   const [activeSection, setActiveSection] = useState(null);
-
   const loadSettings = async () => {
-
     try {
-
       setLoading(true);
-
       setError("");
-
       const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
-
       if (savedSettings) {
-
         setForm({
-
           ...DEFAULT_SETTINGS,
-
           ...JSON.parse(savedSettings),
-
           acceptedPaymentMethods: {
-
             ...DEFAULT_SETTINGS.acceptedPaymentMethods,
-
             ...JSON.parse(savedSettings).acceptedPaymentMethods,
-
           },
-
         });
-
       }
 
       const res = await operatorService.getSettings();
-
       setSettings(res.data);
-
         const config = res.data.config;
-
         const operator = res.data.operator;
-
         setForm((prev) => ({
-
           ...prev,
 
         downPaymentPercent:
-
           config?.downPaymentPercent ??
-
           prev.downPaymentPercent,
 
+        minDriverAge:
+          config?.minDriverAge ??
+          prev.minDriverAge,
+
+        youngDriverSurchargeEnabled:
+          config?.youngDriverSurchargeEnabled ??
+          prev.youngDriverSurchargeEnabled,
+
+        youngDriverMaxAge:
+          config?.youngDriverMaxAge ??
+          prev.youngDriverMaxAge,
+
+        youngDriverSurcharge:
+          config?.youngDriverSurcharge != null
+            ? String(config.youngDriverSurcharge)
+            : "",
+
         overtimeFee:
-
           config?.overtimeFee != null
-
             ? String(config.overtimeFee)
-
             : "",
 
         blockNightHandover:
-
           config?.blockNightHandover ??
-
           prev.blockNightHandover,
 
         allowReceiptUpload:
-
           config?.allowReceiptUpload ??
-
           prev.allowReceiptUpload,
 
         partialRefundElected:
-
           config?.partialRefundElected ??
-
           prev.partialRefundElected,
 
         partialRefundPercent:
-
           config?.partialRefundPercent ??
-
           prev.partialRefundPercent,
-
           bookingResponseDeadlineMinutes:
-
             config?.bookingResponseDeadlineMinutes ?? prev.bookingResponseDeadlineMinutes,
 
           autoRejectInactiveBooking:
-
             config?.autoRejectInactiveBooking ?? prev.autoRejectInactiveBooking,
-
+            
           reminderBeforeAutoRejectMinutes:
-
             config?.reminderBeforeAutoRejectMinutes ?? prev.reminderBeforeAutoRejectMinutes,
 
           acceptedPaymentMethods:
-
             config?.acceptedPaymentMethods ?? prev.acceptedPaymentMethods,
 
           manualPaymentInstructions:
-
             config?.manualPaymentNote ?? prev.manualPaymentInstructions,
 
           operatorReminderBeforeAutoRejectMinutes:
-
             config?.operatorReminderBeforeAutoRejectMinutes ??
-
             prev.operatorReminderBeforeAutoRejectMinutes,
 
           enableOperatorReminderAlerts:
-
             config?.enableOperatorReminderAlerts ?? prev.enableOperatorReminderAlerts,
 
           companyLogo:
-
             operator?.logoUrl || config?.invoiceLogoUrl || prev.companyLogo || "",
 
           bookingRejectedEmailText:
-
             config?.bookingRejectedEmailText || "",
 
           autoRejectedEmailText:
-
             config?.autoRejectedEmailText || "",
 
           bookingCancelledEmailText:
-
             config?.bookingCancelledEmailText || "",
 
           bookingCompletedEmailText:
-
             config?.bookingCompletedEmailText || "",
 
           paymentRequestEmailText:
-
             config?.paymentRequestEmailText || "",
 
           alternativeSuggestedEmailText:
-
             config?.alternativeSuggestedEmailText || "",
 
           emailFooterText:
-
             config?.emailFooterText || "",
-
         }));
-
     } catch (err) {
 
       setError(
@@ -601,81 +498,65 @@ const handleSave = async () => {
   try {
 
     const res = await operatorService.updateSettings({
-
       downPaymentPercent:
-
         Number(
-
           form.downPaymentPercent
-
         ),
 
+      minDriverAge:
+        Number(form.minDriverAge),
+
+      youngDriverSurchargeEnabled:
+        form.youngDriverSurchargeEnabled,
+
+      youngDriverMaxAge:
+        Number(form.youngDriverMaxAge),
+
+      youngDriverSurcharge:
+        form.youngDriverSurchargeEnabled
+          ? form.youngDriverSurcharge
+          : "",
+
       overtimeFee:
-
         form.blockNightHandover
-
           ? ""
-
           : form.overtimeFee,
 
       blockNightHandover:
-
         form.blockNightHandover,
 
       allowReceiptUpload:
-
         form.allowReceiptUpload,
 
       partialRefundElected:
-
         form.partialRefundElected,
 
       partialRefundPercent:
-
         form.partialRefundElected
 
           ? Number(
-
               form.partialRefundPercent
-
             )
-
           : null,
 
       bookingResponseDeadlineMinutes: form.bookingResponseDeadlineMinutes,
-
       autoRejectInactiveBooking: form.autoRejectInactiveBooking,
-
       reminderBeforeAutoRejectMinutes: form.reminderBeforeAutoRejectMinutes,
-
       acceptedPaymentMethods: form.acceptedPaymentMethods,
-
       manualPaymentNote: form.manualPaymentInstructions,
-
       operatorReminderBeforeAutoRejectMinutes:
-
         form.operatorReminderBeforeAutoRejectMinutes,
 
       enableOperatorReminderAlerts: form.enableOperatorReminderAlerts,
-
       companyLogo: form.companyLogo,
-
       invoiceFooterText: form.invoiceFooterText || null,
-
       bookingRejectedEmailText: form.bookingRejectedEmailText,
-
       autoRejectedEmailText: form.autoRejectedEmailText,
-
       bookingCancelledEmailText: form.bookingCancelledEmailText,
-
       bookingCompletedEmailText: form.bookingCompletedEmailText,
-
       paymentRequestEmailText: form.paymentRequestEmailText,
-
       alternativeSuggestedEmailText: form.alternativeSuggestedEmailText,
-
       emailFooterText: form.emailFooterText || null,
-
     });
 
     setSettings((prev) => ({
@@ -810,6 +691,97 @@ const activeMenu = SETTINGS_MENU.find(
             </div>
           </SettingsSection>
         );
+
+              case "driver-rules":
+                return (
+                  <SettingsSection
+                    id="driver-rules"
+                    icon={<ShieldCheck size={20} />}
+                    title="Driver Rules"
+                    description="Configure the minimum driver age and optional young driver surcharge."
+                  >
+                    <div className="operator-settings-form-grid">
+
+                      <FormField
+                        label="Minimum driver age"
+                        helper="The minimum permitted driver age. This cannot be lower than 17."
+                      >
+                        <input
+                          type="number"
+                          min="17"
+                          max="99"
+                          step="1"
+                          value={form.minDriverAge}
+                          onChange={(event) =>
+                            updateField(
+                              "minDriverAge",
+                              Number(event.target.value)
+                            )
+                          }
+                        />
+                      </FormField>
+
+                      <ToggleField
+                        label="Enable young driver surcharge"
+                        helper="Charge younger eligible drivers an additional fee for each rental day."
+                        checked={
+                          form.youngDriverSurchargeEnabled
+                        }
+                        onChange={(checked) =>
+                          updateField(
+                            "youngDriverSurchargeEnabled",
+                            checked
+                          )
+                        }
+                      />
+
+                      {form.youngDriverSurchargeEnabled && (
+                        <>
+                          <FormField
+                            label="Young driver maximum age"
+                            helper="Drivers from the minimum age up to and including this age will be charged the surcharge."
+                          >
+                            <input
+                              type="number"
+                              min={form.minDriverAge}
+                              max="99"
+                              step="1"
+                              value={form.youngDriverMaxAge}
+                              onChange={(event) =>
+                                updateField(
+                                  "youngDriverMaxAge",
+                                  Number(event.target.value)
+                                )
+                              }
+                            />
+                          </FormField>
+
+                          <FormField
+                            label="Young driver surcharge (RM / day)"
+                            helper="Additional amount charged for each rental day when the driver falls within the young driver age range."
+                          >
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              value={
+                                form.youngDriverSurcharge
+                              }
+                              onChange={(event) =>
+                                updateField(
+                                  "youngDriverSurcharge",
+                                  event.target.value
+                                )
+                              }
+                              placeholder="20.00"
+                            />
+                          </FormField>
+                        </>
+                      )}
+
+                    </div>
+                  </SettingsSection>
+                );
 
       case "pickup-return-rules":
         return (
@@ -1642,335 +1614,190 @@ function StripeConnectCard() {
   const [statusError, setStatusError] = useState("");
 
   const fetchStatus = async () => {
-
     setLoadingStatus(true);
-
     setStatusError("");
 
     try {
-
       const res = await operatorService.getStripeAccountStatus();
-
       setStatus(res.data);
-
     } catch (err) {
 
       setStatusError(
-
         err.response?.data?.message || "Could not load Stripe account status."
-
       );
-
     } finally {
-
       setLoadingStatus(false);
-
     }
-
   };
 
   useEffect(() => {
-
     fetchStatus();
-
   }, []);
 
   // Stripe hosts the onboarding form and returns the operator here.
-
   const handleStartOnboarding = async () => {
-
     setLaunching(true);
-
     setStatusError("");
 
     try {
-
       const res = await operatorService.createStripeOnboardingLink();
-
       window.location.href = res.data.url;
-
     } catch (err) {
-
       setStatusError(
-
         err.response?.data?.message || "Failed to generate onboarding link."
-
       );
-
       setLaunching(false);
-
     }
-
   };
 
   const transfersActive = status?.capabilities?.transfers === "active";
-
   const isRestricted =
-
     status?.configured &&
-
     (!status.chargesEnabled || !status.payoutsEnabled || !transfersActive);
 
   const isReady =
-
     status?.configured &&
-
     status.chargesEnabled &&
-
     status.payoutsEnabled &&
-
     transfersActive;
-
   return (
-
     <div className="operator-card" style={{ marginTop: "1.5rem" }}>
-
       <div style={{ marginBottom: "0.75rem" }}>
-
         <h2 style={{ marginBottom: "0.25rem" }}>Stripe Connect</h2>
-
         <p style={{ fontSize: "0.875rem", opacity: 0.7 }}>
-
           Your merchant payout account. Complete onboarding so Stripe can
-
           transfer your share of each payment.
-
         </p>
-
       </div>
 
       <div
-
         className="operator-alert info"
-
         style={{ fontSize: "0.8rem", marginBottom: "1rem" }}
-
       >
-
         Stripe securely collects your business, identity, and bank details on
-
         its hosted onboarding page.
-
       </div>
 
       {statusError && (
-
         <div
-
           className="operator-alert danger"
-
           style={{ marginBottom: "0.75rem" }}
-
         >
-
           {statusError}
-
         </div>
-
       )}
 
       {loadingStatus ? (
-
         <p style={{ opacity: 0.6 }}>Loading account status…</p>
-
       ) : !status?.configured ? (
-
         <p style={{ opacity: 0.6 }}>
-
           Connect a Stripe Express account to receive booking payouts.
-
         </p>
-
       ) : (
 
         <div
-
           style={{
-
             display: "grid",
-
             gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-
             gap: "0.75rem",
-
             marginBottom: "1rem",
-
           }}
-
         >
 
           <StatusPill label="Charges" active={status.chargesEnabled} />
-
           <StatusPill label="Payouts" active={status.payoutsEnabled} />
 
           <StatusPill
-
             label="Details Submitted"
-
             active={status.detailsSubmitted}
-
           />
 
           <StatusPill
-
             label="Transfers capability"
-
             active={status.capabilities?.transfers === "active"}
-
           />
-
         </div>
-
       )}
 
       {/* Transfers capability is required for Destination Charges (the split payment model).
-
           If inactive, the customer checkout will throw a Stripe error. */}
-
       {status?.configured && status.capabilities?.transfers !== "active" && (
-
         <div
-
           className="operator-alert danger"
-
           style={{ fontSize: "0.8rem", marginBottom: "1rem" }}
-
         >
-
           <strong>Transfers capability inactive.</strong> Customers cannot pay
-
           until this is enabled. Click <em>Complete Stripe Onboarding</em> below
-
           — it will request the capability automatically. In sandbox mode it
-
           activates instantly.
-
         </div>
-
       )}
 
       {/* Requirements list — only shown when there are outstanding items */}
-
       {status?.requirements?.currentlyDue?.length > 0 && (
-
         <div style={{ marginBottom: "1rem", fontSize: "0.8rem" }}>
-
           <strong>Required by Stripe:</strong>
-
           <ul style={{ marginTop: "0.25rem", paddingLeft: "1.25rem" }}>
-
             {status.requirements.currentlyDue.map((item) => (
-
               <li key={item}>{item.replaceAll(".", " › ")}</li>
-
             ))}
-
           </ul>
-
         </div>
-
       )}
 
       {/* Onboarding button — always shown so the merchant can re-enter the form */}
-
       <button
-
         className="operator-btn"
-
         onClick={handleStartOnboarding}
-
         disabled={launching}
-
         style={{ minWidth: "220px" }}
-
       >
 
         {launching
-
           ? "Redirecting to Stripe…"
-
           : isReady
-
           ? "Manage Stripe Account"
-
           : status?.configured
-
           ? "Complete Stripe Onboarding"
-
           : "Connect Stripe Account"}
-
       </button>
 
       {isReady && (
-
         <p
-
           className="operator-status success"
-
           style={{ marginTop: "0.5rem", display: "inline-block" }}
-
         >
-
           Account active — charges and payouts enabled
-
         </p>
-
       )}
 
       {isRestricted && (
-
         <p
-
           className="operator-status danger"
-
           style={{ marginTop: "0.5rem", display: "inline-block" }}
-
         >
-
           Account restricted — complete onboarding to enable payouts
-
         </p>
-
       )}
-
     </div>
-
   );
-
 }
 
 function StatusPill({ label, active }) {
-
   return (
-
     <div
-
       style={{
-
         padding: "0.5rem 0.75rem",
-
         borderRadius: "0.5rem",
-
         background: active ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
-
         border: `1px solid ${
-
           active ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"
-
         }`,
-
         fontSize: "0.8rem",
-
       }}
-
     >
-
       <span style={{ marginRight: "0.35rem" }}>{active ? "✓" : "✗"}</span>
-
       <span>{label}</span>
-
     </div>
-
   );
-
 }

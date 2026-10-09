@@ -386,6 +386,31 @@ export default function CarDetail() {
           ? `Additional drivers: ${formatSen(b.additionalDriverSen)} / day`
           : "Ask the operator about additional drivers",
     },
+
+      {
+      k: "Driver age",
+
+      value: `Minimum ${
+        b.driverRules?.minAge ?? 21
+      } years old`,
+
+      note:
+        b.driverRules?.youngDriver
+          ?.enabled &&
+        b.driverRules.youngDriver
+          .surchargeSen > 0
+          ? `Drivers aged ${
+              b.driverRules.minAge
+            }–${
+              b.driverRules.youngDriver
+                .maxAge
+            } are charged ${formatSen(
+              b.driverRules.youngDriver
+                .surchargeSen
+            )} per day.`
+          : "No young driver surcharge.",
+    },
+
     {
       k: "Driving licence",
       value: "A valid driving licence",

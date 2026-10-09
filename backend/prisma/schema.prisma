@@ -256,7 +256,7 @@ model User {
   creditEventActor         CreditProfileEvent[]        @relation("CreditEventActor")
   creditAppeals            CreditAppeal[]              @relation("CreditAppealCustomer")
   reviewedCreditAppeals    CreditAppeal[]              @relation("CreditAppealReviewer")
-  bookingStatusChanges     BookingStatusHistory[] @relation("BookingStatusActor")
+  bookingStatusChanges     BookingStatusHistory[]      @relation("BookingStatusActor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -600,7 +600,7 @@ model Booking {
   refunds                 Refund[]
   commissionLedgerEntries CommissionLedgerEntry[]
   paymentScheduleEntries  PaymentScheduleEntry[]
-  statusHistory         BookingStatusHistory[]
+  statusHistory           BookingStatusHistory[]
   receipt                 Receipt?
   invoice                 Invoice?
 
@@ -619,15 +619,15 @@ model Booking {
 }
 
 model BookingStatusHistory {
-  id          Int          @id @default(autoincrement())
-  bookingId   Int
-  booking     Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  actorId     Int?
-  actor       User?        @relation("BookingStatusActor", fields: [actorId], references: [id], onDelete: SetNull)
-  oldStatus   BookingStatus?
-  newStatus   BookingStatus
-  remark      String
-  createdAt   DateTime     @default(now())
+  id        Int            @id @default(autoincrement())
+  bookingId Int
+  booking   Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  actorId   Int?
+  actor     User?          @relation("BookingStatusActor", fields: [actorId], references: [id], onDelete: SetNull)
+  oldStatus BookingStatus?
+  newStatus BookingStatus
+  remark    String
+  createdAt DateTime       @default(now())
 
   @@index([bookingId, createdAt])
   @@index([actorId, createdAt])
@@ -860,6 +860,16 @@ model BNPLConfig {
   // shop settings; replaces Listing.overtimeFee / blockNightHandover.
   overtimeFee        Decimal? @db.Decimal(10, 2)
   blockNightHandover Boolean  @default(false)
+
+  // Driver rules (BNPLB-85)
+  // Minimum allowed driver age. Operator cannot set below 17.
+  minDriverAge Int @default(21)
+
+  // Optional young-driver surcharge.
+  // Example: min age 21, max age 24 → ages 21–24 pay surcharge.
+  youngDriverSurchargeEnabled Boolean  @default(false)
+  youngDriverMaxAge           Int      @default(24)
+  youngDriverSurcharge        Decimal? @db.Decimal(10, 2)
 
   // Payment settings
   acceptedPaymentMethods Json?

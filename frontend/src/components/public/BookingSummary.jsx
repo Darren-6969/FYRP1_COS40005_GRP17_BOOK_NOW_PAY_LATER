@@ -26,6 +26,22 @@ export default function BookingSummary({ listing, quote, editHref }) {
         k: `Night handover ${quote.nightHandovers === 1 ? "charge" : `× ${quote.nightHandovers}`}`,
         v: quote.overtimeSen,
       });
+    if (
+      quote.youngDriverSurchargeSen
+    ) {
+      lines.push({
+        k:
+          `Young driver surcharge ` +
+          `(${formatSen(
+            quote
+              .youngDriverDailySurchargeSen
+          )}/day × ${days})`,
+
+        v:
+          quote
+            .youngDriverSurchargeSen,
+      });
+    }
     quote.addOnLines.forEach((a) => {
       const unit = a.id === "cdw" ? "per_day" : b.addOns.find((x) => x.id === a.id)?.unit;
       lines.push({ k: `${a.label}${a.qty > 1 ? ` × ${a.qty}` : ""}${unit === "per_day" ? `, ${daysText}` : ""}`, v: a.amountSen });
