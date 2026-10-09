@@ -38,6 +38,11 @@ import {
 } from "../services/platform_policy_service.js";
 import { createAuditLog as writeAuditLog } from "../services/log_service.js";
 import { transitionBookingStatus } from "../services/booking_status_service.js";
+import {
+  carListingSelect,
+  mapCarBooking,
+  operatorResponseConfigSelect,
+} from "../services/car_booking_view.js";
 import { getPlatformSettings } from "../services/platform_settings_service.js";
 import {
   buildOperatorSettlementReport,
@@ -79,6 +84,17 @@ function includeBookingRelations() {
         name: true,
         email: true,
         role: true,
+        // Latest driving licence upload, for the licence status shown on
+        // the booking page (account-level until the per-booking check).
+        licenceDocuments: {
+          orderBy: { submittedAt: "desc" },
+          take: 1,
+          select: {
+            status: true,
+            submittedAt: true,
+            reviewedAt: true,
+          },
+        },
       },
     },
     operator: {
@@ -88,12 +104,15 @@ function includeBookingRelations() {
         email: true,
         phone: true,
         logoUrl: true,
+        // Response deadline settings for car booking requests.
+        configs: operatorResponseConfigSelect(),
       },
     },
     payment: true,
     listing: {
       select: {
-        id: true,
+        ...carListingSelect(),
+        // Used by the late return charge.
         hourlyRate: true,
       },
     },
@@ -156,11 +175,42 @@ function mapInvoice(invoice) {
   };
 }
 
+// Customer with the latest licence upload flattened into the fields the
+// operator booking page reads. NOT_SUBMITTED when nothing was uploaded.
+function mapBookingCustomer(customer) {
+  if (!customer) return customer;
+
+  const { licenceDocuments, ...rest } = customer;
+  const latest = licenceDocuments?.[0] || null;
+
+  return {
+    ...rest,
+    licenceStatus: latest?.status || "NOT_SUBMITTED",
+    licenceSubmittedAt: latest?.submittedAt || null,
+    licenceVerifiedAt:
+      latest?.status === "APPROVED"
+        ? latest.reviewedAt
+        : null,
+  };
+}
+
 function mapBooking(booking) {
   if (!booking) return null;
 
   return {
     ...booking,
+
+    customer:
+      mapBookingCustomer(
+        booking.customer
+      ),
+
+    // Public platform car bookings (SRS 4.2.6): the same car, driver and
+    // pricing snapshot view the customer sees. Null for tour and host bookings.
+    car:
+      booking.listingId
+        ? mapCarBooking(booking)
+        : null,
 
     totalAmount:
       toNumber(booking.totalAmount),

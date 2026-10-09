@@ -9,6 +9,16 @@ import {
   operatorStatusLabel,
 } from "../../services/operator_service";
 
+import {
+  carTitle,
+  depositLabel,
+  formatSen,
+  licenceIssuedInLabel,
+  priceBreakdownRows,
+  rentalDurationText,
+  timeLeft,
+} from "../../components/booking/carBookingParts";
+
 export default function OperatorBookingDetail() {
   const { id } = useParams();
 
@@ -68,6 +78,19 @@ export default function OperatorBookingDetail() {
   useEffect(() => {
     loadBooking();
   }, [id]);
+
+  // Clock for the response countdown on car booking requests.
+  const [now, setNow] =
+    useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(
+      () => setNow(Date.now()),
+      30000
+    );
+
+    return () => clearInterval(timer);
+  }, []);
 
   const handleBookingDecision = async (action) => {
   try {
@@ -174,6 +197,28 @@ export default function OperatorBookingDetail() {
 
   const bookingDetails =
     booking.bookingDetails || {};
+
+  // Public platform car bookings carry a car view built from the pricing
+  // snapshot (same data the customer sees). Null for tour and host bookings.
+  const car = booking.car || null;
+  const carPricing = car?.pricing || null;
+  const carListing = car?.listing || null;
+  const driver =
+    car?.driver ||
+    bookingDetails.driver ||
+    null;
+  const contact =
+    car?.contact ||
+    bookingDetails.contact ||
+    null;
+
+  const responseDueAt =
+    bookingStatus === "PENDING"
+      ? car?.responseDueAt || null
+      : null;
+
+  const priceRows =
+    priceBreakdownRows(carPricing);
 
   const chauffeur =
     bookingDetails.chauffeur || {};
@@ -410,7 +455,9 @@ export default function OperatorBookingDetail() {
         </h1>
 
         <p className="booking-clean-vehicle">
-          {booking.serviceName || "-"}
+          {carTitle(carListing) ||
+            booking.serviceName ||
+            "-"}
         </p>
       </div>
 
@@ -462,6 +509,24 @@ export default function OperatorBookingDetail() {
         booking.createdAt
       )}
     </p>
+
+    {responseDueAt && (
+      <p
+        className="booking-clean-created"
+        role="status"
+      >
+        <strong>
+          Respond by{" "}
+          {formatOperatorDateTime(
+            responseDueAt
+          )}{" "}
+          ({timeLeft(responseDueAt, now)})
+        </strong>
+        {car.autoRejectOnTimeout
+          ? ". If you don't, the request is rejected automatically and the car is released."
+          : ". Auto-reject is off, so the request stays open until you answer."}
+      </p>
+    )}
   </div>
 </section>
 
@@ -493,6 +558,64 @@ export default function OperatorBookingDetail() {
         <h3>Trip</h3>
 
         <div className="booking-clean-trip-grid">
+
+        {carListing && (
+          <div>
+            <span>
+              Car
+            </span>
+
+            <strong>
+              {carTitle(carListing)}
+            </strong>
+
+            {(carListing.transmission ||
+              carListing.seats) && (
+              <small className="booking-clean-location-note">
+                {[
+                  carListing.transmission,
+                  carListing.seats
+                    ? `${carListing.seats} seats`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </small>
+            )}
+          </div>
+        )}
+
+        {carListing?.branch && (
+          <div>
+            <span>
+              Branch
+            </span>
+
+            <strong>
+              {carListing.branch.name}
+            </strong>
+
+            {carListing.branch.address && (
+              <small className="booking-clean-location-note">
+                {carListing.branch.address}
+              </small>
+            )}
+          </div>
+        )}
+
+        {carPricing && (
+          <div>
+            <span>
+              Duration
+            </span>
+
+            <strong>
+              {rentalDurationText(
+                carPricing
+              )}
+            </strong>
+          </div>
+        )}
 
         <div>
           <span>
@@ -582,6 +705,16 @@ export default function OperatorBookingDetail() {
               "-"}
           </strong>
 
+          {!booking.pickupPoint &&
+            booking.requestedLocation && (
+              <small className="booking-clean-location-note">
+                <span className="operator-status warning">
+                  Needs a charge
+                </span>{" "}
+                Customer-requested location, no charge quoted yet.
+              </small>
+            )}
+
           {booking.pickupPoint?.address && (
             <small className="booking-clean-location-note">
               {booking.pickupPoint.address}
@@ -657,6 +790,39 @@ export default function OperatorBookingDetail() {
             </p>
           </div>
         </div>
+
+        {(driver || contact?.phone) && (
+          <div className="booking-clean-licence-details">
+
+            {contact?.phone && (
+              <InfoRow
+                label="Phone"
+                value={contact.phone}
+              />
+            )}
+
+            {driver?.fullName && (
+              <InfoRow
+                label="Driver"
+                value={
+                  driver.isBooker
+                    ? `${driver.fullName} (the booker)`
+                    : driver.fullName
+                }
+              />
+            )}
+
+            {driver?.licenceIssuedIn && (
+              <InfoRow
+                label="Licence Issued In"
+                value={licenceIssuedInLabel(
+                  driver.licenceIssuedIn
+                )}
+              />
+            )}
+
+          </div>
+        )}
 
         <div className="booking-clean-status-row">
           <div>
@@ -908,6 +1074,61 @@ export default function OperatorBookingDetail() {
         </small>
       </div>
 
+      {carPricing && priceRows.length > 0 && (
+        <div className="booking-clean-payment-lines">
+
+          {priceRows.map((row) => (
+            <InfoRow
+              key={row.label}
+              label={row.label}
+              value={formatSen(
+                row.amountSen
+              )}
+            />
+          ))}
+
+          <InfoRow
+            label="Total"
+            value={formatSen(
+              carPricing.totalSen
+            )}
+            strong
+          />
+
+        </div>
+      )}
+
+      {carPricing && !booking.payment && (
+        <div className="booking-clean-payment-lines">
+
+          <InfoRow
+            label={depositLabel(
+              carPricing
+            )}
+            value={formatSen(
+              carPricing.depositSen
+            )}
+          />
+
+          <InfoRow
+            label="Balance"
+            value={formatSen(
+              carPricing.balanceSen
+            )}
+          />
+
+          <small className="booking-clean-location-note">
+            Quoted when the customer booked. Payment is requested
+            only after you accept.
+            {carPricing.requestedLocation
+              ? " The requested location has no charge yet."
+              : ""}
+          </small>
+
+        </div>
+      )}
+
+      {(!carPricing || booking.payment) && (
       <div className="booking-clean-payment-lines">
 
         <InfoRow
@@ -955,6 +1176,7 @@ export default function OperatorBookingDetail() {
         )}
 
       </div>
+      )}
 
     </section>
 
@@ -2242,6 +2464,12 @@ function getLicenceStatusLabel(status) {
     PENDING_VERIFICATION:
       "Pending Verification",
 
+    UNDER_REVIEW:
+      "Pending Verification",
+
+    REUPLOAD_REQUIRED:
+      "Re-upload Required",
+
     REJECTED: "Rejected",
 
     FAILED:
@@ -2277,15 +2505,18 @@ function getLicenceStatusClass(status) {
     [
       "PENDING",
       "PENDING_VERIFICATION",
+      "UNDER_REVIEW",
     ].includes(normalized)
   ) {
     return "warning";
   }
 
   if (
-    ["REJECTED", "FAILED"].includes(
-      normalized
-    )
+    [
+      "REJECTED",
+      "FAILED",
+      "REUPLOAD_REQUIRED",
+    ].includes(normalized)
   ) {
     return "danger";
   }
