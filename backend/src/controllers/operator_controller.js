@@ -87,6 +87,12 @@ function includeBookingRelations() {
       },
     },
     payment: true,
+    listing: {
+      select: {
+        id: true,
+        hourlyRate: true,
+      },
+    },
     refunds: {
       orderBy: {
         createdAt: "desc",
@@ -154,6 +160,11 @@ function mapBooking(booking) {
 
     totalAmount:
       toNumber(booking.totalAmount),
+
+    lateReturnCharge:
+      toNumber(
+        booking.lateReturnCharge
+      ),
 
     addons:
       (booking.addons || []).map(
@@ -969,17 +980,180 @@ export async function getOperatorDashboard(req, res, next) {
         orderBy: { createdAt: "desc" },
         take: 6,
       }),
-      req.user.operatorId && req.user.operatorAccessLevel === "OWNER"
+      req.user.operatorId
         ? prisma.operator.findUnique({
-            where: { id: req.user.operatorId },
+            where: {
+              id: req.user.operatorId,
+            },
+
             select: {
+              id: true,
+              companyName: true,
+              status: true,
+
+              subscriptionPlan: true,
+              subscriptionStartedAt: true,
+              subscriptionEndsAt: true,
+
+              createdAt: true,
+
               stripeAccountId: true,
               stripeOnboardingStatus: true,
               stripeRequirements: true,
+
+              subscriptionUpgradeRequests: {
+                where: {
+                  status: "PENDING",
+                },
+
+                orderBy: {
+                  createdAt: "desc",
+                },
+
+                take: 1,
+
+                select: {
+                  id: true,
+                  currentPlan: true,
+                  requestedPlan: true,
+                  status: true,
+                  note: true,
+                  createdAt: true,
+                },
+              },
             },
           })
         : null,
     ]);
+
+    let subscription = null;
+
+if (operator) {
+  const platformSettings =
+    await getPlatformSettings();
+
+  const plan =
+    String(
+      operator.subscriptionPlan ||
+        "FREE"
+    ).toUpperCase();
+
+  const tier =
+    platformSettings
+      .subscriptionTiers?.[plan] ||
+    {};
+
+  const listingLimit =
+    getListingLimit(
+      plan,
+      platformSettings
+        .subscriptionTiers
+    );
+
+  const listingsUsed =
+    await prisma.listing.count({
+      where: {
+        operatorId:
+          operator.id,
+
+        status:
+          "PUBLISHED",
+      },
+    });
+
+
+  // Existing operators created before
+  let startedAt =
+    operator.subscriptionStartedAt;
+
+      let endsAt =
+        operator.subscriptionEndsAt;
+
+      const termDays =
+        tier.termDays == null
+          ? null
+          : Number(
+              tier.termDays
+            );
+
+
+      // Initialise the term only once.
+      if (!startedAt) {
+        startedAt =
+          new Date();
+
+        if (
+          Number.isFinite(
+            termDays
+          ) &&
+          termDays > 0
+        ) {
+          endsAt =
+            new Date(
+              startedAt.getTime() +
+                termDays *
+                  24 *
+                  60 *
+                  60 *
+                  1000
+            );
+        }
+
+        await prisma.operator.update({
+          where: {
+            id:
+              operator.id,
+          },
+
+          data: {
+            subscriptionStartedAt:
+              startedAt,
+
+            subscriptionEndsAt:
+              endsAt,
+          },
+        });
+      }
+
+
+      subscription = {
+        plan,
+
+        label:
+          tier.label ||
+          plan,
+
+        listingLimit,
+
+        listingsUsed,
+
+        remaining:
+          Math.max(
+            0,
+            listingLimit -
+              listingsUsed
+          ),
+
+        startedAt,
+
+        endsAt,
+
+        termDays,
+
+        activityStatus:
+          operator.status,
+
+        canRequestUpgrade:
+          req.user
+            .operatorAccessLevel ===
+          "OWNER",
+
+        pendingUpgradeRequest:
+          operator
+            .subscriptionUpgradeRequests?.[0] ||
+          null,
+      };
+    }
 
     const paidBookings = allBookings.filter(
       (booking) =>
@@ -1007,20 +1181,494 @@ export async function getOperatorDashboard(req, res, next) {
 
     res.json({
       summary,
-      recentBookings: recentBookings.map(mapBooking),
+
+      subscription,
+
+      recentBookings:
+        recentBookings.map(
+          mapBooking
+        ),
+
       notifications,
-      stripeConnect: operator
-        ? {
-            configured: Boolean(operator.stripeAccountId),
-            onboardingStatus: operator.stripeOnboardingStatus,
-            requirements: operator.stripeRequirements || {
-              currentlyDue: [],
-              pastDue: [],
-              pendingVerification: [],
-              errors: [],
+
+      stripeConnect:
+        operator &&
+        req.user
+          .operatorAccessLevel ===
+          "OWNER"
+          ? {
+              configured: Boolean(
+                operator.stripeAccountId
+              ),
+
+              onboardingStatus:
+                operator.stripeOnboardingStatus,
+
+              requirements:
+                operator.stripeRequirements || {
+                  currentlyDue: [],
+                  pastDue: [],
+                  pendingVerification: [],
+                  errors: [],
+                },
+            }
+          : null,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function requestSubscriptionUpgrade(
+  req,
+  res,
+  next
+) {
+  try {
+    if (
+      !req.user?.operatorId ||
+      req.user?.operatorAccessLevel !==
+        "OWNER"
+    ) {
+      return res.status(403).json({
+        message:
+          "Only the operator owner can request a subscription upgrade.",
+      });
+    }
+
+    const requestedPlan =
+      String(
+        req.body.requestedPlan || ""
+      ).toUpperCase();
+
+    if (
+      ![
+        "BASIC",
+        "PREMIUM",
+      ].includes(requestedPlan)
+    ) {
+      return res.status(400).json({
+        message:
+          "Requested plan must be BASIC or PREMIUM.",
+      });
+    }
+
+    const operator =
+      await prisma.operator.findUnique({
+        where: {
+          id: req.user.operatorId,
+        },
+
+        select: {
+          id: true,
+          companyName: true,
+          subscriptionPlan: true,
+
+          subscriptionUpgradeRequests: {
+            where: {
+              status: "PENDING",
             },
+
+            take: 1,
+          },
+        },
+      });
+
+    if (!operator) {
+      return res.status(404).json({
+        message:
+          "Operator not found.",
+      });
+    }
+
+    const currentPlan =
+      String(
+        operator.subscriptionPlan
+      ).toUpperCase();
+
+    const planLevel = {
+      FREE: 1,
+      BASIC: 2,
+      PREMIUM: 3,
+    };
+
+    if (
+      planLevel[requestedPlan] <=
+      planLevel[currentPlan]
+    ) {
+      return res.status(400).json({
+        message:
+          "Requested plan must be higher than your current plan.",
+      });
+    }
+
+    if (
+      operator
+        .subscriptionUpgradeRequests
+        .length > 0
+    ) {
+      return res.status(409).json({
+        message:
+          "You already have a pending upgrade request.",
+      });
+    }
+
+    const request =
+      await prisma
+        .subscriptionUpgradeRequest
+        .create({
+          data: {
+            operatorId:
+              operator.id,
+
+            currentPlan,
+
+            requestedPlan,
+
+            status:
+              "PENDING",
+          },
+        });
+
+    await createAuditLog({
+      req,
+
+      action:
+        "SUBSCRIPTION_UPGRADE_REQUESTED",
+
+      entityType:
+        "SubscriptionUpgradeRequest",
+
+      entityId:
+        request.id,
+
+      before: {
+        subscriptionPlan:
+          currentPlan,
+      },
+
+      after: {
+        requestedPlan,
+        status:
+          "PENDING",
+      },
+
+      details: {
+        operatorId:
+          operator.id,
+
+        companyName:
+          operator.companyName,
+      },
+    });
+
+    res.status(201).json({
+      message:
+        "Subscription upgrade request submitted successfully.",
+
+      request,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getSubscriptionUpgradeRequests(
+  req,
+  res,
+  next
+) {
+  try {
+    const status = String(
+      req.query.status || "PENDING"
+    ).toUpperCase();
+
+    const allowedStatuses = [
+      "PENDING",
+      "APPROVED",
+      "REJECTED",
+      "ALL",
+    ];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        message:
+          "Invalid upgrade request status.",
+      });
+    }
+
+    const requests =
+      await prisma.subscriptionUpgradeRequest.findMany({
+        where:
+          status === "ALL"
+            ? {}
+            : {
+                status,
+              },
+
+        include: {
+          operator: {
+            select: {
+              id: true,
+              operatorCode: true,
+              companyName: true,
+              email: true,
+              status: true,
+              subscriptionPlan: true,
+            },
+          },
+        },
+
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+    res.json({
+      requests,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function reviewSubscriptionUpgradeRequest(
+  req,
+  res,
+  next
+) {
+  try {
+    const requestId = parseId(
+      req.params.id,
+      "subscription upgrade request id"
+    );
+
+    const decision = String(
+      req.body.decision || ""
+    ).toUpperCase();
+
+    const note = String(
+      req.body.note || ""
+    ).trim();
+
+    if (
+      ![
+        "APPROVED",
+        "REJECTED",
+      ].includes(decision)
+    ) {
+      return res.status(400).json({
+        message:
+          "Decision must be APPROVED or REJECTED.",
+      });
+    }
+
+    const upgradeRequest =
+      await prisma.subscriptionUpgradeRequest.findUnique({
+        where: {
+          id: requestId,
+        },
+
+        include: {
+          operator: true,
+        },
+      });
+
+    if (!upgradeRequest) {
+      return res.status(404).json({
+        message:
+          "Subscription upgrade request not found.",
+      });
+    }
+
+    if (
+      upgradeRequest.status !==
+      "PENDING"
+    ) {
+      return res.status(409).json({
+        message:
+          "This upgrade request has already been reviewed.",
+      });
+    }
+
+    const platformSettings =
+      await getPlatformSettings();
+
+    const requestedPlan =
+      upgradeRequest.requestedPlan;
+
+    const tier =
+      platformSettings
+        .subscriptionTiers?.[
+          requestedPlan
+        ] || {};
+
+    const now = new Date();
+
+    const termDays =
+      tier.termDays == null
+        ? null
+        : Number(
+            tier.termDays
+          );
+
+    let subscriptionEndsAt =
+      null;
+
+    if (
+      decision === "APPROVED" &&
+      Number.isFinite(termDays) &&
+      termDays > 0
+    ) {
+      subscriptionEndsAt =
+        new Date(
+          now.getTime() +
+            termDays *
+              24 *
+              60 *
+              60 *
+              1000
+        );
+    }
+
+    const result =
+      await prisma.$transaction(
+        async (tx) => {
+          const currentRequest =
+            await tx
+              .subscriptionUpgradeRequest
+              .findUnique({
+                where: {
+                  id: requestId,
+                },
+              });
+
+          if (
+            !currentRequest ||
+            currentRequest.status !==
+              "PENDING"
+          ) {
+            const error =
+              new Error(
+                "This upgrade request has already been reviewed."
+              );
+
+            error.statusCode = 409;
+
+            throw error;
           }
-        : null,
+
+          let operator =
+            upgradeRequest.operator;
+
+          if (
+            decision ===
+            "APPROVED"
+          ) {
+            operator =
+              await tx.operator.update({
+                where: {
+                  id:
+                    upgradeRequest.operatorId,
+                },
+
+                data: {
+                  subscriptionPlan:
+                    requestedPlan,
+
+                  subscriptionStartedAt:
+                    now,
+
+                  subscriptionEndsAt,
+                },
+              });
+          }
+
+          const reviewedRequest =
+            await tx
+              .subscriptionUpgradeRequest
+              .update({
+                where: {
+                  id: requestId,
+                },
+
+                data: {
+                  status:
+                    decision,
+
+                  reviewedAt:
+                    now,
+
+                  note:
+                    note || null,
+                },
+              });
+
+          return {
+            operator,
+            request:
+              reviewedRequest,
+          };
+        }
+      );
+
+    await createAuditLog({
+      req,
+
+      action:
+        decision === "APPROVED"
+          ? "SUBSCRIPTION_UPGRADE_APPROVED"
+          : "SUBSCRIPTION_UPGRADE_REJECTED",
+
+      entityType:
+        "SubscriptionUpgradeRequest",
+
+      entityId:
+        requestId,
+
+      before: {
+        status: "PENDING",
+
+        subscriptionPlan:
+          upgradeRequest.operator
+            .subscriptionPlan,
+      },
+
+      after: {
+        status:
+          decision,
+
+        subscriptionPlan:
+          result.operator
+            .subscriptionPlan,
+      },
+
+      details: {
+        operatorId:
+          upgradeRequest.operatorId,
+
+        companyName:
+          upgradeRequest.operator
+            .companyName,
+
+        requestedPlan,
+
+        note:
+          note || null,
+      },
+    });
+
+    res.json({
+      message:
+        decision === "APPROVED"
+          ? `${upgradeRequest.operator.companyName} subscription upgraded to ${requestedPlan}.`
+          : `${upgradeRequest.operator.companyName} upgrade request rejected.`,
+
+      request:
+        result.request,
+
+      operator:
+        result.operator,
     });
   } catch (err) {
     next(err);
@@ -1555,15 +2203,14 @@ export async function returnBooking(
 
     if (!booking) {
       return res.status(404).json({
-        message: "Booking not found",
+        message:
+          "Booking not found",
       });
     }
 
-    /*
-     * Return is only available after handover.
-     */
     if (
-      booking.status !== "IN_PROGRESS"
+      booking.status !==
+      "IN_PROGRESS"
     ) {
       return res.status(400).json({
         message:
@@ -1571,19 +2218,202 @@ export async function returnBooking(
       });
     }
 
-    const updatedBooking =
-      await prisma.booking.update({
-        where: {
-          id: booking.id,
-        },
-
-        data: {
-          status: "COMPLETED",
-          serviceResolvedAt: new Date(),
-        },
-
-        include: includeBookingRelations(),
+    if (!booking.returnDate) {
+      return res.status(400).json({
+        message:
+          "This booking does not have a scheduled return time.",
       });
+    }
+
+    // Operator can submit the actual
+    // return time. If omitted, use now.
+    const actualReturnedAt =
+      req.body?.actualReturnedAt
+        ? parseMalaysiaLocalDateTime(
+            req.body.actualReturnedAt
+          )
+        : new Date();
+
+    if (
+      !actualReturnedAt ||
+      Number.isNaN(
+        actualReturnedAt.getTime()
+      )
+    )
+    
+    {
+      return res.status(400).json({
+        message:
+          "Actual return time is invalid.",
+      });
+    }
+
+    const scheduledReturn =
+      new Date(
+        booking.returnDate
+      );
+
+    // Do not accept an actual return
+    // before the vehicle was handed over.
+    if (
+      booking.pickedUpAt &&
+      actualReturnedAt <
+        new Date(
+          booking.pickedUpAt
+        )
+    ) {
+      return res.status(400).json({
+        message:
+          "Actual return time cannot be earlier than the handover time.",
+      });
+    }
+
+    const lateMilliseconds =
+      Math.max(
+        0,
+        actualReturnedAt.getTime() -
+          scheduledReturn.getTime()
+      );
+
+    // Any started late hour is charged
+    // as one whole hour.
+    const lateReturnHours =
+      lateMilliseconds > 0
+        ? Math.ceil(
+            lateMilliseconds /
+              (60 * 60 * 1000)
+          )
+        : 0;
+
+    let hourlyRate = 0;
+
+    if (lateReturnHours > 0) {
+      const snapshotHourlySen =
+        Number(
+          booking.pricingSnapshot
+            ?.rateCard
+            ?.hourlySen || 0
+        );
+
+      // Prefer the hourly rate that was
+      // quoted when the booking was created.
+      if (snapshotHourlySen > 0) {
+        hourlyRate =
+          snapshotHourlySen / 100;
+      } else {
+        // Fallback for older bookings that
+        // do not have a pricing snapshot.
+        if (!booking.listingId) {
+          return res.status(400).json({
+            message:
+              "Cannot calculate the late return charge because this booking has no vehicle listing.",
+          });
+        }
+
+        const listing =
+          await prisma.listing.findUnique({
+            where: {
+              id: booking.listingId,
+            },
+
+            select: {
+              hourlyRate: true,
+            },
+          });
+
+        hourlyRate =
+          Number(
+            listing?.hourlyRate || 0
+          );
+      }
+
+      if (
+        !Number.isFinite(hourlyRate) ||
+        hourlyRate <= 0
+      ) {
+        return res.status(400).json({
+          message:
+            "This booking does not have a valid hourly rate for late-return charging.",
+        });
+      }
+    }
+
+    const lateReturnCharge =
+      Number(
+        (
+          lateReturnHours *
+          hourlyRate
+        ).toFixed(2)
+      );
+
+    const counterPaymentReceived =
+      req.body
+        ?.counterPaymentReceived ===
+      true;
+
+    if (
+      lateReturnCharge > 0 &&
+      !counterPaymentReceived
+    ) {
+      return res.status(400).json({
+        message:
+          "Confirm that the late return charge has been paid at the counter before completing the return.",
+      });
+    }
+
+    const now =
+      new Date();
+
+    const updatedBooking =
+      await prisma.$transaction(
+        async (tx) => {
+          await transitionBookingStatus({
+            bookingId:
+              booking.id,
+
+            newStatus:
+              "COMPLETED",
+
+            actorId:
+              req.user.id,
+
+            remark:
+              lateReturnHours > 0
+                ? `Vehicle returned ${lateReturnHours} chargeable hour(s) late.`
+                : "Vehicle returned on time.",
+
+            extraData: {
+              returnedAt:
+                actualReturnedAt,
+
+              serviceResolvedAt:
+                now,
+
+              lateReturnHours,
+
+              lateReturnCharge,
+
+              lateReturnPaidAt:
+                lateReturnCharge > 0 &&
+                counterPaymentReceived
+                  ? now
+                  : null,
+            },
+
+            database:
+              tx,
+          });
+
+          return tx.booking.findUnique({
+            where: {
+              id: booking.id,
+            },
+
+            include:
+              includeBookingRelations(),
+          });
+        }
+      );
 
     await createAuditLog({
       req,
@@ -1591,7 +2421,8 @@ export async function returnBooking(
       action:
         "BOOKING_RETURN_COMPLETED",
 
-      entityType: "Booking",
+      entityType:
+        "Booking",
 
       entityId:
         booking.id,
@@ -1603,20 +2434,47 @@ export async function returnBooking(
         status:
           "COMPLETED",
 
-        returnedAt:
-          new Date(),
+        scheduledReturnAt:
+          scheduledReturn,
+
+        actualReturnedAt,
+
+        lateReturnHours,
+
+        hourlyRate,
+
+        lateReturnCharge,
+
+        paymentMethod:
+          lateReturnCharge > 0
+            ? "PAY_AT_COUNTER"
+            : null,
+
+        counterPaymentReceived:
+          lateReturnCharge > 0
+            ? counterPaymentReceived
+            : null,
       },
     });
 
     const customerUrl = `${
       process.env.FRONTEND_URL ||
       "http://localhost:5173"
-    }/customer/bookings/${booking.id}`;
+    }/customer/bookings/${
+      booking.id
+    }`;
 
     const config =
       await getOperatorEmailConfig(
         updatedBooking.operatorId
       );
+
+    const lateMessage =
+      lateReturnCharge > 0
+        ? ` A late return charge of RM${lateReturnCharge.toFixed(
+            2
+          )} was recorded and is paid at the counter.`
+        : "";
 
     await createCustomerNotification({
       booking:
@@ -1625,18 +2483,20 @@ export async function returnBooking(
       title:
         "Booking completed",
 
-      message: `Your booking ${
-        updatedBooking.bookingCode ||
-        updatedBooking.id
-      } has been returned and completed.`,
+      message:
+        `Your booking ${
+          updatedBooking.bookingCode ||
+          updatedBooking.id
+        } has been returned and completed.${lateMessage}`,
 
       type:
         "BOOKING_COMPLETED",
 
-      emailSubject: `Booking Completed - ${
-        updatedBooking.bookingCode ||
-        updatedBooking.id
-      }`,
+      emailSubject:
+        `Booking Completed - ${
+          updatedBooking.bookingCode ||
+          updatedBooking.id
+        }`,
 
       emailHtml:
         bookingStatusTemplate({
@@ -1649,10 +2509,12 @@ export async function returnBooking(
           customerUrl,
 
           bookingCompletedEmailText:
-            config?.bookingCompletedEmailText,
+            config
+              ?.bookingCompletedEmailText,
 
           emailFooterText:
-            config?.emailFooterText,
+            config
+              ?.emailFooterText,
         }),
     });
 
@@ -1661,7 +2523,38 @@ export async function returnBooking(
         "Booking return completed successfully",
 
       booking:
-        mapBooking(updatedBooking),
+        mapBooking(
+          updatedBooking
+        ),
+
+      returnSummary: {
+        scheduledReturnAt:
+          scheduledReturn,
+
+        actualReturnedAt,
+
+        late:
+          lateReturnHours > 0,
+
+        lateReturnHours,
+
+        hourlyRate,
+
+        lateReturnCharge,
+
+        paymentMethod:
+          lateReturnCharge > 0
+            ? "PAY_AT_COUNTER"
+            : null,
+
+        counterPaymentReceived:
+          lateReturnCharge > 0
+            ? Boolean(
+                updatedBooking
+                  .lateReturnPaidAt
+              )
+            : null,
+      },
     });
   } catch (err) {
     next(err);

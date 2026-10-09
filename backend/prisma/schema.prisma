@@ -25,6 +25,12 @@ enum SubscriptionPlan {
   PREMIUM
 }
 
+enum SubscriptionUpgradeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum OperatorApplicationStatus {
   SUBMITTED
   UNDER_REVIEW
@@ -353,7 +359,9 @@ model Operator {
   logoUrl      String?
   status       CompanyStatus @default(ACTIVE)
 
-  subscriptionPlan SubscriptionPlan @default(FREE)
+  subscriptionPlan      SubscriptionPlan @default(FREE)
+  subscriptionStartedAt DateTime?
+  subscriptionEndsAt    DateTime?
 
   // Seller page (FR-CUST-007). The slug gives the operator a short link to
   // share (/o/<slug>); the rest is written by the operator.
@@ -384,11 +392,36 @@ model Operator {
   documents    OperatorDocument[]
   payouts      OperatorPayout[]
 
+  subscriptionUpgradeRequests SubscriptionUpgradeRequest[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([operatorCode])
   @@index([status])
+}
+
+model SubscriptionUpgradeRequest {
+  id Int @id @default(autoincrement())
+
+  operatorId Int
+  operator   Operator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+
+  currentPlan   SubscriptionPlan
+  requestedPlan SubscriptionPlan
+
+  status SubscriptionUpgradeRequestStatus @default(PENDING)
+
+  note String? @db.Text
+
+  reviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([operatorId])
+  @@index([operatorId, status])
+  @@index([createdAt])
 }
 
 model OperatorApplication {
@@ -583,7 +616,13 @@ model Booking {
   pickedUpAt        DateTime?
   returnedAt        DateTime?
   serviceResolvedAt DateTime?
-  noShowRemark      String?
+
+  // BNPLB-113 - Late return
+  lateReturnHours  Int       @default(0)
+  lateReturnCharge Decimal   @default(0) @db.Decimal(10, 2)
+  lateReturnPaidAt DateTime?
+
+  noShowRemark String?
 
   addons BookingAddon[]
 
@@ -1273,9 +1312,10 @@ model ListingAllocation {
 
   date DateTime @db.Date
 
-  quantity  Int? // overrides Listing.quantity for this day (channel allocation)
-  isBlocked Boolean @default(false)
-  note      String?
+  quantity        Int?
+  blockedQuantity Int     @default(0)
+  isBlocked       Boolean @default(false)
+  note            String?
 
   updatedAt DateTime @updatedAt
 

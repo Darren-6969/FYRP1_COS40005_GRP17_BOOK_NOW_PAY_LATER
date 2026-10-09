@@ -21,6 +21,8 @@ export default function OperatorDashboard() {
   const [recentBookings, setRecentBookings] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [stripeConnect, setStripeConnect] = useState(null);
+  const [subscription, setSubscription] = useState(null);
+  const [upgradeSubmitting, setUpgradeSubmitting,] = useState(false);
   const [forecastData, setForecastData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -60,6 +62,7 @@ export default function OperatorDashboard() {
       setRecentBookings(dashboardRes.data.recentBookings || []);
       setNotifications(dashboardRes.data.notifications || []);
       setStripeConnect(dashboardRes.data.stripeConnect || null);
+      setSubscription(dashboardRes.data.subscription || null);
       setForecastData(reportsRes.data);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load operator dashboard");
@@ -86,6 +89,7 @@ export default function OperatorDashboard() {
     setRecentBookings(dashboardRes.data.recentBookings || []);
     setNotifications(dashboardRes.data.notifications || []);
     setStripeConnect(dashboardRes.data.stripeConnect || null);
+    setSubscription(dashboardRes.data.subscription || null);
     } catch {
       // Ignore transient poll failures; the next tick retries.
     }
@@ -113,6 +117,59 @@ export default function OperatorDashboard() {
     };
   }, []);
 
+  const handleUpgradeRequest = async () => {
+  if (!subscription) {
+    return;
+  }
+
+  let requestedPlan = null;
+
+  if (subscription.plan === "FREE") {
+    requestedPlan = "BASIC";
+  } else if (
+    subscription.plan === "BASIC"
+  ) {
+    requestedPlan = "PREMIUM";
+  }
+
+  if (!requestedPlan) {
+    alert(
+      "You are already on the highest subscription plan."
+    );
+    return;
+  }
+
+  const confirmed =
+    window.confirm(
+      `Request upgrade from ${subscription.plan} to ${requestedPlan}?`
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setUpgradeSubmitting(true);
+
+    await operatorService
+      .requestSubscriptionUpgrade(
+        requestedPlan
+      );
+
+    alert(
+      `Upgrade request to ${requestedPlan} submitted successfully.`
+    );
+
+    await refreshDashboardSilently();
+  } catch (err) {
+    alert(
+      err.response?.data?.message ||
+        "Failed to submit upgrade request."
+    );
+  } finally {
+    setUpgradeSubmitting(false);
+  }
+};
 
   // ========== PREPARE FORECAST CHART DATA ==========
   const prepareForecastData = () => {
@@ -164,20 +221,68 @@ export default function OperatorDashboard() {
   const peakDay = forecastChartData.length > 0 ? 
     forecastChartData.reduce((max, d) => (d.predictedBookings > max.predictedBookings) ? d : max, forecastChartData[0]) : null;
 
-  const getMalaysiaDate = (dateValue = new Date()) => {
-  const date = new Date(dateValue);
+  const formatSubscriptionDate = (
+    value
+  ) => {
+    if (!value) {
+      return "No fixed term";
+    }
 
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
+    const date = new Date(value);
 
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kuala_Lumpur",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-};
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return "—";
+    }
+
+    return new Intl.DateTimeFormat(
+      "en-MY",
+      {
+        timeZone:
+          "Asia/Kuala_Lumpur",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }
+    ).format(date);
+  };
+
+    const getMalaysiaDate = (dateValue = new Date()) => {
+    const date = new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kuala_Lumpur",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  };
+
+  const subscriptionUsagePercent =
+  subscription?.listingLimit > 0
+    ? Math.min(
+        100,
+        Math.round(
+          (
+            Number(
+              subscription.listingsUsed ||
+                0
+            ) /
+            Number(
+              subscription.listingLimit
+            )
+          ) *
+            100
+        )
+      )
+    : 0;
 
 const addDays = (dateString, days) => {
   const [year, month, day] = dateString.split("-").map(Number);
@@ -613,6 +718,360 @@ const operationalMetrics = useMemo(() => {
   return (
     <div style={styles.container}>
       <h1 style={styles.pageTitle}>Operator Dashboard</h1>
+
+      {subscription && (
+  <section
+    style={{
+      ...styles.card,
+      marginBottom: "24px",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent:
+          "space-between",
+        alignItems: "center",
+        gap: "16px",
+        marginBottom: "20px",
+        flexWrap: "wrap",
+      }}
+    >
+      <div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "18px",
+            color: "#1f2937",
+          }}
+        >
+          Subscription Status
+        </h2>
+
+        <div
+          style={{
+            marginTop: "4px",
+            fontSize: "13px",
+            color: "#6b7280",
+          }}
+        >
+          Your current BNPL
+          operator subscription
+        </div>
+      </div>
+
+      <span
+        style={{
+          padding:
+            "6px 12px",
+          borderRadius:
+            "999px",
+          fontSize: "12px",
+          fontWeight: 700,
+
+          background:
+            subscription.activityStatus ===
+            "ACTIVE"
+              ? "#dcfce7"
+              : "#fee2e2",
+
+          color:
+            subscription.activityStatus ===
+            "ACTIVE"
+              ? "#166534"
+              : "#991b1b",
+        }}
+      >
+        {subscription.activityStatus ||
+          "UNKNOWN"}
+      </span>
+    </div>
+
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns:
+          "repeat(auto-fit, minmax(180px, 1fr))",
+        gap: "18px",
+        marginBottom: "20px",
+      }}
+    >
+      <div>
+        <div
+          style={{
+            fontSize: "12px",
+            color: "#6b7280",
+            marginBottom: "5px",
+          }}
+        >
+          Current Tier
+        </div>
+
+        <div
+          style={{
+            fontSize: "21px",
+            fontWeight: 700,
+            color: "#1f2937",
+          }}
+        >
+          {subscription.label ||
+            subscription.plan}
+        </div>
+
+        <div
+          style={{
+            fontSize: "12px",
+            color: "#6b7280",
+            marginTop: "3px",
+          }}
+        >
+          {subscription.plan}
+        </div>
+      </div>
+
+      <div>
+        <div
+          style={{
+            fontSize: "12px",
+            color: "#6b7280",
+            marginBottom: "5px",
+          }}
+        >
+          Listings Used
+        </div>
+
+        <div
+          style={{
+            fontSize: "21px",
+            fontWeight: 700,
+            color: "#1f2937",
+          }}
+        >
+          {subscription.listingsUsed} /{" "}
+          {subscription.listingLimit}
+        </div>
+
+        <div
+          style={{
+            fontSize: "12px",
+            color: "#6b7280",
+            marginTop: "3px",
+          }}
+        >
+          {subscription.remaining}{" "}
+          listing slot
+          {subscription.remaining === 1
+            ? ""
+            : "s"}{" "}
+          remaining
+        </div>
+      </div>
+
+      <div>
+        <div
+          style={{
+            fontSize: "12px",
+            color: "#6b7280",
+            marginBottom: "5px",
+          }}
+        >
+          Term End
+        </div>
+
+        <div
+          style={{
+            fontSize: "18px",
+            fontWeight: 700,
+            color: "#1f2937",
+          }}
+        >
+          {formatSubscriptionDate(
+            subscription.endsAt
+          )}
+        </div>
+      </div>
+    </div>
+
+    <div
+      style={{
+        marginBottom: "20px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent:
+            "space-between",
+          gap: "12px",
+          fontSize: "12px",
+          color: "#4b5563",
+          marginBottom: "7px",
+        }}
+      >
+        <span>
+          Listing usage
+        </span>
+
+        <span>
+          {subscriptionUsagePercent}%
+        </span>
+      </div>
+
+      <div
+        style={{
+          width: "100%",
+          height: "10px",
+          background: "#e5e7eb",
+          borderRadius:
+            "999px",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width:
+              `${subscriptionUsagePercent}%`,
+
+            height: "100%",
+
+            background:
+              subscriptionUsagePercent >=
+              100
+                ? "#ef4444"
+                : "#3b82f6",
+
+            borderRadius:
+              "999px",
+
+            transition:
+              "width 0.3s ease",
+          }}
+        />
+      </div>
+    </div>
+
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent:
+          "space-between",
+        gap: "16px",
+        flexWrap: "wrap",
+      }}
+    >
+      <div>
+        {subscription
+          .pendingUpgradeRequest ? (
+          <>
+            <div
+              style={{
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "#92400e",
+              }}
+            >
+              Upgrade request
+              pending
+            </div>
+
+            <div
+              style={{
+                fontSize: "12px",
+                color: "#6b7280",
+                marginTop: "3px",
+              }}
+            >
+              Requested:{" "}
+              {
+                subscription
+                  .pendingUpgradeRequest
+                  .requestedPlan
+              }
+            </div>
+          </>
+        ) : (
+          <div
+            style={{
+              fontSize: "12px",
+              color: "#6b7280",
+            }}
+          >
+            Upgrade your plan for
+            more listing capacity.
+          </div>
+        )}
+      </div>
+
+      {subscription.canRequestUpgrade && (
+        <button
+          type="button"
+          onClick={
+            handleUpgradeRequest
+          }
+          disabled={
+            upgradeSubmitting ||
+            Boolean(
+              subscription
+                .pendingUpgradeRequest
+            ) ||
+            subscription.plan ===
+              "PREMIUM"
+          }
+          style={{
+            padding:
+              "10px 18px",
+
+            border: "none",
+
+            borderRadius:
+              "8px",
+
+            background:
+              "#2563eb",
+
+            color:
+              "#ffffff",
+
+            fontSize:
+              "13px",
+
+            fontWeight:
+              600,
+
+            opacity:
+              upgradeSubmitting ||
+              subscription
+                .pendingUpgradeRequest ||
+              subscription.plan ===
+                "PREMIUM"
+                ? 0.6
+                : 1,
+
+            cursor:
+              upgradeSubmitting ||
+              subscription
+                .pendingUpgradeRequest ||
+              subscription.plan ===
+                "PREMIUM"
+                ? "not-allowed"
+                : "pointer",
+          }}
+        >
+          {upgradeSubmitting
+            ? "Submitting..."
+            : subscription
+                .pendingUpgradeRequest
+            ? "Request Pending"
+            : subscription.plan ===
+              "PREMIUM"
+            ? "Highest Plan"
+            : "Request Upgrade"}
+        </button>
+      )}
+    </div>
+  </section>
+)}
 
       {stripeConnect && stripeConnect.onboardingStatus !== "COMPLETE" && (
         <section style={{ ...styles.card, marginBottom: "24px" }}>

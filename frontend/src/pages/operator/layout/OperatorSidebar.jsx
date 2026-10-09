@@ -3,6 +3,7 @@ import logo from "../../../assets/logo.png";
 import {
   LayoutDashboard,
   ClipboardList,
+  RotateCcw,
   ListChecks,
   MapPin,
   PackageSearch,
@@ -30,6 +31,12 @@ const links = [
     to: "/operator/bookings",
     label: "Bookings",
     icon: <ClipboardList size={20} />,
+    allowedAccess: ["OWNER", "STAFF"],
+  },
+  {
+    to: "/operator/returns",
+    label: "Return Board",
+    icon: <RotateCcw size={20} />,
     allowedAccess: ["OWNER", "STAFF"],
   },
   {

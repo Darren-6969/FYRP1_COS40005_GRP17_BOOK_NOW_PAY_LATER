@@ -6,6 +6,7 @@ import { sendEmail } from "../services/email_service.js";
 import { createInAppNotification, notifyMasterUsers } from "../services/notification_email_service.js";
 import { generateUserCode } from "../services/userCode.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
+import {validateSecureDocument,} from "../utils/secure_upload.js";
 
 const DOCUMENT_TYPES = new Set(["BUSINESS_REGISTRATION", "BUSINESS_LICENSE", "OWNER_IDENTITY"]);
 const APPLICATION_DECISIONS = new Set(["APPROVED", "REJECTED", "NEEDS_INFORMATION"]);
@@ -63,6 +64,31 @@ export async function submitOperatorApplication(req, res, next) {
       return res.status(400).json({ message: "At least one business document is required." });
     }
 
+    const validatedFiles =
+  await Promise.all(
+    files.map(async (file) => {
+      const validated =
+        await validateSecureDocument(
+          file.buffer,
+          {
+            allowedTypes: [
+              "application/pdf",
+              "image/png",
+              "image/jpeg",
+            ],
+
+            maxBytes:
+              3 * 1024 * 1024,
+          }
+        );
+
+      return {
+        file,
+        validated,
+      };
+    })
+  );
+
     const normalizedEmail = String(email).trim().toLowerCase();
     const [existingOperator, existingUser] = await Promise.all([
       prisma.operator.findUnique({ where: { email: normalizedEmail } }),
@@ -111,7 +137,12 @@ export async function submitOperatorApplication(req, res, next) {
         },
       });
 
-      for (const file of files) {
+      for (
+        const {
+          file,
+          validated,
+        } of validatedFiles
+      ) {
         const documentType = String(file.fieldname || "").replace(/^document_/, "").toUpperCase();
         if (!DOCUMENT_TYPES.has(documentType)) {
           throw new Error(`Unsupported document type: ${documentType}`);
@@ -125,12 +156,12 @@ export async function submitOperatorApplication(req, res, next) {
             documentType,
             originalName: safeDocumentName(file.originalname),
             storageKey,
-            content: file.buffer,
-            mimeType: file.mimetype,
-            sizeBytes: file.size,
-          },
-        });
-      }
+            content: validated.buffer,
+            mimeType: validated.mime,
+            sizeBytes:validated.size,
+            },
+          });
+        }
 
       return tx.operatorApplication.findUnique({
         where: { id: createdApplication.id },

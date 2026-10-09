@@ -11,6 +11,9 @@ import {
   suspendListing,
   reactivateListing,
   bulkUpdateListingStatus,
+  getListingAllocations,
+  blockListingForServicing,
+  unblockListingServicing,
 } from "../controllers/listing_controller.js";
 import { previewListingRates } from "../controllers/listing_rates_controller.js";
 
@@ -37,6 +40,24 @@ const masterAccess = [verifyToken, allowRoles("MASTER_SELLER")];
 // ==========================================================
 // LISTINGS
 // ==========================================================
+
+router.get(
+  "/:id/allocations",
+  ...ownerOrStaffAccess,
+  getListingAllocations
+);
+
+router.put(
+  "/:id/servicing-block",
+  ...ownerOrStaffAccess,
+  blockListingForServicing
+);
+
+router.patch(
+  "/:id/servicing-unblock",
+  ...ownerOrStaffAccess,
+  unblockListingServicing
+);
 
 router.get(
   "/",

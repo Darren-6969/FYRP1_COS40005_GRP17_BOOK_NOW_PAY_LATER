@@ -2,6 +2,7 @@ import express from "express";
 import multer from "multer";
 import crypto from "crypto";
 import { put } from "@vercel/blob";
+import {processSecureImage,} from "../utils/secure_upload.js";
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import { allowRoles } from "../middlewares/rbac_middleware.js";
 
@@ -39,16 +40,27 @@ router.post(
 
       // OWASP A03 – never use the client-supplied filename.
       // Derive the extension exclusively from the validated MIME type whitelist.
-      const MIME_EXT = { "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp" };
-      const ext      = MIME_EXT[req.file.mimetype] ?? "";
-      const safeName = `logo-${Date.now()}-${crypto.randomBytes(12).toString("hex")}${ext}`;
+      const processed =
+        await processSecureImage(
+          req.file.buffer
+        );
+
+      const safeName =
+        `listing-${Date.now()}-${crypto
+          .randomBytes(12)
+          .toString("hex")}${
+          processed.extension
+        }`;
 
       const blob = await put(
-        `operator-logos/${safeName}`,
-        req.file.buffer,
+        `listing-images/${safeName}`,
+        processed.buffer,
         {
           access: "public",
-          contentType: req.file.mimetype,
+
+          contentType:
+            processed.mime,
+
           addRandomSuffix: false,
         }
       );
@@ -112,29 +124,26 @@ router.post(
         });
       }
 
-      const MIME_EXT = {
-        "image/png": ".png",
-        "image/jpeg": ".jpg",
-        "image/webp": ".webp",
-      };
-
-      const ext =
-        MIME_EXT[
-          req.file.mimetype
-        ] ?? "";
+      const processed =
+        await processSecureImage(
+          req.file.buffer
+        );
 
       const safeName =
         `listing-${Date.now()}-${crypto
           .randomBytes(12)
-          .toString("hex")}${ext}`;
+          .toString("hex")}${
+          processed.extension
+        }`;
 
       const blob = await put(
         `listing-images/${safeName}`,
-        req.file.buffer,
+        processed.buffer,
         {
           access: "public",
+
           contentType:
-            req.file.mimetype,
+            processed.mime,
 
           addRandomSuffix: false,
         }

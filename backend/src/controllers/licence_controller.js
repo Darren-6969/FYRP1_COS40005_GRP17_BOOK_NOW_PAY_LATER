@@ -1,4 +1,5 @@
 import multer from "multer";
+import {validateSecureDocument,} from "../utils/secure_upload.js";
 import prisma from "../config/db.js";
 import { transitionBookingStatus } from "../services/booking_status_service.js";
 import { createInAppNotification } from "../services/notification_email_service.js";
@@ -57,6 +58,21 @@ export async function submitLicenceDocument(req, res, next) {
     const file = req.file;
     if (!file) return res.status(400).json({ message: "A licence document is required." });
 
+    const validatedDocument =
+      await validateSecureDocument(
+        file.buffer,
+        {
+          allowedTypes: [
+            "application/pdf",
+            "image/png",
+            "image/jpeg",
+          ],
+
+          maxBytes:
+            5 * 1024 * 1024,
+        }
+      );
+
     const latest = await prisma.customerLicenceDocument.findFirst({
       where: { customerId: req.user.id },
       orderBy: { submittedAt: "desc" },
@@ -77,9 +93,9 @@ export async function submitLicenceDocument(req, res, next) {
       data: {
         customerId: req.user.id,
         originalName: file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120),
-        mimeType: file.mimetype,
-        sizeBytes: file.size,
-        content: file.buffer,
+        mimeType: validatedDocument.mime,
+        sizeBytes: validatedDocument.size,
+        content: validatedDocument.buffer,
         reviewDueAt: new Date(Date.now() + SLA_HOURS * 60 * 60 * 1000),
       },
     });

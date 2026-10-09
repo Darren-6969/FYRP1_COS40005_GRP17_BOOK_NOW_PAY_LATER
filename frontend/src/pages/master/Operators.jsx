@@ -6,6 +6,8 @@ import {
   deleteOperator,
   deleteOperatorUser,
   getOperators,
+  getSubscriptionUpgradeRequests,
+  reviewSubscriptionUpgradeRequest,
   resetOperatorUser,
   updateOperatorStatus,
   updateOperatorSubscriptionPlan,
@@ -142,6 +144,9 @@ function accessLevelDescription(level) {
 export default function Operators() {
   const [operators, setOperators] = useState([]);
 
+  const [upgradeRequests, setUpgradeRequests,] = useState([]);
+  const [reviewingUpgradeId, setReviewingUpgradeId,] = useState(null);
+
   const [companyForm, setCompanyForm] = useState(initialCompanyForm);
   const [staffForm, setStaffForm] = useState(initialStaffForm);
 
@@ -163,8 +168,24 @@ export default function Operators() {
     try {
       setLoading(true);
       setError("");
-      const res = await getOperators();
-      setOperators(res.data || []);
+      const [
+        operatorsRes,
+        upgradeRequestsRes,
+      ] = await Promise.all([
+        getOperators(),
+        getSubscriptionUpgradeRequests(
+          "PENDING"
+        ),
+      ]);
+
+      setOperators(
+        operatorsRes.data || []
+      );
+
+      setUpgradeRequests(
+        upgradeRequestsRes.data
+          ?.requests || []
+      );
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load operators");
     } finally {
@@ -390,6 +411,83 @@ export default function Operators() {
     setShowStaffForm(true);
     setShowCompanyForm(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const reviewUpgradeRequest =
+  async (
+    request,
+    decision
+  ) => {
+    const companyName =
+      request.operator
+        ?.companyName ||
+      "this operator";
+
+    let note = "";
+
+    if (
+      decision === "APPROVED"
+    ) {
+      const confirmed =
+        window.confirm(
+          `Approve ${companyName} upgrade from ${request.currentPlan} to ${request.requestedPlan}?`
+        );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    if (
+      decision === "REJECTED"
+    ) {
+      const rejectionNote =
+        window.prompt(
+          `Reason for rejecting ${companyName}'s upgrade request:`
+        );
+
+      if (
+        rejectionNote === null
+      ) {
+        return;
+      }
+
+      note =
+        rejectionNote.trim();
+    }
+
+    try {
+      setReviewingUpgradeId(
+        request.id
+      );
+
+      setError("");
+      setMessage("");
+
+      const response =
+        await reviewSubscriptionUpgradeRequest(
+          request.id,
+          decision,
+          note
+        );
+
+      setMessage(
+        response.data?.message ||
+          `Upgrade request ${decision.toLowerCase()}.`
+      );
+
+      await load();
+    } catch (err) {
+      setError(
+        err.response?.data
+          ?.message ||
+          "Failed to review subscription upgrade request."
+      );
+    } finally {
+      setReviewingUpgradeId(
+        null
+      );
+    }
   };
 
   //Add Operator Subscription Plan Function
@@ -818,6 +916,182 @@ const toggleUserStatus = async (op, user) => {
           </form>
         )}
       </section>
+
+      <section className="card">
+          <div className="section-header">
+            <div>
+              <h3>
+                Subscription Upgrade Requests
+              </h3>
+
+              <p>
+                Review pending operator
+                subscription upgrade
+                requests.
+              </p>
+            </div>
+
+            <div className="actions">
+              <span className="badge pending">
+                {
+                  upgradeRequests.length
+                }{" "}
+                Pending
+              </span>
+            </div>
+          </div>
+
+          {upgradeRequests.length ===
+          0 ? (
+            <div className="empty-state">
+              No pending subscription
+              upgrade requests.
+            </div>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>
+                    Current Plan
+                  </th>
+                  <th>
+                    Requested Plan
+                  </th>
+                  <th>
+                    Requested At
+                  </th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {upgradeRequests.map(
+                  (request) => {
+                    const isReviewing =
+                      reviewingUpgradeId ===
+                      request.id;
+
+                    return (
+                      <tr key={request.id}>
+                        <td>
+                          <strong>
+                            {request
+                              .operator
+                              ?.companyName ||
+                              "-"}
+                          </strong>
+
+                          <div
+                            style={{
+                              fontSize:
+                                "12px",
+                              marginTop:
+                                "4px",
+                              color:
+                                "#6b7280",
+                            }}
+                          >
+                            {request
+                              .operator
+                              ?.operatorCode ||
+                              ""}
+                          </div>
+                        </td>
+
+                        <td>
+                          <span className="badge">
+                            {
+                              request.currentPlan
+                            }
+                          </span>
+                        </td>
+
+                        <td>
+                          <span className="badge active">
+                            {
+                              request.requestedPlan
+                            }
+                          </span>
+                        </td>
+
+                        <td>
+                          {request.createdAt
+                            ? new Intl.DateTimeFormat(
+                                "en-MY",
+                                {
+                                  timeZone:
+                                    "Asia/Kuala_Lumpur",
+                                  day: "2-digit",
+                                  month:
+                                    "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute:
+                                    "2-digit",
+                                }
+                              ).format(
+                                new Date(
+                                  request.createdAt
+                                )
+                              )
+                            : "-"}
+                        </td>
+
+                        <td>
+                          <span className="badge pending">
+                            {
+                              request.status
+                            }
+                          </span>
+                        </td>
+
+                        <td>
+                          <div className="actions">
+                            <button
+                              className="btn primary"
+                              type="button"
+                              disabled={
+                                isReviewing
+                              }
+                              onClick={() =>
+                                reviewUpgradeRequest(
+                                  request,
+                                  "APPROVED"
+                                )
+                              }
+                            >
+                              {isReviewing
+                                ? "Processing..."
+                                : "Approve"}
+                            </button>
+
+                            <button
+                              className="btn danger"
+                              type="button"
+                              disabled={
+                                isReviewing
+                              }
+                              onClick={() =>
+                                reviewUpgradeRequest(
+                                  request,
+                                  "REJECTED"
+                                )
+                              }
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+                )}
+              </tbody>
+            </table>
+          )}
+        </section>
 
       <section className="card">
         <div className="section-header">

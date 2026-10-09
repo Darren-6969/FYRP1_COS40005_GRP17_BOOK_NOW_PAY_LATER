@@ -18,6 +18,17 @@ export const operatorService = {
     return api.get("/operators/dashboard");
   },
 
+  requestSubscriptionUpgrade(
+    requestedPlan
+  ) {
+    return api.post(
+      "/operators/subscription-upgrade-request",
+      {
+        requestedPlan,
+      }
+    );
+  },
+
   getBookings(params = {}) {
     return api.get("/operators/bookings", { params });
   },
@@ -61,86 +72,118 @@ export const operatorService = {
     return api.get(`/operators/listings/${id}`);
   },
 
-  getVehicleImages(params) {
-    return api.get(
-      "/carsxe/images",
-      {
-        params,
-     }
-   );
-  },
+  getListingAllocations(
+      id,
+      params = {}
+    ) {
+      return api.get(
+        `/operators/listings/${id}/allocations`,
+        {
+          params,
+        }
+      );
+    },
 
-  createListing(payload) {
-    return api.post("/operators/listings", payload);
-  },
-
-  // payload: { price, hourlyRate, weeklyRate, monthlyRate } in RM.
-  // Returns { samples: [{ key, label, hours, total, totalSen, lines }], warnings: [{ code, field, message }] }.
-  // A 400 response carries { errors: { field: message } }.
-  previewListingRates(payload) {
-    return api.post("/operators/listings/rate-preview", payload);
-  },
-
-  updateListing(id, payload) {
-    return api.patch(
-      `/operators/listings/${id}`,
+    blockListingForServicing(
+      id,
       payload
-    );
-  },
+    ) {
+      return api.put(
+        `/operators/listings/${id}/servicing-block`,
+        payload
+      );
+    },
 
-  publishListing(id) {
-    return api.patch(
-      `/operators/listings/${id}/publish`
-    );
-  },
-
-  withdrawListing(id) {
-    return api.patch(
-      `/operators/listings/${id}/withdraw`
-    );
-  },
-
-  quickEditListing(id, payload) {
-    return api.patch(
-      `/operators/listings/${id}/quick-edit`,
+    unblockListingServicing(
+      id,
       payload
-    );
-  },
+    ) {
+      return api.patch(
+        `/operators/listings/${id}/servicing-unblock`,
+        payload
+      );
+    },
 
-  bulkUpdateListingStatus(payload) {
-    return api.patch(
-      "/operators/listings/bulk-status",
-      payload
-    );
-  },
+      getVehicleImages(params) {
+        return api.get(
+          "/carsxe/images",
+          {
+            params,
+        }
+      );
+      },
 
-  /** New Branch functions */
-getBranches() {
-  return api.get(
-    "/operators/branches"
-  );
-},
+      createListing(payload) {
+        return api.post("/operators/listings", payload);
+      },
 
-createBranch(payload) {
-  return api.post(
-    "/operators/branches",
-    payload
-  );
-},
+      // payload: { price, hourlyRate, weeklyRate, monthlyRate } in RM.
+      // Returns { samples: [{ key, label, hours, total, totalSen, lines }], warnings: [{ code, field, message }] }.
+      // A 400 response carries { errors: { field: message } }.
+      previewListingRates(payload) {
+        return api.post("/operators/listings/rate-preview", payload);
+      },
 
-updateBranch(id, payload) {
-  return api.patch(
-    `/operators/branches/${id}`,
-    payload
-  );
-},
+      updateListing(id, payload) {
+        return api.patch(
+          `/operators/listings/${id}`,
+          payload
+        );
+      },
 
-createBranchPoint(branchId, payload) {
-  return api.post(
-    `/operators/branches/${branchId}/points`,
-    payload
-  );
-},
+      publishListing(id) {
+        return api.patch(
+          `/operators/listings/${id}/publish`
+        );
+      },
+
+      withdrawListing(id) {
+        return api.patch(
+          `/operators/listings/${id}/withdraw`
+        );
+      },
+
+      quickEditListing(id, payload) {
+        return api.patch(
+          `/operators/listings/${id}/quick-edit`,
+          payload
+        );
+      },
+
+      bulkUpdateListingStatus(payload) {
+        return api.patch(
+          "/operators/listings/bulk-status",
+          payload
+        );
+      },
+
+      /** New Branch functions */
+    getBranches() {
+      return api.get(
+        "/operators/branches"
+      );
+    },
+
+    createBranch(payload) {
+      return api.post(
+        "/operators/branches",
+        payload
+      );
+    },
+
+    updateBranch(id, payload) {
+      return api.patch(
+        `/operators/branches/${id}`,
+        payload
+      );
+    },
+
+    createBranchPoint(branchId, payload) {
+      return api.post(
+        `/operators/branches/${branchId}/points`,
+        payload
+      );
+    },
 
 updateBranchPoint(
   branchId,
@@ -203,9 +246,13 @@ updateBranchPoint(
     );
   },
 
-  returnBooking(id) {
+  returnBooking(
+    id,
+    payload = {}
+  ) {
     return api.patch(
-      `/operators/bookings/${id}/return`
+      `/operators/bookings/${id}/return`,
+      payload
     );
   },
 
