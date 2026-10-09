@@ -31,7 +31,11 @@ import {
   PAYMENT_TYPES,
 } from "../services/payment_schedule_service.js";
 import { recordSuccessfulPaymentEvents } from "../services/customer_credit_service.js";
-import { getPlatformDeadlinePolicy, validatePublishedDeadline } from "../services/platform_policy_service.js";
+import {
+  getOperatorDeadlineTierStatus,
+  getPlatformDeadlinePolicy,
+  validatePublishedDeadline,
+} from "../services/platform_policy_service.js";
 import { createAuditLog as writeAuditLog } from "../services/log_service.js";
 import { transitionBookingStatus } from "../services/booking_status_service.js";
 import { getPlatformSettings } from "../services/platform_settings_service.js";
@@ -4122,8 +4126,10 @@ export async function getOperatorSettings(req, res, next) {
     }
 
     const config = operator.configs[0] || (await getOrCreateOperatorConfig(operatorId));
+    const deadlineTier = await getOperatorDeadlineTierStatus(operatorId);
 
     res.json({
+      deadlineTier,
       user: {
         id: req.user.id,
         name: req.user.name,
@@ -4207,7 +4213,10 @@ export async function updateOperatorSettings(req, res, next) {
     const parsedPaymentDeadlineDays = paymentDeadlineDays === undefined
       ? configForValidation.paymentDeadlineDays
       : Number(paymentDeadlineDays);
-    if (!validatePublishedDeadline(deadlinePolicy, parsedPaymentDeadlineDays)) {
+    // Only a tier the operator is choosing now has to be published. Checking the
+    // stored tier on every save would lock an operator out of all other settings
+    // once the platform withdraws their tier.
+    if (paymentDeadlineDays !== undefined && !validatePublishedDeadline(deadlinePolicy, parsedPaymentDeadlineDays)) {
       return res.status(400).json({ message: `Payment deadline must be one of the published tiers: ${deadlinePolicy.publishedTiers.join(", ")} days.` });
     }
 

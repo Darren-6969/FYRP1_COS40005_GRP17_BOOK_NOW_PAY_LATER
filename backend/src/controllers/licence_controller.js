@@ -6,6 +6,7 @@ import { createInAppNotification } from "../services/notification_email_service.
 import { sendEmail } from "../services/email_service.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
 import { getPlatformSettings } from "../services/platform_settings_service.js";
+import { createAuditLog } from "../services/log_service.js";
 
 const SLA_HOURS = 48;
 const REJECTION_REASONS = new Set(["EXPIRED", "UNREADABLE", "NOT_A_LICENCE"]);
@@ -283,16 +284,14 @@ export async function createPeakDate(req, res, next) {
     }
     const date = await prisma.$transaction(async (tx) => {
       const created = await tx.platformPeakDate.create({ data: { peakDate, label } });
-      await tx.auditLog.create({
-        data: {
-          userId: req.user.id,
-          action: "PLATFORM_PEAK_DATE_CREATED",
-          entityType: "PlatformPeakDate",
-          entityId: String(created.id),
-          before: null,
-          after: { peakDate: created.peakDate, label: created.label },
-        },
-      });
+      await createAuditLog({
+        req,
+        action: "PLATFORM_PEAK_DATE_CREATED",
+        entityType: "PlatformPeakDate",
+        entityId: created.id,
+        before: null,
+        after: { peakDate: created.peakDate, label: created.label },
+      }, tx);
       return created;
     });
     res.status(201).json(date);
@@ -309,16 +308,14 @@ export async function deletePeakDate(req, res, next) {
     if (!existing) return res.status(404).json({ message: "Peak date not found." });
     await prisma.$transaction(async (tx) => {
       await tx.platformPeakDate.delete({ where: { id } });
-      await tx.auditLog.create({
-        data: {
-          userId: req.user.id,
-          action: "PLATFORM_PEAK_DATE_DELETED",
-          entityType: "PlatformPeakDate",
-          entityId: String(id),
-          before: { peakDate: existing.peakDate, label: existing.label },
-          after: null,
-        },
-      });
+      await createAuditLog({
+        req,
+        action: "PLATFORM_PEAK_DATE_DELETED",
+        entityType: "PlatformPeakDate",
+        entityId: id,
+        before: { peakDate: existing.peakDate, label: existing.label },
+        after: null,
+      }, tx);
     });
     res.status(204).end();
   } catch (err) {

@@ -4,7 +4,6 @@ import {
   parseUtcDate,
   subtractMinutes,
 } from "../utils/datetime.js";
-import { getPlatformDeadlinePolicy, validatePublishedDeadline } from "./platform_policy_service.js";
 import { getPlatformSettings } from "./platform_settings_service.js";
 
 const MALAYSIA_TIMEZONE_OFFSET_HOURS = 8;
@@ -128,13 +127,9 @@ export async function calculatePaymentDeadline(
     });
 
     const platformSettings = await getPlatformSettings();
+    // A withdrawn tier is refused when the operator accepts a booking
+    // (assertOperatorTierPublished), not here, so a customer can still submit.
     const paymentDeadlineDays = config?.paymentDeadlineDays ?? platformSettings.defaultPaymentDeadlineDays;
-    const policy = await getPlatformDeadlinePolicy();
-    if (!validatePublishedDeadline(policy, paymentDeadlineDays)) {
-      const error = new Error("The operator payment deadline is no longer published by the platform.");
-      error.statusCode = 400;
-      throw error;
-    }
     selectedDeadline = calculateDefaultDeadlineInMalaysia(paymentDeadlineDays);
   }
 

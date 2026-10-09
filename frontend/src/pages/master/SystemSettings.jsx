@@ -437,8 +437,14 @@ export default function SystemSettings() {
 
     setSaving(true);
     try {
-      await updatePlatformDeadlineSettings({ publishedTiers, mostLenientDays });
-      notify("success", "Platform deadline tiers published.");
+      const res = await updatePlatformDeadlineSettings({ publishedTiers, mostLenientDays });
+      const affected = res.data?.operatorsAffected || 0;
+      notify(
+        "success",
+        affected
+          ? `Deadline tiers published. ${affected} operator${affected === 1 ? "" : "s"} must choose another tier before accepting new bookings.`
+          : "Platform deadline tiers published."
+      );
       await load({ silent: true });
       return true;
     } catch (err) {
@@ -590,7 +596,7 @@ export default function SystemSettings() {
           <SettingsSection
             icon={<Clock size={20} />}
             title="Published Deadline Tiers"
-            description="Operators may select only these payment deadline values. The largest value is the most lenient term allowed."
+            description="Operators may select only these payment deadline values. A tier removed from the list cannot be used for new acceptances until the operator selects another."
           >
             <div className="operator-settings-form-grid">
               <FormField label="Published tiers (days)" helper="Comma separated, for example 1, 3, 7.">
@@ -858,7 +864,11 @@ export default function SystemSettings() {
                     <select value={form.paymentDeadlineDays || 3} onChange={(event) => handleOperatorChange("paymentDeadlineDays", Number(event.target.value))}>
                       {[...new Set([...(deadlinePolicy.publishedTiers || []), Number(form.paymentDeadlineDays || 3)])]
                         .sort((a, b) => a - b)
-                        .map((days) => <option key={days} value={days}>{days} {days === 1 ? "day" : "days"}</option>)}
+                        .map((days) => (
+                          <option key={days} value={days}>
+                            {days} {days === 1 ? "day" : "days"}{(deadlinePolicy.publishedTiers || []).includes(days) ? "" : " (withdrawn)"}
+                          </option>
+                        ))}
                     </select>
                   </FormField>
 

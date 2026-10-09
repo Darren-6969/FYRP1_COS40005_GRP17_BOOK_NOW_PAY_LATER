@@ -241,11 +241,17 @@ export async function updatePlatformDeadlineSettings(req, res, next) {
         message: "Published tiers must include the current default payment deadline.",
       });
     }
-    const after = await prisma.$transaction(async (tx) => {
+    // Tiers taken off the list can no longer be used for new acceptances, so say
+    // how many operators now have to choose another one.
+    const withdrawnTiers = before.publishedTiers.filter((days) => !tiers.includes(days));
+    const result = await prisma.$transaction(async (tx) => {
       const updated = await tx.platformDeadlinePolicy.update({
         where: { id: 1 },
         data: { publishedTiers: tiers, mostLenientDays },
       });
+      const operatorsAffected = withdrawnTiers.length
+        ? await tx.bNPLConfig.count({ where: { paymentDeadlineDays: { in: withdrawnTiers } } })
+        : 0;
       await createAuditLog({
         req,
         action: "PLATFORM_DEADLINE_POLICY_UPDATED",
@@ -253,10 +259,11 @@ export async function updatePlatformDeadlineSettings(req, res, next) {
         entityId: "1",
         before: { publishedTiers: before.publishedTiers, mostLenientDays: before.mostLenientDays },
         after: { publishedTiers: updated.publishedTiers, mostLenientDays: updated.mostLenientDays },
+        details: { withdrawnTiers, operatorsAffected },
       }, tx);
-      return updated;
+      return { ...updated, withdrawnTiers, operatorsAffected };
     });
-    res.json(after);
+    res.json(result);
   } catch (err) {
     next(err);
   }

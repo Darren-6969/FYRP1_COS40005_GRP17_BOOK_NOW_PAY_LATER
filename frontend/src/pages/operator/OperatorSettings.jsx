@@ -114,6 +114,8 @@ const DEFAULT_SETTINGS = {
 
   downPaymentPercent: 30,
 
+  paymentDeadlineDays: 3,
+
   bookingResponseDeadlineMinutes: 120,
 
   autoRejectInactiveBooking: true,
@@ -266,6 +268,10 @@ export default function OperatorSettings() {
           config?.downPaymentPercent ??
           prev.downPaymentPercent,
 
+        paymentDeadlineDays:
+          config?.paymentDeadlineDays ??
+          prev.paymentDeadlineDays,
+
         minDriverAge:
           config?.minDriverAge ??
           prev.minDriverAge,
@@ -391,6 +397,18 @@ export default function OperatorSettings() {
 
   const user = settings?.user;
 
+  // The platform publishes the payment deadline tiers an operator may choose.
+  const deadlineTier = settings?.deadlineTier ?? null;
+
+  const deadlineOptions = [
+    ...new Set([
+      ...(deadlineTier?.publishedTiers || []),
+      Number(form.paymentDeadlineDays),
+    ]),
+  ]
+    .filter((days) => Number.isInteger(days) && days > 0)
+    .sort((a, b) => a - b);
+
   const operator = settings?.operator;
 
   const selectedTemplate = useMemo(() => {
@@ -502,6 +520,8 @@ const handleSave = async () => {
         Number(
           form.downPaymentPercent
         ),
+
+      paymentDeadlineDays: Number(form.paymentDeadlineDays),
 
       minDriverAge:
         Number(form.minDriverAge),
@@ -635,6 +655,27 @@ const activeMenu = SETTINGS_MENU.find(
                     )
                   }
                 />
+              </FormField>
+
+              <FormField
+                label="Payment deadline"
+                helper="Days a customer has to pay after you accept. Choose from the tiers the platform publishes."
+              >
+                <select
+                  value={form.paymentDeadlineDays}
+                  onChange={(event) =>
+                    updateField("paymentDeadlineDays", Number(event.target.value))
+                  }
+                >
+                  {deadlineOptions.map((days) => (
+                    <option key={days} value={days}>
+                      {days} {days === 1 ? "day" : "days"}
+                      {deadlineTier && !deadlineTier.publishedTiers.includes(days)
+                        ? " (no longer published)"
+                        : ""}
+                    </option>
+                  ))}
+                </select>
               </FormField>
 
               <FormField
@@ -1251,6 +1292,16 @@ const activeMenu = SETTINGS_MENU.find(
           {saving ? "Saving..." : "Save Settings"}
         </button>
       </section>
+
+      {deadlineTier?.withdrawn && (
+        <div className="operator-alert danger">
+          Your payment deadline of {deadlineTier.selectedDays}{" "}
+          {deadlineTier.selectedDays === 1 ? "day" : "days"} is no longer
+          published by the platform, so you cannot accept new bookings. Open
+          Booking Rules, choose one of the published tiers
+          ({deadlineTier.publishedTiers.join(", ")} days) and save.
+        </div>
+      )}
 
       {error && (
         <div className="operator-alert warning">

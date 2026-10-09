@@ -1,6 +1,7 @@
 import prisma from "../config/db.js";
 import { generateInvoiceForBooking } from "./invoice_service.js";
 import { calculatePaymentDeadline } from "./payment_deadline_service.js";
+import { assertOperatorTierPublished } from "./platform_policy_service.js";
 import { notifyCustomerByBooking } from "./notification_email_service.js";
 import { invoiceSentTemplate } from "./email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
@@ -89,6 +90,9 @@ export async function acceptBookingAndRequestPayment({
     "2️⃣ AUTO ACCEPT: status check passed",
     booking.status
   );
+
+  // The operator's deadline tier must still be published by the platform.
+  await assertOperatorTierPublished(booking.operatorId);
 
   // =========================================================
   // 2. Calculate general payment deadline

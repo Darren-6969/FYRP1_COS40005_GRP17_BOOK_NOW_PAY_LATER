@@ -1,4 +1,5 @@
 import prisma from "../config/db.js";
+import { peakDatesForBooking } from "./platform_policy_service.js";
 
 const REFUNDABLE_BOOKING_STATUSES = [
   "PENDING_PAYMENT",
@@ -145,6 +146,14 @@ export async function createPartialRefundForBooking({
     if (!config?.partialRefundElected) {
       throw refundError(
         "Partial refund is disabled in Operator Settings."
+      );
+    }
+
+    // The platform peak calendar decides where the election is available.
+    const peakDates = await peakDatesForBooking(booking, tx);
+    if (peakDates.length) {
+      throw refundError(
+        `A partial refund is not available for bookings that include a platform peak date (${peakDates.join(", ")}).`
       );
     }
 
