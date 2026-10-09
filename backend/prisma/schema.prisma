@@ -1279,9 +1279,10 @@ model ListingAllocation {
 
   date DateTime @db.Date
 
-  quantity  Int? // overrides Listing.quantity for this day (channel allocation)
-  isBlocked Boolean @default(false)
-  note      String?
+  quantity        Int?
+  blockedQuantity Int     @default(0)
+  isBlocked       Boolean @default(false)
+  note            String?
 
   updatedAt DateTime @updatedAt
 

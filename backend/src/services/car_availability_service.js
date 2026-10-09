@@ -74,10 +74,46 @@ export async function loadAvailability(listings, fromPlain, toPlainExclusive, db
   }
 
   for (const a of allocations) {
-    const entry = result.get(a.listingId);
-    const date = a.date.toISOString().slice(0, 10);
-    if (!entry || !entry.remaining.has(date)) continue;
-    entry.remaining.set(date, a.isBlocked ? 0 : a.quantity ?? entry.remaining.get(date));
+    const entry =
+      result.get(a.listingId);
+
+    const date =
+      a.date
+        .toISOString()
+        .slice(0, 10);
+
+    if (
+      !entry ||
+      !entry.remaining.has(date)
+    ) {
+      continue;
+    }
+
+    const baseQuantity =
+      a.quantity ??
+      entry.remaining.get(date);
+
+    const blockedQuantity =
+      Math.max(
+        0,
+        Number(
+          a.blockedQuantity || 0
+        )
+      );
+
+    const availableQuantity =
+      a.isBlocked
+        ? 0
+        : Math.max(
+            0,
+            baseQuantity -
+              blockedQuantity
+          );
+
+    entry.remaining.set(
+      date,
+      availableQuantity
+    );
   }
 
   for (const b of bookings) {

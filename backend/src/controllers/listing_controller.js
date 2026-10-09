@@ -8,7 +8,44 @@ import {
 import {
   getListingLimit,
 } from "../services/subscription_service.js";
+
+import {
+  ACTIVE_BOOKING_STATUSES,
+  occupiedDates,
+} from "../services/car_availability_service.js";
+
 import { getPlatformSettings } from "../services/platform_settings_service.js";
+
+function isPlainDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(
+    String(value || "")
+  );
+}
+
+function addPlainDateDays(
+  plainDate,
+  days
+) {
+  const [year, month, day] =
+    plainDate.split("-").map(Number);
+
+  const date =
+    new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day
+      )
+    );
+
+  date.setUTCDate(
+    date.getUTCDate() + days
+  );
+
+  return date
+    .toISOString()
+    .slice(0, 10);
+}
 
 function listingWhere(req) {
   if (req.user.role === "MASTER_SELLER") {
@@ -201,6 +238,528 @@ export async function getListings(req, res, next) {
 
     subscription,
   });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getListingAllocations(
+  req,
+  res,
+  next
+) {
+  try {
+    const listingId =
+      parseId(
+        req.params.id,
+        "listing id"
+      );
+
+    const listing =
+      await prisma.listing.findFirst({
+        where: {
+          id: listingId,
+          ...listingWhere(req),
+        },
+      });
+
+    if (!listing) {
+      return res.status(404).json({
+        message:
+          "Listing not found.",
+      });
+    }
+
+    const {
+      from,
+      to,
+    } = req.query;
+
+    const where = {
+      listingId,
+    };
+
+    if (
+      from &&
+      to &&
+      isPlainDate(from) &&
+      isPlainDate(to)
+    ) {
+      where.date = {
+        gte:
+          new Date(
+            `${from}T00:00:00.000Z`
+          ),
+
+        lt:
+          new Date(
+            `${addPlainDateDays(
+              to,
+              1
+            )}T00:00:00.000Z`
+          ),
+      };
+    }
+
+    const allocations =
+      await prisma.listingAllocation.findMany({
+        where,
+
+        orderBy: {
+          date: "asc",
+        },
+      });
+
+    res.json({
+      allocations:
+        allocations.map(
+          (item) => ({
+            ...item,
+
+            date:
+              item.date
+                .toISOString()
+                .slice(0, 10),
+          })
+        ),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function blockListingForServicing(
+  req,
+  res,
+  next
+) {
+  try {
+    const listingId =
+      parseId(
+        req.params.id,
+        "listing id"
+      );
+
+    const {
+      fromDate,
+      toDate,
+      blockedQuantity,
+      note,
+    } = req.body;
+
+    // =========================
+    // Validate dates
+    // =========================
+
+    if (
+      !isPlainDate(fromDate) ||
+      !isPlainDate(toDate)
+    ) {
+      return res.status(400).json({
+        message:
+          "Valid servicing start and end dates are required.",
+      });
+    }
+
+    if (toDate < fromDate) {
+      return res.status(400).json({
+        message:
+          "Servicing end date cannot be earlier than the start date.",
+      });
+    }
+
+    // =========================
+    // Validate quantity
+    // =========================
+
+    const servicingQuantity =
+      Number(blockedQuantity);
+
+    if (
+      !Number.isInteger(
+        servicingQuantity
+      ) ||
+      servicingQuantity < 1
+    ) {
+      return res.status(400).json({
+        message:
+          "Servicing quantity must be at least 1.",
+      });
+    }
+
+    // =========================
+    // Find listing
+    // =========================
+
+    const listing =
+      await prisma.listing.findFirst({
+        where: {
+          id: listingId,
+          ...listingWhere(req),
+        },
+
+        select: {
+          id: true,
+          name: true,
+          quantity: true,
+        },
+      });
+
+    if (!listing) {
+      return res.status(404).json({
+        message:
+          "Listing not found.",
+      });
+    }
+
+    const totalQuantity =
+      Number(
+        listing.quantity || 0
+      );
+
+    if (
+      servicingQuantity >
+      totalQuantity
+    ) {
+      return res.status(400).json({
+        message:
+          `This listing only has ${totalQuantity} vehicle(s).`,
+      });
+    }
+
+    // =========================
+    // Build selected dates
+    // =========================
+
+    const dates = [];
+
+    for (
+      let current = fromDate;
+      current <= toDate;
+      current =
+        addPlainDateDays(
+          current,
+          1
+        )
+    ) {
+      dates.push(current);
+    }
+
+    const startDate =
+      new Date(
+        `${fromDate}T00:00:00+08:00`
+      );
+
+    const endExclusive =
+      new Date(
+        `${addPlainDateDays(
+          toDate,
+          1
+        )}T00:00:00+08:00`
+      );
+
+    // =========================
+    // Load current allocations
+    // =========================
+
+    const allocations =
+      await prisma
+        .listingAllocation
+        .findMany({
+          where: {
+            listingId,
+
+            date: {
+              gte:
+                new Date(
+                  `${fromDate}T00:00:00.000Z`
+                ),
+
+              lt:
+                new Date(
+                  `${addPlainDateDays(
+                    toDate,
+                    1
+                  )}T00:00:00.000Z`
+                ),
+            },
+          },
+        });
+
+    const allocationMap =
+      new Map(
+        allocations.map(
+          (allocation) => [
+            allocation.date
+              .toISOString()
+              .slice(0, 10),
+
+            allocation,
+          ]
+        )
+      );
+
+    // =========================
+    // Load bookings
+    // =========================
+
+    const bookings =
+      await prisma.booking.findMany({
+        where: {
+          listingId,
+
+          status: {
+            in:
+              ACTIVE_BOOKING_STATUSES,
+          },
+
+          pickupDate: {
+            lt: endExclusive,
+          },
+
+          returnDate: {
+            gt: startDate,
+          },
+        },
+
+        select: {
+          id: true,
+          bookingCode: true,
+          pickupDate: true,
+          returnDate: true,
+        },
+      });
+
+    // =========================
+    // Validate each day
+    // =========================
+
+    for (const date of dates) {
+      const allocation =
+        allocationMap.get(date);
+
+      const dailyCapacity =
+        Number(
+          allocation?.quantity ??
+            totalQuantity
+        );
+
+      const bookingCount =
+        bookings.filter(
+          (booking) =>
+            occupiedDates(
+              booking
+            ).includes(date)
+        ).length;
+
+      const remainingAfterServicing =
+        dailyCapacity -
+        servicingQuantity -
+        bookingCount;
+
+      if (
+        remainingAfterServicing < 0
+      ) {
+        return res.status(409).json({
+          message:
+            `Cannot service ${servicingQuantity} vehicle(s) on ${date}. ` +
+            `${bookingCount} vehicle(s) are already booked and only ${dailyCapacity} are available in the fleet.`,
+        });
+      }
+    }
+
+    // =========================
+    // Save servicing blocks
+    // =========================
+
+    const cleanNote =
+      String(
+        note ||
+          "Scheduled servicing"
+      ).trim() ||
+      "Scheduled servicing";
+
+    await prisma.$transaction(
+      dates.map((date) => {
+        const allocation =
+          allocationMap.get(date);
+
+        const dailyCapacity =
+          Number(
+            allocation?.quantity ??
+              totalQuantity
+          );
+
+        return prisma
+          .listingAllocation
+          .upsert({
+            where: {
+              listingId_date: {
+                listingId,
+
+                date:
+                  new Date(
+                    `${date}T00:00:00.000Z`
+                  ),
+              },
+            },
+
+            create: {
+              listingId,
+
+              date:
+                new Date(
+                  `${date}T00:00:00.000Z`
+                ),
+
+              blockedQuantity:
+                servicingQuantity,
+
+              isBlocked:
+                servicingQuantity >=
+                dailyCapacity,
+
+              note:
+                cleanNote,
+            },
+
+            update: {
+              blockedQuantity:
+                servicingQuantity,
+
+              isBlocked:
+                servicingQuantity >=
+                dailyCapacity,
+
+              note:
+                cleanNote,
+            },
+          });
+      })
+    );
+
+    res.json({
+      message:
+        "Servicing allocation saved successfully.",
+
+      listingId,
+
+      totalQuantity,
+
+      blockedQuantity:
+        servicingQuantity,
+
+      fromDate,
+      toDate,
+
+      blockedDates:
+        dates,
+
+      note:
+        cleanNote,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function unblockListingServicing(
+  req,
+  res,
+  next
+) {
+  try {
+    const listingId =
+      parseId(
+        req.params.id,
+        "listing id"
+      );
+
+    const {
+      fromDate,
+      toDate,
+    } = req.body;
+
+    if (
+      !isPlainDate(fromDate) ||
+      !isPlainDate(toDate)
+    ) {
+      return res.status(400).json({
+        message:
+          "Valid start and end dates are required.",
+      });
+    }
+
+    if (toDate < fromDate) {
+      return res.status(400).json({
+        message:
+          "End date cannot be earlier than the start date.",
+      });
+    }
+
+    const listing =
+      await prisma.listing.findFirst({
+        where: {
+          id: listingId,
+          ...listingWhere(req),
+        },
+
+        select: {
+          id: true,
+        },
+      });
+
+    if (!listing) {
+      return res.status(404).json({
+        message:
+          "Listing not found.",
+      });
+    }
+
+    const dates = [];
+
+    for (
+      let current = fromDate;
+      current <= toDate;
+      current =
+        addPlainDateDays(
+          current,
+          1
+        )
+    ) {
+      dates.push(current);
+    }
+
+    await prisma.$transaction(
+      dates.map((date) =>
+        prisma.listingAllocation.updateMany({
+          where: {
+            listingId,
+
+            date:
+              new Date(
+                `${date}T00:00:00.000Z`
+              ),
+          },
+
+          data: {
+            blockedQuantity: 0,
+            isBlocked: false,
+            note: null,
+          },
+        })
+      )
+    );
+
+    res.json({
+      message:
+        "Servicing block removed successfully.",
+
+      listingId,
+
+      unblockedDates:
+        dates,
+    });
   } catch (err) {
     next(err);
   }
