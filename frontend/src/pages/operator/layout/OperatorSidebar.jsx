@@ -17,6 +17,7 @@ import {
   CircleHelp,
   LogOut,
   UserRound,
+  BadgeCheck,
 } from "lucide-react";
 import { getUser as getStoredUser } from "../../../utils/session";
 
@@ -33,6 +34,12 @@ const links = [
     icon: <ClipboardList size={20} />,
     allowedAccess: ["OWNER", "STAFF"],
   },
+  {
+    to: "/operator/licence-verification",
+    label: "Licence Verification",
+    icon: <BadgeCheck size={20} />,
+    allowedAccess: ["OWNER", "STAFF"],
+  },                            
   {
     to: "/operator/returns",
     label: "Return Board",

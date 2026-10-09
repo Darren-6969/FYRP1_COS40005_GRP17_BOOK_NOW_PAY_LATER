@@ -105,6 +105,15 @@ export default function OperatorLayout() {
   const type = String(item.type || "").toUpperCase();
 
   if (
+  type.includes("LICENCE") ||
+  text
+    .toLowerCase()
+    .includes("driving licence")
+) {
+  return "/operator/licence-verification";
+}
+
+  if (
     type.includes("PAYMENT") ||
     text.toLowerCase().includes("payment")
   ) {

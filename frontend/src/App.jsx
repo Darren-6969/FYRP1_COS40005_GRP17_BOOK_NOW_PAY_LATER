@@ -53,6 +53,7 @@ import OperatorListingForm from "./pages/operator/OperatorListingForm";
 import OperatorBookingDetail from "./pages/operator/OperatorBookingDetail";
 import OperatorBranches from "./pages/operator/OperatorBranches";
 import OperatorPaymentVerification from "./pages/operator/OperatorPaymentVerification";
+import OperatorLicenceVerification from "./pages/operator/OperatorLicenceVerification";
 import OperatorBookingLog from "./pages/operator/OperatorBookingLog";
 import OperatorInvoices from "./pages/operator/OperatorInvoices";
 import OperatorSalesReport from "./pages/operator/OperatorSalesReport";
@@ -146,6 +147,11 @@ export default function App() {
                   <Route
                     path="bookings"
                     element={<OperatorBookings />}
+                  />
+
+                  <Route
+                    path="licence-verification"
+                    element={<OperatorLicenceVerification />}
                   />
 
                   <Route

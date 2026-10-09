@@ -277,6 +277,39 @@ updateBranchPoint(
     );
   },
 
+    /**
+   * Licence Verification
+   */
+
+  getLicenceQueue() {
+    return api.get(
+      "/licence-verification/queue"
+    );
+  },
+
+  downloadLicenceDocument(id) {
+    return api.get(
+      `/licence-verification/queue/${id}/document`,
+      {
+        responseType: "blob",
+      }
+    );
+  },
+
+  reviewLicenceDocument(
+    id,
+    decision,
+    reason = ""
+  ) {
+    return api.patch(
+      `/licence-verification/queue/${id}/review`,
+      {
+        decision,
+        reason,
+      }
+    );
+  },
+
   /**
    * Payments
    */
