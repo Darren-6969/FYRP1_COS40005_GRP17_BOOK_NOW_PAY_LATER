@@ -87,6 +87,12 @@ function includeBookingRelations() {
       },
     },
     payment: true,
+    listing: {
+      select: {
+        id: true,
+        hourlyRate: true,
+      },
+    },
     refunds: {
       orderBy: {
         createdAt: "desc",

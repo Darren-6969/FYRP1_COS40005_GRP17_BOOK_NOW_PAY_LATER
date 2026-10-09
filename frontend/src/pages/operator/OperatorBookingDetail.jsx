@@ -517,6 +517,59 @@ export default function OperatorBookingDetail() {
             )}
           </strong>
         </div>
+        
+        {booking.returnedAt && (
+        <>
+          <div>
+            <span>
+              Actual Return
+            </span>
+
+            <strong>
+              {formatOperatorDateTime(
+                booking.returnedAt
+              )}
+            </strong>
+          </div>
+
+          <div>
+            <span>
+              Late Return
+            </span>
+
+            <strong>
+              {booking.lateReturnHours > 0
+                ? `${booking.lateReturnHours} chargeable hour${
+                    booking.lateReturnHours ===
+                    1
+                      ? ""
+                      : "s"
+                  }`
+                : "On time"}
+            </strong>
+          </div>
+
+          {Number(
+            booking.lateReturnCharge
+          ) > 0 && (
+            <div>
+              <span>
+                Late Return Charge
+              </span>
+
+              <strong>
+                {formatOperatorMoney(
+                  booking.lateReturnCharge
+                )}
+                {" · "}
+                {booking.lateReturnPaidAt
+                  ? "Paid at counter"
+                  : "Payment pending"}
+              </strong>
+            </div>
+          )}
+        </>
+      )}
 
         <div>
           <span>
@@ -1381,15 +1434,23 @@ function ReturnModal({
   const exactLateMinutes =
     lateMinutes % 60;
 
-  const hourlyRateSen =
-    Number(
-      booking.pricingSnapshot
-        ?.rateCard
-        ?.hourlySen || 0
-    );
+  const snapshotHourlyRateSen =
+  Number(
+    booking.pricingSnapshot
+      ?.rateCard
+      ?.hourlySen || 0
+  );
 
-  const hourlyRate =
-    hourlyRateSen / 100;
+const listingHourlyRate =
+  Number(
+    booking.listing
+      ?.hourlyRate || 0
+  );
+
+const hourlyRate =
+  snapshotHourlyRateSen > 0
+    ? snapshotHourlyRateSen / 100
+    : listingHourlyRate;
 
   const lateReturnCharge =
     Number(
