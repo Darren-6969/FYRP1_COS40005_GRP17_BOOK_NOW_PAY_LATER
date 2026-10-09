@@ -974,17 +974,180 @@ export async function getOperatorDashboard(req, res, next) {
         orderBy: { createdAt: "desc" },
         take: 6,
       }),
-      req.user.operatorId && req.user.operatorAccessLevel === "OWNER"
+      req.user.operatorId
         ? prisma.operator.findUnique({
-            where: { id: req.user.operatorId },
+            where: {
+              id: req.user.operatorId,
+            },
+
             select: {
+              id: true,
+              companyName: true,
+              status: true,
+
+              subscriptionPlan: true,
+              subscriptionStartedAt: true,
+              subscriptionEndsAt: true,
+
+              createdAt: true,
+
               stripeAccountId: true,
               stripeOnboardingStatus: true,
               stripeRequirements: true,
+
+              subscriptionUpgradeRequests: {
+                where: {
+                  status: "PENDING",
+                },
+
+                orderBy: {
+                  createdAt: "desc",
+                },
+
+                take: 1,
+
+                select: {
+                  id: true,
+                  currentPlan: true,
+                  requestedPlan: true,
+                  status: true,
+                  note: true,
+                  createdAt: true,
+                },
+              },
             },
           })
         : null,
     ]);
+
+    let subscription = null;
+
+if (operator) {
+  const platformSettings =
+    await getPlatformSettings();
+
+  const plan =
+    String(
+      operator.subscriptionPlan ||
+        "FREE"
+    ).toUpperCase();
+
+  const tier =
+    platformSettings
+      .subscriptionTiers?.[plan] ||
+    {};
+
+  const listingLimit =
+    getListingLimit(
+      plan,
+      platformSettings
+        .subscriptionTiers
+    );
+
+  const listingsUsed =
+    await prisma.listing.count({
+      where: {
+        operatorId:
+          operator.id,
+
+        status:
+          "PUBLISHED",
+      },
+    });
+
+
+  // Existing operators created before
+  let startedAt =
+    operator.subscriptionStartedAt;
+
+      let endsAt =
+        operator.subscriptionEndsAt;
+
+      const termDays =
+        tier.termDays == null
+          ? null
+          : Number(
+              tier.termDays
+            );
+
+
+      // Initialise the term only once.
+      if (!startedAt) {
+        startedAt =
+          new Date();
+
+        if (
+          Number.isFinite(
+            termDays
+          ) &&
+          termDays > 0
+        ) {
+          endsAt =
+            new Date(
+              startedAt.getTime() +
+                termDays *
+                  24 *
+                  60 *
+                  60 *
+                  1000
+            );
+        }
+
+        await prisma.operator.update({
+          where: {
+            id:
+              operator.id,
+          },
+
+          data: {
+            subscriptionStartedAt:
+              startedAt,
+
+            subscriptionEndsAt:
+              endsAt,
+          },
+        });
+      }
+
+
+      subscription = {
+        plan,
+
+        label:
+          tier.label ||
+          plan,
+
+        listingLimit,
+
+        listingsUsed,
+
+        remaining:
+          Math.max(
+            0,
+            listingLimit -
+              listingsUsed
+          ),
+
+        startedAt,
+
+        endsAt,
+
+        termDays,
+
+        activityStatus:
+          operator.status,
+
+        canRequestUpgrade:
+          req.user
+            .operatorAccessLevel ===
+          "OWNER",
+
+        pendingUpgradeRequest:
+          operator
+            .subscriptionUpgradeRequests?.[0] ||
+          null,
+      };
+    }
 
     const paidBookings = allBookings.filter(
       (booking) =>
@@ -1012,20 +1175,494 @@ export async function getOperatorDashboard(req, res, next) {
 
     res.json({
       summary,
-      recentBookings: recentBookings.map(mapBooking),
+
+      subscription,
+
+      recentBookings:
+        recentBookings.map(
+          mapBooking
+        ),
+
       notifications,
-      stripeConnect: operator
-        ? {
-            configured: Boolean(operator.stripeAccountId),
-            onboardingStatus: operator.stripeOnboardingStatus,
-            requirements: operator.stripeRequirements || {
-              currentlyDue: [],
-              pastDue: [],
-              pendingVerification: [],
-              errors: [],
+
+      stripeConnect:
+        operator &&
+        req.user
+          .operatorAccessLevel ===
+          "OWNER"
+          ? {
+              configured: Boolean(
+                operator.stripeAccountId
+              ),
+
+              onboardingStatus:
+                operator.stripeOnboardingStatus,
+
+              requirements:
+                operator.stripeRequirements || {
+                  currentlyDue: [],
+                  pastDue: [],
+                  pendingVerification: [],
+                  errors: [],
+                },
+            }
+          : null,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function requestSubscriptionUpgrade(
+  req,
+  res,
+  next
+) {
+  try {
+    if (
+      !req.user?.operatorId ||
+      req.user?.operatorAccessLevel !==
+        "OWNER"
+    ) {
+      return res.status(403).json({
+        message:
+          "Only the operator owner can request a subscription upgrade.",
+      });
+    }
+
+    const requestedPlan =
+      String(
+        req.body.requestedPlan || ""
+      ).toUpperCase();
+
+    if (
+      ![
+        "BASIC",
+        "PREMIUM",
+      ].includes(requestedPlan)
+    ) {
+      return res.status(400).json({
+        message:
+          "Requested plan must be BASIC or PREMIUM.",
+      });
+    }
+
+    const operator =
+      await prisma.operator.findUnique({
+        where: {
+          id: req.user.operatorId,
+        },
+
+        select: {
+          id: true,
+          companyName: true,
+          subscriptionPlan: true,
+
+          subscriptionUpgradeRequests: {
+            where: {
+              status: "PENDING",
             },
+
+            take: 1,
+          },
+        },
+      });
+
+    if (!operator) {
+      return res.status(404).json({
+        message:
+          "Operator not found.",
+      });
+    }
+
+    const currentPlan =
+      String(
+        operator.subscriptionPlan
+      ).toUpperCase();
+
+    const planLevel = {
+      FREE: 1,
+      BASIC: 2,
+      PREMIUM: 3,
+    };
+
+    if (
+      planLevel[requestedPlan] <=
+      planLevel[currentPlan]
+    ) {
+      return res.status(400).json({
+        message:
+          "Requested plan must be higher than your current plan.",
+      });
+    }
+
+    if (
+      operator
+        .subscriptionUpgradeRequests
+        .length > 0
+    ) {
+      return res.status(409).json({
+        message:
+          "You already have a pending upgrade request.",
+      });
+    }
+
+    const request =
+      await prisma
+        .subscriptionUpgradeRequest
+        .create({
+          data: {
+            operatorId:
+              operator.id,
+
+            currentPlan,
+
+            requestedPlan,
+
+            status:
+              "PENDING",
+          },
+        });
+
+    await createAuditLog({
+      req,
+
+      action:
+        "SUBSCRIPTION_UPGRADE_REQUESTED",
+
+      entityType:
+        "SubscriptionUpgradeRequest",
+
+      entityId:
+        request.id,
+
+      before: {
+        subscriptionPlan:
+          currentPlan,
+      },
+
+      after: {
+        requestedPlan,
+        status:
+          "PENDING",
+      },
+
+      details: {
+        operatorId:
+          operator.id,
+
+        companyName:
+          operator.companyName,
+      },
+    });
+
+    res.status(201).json({
+      message:
+        "Subscription upgrade request submitted successfully.",
+
+      request,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getSubscriptionUpgradeRequests(
+  req,
+  res,
+  next
+) {
+  try {
+    const status = String(
+      req.query.status || "PENDING"
+    ).toUpperCase();
+
+    const allowedStatuses = [
+      "PENDING",
+      "APPROVED",
+      "REJECTED",
+      "ALL",
+    ];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        message:
+          "Invalid upgrade request status.",
+      });
+    }
+
+    const requests =
+      await prisma.subscriptionUpgradeRequest.findMany({
+        where:
+          status === "ALL"
+            ? {}
+            : {
+                status,
+              },
+
+        include: {
+          operator: {
+            select: {
+              id: true,
+              operatorCode: true,
+              companyName: true,
+              email: true,
+              status: true,
+              subscriptionPlan: true,
+            },
+          },
+        },
+
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+    res.json({
+      requests,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function reviewSubscriptionUpgradeRequest(
+  req,
+  res,
+  next
+) {
+  try {
+    const requestId = parseId(
+      req.params.id,
+      "subscription upgrade request id"
+    );
+
+    const decision = String(
+      req.body.decision || ""
+    ).toUpperCase();
+
+    const note = String(
+      req.body.note || ""
+    ).trim();
+
+    if (
+      ![
+        "APPROVED",
+        "REJECTED",
+      ].includes(decision)
+    ) {
+      return res.status(400).json({
+        message:
+          "Decision must be APPROVED or REJECTED.",
+      });
+    }
+
+    const upgradeRequest =
+      await prisma.subscriptionUpgradeRequest.findUnique({
+        where: {
+          id: requestId,
+        },
+
+        include: {
+          operator: true,
+        },
+      });
+
+    if (!upgradeRequest) {
+      return res.status(404).json({
+        message:
+          "Subscription upgrade request not found.",
+      });
+    }
+
+    if (
+      upgradeRequest.status !==
+      "PENDING"
+    ) {
+      return res.status(409).json({
+        message:
+          "This upgrade request has already been reviewed.",
+      });
+    }
+
+    const platformSettings =
+      await getPlatformSettings();
+
+    const requestedPlan =
+      upgradeRequest.requestedPlan;
+
+    const tier =
+      platformSettings
+        .subscriptionTiers?.[
+          requestedPlan
+        ] || {};
+
+    const now = new Date();
+
+    const termDays =
+      tier.termDays == null
+        ? null
+        : Number(
+            tier.termDays
+          );
+
+    let subscriptionEndsAt =
+      null;
+
+    if (
+      decision === "APPROVED" &&
+      Number.isFinite(termDays) &&
+      termDays > 0
+    ) {
+      subscriptionEndsAt =
+        new Date(
+          now.getTime() +
+            termDays *
+              24 *
+              60 *
+              60 *
+              1000
+        );
+    }
+
+    const result =
+      await prisma.$transaction(
+        async (tx) => {
+          const currentRequest =
+            await tx
+              .subscriptionUpgradeRequest
+              .findUnique({
+                where: {
+                  id: requestId,
+                },
+              });
+
+          if (
+            !currentRequest ||
+            currentRequest.status !==
+              "PENDING"
+          ) {
+            const error =
+              new Error(
+                "This upgrade request has already been reviewed."
+              );
+
+            error.statusCode = 409;
+
+            throw error;
           }
-        : null,
+
+          let operator =
+            upgradeRequest.operator;
+
+          if (
+            decision ===
+            "APPROVED"
+          ) {
+            operator =
+              await tx.operator.update({
+                where: {
+                  id:
+                    upgradeRequest.operatorId,
+                },
+
+                data: {
+                  subscriptionPlan:
+                    requestedPlan,
+
+                  subscriptionStartedAt:
+                    now,
+
+                  subscriptionEndsAt,
+                },
+              });
+          }
+
+          const reviewedRequest =
+            await tx
+              .subscriptionUpgradeRequest
+              .update({
+                where: {
+                  id: requestId,
+                },
+
+                data: {
+                  status:
+                    decision,
+
+                  reviewedAt:
+                    now,
+
+                  note:
+                    note || null,
+                },
+              });
+
+          return {
+            operator,
+            request:
+              reviewedRequest,
+          };
+        }
+      );
+
+    await createAuditLog({
+      req,
+
+      action:
+        decision === "APPROVED"
+          ? "SUBSCRIPTION_UPGRADE_APPROVED"
+          : "SUBSCRIPTION_UPGRADE_REJECTED",
+
+      entityType:
+        "SubscriptionUpgradeRequest",
+
+      entityId:
+        requestId,
+
+      before: {
+        status: "PENDING",
+
+        subscriptionPlan:
+          upgradeRequest.operator
+            .subscriptionPlan,
+      },
+
+      after: {
+        status:
+          decision,
+
+        subscriptionPlan:
+          result.operator
+            .subscriptionPlan,
+      },
+
+      details: {
+        operatorId:
+          upgradeRequest.operatorId,
+
+        companyName:
+          upgradeRequest.operator
+            .companyName,
+
+        requestedPlan,
+
+        note:
+          note || null,
+      },
+    });
+
+    res.json({
+      message:
+        decision === "APPROVED"
+          ? `${upgradeRequest.operator.companyName} subscription upgraded to ${requestedPlan}.`
+          : `${upgradeRequest.operator.companyName} upgrade request rejected.`,
+
+      request:
+        result.request,
+
+      operator:
+        result.operator,
     });
   } catch (err) {
     next(err);

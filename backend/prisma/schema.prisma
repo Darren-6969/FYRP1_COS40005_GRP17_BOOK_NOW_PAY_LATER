@@ -25,6 +25,12 @@ enum SubscriptionPlan {
   PREMIUM
 }
 
+enum SubscriptionUpgradeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum OperatorApplicationStatus {
   SUBMITTED
   UNDER_REVIEW
@@ -353,7 +359,9 @@ model Operator {
   logoUrl      String?
   status       CompanyStatus @default(ACTIVE)
 
-  subscriptionPlan SubscriptionPlan @default(FREE)
+  subscriptionPlan      SubscriptionPlan @default(FREE)
+  subscriptionStartedAt DateTime?
+  subscriptionEndsAt    DateTime?
 
   // Seller page (FR-CUST-007). The slug gives the operator a short link to
   // share (/o/<slug>); the rest is written by the operator.
@@ -384,11 +392,36 @@ model Operator {
   documents    OperatorDocument[]
   payouts      OperatorPayout[]
 
+  subscriptionUpgradeRequests SubscriptionUpgradeRequest[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([operatorCode])
   @@index([status])
+}
+
+model SubscriptionUpgradeRequest {
+  id Int @id @default(autoincrement())
+
+  operatorId Int
+  operator   Operator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+
+  currentPlan   SubscriptionPlan
+  requestedPlan SubscriptionPlan
+
+  status SubscriptionUpgradeRequestStatus @default(PENDING)
+
+  note String? @db.Text
+
+  reviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([operatorId])
+  @@index([operatorId, status])
+  @@index([createdAt])
 }
 
 model OperatorApplication {

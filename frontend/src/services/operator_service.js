@@ -18,6 +18,17 @@ export const operatorService = {
     return api.get("/operators/dashboard");
   },
 
+  requestSubscriptionUpgrade(
+    requestedPlan
+  ) {
+    return api.post(
+      "/operators/subscription-upgrade-request",
+      {
+        requestedPlan,
+      }
+    );
+  },
+
   getBookings(params = {}) {
     return api.get("/operators/bookings", { params });
   },

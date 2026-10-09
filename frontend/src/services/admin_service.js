@@ -55,6 +55,30 @@ export const createOperator = (payload) => api.post("/operators", payload);
 export const createOperatorUser = (operatorId, payload) => api.post(`/operators/${operatorId}/users`, payload);
 export const updateOperatorStatus = (id, status, reason) => api.patch(`/operators/${id}/status`, { status, reason });
 export const updateOperatorSubscriptionPlan =(id,subscriptionPlan) =>api.patch(`/operators/${id}/subscription-plan`,{subscriptionPlan,});
+export const getSubscriptionUpgradeRequests = (
+  status = "PENDING"
+) =>
+  api.get(
+    "/operators/subscription-upgrade-requests",
+    {
+      params: {
+        status,
+      },
+    }
+  );
+
+export const reviewSubscriptionUpgradeRequest = (
+  id,
+  decision,
+  note = ""
+) =>
+  api.patch(
+    `/operators/subscription-upgrade-requests/${id}/review`,
+    {
+      decision,
+      note,
+    }
+  );
 export const deleteOperator = (id) => api.delete(`/operators/${id}`);
 /// Update operator user status (ACTIVE, SUSPENDED)
 export const updateOperatorUserStatus = (operatorId, userId, status, reason) => api.patch(`/operators/${operatorId}/users/${userId}/status`, { status, reason });

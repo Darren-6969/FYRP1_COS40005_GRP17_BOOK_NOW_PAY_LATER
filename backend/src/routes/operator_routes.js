@@ -5,12 +5,15 @@ import {
   createOperatorUser,
   updateOperatorUserStatus,
   updateOperatorSubscriptionPlan,
+  getSubscriptionUpgradeRequests,
+  reviewSubscriptionUpgradeRequest,
   resetOperatorUser,
   deleteOperatorUser,
   getOperators,
   updateOperatorStatus,
   deleteOperator,
   getOperatorDashboard,
+  requestSubscriptionUpgrade,
   getOperatorBookings,
   getOperatorSettlements,
   exportOperatorSettlementsCsv,
@@ -126,6 +129,8 @@ router.get("/", ...masterOnly, getOperators);
 router.get("/applications", ...masterOnly, getOperatorApplications);
 router.patch("/applications/:id/review", ...masterOnly, reviewOperatorApplication);
 router.get("/applications/documents/:documentId", ...masterOnly, downloadOperatorDocument);
+router.get("/subscription-upgrade-requests", ...masterOnly, getSubscriptionUpgradeRequests);
+router.patch("/subscription-upgrade-requests/:id/review", ...masterOnly, reviewSubscriptionUpgradeRequest);
 router.patch("/:id/subscription-plan", ...masterOnly, updateOperatorSubscriptionPlan);
 router.patch("/:id/status", ...masterOnly, updateOperatorStatus);
 router.delete("/:id", ...masterOnly, deleteOperator);
@@ -141,6 +146,8 @@ router.patch("/bookings/:id/refunds/:refundId/complete",...ownerOnlyAccess,compl
  * STAFF: allowed, but dashboard data should ideally be limited in controller/frontend
  */
 router.get("/dashboard", ...ownerOrStaffAccess, getOperatorDashboard);
+
+router.post("/subscription-upgrade-request", ...ownerOnlyAccess, requestSubscriptionUpgrade);
 
 /**
  * BOOKING OPERATIONS
