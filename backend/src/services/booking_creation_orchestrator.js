@@ -113,8 +113,8 @@ export async function createBookingOrchestrator({
         discountAmount: "0.00",
         totalAmount,
         creditTier: customerTier,
-        paymentDeadline: schedule.find((entry) => entry.type === "PAYMENT")?.dueAt || null,
-        status: "PENDING_PAYMENT",
+        paymentDeadline: null,
+        status: "PENDING",
         pricingSnapshot: {
           version: 2,
           currency: "MYR",
@@ -176,7 +176,7 @@ export async function createBookingOrchestrator({
         bookingId: created.id,
         actorId: customerId,
         oldStatus: null,
-        newStatus: "PENDING_PAYMENT",
+        newStatus: "PENDING",
         remark: "Booking created by customer.",
       },
     });

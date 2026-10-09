@@ -155,10 +155,10 @@ export async function createCarBooking(req, res, next) {
     Promise.allSettled([
       notifyCustomerByBooking({
         booking,
-        title: "Booking confirmed",
-        message: `Your booking ${booking.bookingCode} is confirmed and your payment schedule is ready.`,
-        type: "BOOKING_CONFIRMED",
-        emailSubject: `Booking Confirmed - ${booking.bookingCode}`,
+        title: "Booking request sent",
+        message: `Your booking request ${booking.bookingCode} has been submitted and is waiting for operator approval.`,
+        type: "BOOKING_REQUEST_RECEIVED",
+        emailSubject: `Booking Request Sent - ${booking.bookingCode}`,
         emailHtml: bookingRequestReceivedTemplate({
           booking,
           customerUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`,
@@ -166,10 +166,10 @@ export async function createCarBooking(req, res, next) {
       }),
       notifyOperatorUsersByBooking({
         booking,
-        title: "New confirmed booking",
-        message: `${booking.bookingCode} is confirmed and payment is pending.`,
-        type: "BOOKING_CONFIRMED",
-        emailSubject: `New Confirmed Booking - ${booking.bookingCode}`,
+        title: "New booking request",
+        message: `${booking.bookingCode} requires operator review and approval.`,
+        type: "BOOKING_SUBMITTED",
+        emailSubject: `New Booking Request - ${booking.bookingCode}`,
         emailHtml: bookingSubmittedTemplate({ booking, operatorUrl }),
       }),
     ]).then((results) =>
