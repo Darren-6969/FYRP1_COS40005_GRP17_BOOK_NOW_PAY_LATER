@@ -4,6 +4,11 @@ import { getUser as getStoredUser } from "../utils/session";
 export default function OperatorAccessRoute({ allowedAccess = [] }) {
   const user = getStoredUser();
 
+console.log(
+  "OPERATOR ACCESS CHECK:",
+  user
+);
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }

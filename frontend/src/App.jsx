@@ -48,6 +48,7 @@ import OperatorLayout from "./pages/operator/layout/OperatorLayout";
 import OperatorDashboard from "./pages/operator/OperatorDashboard";
 import OperatorProfile from "./pages/operator/OperatorProfile";
 import OperatorBookings from "./pages/operator/OperatorBookings";
+import OperatorReturnBoard from "./pages/operator/OperatorReturnBoard";
 import OperatorListings from "./pages/operator/OperatorListings";
 import OperatorListingForm from "./pages/operator/OperatorListingForm";
 import OperatorBookingDetail from "./pages/operator/OperatorBookingDetail";
@@ -147,6 +148,11 @@ export default function App() {
                   <Route
                     path="bookings"
                     element={<OperatorBookings />}
+                  />
+
+                  <Route
+                    path="returns"
+                    element={<OperatorReturnBoard />}
                   />
 
                   <Route

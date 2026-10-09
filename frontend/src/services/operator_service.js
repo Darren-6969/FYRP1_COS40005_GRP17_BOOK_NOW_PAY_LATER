@@ -203,9 +203,13 @@ updateBranchPoint(
     );
   },
 
-  returnBooking(id) {
+  returnBooking(
+    id,
+    payload = {}
+  ) {
     return api.patch(
-      `/operators/bookings/${id}/return`
+      `/operators/bookings/${id}/return`,
+      payload
     );
   },
 

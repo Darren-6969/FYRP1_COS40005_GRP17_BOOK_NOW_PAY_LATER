@@ -155,6 +155,11 @@ function mapBooking(booking) {
     totalAmount:
       toNumber(booking.totalAmount),
 
+    lateReturnCharge:
+      toNumber(
+        booking.lateReturnCharge
+      ),
+
     addons:
       (booking.addons || []).map(
         (addon) => ({
@@ -1555,15 +1560,14 @@ export async function returnBooking(
 
     if (!booking) {
       return res.status(404).json({
-        message: "Booking not found",
+        message:
+          "Booking not found",
       });
     }
 
-    /*
-     * Return is only available after handover.
-     */
     if (
-      booking.status !== "IN_PROGRESS"
+      booking.status !==
+      "IN_PROGRESS"
     ) {
       return res.status(400).json({
         message:
@@ -1571,19 +1575,202 @@ export async function returnBooking(
       });
     }
 
-    const updatedBooking =
-      await prisma.booking.update({
-        where: {
-          id: booking.id,
-        },
-
-        data: {
-          status: "COMPLETED",
-          serviceResolvedAt: new Date(),
-        },
-
-        include: includeBookingRelations(),
+    if (!booking.returnDate) {
+      return res.status(400).json({
+        message:
+          "This booking does not have a scheduled return time.",
       });
+    }
+
+    // Operator can submit the actual
+    // return time. If omitted, use now.
+    const actualReturnedAt =
+      req.body?.actualReturnedAt
+        ? parseMalaysiaLocalDateTime(
+            req.body.actualReturnedAt
+          )
+        : new Date();
+
+    if (
+      !actualReturnedAt ||
+      Number.isNaN(
+        actualReturnedAt.getTime()
+      )
+    )
+    
+    {
+      return res.status(400).json({
+        message:
+          "Actual return time is invalid.",
+      });
+    }
+
+    const scheduledReturn =
+      new Date(
+        booking.returnDate
+      );
+
+    // Do not accept an actual return
+    // before the vehicle was handed over.
+    if (
+      booking.pickedUpAt &&
+      actualReturnedAt <
+        new Date(
+          booking.pickedUpAt
+        )
+    ) {
+      return res.status(400).json({
+        message:
+          "Actual return time cannot be earlier than the handover time.",
+      });
+    }
+
+    const lateMilliseconds =
+      Math.max(
+        0,
+        actualReturnedAt.getTime() -
+          scheduledReturn.getTime()
+      );
+
+    // Any started late hour is charged
+    // as one whole hour.
+    const lateReturnHours =
+      lateMilliseconds > 0
+        ? Math.ceil(
+            lateMilliseconds /
+              (60 * 60 * 1000)
+          )
+        : 0;
+
+    let hourlyRate = 0;
+
+    if (lateReturnHours > 0) {
+      const snapshotHourlySen =
+        Number(
+          booking.pricingSnapshot
+            ?.rateCard
+            ?.hourlySen || 0
+        );
+
+      // Prefer the hourly rate that was
+      // quoted when the booking was created.
+      if (snapshotHourlySen > 0) {
+        hourlyRate =
+          snapshotHourlySen / 100;
+      } else {
+        // Fallback for older bookings that
+        // do not have a pricing snapshot.
+        if (!booking.listingId) {
+          return res.status(400).json({
+            message:
+              "Cannot calculate the late return charge because this booking has no vehicle listing.",
+          });
+        }
+
+        const listing =
+          await prisma.listing.findUnique({
+            where: {
+              id: booking.listingId,
+            },
+
+            select: {
+              hourlyRate: true,
+            },
+          });
+
+        hourlyRate =
+          Number(
+            listing?.hourlyRate || 0
+          );
+      }
+
+      if (
+        !Number.isFinite(hourlyRate) ||
+        hourlyRate <= 0
+      ) {
+        return res.status(400).json({
+          message:
+            "This booking does not have a valid hourly rate for late-return charging.",
+        });
+      }
+    }
+
+    const lateReturnCharge =
+      Number(
+        (
+          lateReturnHours *
+          hourlyRate
+        ).toFixed(2)
+      );
+
+    const counterPaymentReceived =
+      req.body
+        ?.counterPaymentReceived ===
+      true;
+
+    if (
+      lateReturnCharge > 0 &&
+      !counterPaymentReceived
+    ) {
+      return res.status(400).json({
+        message:
+          "Confirm that the late return charge has been paid at the counter before completing the return.",
+      });
+    }
+
+    const now =
+      new Date();
+
+    const updatedBooking =
+      await prisma.$transaction(
+        async (tx) => {
+          await transitionBookingStatus({
+            bookingId:
+              booking.id,
+
+            newStatus:
+              "COMPLETED",
+
+            actorId:
+              req.user.id,
+
+            remark:
+              lateReturnHours > 0
+                ? `Vehicle returned ${lateReturnHours} chargeable hour(s) late.`
+                : "Vehicle returned on time.",
+
+            extraData: {
+              returnedAt:
+                actualReturnedAt,
+
+              serviceResolvedAt:
+                now,
+
+              lateReturnHours,
+
+              lateReturnCharge,
+
+              lateReturnPaidAt:
+                lateReturnCharge > 0 &&
+                counterPaymentReceived
+                  ? now
+                  : null,
+            },
+
+            database:
+              tx,
+          });
+
+          return tx.booking.findUnique({
+            where: {
+              id: booking.id,
+            },
+
+            include:
+              includeBookingRelations(),
+          });
+        }
+      );
 
     await createAuditLog({
       req,
@@ -1591,7 +1778,8 @@ export async function returnBooking(
       action:
         "BOOKING_RETURN_COMPLETED",
 
-      entityType: "Booking",
+      entityType:
+        "Booking",
 
       entityId:
         booking.id,
@@ -1603,20 +1791,47 @@ export async function returnBooking(
         status:
           "COMPLETED",
 
-        returnedAt:
-          new Date(),
+        scheduledReturnAt:
+          scheduledReturn,
+
+        actualReturnedAt,
+
+        lateReturnHours,
+
+        hourlyRate,
+
+        lateReturnCharge,
+
+        paymentMethod:
+          lateReturnCharge > 0
+            ? "PAY_AT_COUNTER"
+            : null,
+
+        counterPaymentReceived:
+          lateReturnCharge > 0
+            ? counterPaymentReceived
+            : null,
       },
     });
 
     const customerUrl = `${
       process.env.FRONTEND_URL ||
       "http://localhost:5173"
-    }/customer/bookings/${booking.id}`;
+    }/customer/bookings/${
+      booking.id
+    }`;
 
     const config =
       await getOperatorEmailConfig(
         updatedBooking.operatorId
       );
+
+    const lateMessage =
+      lateReturnCharge > 0
+        ? ` A late return charge of RM${lateReturnCharge.toFixed(
+            2
+          )} was recorded and is paid at the counter.`
+        : "";
 
     await createCustomerNotification({
       booking:
@@ -1625,18 +1840,20 @@ export async function returnBooking(
       title:
         "Booking completed",
 
-      message: `Your booking ${
-        updatedBooking.bookingCode ||
-        updatedBooking.id
-      } has been returned and completed.`,
+      message:
+        `Your booking ${
+          updatedBooking.bookingCode ||
+          updatedBooking.id
+        } has been returned and completed.${lateMessage}`,
 
       type:
         "BOOKING_COMPLETED",
 
-      emailSubject: `Booking Completed - ${
-        updatedBooking.bookingCode ||
-        updatedBooking.id
-      }`,
+      emailSubject:
+        `Booking Completed - ${
+          updatedBooking.bookingCode ||
+          updatedBooking.id
+        }`,
 
       emailHtml:
         bookingStatusTemplate({
@@ -1649,10 +1866,12 @@ export async function returnBooking(
           customerUrl,
 
           bookingCompletedEmailText:
-            config?.bookingCompletedEmailText,
+            config
+              ?.bookingCompletedEmailText,
 
           emailFooterText:
-            config?.emailFooterText,
+            config
+              ?.emailFooterText,
         }),
     });
 
@@ -1661,7 +1880,38 @@ export async function returnBooking(
         "Booking return completed successfully",
 
       booking:
-        mapBooking(updatedBooking),
+        mapBooking(
+          updatedBooking
+        ),
+
+      returnSummary: {
+        scheduledReturnAt:
+          scheduledReturn,
+
+        actualReturnedAt,
+
+        late:
+          lateReturnHours > 0,
+
+        lateReturnHours,
+
+        hourlyRate,
+
+        lateReturnCharge,
+
+        paymentMethod:
+          lateReturnCharge > 0
+            ? "PAY_AT_COUNTER"
+            : null,
+
+        counterPaymentReceived:
+          lateReturnCharge > 0
+            ? Boolean(
+                updatedBooking
+                  .lateReturnPaidAt
+              )
+            : null,
+      },
     });
   } catch (err) {
     next(err);

@@ -39,6 +39,9 @@ export default function OperatorBookingDetail() {
   const [error, setError] =
     useState("");
 
+  const [showReturn, setShowReturn] =
+    useState(false);
+
   // =========================================================
   // Load booking
   // =========================================================
@@ -120,34 +123,6 @@ export default function OperatorBookingDetail() {
       alert(
         err.response?.data?.message ||
           "Failed to hand over booking"
-      );
-    } finally {
-      setActionLoading("");
-    }
-  };
-
-  // =========================================================
-  // Return
-  // Backend/service will be added in Step 2
-  // =========================================================
-  const handleReturn = async () => {
-    try {
-      setActionLoading("return");
-
-      if (!operatorService.returnBooking) {
-        alert(
-          "Return backend API will be connected in the next step."
-        );
-        return;
-      }
-
-      await operatorService.returnBooking(id);
-
-      await loadBooking();
-    } catch (err) {
-      alert(
-        err.response?.data?.message ||
-          "Failed to complete vehicle return"
       );
     } finally {
       setActionLoading("");
@@ -1207,14 +1182,11 @@ export default function OperatorBookingDetail() {
             disabled={
               !!actionLoading
             }
-            onClick={
-              handleReturn
+            onClick={() =>
+              setShowReturn(true)
             }
           >
-            {actionLoading ===
-            "return"
-              ? "Processing Return..."
-              : "Complete Return"}
+            Record Return
           </button>
         )}
 
@@ -1319,6 +1291,16 @@ export default function OperatorBookingDetail() {
         />
       )}
 
+      {showReturn && (
+        <ReturnModal
+          booking={booking}
+          onClose={() =>
+            setShowReturn(false)
+          }
+          onDone={loadBooking}
+        />
+      )}
+
       {showRefund && (
         <RefundModal
           booking={booking}
@@ -1328,6 +1310,344 @@ export default function OperatorBookingDetail() {
           onDone={loadBooking}
         />
       )}
+    </div>
+  );
+}
+
+function ReturnModal({
+  booking,
+  onClose,
+  onDone,
+}) {
+  const [actualReturnedAt,
+    setActualReturnedAt] =
+    useState(
+      formatDatetimeLocal(
+        new Date()
+      )
+    );
+
+  const [
+    counterPaymentReceived,
+    setCounterPaymentReceived,
+  ] = useState(false);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const scheduledReturn =
+    booking.returnDate
+      ? new Date(
+          booking.returnDate
+        )
+      : null;
+
+  const actualReturn =
+    actualReturnedAt
+      ? new Date(
+          actualReturnedAt
+        )
+      : null;
+
+  const lateMilliseconds =
+    scheduledReturn &&
+    actualReturn
+      ? Math.max(
+          0,
+          actualReturn.getTime() -
+            scheduledReturn.getTime()
+        )
+      : 0;
+
+  const lateMinutes =
+    Math.floor(
+      lateMilliseconds /
+        (60 * 1000)
+    );
+
+  const lateHours =
+    lateMilliseconds > 0
+      ? Math.ceil(
+          lateMilliseconds /
+            (60 * 60 * 1000)
+        )
+      : 0;
+
+  const exactLateHours =
+    Math.floor(
+      lateMinutes / 60
+    );
+
+  const exactLateMinutes =
+    lateMinutes % 60;
+
+  const hourlyRateSen =
+    Number(
+      booking.pricingSnapshot
+        ?.rateCard
+        ?.hourlySen || 0
+    );
+
+  const hourlyRate =
+    hourlyRateSen / 100;
+
+  const lateReturnCharge =
+    Number(
+      (
+        lateHours *
+        hourlyRate
+      ).toFixed(2)
+    );
+
+  const isLate =
+    lateHours > 0;
+
+  const handleSubmit =
+    async () => {
+      if (!actualReturnedAt) {
+        alert(
+          "Please enter the actual return time."
+        );
+
+        return;
+      }
+
+      if (
+        isLate &&
+        !counterPaymentReceived
+      ) {
+        alert(
+          "Please confirm that the late return charge has been paid at the counter."
+        );
+
+        return;
+      }
+
+      const confirmed =
+        window.confirm(
+          isLate
+            ? `Complete this return and record ${formatOperatorMoney(
+                lateReturnCharge
+              )} as paid at the counter?`
+            : "Complete this vehicle return?"
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        await operatorService.returnBooking(
+          booking.id,
+          {
+            actualReturnedAt,
+
+            counterPaymentReceived:
+              isLate
+                ? counterPaymentReceived
+                : false,
+          }
+        );
+
+        await onDone();
+
+        onClose();
+      } catch (err) {
+        alert(
+          err.response?.data
+            ?.message ||
+            "Failed to complete vehicle return"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  return (
+    <div className="operator-modal-backdrop">
+      <div className="operator-modal">
+
+        <div className="operator-card-head">
+          <div>
+            <h2>
+              Record Vehicle Return
+            </h2>
+
+            <p>
+              Record the actual return
+              time for{" "}
+              {booking.bookingCode}.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+          >
+            ×
+          </button>
+        </div>
+
+
+        <div className="booking-clean-payment-lines">
+
+          <InfoRow
+            label="Scheduled Return"
+            value={
+              formatOperatorDateTime(
+                booking.returnDate
+              )
+            }
+          />
+
+          <InfoRow
+            label="Hourly Rate"
+            value={
+              hourlyRate > 0
+                ? `${formatOperatorMoney(
+                    hourlyRate
+                  )} / hour`
+                : "Not configured"
+            }
+          />
+
+        </div>
+
+
+        <label className="operator-field">
+          Actual Return Time *
+
+          <input
+            type="datetime-local"
+            value={
+              actualReturnedAt
+            }
+            onChange={(e) =>
+              setActualReturnedAt(
+                e.target.value
+              )
+            }
+          />
+        </label>
+
+
+        <div className="booking-clean-payment-lines">
+
+          <InfoRow
+            label="Late"
+            value={
+              isLate
+                ? `${exactLateHours}h ${exactLateMinutes}m`
+                : "No"
+            }
+          />
+
+          <InfoRow
+            label="Chargeable Hours"
+            value={
+              isLate
+                ? `${lateHours} hour${
+                    lateHours === 1
+                      ? ""
+                      : "s"
+                  }`
+                : "0 hours"
+            }
+          />
+
+          <InfoRow
+            label="Late Return Charge"
+            value={
+              formatOperatorMoney(
+                lateReturnCharge
+              )
+            }
+            strong
+          />
+
+          <InfoRow
+            label="Payment Method"
+            value={
+              isLate
+                ? "Pay at counter"
+                : "-"
+            }
+          />
+
+        </div>
+
+
+        {isLate && (
+          <div className="operator-field">
+            <label>
+              <input
+                type="checkbox"
+                checked={
+                  counterPaymentReceived
+                }
+                onChange={(e) =>
+                  setCounterPaymentReceived(
+                    e.target.checked
+                  )
+                }
+              />{" "}
+              Late return charge
+              received at counter
+            </label>
+          </div>
+        )}
+
+
+        {isLate && (
+          <p className="booking-clean-muted">
+            Any started late hour is
+            charged as one full hour.
+            This charge is collected at
+            the counter and is not added
+            to the BNPL payment balance.
+          </p>
+        )}
+
+
+        <div className="operator-modal-actions">
+
+          <button
+            type="button"
+            className="operator-secondary-btn"
+            onClick={onClose}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            className="operator-primary-btn"
+            onClick={
+              handleSubmit
+            }
+            disabled={
+              loading ||
+              (
+                isLate &&
+                (
+                  hourlyRate <= 0 ||
+                  !counterPaymentReceived
+                )
+              )
+            }
+          >
+            {loading
+              ? "Completing Return..."
+              : "Confirm Return"}
+          </button>
+
+        </div>
+
+      </div>
     </div>
   );
 }
