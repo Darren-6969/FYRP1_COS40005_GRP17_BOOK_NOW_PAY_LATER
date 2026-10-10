@@ -652,7 +652,7 @@ model Booking {
   channel BookingChannel @default(WEB)
 
   listingId Int?
-  listing   Listing? @relation(fields: [listingId], references: [id])
+  listing   Listing? @relation("BookingListing", fields: [listingId], references: [id])
 
   pickupPointId Int?
   pickupPoint   PickupPoint? @relation("BookingPickupPoint", fields: [pickupPointId], references: [id])
@@ -699,6 +699,13 @@ model Booking {
   alternativeSuggestedAt DateTime?
   alternativeUsed        Boolean   @default(false)
 
+  // Car bookings: the listing the operator suggested and the server's quote
+  // for it (same shape as pricingSnapshot). While the booking is
+  // ALTERNATIVE_SUGGESTED, the suggested car and dates hold the stock.
+  alternativeListingId       Int?
+  alternativeListing         Listing? @relation("BookingAlternativeListing", fields: [alternativeListingId], references: [id])
+  alternativePricingSnapshot Json?
+
   payment                 Payment?
   refunds                 Refund[]
   commissionLedgerEntries CommissionLedgerEntry[]
@@ -717,6 +724,7 @@ model Booking {
   @@index([createdAt, status])
   @@index([paymentDeadline])
   @@index([listingId, status])
+  @@index([alternativeListingId, status])
   @@index([pickupDate, returnDate])
   @@index([dropoffPointId])
 }
@@ -1220,7 +1228,9 @@ model Listing {
   images      ListingImage[]
   addons      ListingAddon[]
   allocations ListingAllocation[]
-  bookings    Booking[]
+  bookings    Booking[] @relation("BookingListing")
+
+  alternativeBookings Booking[] @relation("BookingAlternativeListing")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

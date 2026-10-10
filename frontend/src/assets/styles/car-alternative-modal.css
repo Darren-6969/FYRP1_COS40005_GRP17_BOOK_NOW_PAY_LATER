@@ -1,0 +1,688 @@
+/* Suggest another car modal (components/operator/CarAlternativeModal.jsx).
+   Desktop: split view. 720px and below: compact bottom sheet. */
+
+.cam-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.55);
+  box-sizing: border-box;
+}
+
+.cam-backdrop.is-sheet {
+  align-items: flex-end;
+  padding: 0;
+}
+
+.cam-dialog {
+  width: min(960px, 100%);
+  max-height: min(860px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+  outline: none;
+  animation: cam-in 180ms ease-out;
+}
+
+.cam-dialog.is-sheet {
+  width: 100%;
+  max-height: 92vh;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -12px 40px rgba(15, 23, 42, 0.25);
+  animation: cam-up 220ms ease-out;
+}
+
+@keyframes cam-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes cam-up {
+  from { transform: translateY(24px); opacity: 0.6; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cam-dialog,
+  .cam-dialog.is-sheet {
+    animation: none;
+  }
+}
+
+.cam-handle {
+  align-self: center;
+  width: 40px;
+  height: 5px;
+  margin-top: 10px;
+  border-radius: 5px;
+  background: #cbd5e1;
+}
+
+/* Header */
+
+.cam-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.cam-dialog.is-sheet .cam-header {
+  padding: 12px 16px 14px 20px;
+}
+
+.cam-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.cam-dialog.is-sheet .cam-header h2 {
+  font-size: 20px;
+}
+
+.cam-header p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #475569;
+}
+
+.cam-header strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.cam-close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+}
+
+.cam-dialog.is-sheet .cam-close {
+  border: 0;
+  background: #f1f5f9;
+}
+
+.cam-close:hover {
+  background: #f8fafc;
+}
+
+/* Body */
+
+.cam-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.cam-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.cam-dialog.is-sheet .cam-body {
+  flex: 1;
+  padding: 16px 20px;
+  gap: 18px;
+}
+
+.cam-aside {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #f8fafc;
+  border-left: 1px solid #e2e8f0;
+}
+
+.cam-aside-foot {
+  margin-top: auto;
+}
+
+.cam-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cam-label {
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.cam-fieldset > legend.cam-label {
+  margin-bottom: 10px;
+}
+
+.cam-muted,
+.cam-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.cam-error {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.cam-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+/* Car options */
+
+.cam-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cam-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.cam-option:hover {
+  border-color: #93c5fd;
+}
+
+.cam-option.is-selected {
+  border: 2px solid #2563eb;
+  padding: 11px 13px;
+  background: #eff6ff;
+}
+
+.cam-option.is-disabled {
+  cursor: not-allowed;
+  background: #f8fafc;
+}
+
+.cam-option.is-disabled:hover {
+  border-color: #e2e8f0;
+}
+
+.cam-option.is-disabled .cam-option-title,
+.cam-option.is-disabled .cam-rate {
+  color: #64748b;
+}
+
+.cam-option:has(input:focus-visible) {
+  outline: 3px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 2px;
+}
+
+.cam-thumb {
+  width: 64px;
+  height: 48px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.cam-option.is-selected .cam-thumb {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.cam-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cam-option-text,
+.cam-picker-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.cam-option-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.cam-option-meta {
+  font-size: 13px;
+  color: #475569;
+}
+
+.cam-option-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  text-align: right;
+}
+
+.cam-rate {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cam-rate span {
+  font-size: 13px;
+  font-weight: 400;
+  color: #475569;
+}
+
+.cam-radio {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  box-sizing: border-box;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+}
+
+.cam-radio.is-on {
+  border: 6px solid #2563eb;
+  background: #ffffff;
+}
+
+.cam-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cam-chip-free {
+  color: #047857;
+  background: #ecfdf5;
+}
+
+.cam-chip-busy {
+  color: #b45309;
+  background: #fffbeb;
+}
+
+/* Mobile car picker */
+
+.cam-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  font: inherit;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cam-picker.is-open {
+  border: 2px solid #2563eb;
+  padding: 0 13px;
+}
+
+.cam-dialog.is-sheet .cam-option {
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.cam-dialog.is-sheet .cam-option.is-selected {
+  padding: 9px 11px;
+}
+
+.cam-dialog.is-sheet .cam-option-title {
+  font-size: 15px;
+}
+
+/* Dates */
+
+.cam-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cam-dialog.is-sheet .cam-dates {
+  gap: 8px;
+}
+
+.cam-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.cam-field input {
+  height: 48px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.cam-dialog.is-sheet .cam-field input {
+  font-size: 14px;
+  padding: 0 10px;
+}
+
+/* Message */
+
+.cam-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cam-preset {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+}
+
+.cam-preset:hover {
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
+
+.cam-textarea {
+  resize: vertical;
+  min-height: 72px;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #0f172a;
+}
+
+.cam-field input:focus,
+.cam-textarea:focus,
+.cam-picker:focus-visible,
+.cam-btn:focus-visible,
+.cam-preset:focus-visible,
+.cam-close:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 1px;
+  border-color: #2563eb;
+}
+
+/* Price */
+
+.cam-price {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: opacity 150ms ease;
+}
+
+.cam-price.is-updating {
+  opacity: 0.6;
+}
+
+.cam-dialog.is-sheet .cam-price {
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  gap: 10px;
+}
+
+.cam-price-empty {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  font-size: 14px;
+  color: #475569;
+}
+
+.cam-price-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.cam-total {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.cam-dialog.is-sheet .cam-total {
+  font-size: 24px;
+}
+
+.cam-updating {
+  font-size: 12px;
+  color: #475569;
+}
+
+.cam-problems {
+  margin: 0;
+  padding: 10px 12px 10px 28px;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cam-lines {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.cam-lines.is-compact {
+  gap: 8px;
+  font-size: 13px;
+}
+
+.cam-lines > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cam-lines dt {
+  color: #475569;
+}
+
+.cam-lines dd {
+  margin: 0;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.cam-lines .cam-lines-split {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed #cbd5e1;
+}
+
+/* Footer */
+
+.cam-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px 16px;
+  padding: 16px 28px;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.cam-footer > .cam-muted:first-child {
+  flex: 1 1 320px;
+  margin-right: auto;
+}
+
+.cam-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.cam-dialog.is-sheet .cam-footer {
+  padding: 12px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.cam-dialog.is-sheet .cam-footer > p {
+  width: 100%;
+}
+
+.cam-dialog.is-sheet .cam-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 10px;
+}
+
+.cam-btn {
+  min-height: 48px;
+  padding: 0 22px;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, opacity 150ms ease;
+}
+
+.cam-dialog.is-sheet .cam-btn {
+  min-height: 52px;
+  border-radius: 14px;
+  padding: 0 12px;
+}
+
+.cam-btn-secondary {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.cam-btn-secondary:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.cam-btn-primary {
+  border: 0;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.cam-btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.cam-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Narrow desktops: stack the price under the form. */
+@media (max-width: 900px) and (min-width: 721px) {
+  .cam-split {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .cam-body,
+  .cam-aside {
+    overflow: visible;
+  }
+
+  .cam-aside {
+    border-left: 0;
+    border-top: 1px solid #e2e8f0;
+  }
+}

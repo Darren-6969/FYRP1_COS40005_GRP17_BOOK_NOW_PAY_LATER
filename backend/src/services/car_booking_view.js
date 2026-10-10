@@ -56,23 +56,48 @@ export function autoRejectsOnTimeout(booking) {
   return booking.operator?.configs?.[0]?.autoRejectInactiveBooking ?? true;
 }
 
+function mapListing(listing) {
+  return listing
+    ? {
+        id: listing.id,
+        name: listing.name,
+        make: listing.vehicleMake ?? null,
+        model: listing.vehicleModel ?? null,
+        modelYear: listing.modelYear ?? null,
+        transmission: listing.transmission ?? null,
+        seats: listing.seats ?? null,
+        imageUrl: listing.images?.[0]?.imageUrl ?? null,
+        branch: listing.branch ?? null,
+      }
+    : null;
+}
+
+// The operator's suggested car (Module 3), while it is on offer. Null when
+// nothing is suggested, and for suggestions made before alternatives were
+// real listings (those keep the free-text fields on the booking).
+function mapAlternative(booking) {
+  if (
+    booking.status !== "ALTERNATIVE_SUGGESTED" ||
+    !booking.alternativeListingId ||
+    !booking.alternativePricingSnapshot
+  ) {
+    return null;
+  }
+  return {
+    listing: mapListing(booking.alternativeListing),
+    pricing: booking.alternativePricingSnapshot,
+    pickupAt: booking.alternativePickupDate,
+    returnAt: booking.alternativeReturnDate,
+    reason: booking.alternativeReason ?? null,
+    suggestedAt: booking.alternativeSuggestedAt ?? null,
+  };
+}
+
 export function mapCarBooking(booking) {
   const listing = booking.listing;
   const details = booking.bookingDetails || {};
   return {
-    listing: listing
-      ? {
-          id: listing.id,
-          name: listing.name,
-          make: listing.vehicleMake ?? null,
-          model: listing.vehicleModel ?? null,
-          modelYear: listing.modelYear ?? null,
-          transmission: listing.transmission ?? null,
-          seats: listing.seats ?? null,
-          imageUrl: listing.images?.[0]?.imageUrl ?? null,
-          branch: listing.branch ?? null,
-        }
-      : null,
+    listing: mapListing(listing),
     pickupPoint: booking.pickupPoint ?? null,
     dropoffPoint: booking.dropoffPoint ?? null,
     requestedLocation: booking.requestedLocation ?? null,
@@ -87,5 +112,6 @@ export function mapCarBooking(booking) {
     chauffeur: details.chauffeur ?? null,
     responseDueAt: responseDueAt(booking),
     autoRejectOnTimeout: autoRejectsOnTimeout(booking),
+    alternative: mapAlternative(booking),
   };
 }

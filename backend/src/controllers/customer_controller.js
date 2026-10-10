@@ -26,6 +26,8 @@ import { enforceConcurrentExposureCap } from "../services/concurrent_exposure_se
 import { assertOperatorTakingBookings } from "../services/subscription_admin_service.js";
 import { transitionBookingStatus } from "../services/booking_status_service.js";
 import { carListingSelect, mapCarBooking } from "../services/car_booking_view.js";
+import { quoteAlternative } from "../services/car_requote_service.js";
+import { fromSen } from "../services/car_pricing_service.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -161,6 +163,9 @@ async function assertCustomerBooking(bookingId, customerId) {
       receipt: true,
       invoice: true,
       listing: {
+        select: carListingSelect(),
+      },
+      alternativeListing: {
         select: carListingSelect(),
       },
       pickupPoint: { select: { id: true, label: true, address: true, note: true } },
@@ -724,6 +729,91 @@ export async function getCustomerBookingActivity(req, res, next) {
   }
 }
 
+const BOOKING_PAYMENT_INCLUDE = {
+  customer: {
+    select: {
+      id: true,
+      userCode: true,
+      name: true,
+      email: true,
+    },
+  },
+  operator: true,
+  payment: true,
+  receipt: true,
+  invoice: true,
+};
+
+/*
+ * Car bookings (Module 3): the suggested car is re-quoted with its listing row
+ * locked. If it is no longer available, or its price changed since the offer,
+ * nothing is written. Otherwise the booking moves to the suggested car, its
+ * dates, points, add-ons and pricing snapshot, and the accept service then
+ * requests payment from the new snapshot.
+ */
+async function applyCarAlternative(req, booking) {
+  return prisma.$transaction(async (tx) => {
+    const quote = await quoteAlternative({
+      booking,
+      listingId: booking.alternativeListingId,
+      pickupAt: booking.alternativePickupDate || booking.pickupDate,
+      returnAt: booking.alternativeReturnDate || booking.returnDate,
+      db: tx,
+      lock: true,
+    });
+
+    if (quote.problems.length) {
+      return { problems: quote.problems };
+    }
+
+    // Price moved since the offer (the operator changed rates or settings):
+    // show the customer the new price before charging it.
+    if (Number(booking.alternativePricingSnapshot?.totalSen) !== quote.snapshot.totalSen) {
+      await tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          alternativePricingSnapshot: quote.snapshot,
+          alternativePrice: fromSen(quote.snapshot.totalSen),
+        },
+      });
+      return { priceChanged: true };
+    }
+
+    await tx.bookingAddon.deleteMany({
+      where: { bookingId: booking.id },
+    });
+
+    const updated = await tx.booking.update({
+      where: { id: booking.id },
+      data: {
+        ...quote.bookingData,
+        addons: {
+          create: quote.addonRows,
+        },
+      },
+      include: BOOKING_PAYMENT_INCLUDE,
+    });
+
+    await tx.auditLog.create({
+      data: {
+        userId: req.user.id,
+        action: "CUSTOMER_ACCEPTED_ALTERNATIVE",
+        entityType: "Booking",
+        entityId: String(booking.id),
+        details: {
+          previousListingId: booking.listingId,
+          alternativeListingId: booking.alternativeListingId,
+          alternativeServiceName: quote.listing.name,
+          totalSen: quote.snapshot.totalSen,
+          depositSen: quote.snapshot.depositSen,
+        },
+      },
+    });
+
+    return { updated };
+  }, { timeout: 15000 });
+}
+
 export async function acceptAlternativeBooking(req, res, next) {
   try {
     const booking = await assertCustomerBooking(
@@ -738,18 +828,47 @@ export async function acceptAlternativeBooking(req, res, next) {
       });
     }
 
-    if (!booking.alternativeServiceName) {
+    let alternativeAccepted = null;
+
+    if (booking.listingId && booking.alternativeListingId) {
+      const outcome = await applyCarAlternative(req, booking);
+
+      if (outcome.problems) {
+        const [first] = outcome.problems;
+        return res.status(409).json({
+          code: first.code,
+          message:
+            first.code === "LISTING_UNAVAILABLE"
+              ? "Sorry, this car has just been booked for these dates. You can decline the offer and book another car."
+              : first.message,
+          details: { problems: outcome.problems },
+        });
+      }
+
+      if (outcome.priceChanged) {
+        return res.status(409).json({
+          code: "ALTERNATIVE_PRICE_CHANGED",
+          message:
+            "The price of this car has changed since it was offered. Please review the new price and accept again.",
+        });
+      }
+
+      alternativeAccepted = outcome.updated;
+    }
+
+    if (!alternativeAccepted && !booking.alternativeServiceName) {
       return res.status(400).json({
         message:
           "No alternative booking details found.",
       });
     }
 
-    // 1. Apply the alternative details first.
+    // 1. Host bookings: apply the free-text alternative details first.
     // IMPORTANT: keep status as ALTERNATIVE_SUGGESTED
     // because acceptBookingAndRequestPayment()
     // accepts this status.
-    const alternativeAccepted =
+    if (!alternativeAccepted) {
+    alternativeAccepted =
       await prisma.$transaction(async (tx) => {
         const updated =
           await tx.booking.update({
@@ -819,6 +938,7 @@ export async function acceptAlternativeBooking(req, res, next) {
 
         return updated;
       });
+    }
 
     // 2. Create the payment schedule + invoice
     // and change booking to PENDING_PAYMENT.

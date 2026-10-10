@@ -1,5 +1,10 @@
 import prisma from "../config/db.js";
-import { addDays, fromSen, rateCardFor } from "./car_pricing_service.js";
+import { addDays } from "./car_pricing_service.js";
+import {
+  buildCarPricingSnapshot,
+  carBookingAddonRows,
+  carBookingAmounts,
+} from "./car_booking_snapshot.js";
 import { loadAvailability } from "./car_availability_service.js";
 import { enforceConcurrentExposureCap } from "./concurrent_exposure_service.js";
 import { isCreditTierPolicyEnabled } from "./platform_settings_service.js";
@@ -21,13 +26,11 @@ export async function createBookingOrchestrator({
   selection,
   location,
   bookingDetails,
-  chosenAddons,
   cdwId,
   platformSettings,
   customerTier,
   database = prisma,
 }) {
-  const totalAmount = fromSen(pricing.totalSen);
   // Exposure limits act only while the E17 tier policy is on.
   const tierPolicyOn = await isCreditTierPolicyEnabled(platformSettings, listing.operatorId);
 
@@ -78,67 +81,14 @@ export async function createBookingOrchestrator({
           : null,
         requestedLocation: selection.requestedLocation || null,
         quantity: 1,
-        rentalAmount: fromSen(pricing.rentalSen),
-        addonsAmount: fromSen(pricing.addOnsSen),
-        feesAmount:
-          fromSen(
-            pricing.overtimeSen +
-            (
-              pricing
-                .youngDriverSurchargeSen ||
-              0
-            ) +
-            pricing.pickupFeeSen +
-            pricing.dropoffFeeSen
-          ),
-        discountAmount: "0.00",
-        totalAmount,
+        ...carBookingAmounts(pricing),
         creditTier: customerTier,
         paymentDeadline: null,
         status: "PENDING",
-        pricingSnapshot: {
-          version: 2,
-          currency: "MYR",
-          unit: "sen",
-          rateCard: rateCardFor(listing),
-          hours: pricing.hours,
-          days: pricing.days,
-          rateLines: pricing.rateLines,
-          rentalSen: pricing.rentalSen,
-          nightHandovers: pricing.nightHandovers,
-          overtimeSen: pricing.overtimeSen,
-          driverAge:
-            pricing.driverAge ?? null,
-          youngDriverDailySurchargeSen:
-            pricing
-              .youngDriverDailySurchargeSen ||
-            0,
-          youngDriverSurchargeSen:
-            pricing
-              .youngDriverSurchargeSen ||
-            0,
-          depositPct: pricing.depositPct,
-          depositSen: pricing.depositSen,
-          addOnLines: pricing.addOnLines,
-          pickupFeeSen: pricing.pickupFeeSen,
-          dropoffFeeSen: pricing.dropoffFeeSen,
-          balanceSen: pricing.balanceSen,
-          totalSen: pricing.totalSen,
-          refundRule: pricing.refundRule,
-          pickupPoint: pricing.point,
-          dropoffPoint: pricing.dropoff,
-          requestedLocation: pricing.requestedLocation || null,
-        },
+        pricingSnapshot: buildCarPricingSnapshot(listing, pricing),
         bookingDetails,
         addons: {
-          create: pricing.addOnLines.map((line) => ({
-            listingAddonId: String(line.id) === String(cdwId) ? null : Number(line.id),
-            name: String(line.id) === String(cdwId) ? line.label : chosenAddons.get(line.id).name,
-            unit: line.unit === "per_day" ? "PER_DAY" : "PER_BOOKING",
-            unitPrice: fromSen(line.unitPriceSen),
-            quantity: line.qty,
-            totalPrice: fromSen(line.amountSen),
-          })),
+          create: carBookingAddonRows(pricing, cdwId),
         },
       },
     });

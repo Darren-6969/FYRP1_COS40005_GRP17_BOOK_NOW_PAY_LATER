@@ -11,6 +11,7 @@ import {
   createPaymentScheduleEntries,
 } from "./payment_schedule_entry_service.js";
 import { depositFor } from "./car_pricing_service.js";
+import { transitionBookingStatus } from "./booking_status_service.js";
 import { getDefaultCreditProfile } from "./customer_credit_service.js";
 import {
   applyDownPaymentFloor,
@@ -569,15 +570,27 @@ console.log(
         "8️⃣ AUTO ACCEPT: changing booking to PENDING_PAYMENT"
       );
 
+      // Through the status service, so the move is recorded in the
+      // booking's status history (PENDING or ALTERNATIVE_SUGGESTED to
+      // PENDING_PAYMENT).
+      await transitionBookingStatus({
+        bookingId: booking.id,
+        newStatus: "PENDING_PAYMENT",
+        actorId: actorUserId || null,
+        remark:
+          booking.status === "ALTERNATIVE_SUGGESTED"
+            ? "Customer accepted the suggested alternative; payment requested."
+            : "Booking accepted; payment requested.",
+        database: tx,
+        extraData: {
+          paymentDeadline,
+        },
+      });
+
       const updatedBooking =
-        await tx.booking.update({
+        await tx.booking.findUnique({
           where: {
             id: booking.id,
-          },
-
-          data: {
-            status: "PENDING_PAYMENT",
-            paymentDeadline,
           },
 
           include: includeBookingRelations(),

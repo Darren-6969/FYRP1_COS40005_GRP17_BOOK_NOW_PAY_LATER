@@ -224,6 +224,22 @@ updateBranchPoint(
     );
   },
 
+  // Car bookings: the operator's other cars, marked free or not for the dates.
+  getAlternativeOptions(id, payload) {
+    return api.post(
+      `/operators/bookings/${id}/alternative/options`,
+      payload
+    );
+  },
+
+  // Car bookings: price a suggested alternative car without saving anything.
+  quoteAlternative(id, payload) {
+    return api.post(
+      `/operators/bookings/${id}/alternative/quote`,
+      payload
+    );
+  },
+
   confirmBooking(id) {
     return api.patch(
       `/operators/bookings/${id}/confirm`

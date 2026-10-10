@@ -26,6 +26,8 @@ import {
   confirmBooking,
   markBookingNoShow,
   suggestAlternative,
+  previewAlternativeQuote,
+  listAlternativeCarOptions,
   sendPaymentRequest,
 
   handoverBooking,
@@ -184,6 +186,18 @@ router.patch(
   "/bookings/:id/suggest-alternative",
   ...ownerOrStaffAccess,
   suggestAlternative
+);
+// The operator's other cars for the alternative picker, with availability.
+router.post(
+  "/bookings/:id/alternative/options",
+  ...ownerOrStaffAccess,
+  listAlternativeCarOptions
+);
+// Price preview for a suggested alternative car. Writes nothing.
+router.post(
+  "/bookings/:id/alternative/quote",
+  ...ownerOrStaffAccess,
+  previewAlternativeQuote
 );
 
 /**

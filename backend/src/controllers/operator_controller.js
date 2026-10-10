@@ -43,6 +43,8 @@ import {
   mapCarBooking,
   operatorResponseConfigSelect,
 } from "../services/car_booking_view.js";
+import { listAlternativeOptions, quoteAlternative } from "../services/car_requote_service.js";
+import { fromSen } from "../services/car_pricing_service.js";
 import { getPlatformSettings } from "../services/platform_settings_service.js";
 import {
   buildOperatorSettlementReport,
@@ -119,6 +121,10 @@ function includeBookingRelations() {
         // Used by the late return charge.
         hourlyRate: true,
       },
+    },
+    // The car suggested as an alternative (Module 3).
+    alternativeListing: {
+      select: carListingSelect(),
     },
     refunds: {
       orderBy: {
@@ -2705,12 +2711,230 @@ export async function markBookingNoShow(req, res, next) {
   }
 }
 
+// ── Suggested alternative car (car bookings) ───────────────────────────────
+// The operator picks one of their published listings; the server prices it.
+// Host bookings keep the free-text suggestion below.
+
+function alternativeDates(booking, body = {}) {
+  return {
+    pickupAt: body.alternativePickupDate
+      ? parseMalaysiaLocalDateTime(body.alternativePickupDate)
+      : booking.pickupDate,
+    returnAt: body.alternativeReturnDate
+      ? parseMalaysiaLocalDateTime(body.alternativeReturnDate)
+      : booking.returnDate,
+  };
+}
+
+function mapAlternativeQuote(quote) {
+  const listing = quote.listing;
+  return {
+    listing: listing
+      ? {
+          id: listing.id,
+          name: listing.name,
+          make: listing.vehicleMake ?? null,
+          model: listing.vehicleModel ?? null,
+          modelYear: listing.modelYear ?? null,
+          transmission: listing.transmission ?? null,
+          seats: listing.seats ?? null,
+          branch: listing.branch ? { name: listing.branch.name } : null,
+        }
+      : null,
+    pricing: quote.snapshot || null,
+    problems: quote.problems || [],
+    pointsChanged: quote.pointsChanged ?? false,
+    droppedAddons: quote.droppedAddons ?? [],
+  };
+}
+
+function carAlternativeGuard(booking) {
+  if (booking.status !== "PENDING") {
+    return "An alternative car can only be suggested while the request is waiting for your answer.";
+  }
+  if (booking.alternativeUsed) {
+    return "Alternative can only be suggested once for this booking";
+  }
+  return null;
+}
+
+// POST /operators/bookings/:id/alternative/options
+// The operator's other published cars, each marked free or not for the dates.
+export async function listAlternativeCarOptions(req, res, next) {
+  try {
+    const booking = await findOperatorBooking(req, req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    if (!booking.listingId) {
+      return res.status(400).json({ message: "Alternative cars are only for car bookings." });
+    }
+
+    const blocked = carAlternativeGuard(booking);
+    if (blocked) {
+      return res.status(400).json({ message: blocked });
+    }
+
+    const { pickupAt, returnAt } = alternativeDates(booking, req.body);
+    const options = await listAlternativeOptions({ booking, pickupAt, returnAt });
+
+    res.json({ options });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /operators/bookings/:id/alternative/quote
+// Preview only: prices the chosen listing and dates, writes nothing.
+export async function previewAlternativeQuote(req, res, next) {
+  try {
+    const booking = await findOperatorBooking(req, req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    if (!booking.listingId) {
+      return res.status(400).json({ message: "Price previews are only for car bookings." });
+    }
+
+    const blocked = carAlternativeGuard(booking);
+    if (blocked) {
+      return res.status(400).json({ message: blocked });
+    }
+
+    const { pickupAt, returnAt } = alternativeDates(booking, req.body);
+    const quote = await quoteAlternative({
+      booking,
+      listingId: req.body?.alternativeListingId,
+      pickupAt,
+      returnAt,
+    });
+
+    res.json({ quote: mapAlternativeQuote(quote) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function suggestCarAlternative(req, res, booking) {
+  const blocked = carAlternativeGuard(booking);
+  if (blocked) {
+    return res.status(400).json({ message: blocked });
+  }
+
+  const reason = String(req.body?.reason || "").trim();
+  if (!req.body?.alternativeListingId || !reason) {
+    return res.status(400).json({
+      message: "Choose the car to suggest and give a reason.",
+    });
+  }
+
+  const { pickupAt, returnAt } = alternativeDates(booking, req.body);
+
+  // Quote again with the suggested car locked, then hand its stock to this
+  // booking by moving it to ALTERNATIVE_SUGGESTED in the same transaction.
+  const { updatedBooking, quote } = await prisma.$transaction(async (tx) => {
+    const fresh = await quoteAlternative({
+      booking,
+      listingId: req.body.alternativeListingId,
+      pickupAt,
+      returnAt,
+      db: tx,
+      lock: true,
+    });
+
+    if (fresh.problems.length) {
+      const [first] = fresh.problems;
+      throw Object.assign(new Error(first.message), {
+        statusCode: 409,
+        appCode: first.code,
+        details: { problems: fresh.problems },
+      });
+    }
+
+    await transitionBookingStatus({
+      bookingId: booking.id,
+      newStatus: "ALTERNATIVE_SUGGESTED",
+      actorId: req.user.id,
+      remark: `Operator suggested ${fresh.listing.name} instead.`,
+      database: tx,
+      extraData: {
+        alternativeListingId: fresh.listing.id,
+        alternativePricingSnapshot: fresh.snapshot,
+        alternativeServiceName: fresh.listing.name,
+        alternativePrice: fromSen(fresh.snapshot.totalSen),
+        alternativePickupDate: pickupAt,
+        alternativeReturnDate: returnAt,
+        alternativeReason: reason,
+        alternativeSuggestedAt: new Date(),
+        alternativeUsed: true,
+      },
+    });
+
+    return {
+      quote: fresh,
+      updatedBooking: await tx.booking.findUnique({
+        where: { id: booking.id },
+        include: includeBookingRelations(),
+      }),
+    };
+  }, { timeout: 15000 });
+
+  const details = {
+    alternativeListingId: quote.listing.id,
+    alternativeServiceName: quote.listing.name,
+    alternativePrice: fromSen(quote.snapshot.totalSen),
+    alternativePickupDate: pickupAt,
+    alternativeReturnDate: returnAt,
+    pointsChanged: quote.pointsChanged,
+    droppedAddons: quote.droppedAddons,
+    reason,
+  };
+
+  await createAuditLog({
+    req,
+    action: "ALTERNATIVE_SUGGESTED",
+    entityType: "Booking",
+    entityId: String(booking.id),
+    details,
+  });
+
+  const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;
+  const config = await getOperatorEmailConfig(updatedBooking.operatorId);
+
+  await createCustomerNotification({
+    booking: updatedBooking,
+    title: "Alternative car suggested",
+    message: `${updatedBooking.operator?.companyName || "The operator"} suggested ${quote.listing.name} for booking ${booking.bookingCode || booking.id}. Review the new price and accept or decline.`,
+    type: "ALTERNATIVE_SUGGESTED",
+    emailSubject: `Alternative Booking Suggested - ${booking.bookingCode || booking.id}`,
+    emailHtml: alternativeSuggestionTemplate({
+      booking: updatedBooking,
+      customerUrl,
+      introText: config?.alternativeSuggestedEmailText,
+      emailFooterText: config?.emailFooterText,
+    }),
+  });
+
+  return res.json({
+    booking: mapBooking(updatedBooking),
+    alternative: details,
+  });
+}
+
 export async function suggestAlternative(req, res, next) {
   try {
     const booking = await findOperatorBooking(req, req.params.id);
 
     if (!booking) {
       return res.status(404).json({ message: "Booking not found" });
+    }
+
+    if (booking.listingId) {
+      return await suggestCarAlternative(req, res, booking);
     }
 
     const existingAlternative = await prisma.auditLog.findFirst({

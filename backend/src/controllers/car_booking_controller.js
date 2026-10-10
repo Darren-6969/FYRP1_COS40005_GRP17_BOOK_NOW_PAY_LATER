@@ -24,6 +24,7 @@ import {
   releaseIdempotencyKey,
 } from "../services/idempotency_service.js";
 import { createBookingOrchestrator } from "../services/booking_creation_orchestrator.js";
+import { bookingLocationText } from "../services/car_booking_snapshot.js";
 
 const ENDPOINT = "POST /customer/car-bookings";
 const MIN_LEAD_MINUTES = 60;
@@ -110,13 +111,7 @@ export async function createCarBooking(req, res, next) {
     }
 
     const p = r.priced;
-    const chosenAddons = new Map(listing.addons.map((a) => [String(a.id), a]));
-    const pointText = (pt) => (pt.id === "branch" ? `${listing.branch.name}, ${listing.branch.address}` : pt.label);
-    const location = r.requestedLocation
-      ? `Requested: ${r.requestedLocation}`
-      : r.dropoff.id === r.point.id
-        ? pointText(r.point)
-        : `${pointText(r.point)} → ${pointText(r.dropoff)}`;
+    const location = bookingLocationText(listing, r);
     const platformSettings = await prisma.platformSettings.findUnique({ where: { id: 1 } })
       || { exposureLimits: {} };
     const creditProfile = await prisma.customerCreditProfile.findUnique({
@@ -134,7 +129,6 @@ export async function createCarBooking(req, res, next) {
       selection: sel,
       location,
       bookingDetails: body.bookingDetails,
-      chosenAddons,
       cdwId: CDW_ID,
       platformSettings,
       customerTier,

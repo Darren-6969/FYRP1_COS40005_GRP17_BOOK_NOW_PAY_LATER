@@ -10,6 +10,12 @@
 //
 // A booking holds its car for its booked dates only (SRS V2.9 removed the
 // rolling return hold). A late return is recorded and charged at the counter.
+//
+// While a car booking is ALTERNATIVE_SUGGESTED, the suggested car and dates
+// hold the stock instead of the original (the original is usually the car that
+// was unavailable). Bookings with no alternativeListingId (host bookings, or
+// suggestions made before alternatives were real listings) keep holding their
+// own listing.
 
 import prisma from "../config/db.js";
 import { addDays, klPlainDate, klToday, occupiedDates } from "./car_pricing_service.js";
@@ -32,6 +38,29 @@ export const ACTIVE_BOOKING_STATUSES = [
 
 const HORIZON_DAYS = 90;
 
+const OWN_LISTING_STATUSES = ACTIVE_BOOKING_STATUSES.filter(
+  (status) => status !== "ALTERNATIVE_SUGGESTED"
+);
+
+/**
+ * The listing and dates a booking holds stock on. Exported for tests.
+ * @returns {{listingId:number, pickupDate:Date, returnDate:Date}}
+ */
+export function effectiveHold(booking) {
+  if (booking.status === "ALTERNATIVE_SUGGESTED" && booking.alternativeListingId) {
+    return {
+      listingId: booking.alternativeListingId,
+      pickupDate: booking.alternativePickupDate || booking.pickupDate,
+      returnDate: booking.alternativeReturnDate || booking.returnDate,
+    };
+  }
+  return {
+    listingId: booking.listingId,
+    pickupDate: booking.pickupDate,
+    returnDate: booking.returnDate,
+  };
+}
+
 function datesBetween(fromPlain, toPlainExclusive) {
   const out = [];
   for (let d = fromPlain; d < toPlainExclusive; d = addDays(d, 1)) out.push(d);
@@ -41,10 +70,18 @@ function datesBetween(fromPlain, toPlainExclusive) {
 /**
  * Remaining stock per listing per plain date in [from, toExclusive).
  * Pass `db` (a transaction client) when called inside a transaction.
+ * `excludeBookingId` leaves one booking out of the count, so a booking can be
+ * re-quoted without its own hold counting against it.
  *
  * @returns {Map<number, {remaining: Map<string, number>}>}
  */
-export async function loadAvailability(listings, fromPlain, toPlainExclusive, db = prisma) {
+export async function loadAvailability(
+  listings,
+  fromPlain,
+  toPlainExclusive,
+  db = prisma,
+  { excludeBookingId = null } = {}
+) {
   const ids = listings.map((l) => l.id);
   const result = new Map();
   if (!ids.length) return result;
@@ -54,12 +91,38 @@ export async function loadAvailability(listings, fromPlain, toPlainExclusive, db
   const [bookings, allocations] = await Promise.all([
     db.booking.findMany({
       where: {
-        listingId: { in: ids },
-        status: { in: ACTIVE_BOOKING_STATUSES },
-        pickupDate: { lt: windowEnd },
-        returnDate: { gt: windowStart },
+        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
+        OR: [
+          {
+            listingId: { in: ids },
+            status: { in: OWN_LISTING_STATUSES },
+            pickupDate: { lt: windowEnd },
+            returnDate: { gt: windowStart },
+          },
+          {
+            listingId: { in: ids },
+            status: "ALTERNATIVE_SUGGESTED",
+            alternativeListingId: null,
+            pickupDate: { lt: windowEnd },
+            returnDate: { gt: windowStart },
+          },
+          {
+            alternativeListingId: { in: ids },
+            status: "ALTERNATIVE_SUGGESTED",
+            alternativePickupDate: { lt: windowEnd },
+            alternativeReturnDate: { gt: windowStart },
+          },
+        ],
       },
-      select: { listingId: true, pickupDate: true, returnDate: true },
+      select: {
+        listingId: true,
+        pickupDate: true,
+        returnDate: true,
+        status: true,
+        alternativeListingId: true,
+        alternativePickupDate: true,
+        alternativeReturnDate: true,
+      },
     }),
     db.listingAllocation.findMany({
       where: { listingId: { in: ids }, date: { gte: new Date(`${fromPlain}T00:00:00Z`), lt: new Date(`${toPlainExclusive}T00:00:00Z`) } },
@@ -116,7 +179,8 @@ export async function loadAvailability(listings, fromPlain, toPlainExclusive, db
     );
   }
 
-  for (const b of bookings) {
+  for (const booking of bookings) {
+    const b = effectiveHold(booking);
     const entry = result.get(b.listingId);
     if (!entry) continue;
     for (const date of occupiedDates(b)) {

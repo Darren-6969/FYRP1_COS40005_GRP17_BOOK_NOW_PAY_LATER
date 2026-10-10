@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCustomerBooking } from "../../hooks/useBookings";
 import {
@@ -10,6 +11,7 @@ import {
 } from "../../utils/customerUtils";
 import { refreshNotifications } from "../../utils/notifyRefresh";
 import CarBookingPanel from "../../components/booking/CarBookingPanel";
+import CarAlternativeCard from "../../components/booking/CarAlternativeCard";
 
 export default function BookingDetail() {
   const { id } = useParams();
@@ -22,7 +24,10 @@ export default function BookingDetail() {
     cancelBooking,
     acceptAlternative,
     rejectAlternative,
+    reload,
   } = useCustomerBooking(id);
+
+  const [alternativeBusy, setAlternativeBusy] = useState(false);
 
   const gocarThankYouUrl = import.meta.env.VITE_GOCAR_THANK_YOU_URL;
 
@@ -32,16 +37,33 @@ export default function BookingDetail() {
     refreshNotifications();
   };
 
+  // A car alternative is re-checked when accepted: it may have sold out, or
+  // its price may have changed (the card then reloads with the new price).
   const handleAcceptAlternative = async () => {
     if (!window.confirm("Accept this alternative booking option?")) return;
-    await acceptAlternative();
-    refreshNotifications();
+    try {
+      setAlternativeBusy(true);
+      await acceptAlternative();
+      refreshNotifications();
+    } catch (err) {
+      alert(err.response?.data?.message || "Could not accept the alternative");
+      await reload();
+    } finally {
+      setAlternativeBusy(false);
+    }
   };
 
   const handleRejectAlternative = async () => {
     if (!window.confirm("Reject this alternative booking option?")) return;
-    await rejectAlternative();
-    refreshNotifications();
+    try {
+      setAlternativeBusy(true);
+      await rejectAlternative();
+      refreshNotifications();
+    } catch (err) {
+      alert(err.response?.data?.message || "Could not decline the alternative");
+    } finally {
+      setAlternativeBusy(false);
+    }
   };
 
   if (loading) {
@@ -338,7 +360,16 @@ export default function BookingDetail() {
           </article>
         )}
 
-        {booking.status === "ALTERNATIVE_SUGGESTED" && (
+        {booking.status === "ALTERNATIVE_SUGGESTED" && booking.car?.alternative && (
+          <CarAlternativeCard
+            booking={booking}
+            onAccept={handleAcceptAlternative}
+            onDecline={handleRejectAlternative}
+            busy={alternativeBusy}
+          />
+        )}
+
+        {booking.status === "ALTERNATIVE_SUGGESTED" && !booking.car?.alternative && (
           <article className="customer-glass-card customer-alternative-card">
             <div className="customer-alternative-head">
               <div>

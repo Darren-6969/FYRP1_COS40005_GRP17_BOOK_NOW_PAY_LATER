@@ -9,6 +9,8 @@ import {
   operatorStatusLabel,
 } from "../../services/operator_service";
 
+import CarAlternativeModal from "../../components/operator/CarAlternativeModal";
+
 import {
   carTitle,
   depositLabel,
@@ -766,6 +768,44 @@ export default function OperatorBookingDetail() {
       </div>
 
 
+      {car?.alternative && (
+        <div className="booking-clean-section">
+          <h3>Suggested Alternative</h3>
+
+          <div className="booking-clean-licence-details">
+            <InfoRow
+              label="Car"
+              value={
+                carTitle(car.alternative.listing) ||
+                booking.alternativeServiceName ||
+                "-"
+              }
+            />
+
+            <InfoRow
+              label="Dates"
+              value={`${formatOperatorDateTime(
+                car.alternative.pickupAt
+              )} → ${formatOperatorDateTime(
+                car.alternative.returnAt
+              )}`}
+            />
+
+            <InfoRow
+              label="Quoted Total"
+              value={formatSen(
+                car.alternative.pricing?.totalSen
+              )}
+            />
+
+            <InfoRow
+              label="Status"
+              value="Waiting for the customer to accept or decline"
+            />
+          </div>
+        </div>
+      )}
+
       {/* =========================
           Customer
       ========================== */}
@@ -1520,15 +1560,24 @@ export default function OperatorBookingDetail() {
   </aside>
 </div>
 
-      {showAlternative && (
-        <AlternativeModal
-          booking={booking}
-          onClose={() =>
-            setShowAlternative(false)
-          }
-          onDone={loadBooking}
-        />
-      )}
+      {showAlternative &&
+        (booking.car ? (
+          <CarAlternativeModal
+            booking={booking}
+            onClose={() =>
+              setShowAlternative(false)
+            }
+            onDone={loadBooking}
+          />
+        ) : (
+          <AlternativeModal
+            booking={booking}
+            onClose={() =>
+              setShowAlternative(false)
+            }
+            onDone={loadBooking}
+          />
+        ))}
 
       {showReject && (
         <RejectBookingModal
