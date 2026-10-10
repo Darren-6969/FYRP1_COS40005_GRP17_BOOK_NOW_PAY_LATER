@@ -124,7 +124,7 @@ export async function createCarBooking(req, res, next) {
       select: { tier: true },
     });
     const customerTier = creditProfile?.tier || "Normal";
-    const { booking, schedule } = await createBookingOrchestrator({
+    const { booking } = await createBookingOrchestrator({
       customerId: req.user.id,
       operatorId: listing.operatorId,
       listing,
@@ -144,7 +144,6 @@ export async function createCarBooking(req, res, next) {
       id: booking.id,
       bookingCode: booking.bookingCode,
       status: booking.status,
-      schedule,
     };
     await completeIdempotencyKey(claim.record, 201, response);
     claim = null;

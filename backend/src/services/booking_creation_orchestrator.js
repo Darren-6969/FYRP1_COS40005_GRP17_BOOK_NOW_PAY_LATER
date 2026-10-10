@@ -3,26 +3,14 @@ import { addDays, fromSen, rateCardFor } from "./car_pricing_service.js";
 import { loadAvailability } from "./car_availability_service.js";
 import { enforceConcurrentExposureCap } from "./concurrent_exposure_service.js";
 import { isCreditTierPolicyEnabled } from "./platform_settings_service.js";
-import { createPaymentScheduleEntries, getScheduleForCreditTier } from "./payment_schedule_entry_service.js";
 import { formatBookingCode, tempBookingCode } from "../utils/bookingCode.js";
 
-function paymentData(entries, totalAmount) {
-  const down = entries.find((entry) => entry.paymentPart === "DOWN_PAYMENT");
-  const final = entries.find((entry) => entry.paymentPart === "FINAL_PAYMENT");
-  const full = entries.find((entry) => entry.paymentPart === "FULL_PAYMENT");
-  return {
-    amount: totalAmount,
-    method: "PENDING",
-    status: "UNPAID",
-    downPaymentAmount: down?.amount || 0,
-    finalPaymentAmount: final?.amount || full?.amount || 0,
-    downPaymentDueDate: down?.dueAt || null,
-    finalPaymentDueDate: final?.dueAt || full?.dueAt || null,
-    downPaymentStatus: down ? "UNPAID" : full ? "UNPAID" : "PAID",
-    finalPaymentStatus: down ? "UNPAID" : full ? "UNPAID" : "PAID",
-  };
-}
-
+// Creates a car booking REQUEST. Booking requests wait for the operator to
+// accept (manual acceptance flow), so nothing payment-related is created here:
+// no Payment row and no PaymentScheduleEntry rows. booking_accept_service.js
+// upserts the payment and builds the schedule when the operator accepts.
+// Customer and operator notifications are sent by car_booking_controller.js
+// after the transaction commits.
 export async function createBookingOrchestrator({
   customerId,
   operatorId,
@@ -39,13 +27,6 @@ export async function createBookingOrchestrator({
   customerTier,
   database = prisma,
 }) {
-  const schedule = getScheduleForCreditTier({
-    creditTier: customerTier,
-    rentalAmount: fromSen(pricing.rentalSen),
-    addonAmount: fromSen(pricing.addOnsSen),
-    createdAt: new Date(),
-    serviceStart: pickupAt,
-  });
   const totalAmount = fromSen(pricing.totalSen);
   // Exposure limits act only while the E17 tier policy is on.
   const tierPolicyOn = await isCreditTierPolicyEnabled(platformSettings, listing.operatorId);
@@ -168,7 +149,6 @@ export async function createBookingOrchestrator({
       include: {
         customer: { select: { id: true, userCode: true, name: true, email: true } },
         operator: true,
-        payment: true,
       },
     });
     await tx.bookingStatusHistory.create({
@@ -181,45 +161,6 @@ export async function createBookingOrchestrator({
       },
     });
 
-    await tx.payment.create({
-      data: {
-        bookingId: created.id,
-        ...paymentData(schedule, totalAmount),
-      },
-    });
-    await createPaymentScheduleEntries(withCode, {
-      database: tx,
-      creditTier: customerTier,
-      createdAt: withCode.createdAt,
-      entries: schedule,
-    });
-    await tx.notification.create({
-      data: {
-        userId: customerId,
-        title: "Booking confirmed",
-        message: `${withCode.bookingCode} is confirmed and your payment schedule is ready.`,
-        type: "BOOKING_CONFIRMED",
-      },
-    });
-    const operatorUsers = await tx.user.findMany({
-      where: {
-        OR: [
-          { operatorId, role: "NORMAL_SELLER" },
-          { role: "MASTER_SELLER" },
-        ],
-      },
-      select: { id: true },
-    });
-    if (operatorUsers.length) {
-      await tx.notification.createMany({
-        data: operatorUsers.map((user) => ({
-          userId: user.id,
-          title: "New confirmed booking",
-          message: `${withCode.bookingCode} is confirmed and payment is pending.`,
-          type: "BOOKING_CONFIRMED",
-        })),
-      });
-    }
     await tx.auditLog.create({
       data: {
         userId: customerId,
@@ -230,9 +171,6 @@ export async function createBookingOrchestrator({
       },
     });
 
-    return {
-      booking: { ...withCode, payment: await tx.payment.findUnique({ where: { bookingId: created.id } }) },
-      schedule,
-    };
+    return { booking: withCode };
   }, { timeout: 15000 });
 }

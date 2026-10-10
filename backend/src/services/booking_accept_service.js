@@ -6,7 +6,11 @@ import { notifyCustomerByBooking } from "./notification_email_service.js";
 import { invoiceSentTemplate } from "./email_templates.js";
 import { parseMalaysiaLocalDateTime } from "../utils/datetime.js";
 import { createAuditLog } from "./log_service.js";
-import { createPaymentScheduleEntries } from "./payment_schedule_entry_service.js";
+import {
+  buildAcceptedScheduleEntries,
+  createPaymentScheduleEntries,
+} from "./payment_schedule_entry_service.js";
+import { depositFor } from "./car_pricing_service.js";
 import { getDefaultCreditProfile } from "./customer_credit_service.js";
 import {
   applyDownPaymentFloor,
@@ -18,6 +22,65 @@ const ACCEPTABLE_STATUSES = [
   "PENDING",
   "ALTERNATIVE_SUGGESTED",
 ];
+
+/*
+ * The price a car booking was quoted at, stored by the booking orchestrator.
+ * Amounts in it are integer sen. Older and non-car bookings have none.
+ */
+function quotedPricing(booking) {
+  const snapshot = booking.pricingSnapshot;
+  if (
+    !snapshot ||
+    snapshot.unit !== "sen" ||
+    !Number.isFinite(Number(snapshot.rentalSen)) ||
+    !Number.isFinite(Number(snapshot.totalSen))
+  ) {
+    return null;
+  }
+  return snapshot;
+}
+
+/*
+ * Splits the total into the down payment and the balance.
+ *
+ * Car bookings follow the pricing rule the customer was shown when booking
+ * (car_pricing_service.priceCarRental): the down payment is the percentage of
+ * the rental only, and add-ons, overtime and point charges are paid with the
+ * balance. At 100% everything is paid up front. When the percentage is the one
+ * quoted, the quoted deposit is reused so the amounts match to the sen.
+ *
+ * Other bookings keep the earlier rule: the percentage of the whole total.
+ */
+function splitBookingAmount({ snapshot, totalAmount, percent }) {
+  if (snapshot) {
+    const totalSen = Number(snapshot.totalSen);
+    const rentalSen = Number(snapshot.rentalSen);
+    const quotedDepositSen = Number(snapshot.depositSen);
+
+    let depositSen;
+    if (percent >= 100) {
+      depositSen = totalSen;
+    } else if (
+      percent === Number(snapshot.depositPct) &&
+      Number.isFinite(quotedDepositSen)
+    ) {
+      depositSen = quotedDepositSen;
+    } else {
+      depositSen = depositFor(rentalSen, percent);
+    }
+
+    return {
+      downAmount: depositSen / 100,
+      finalAmount: (totalSen - depositSen) / 100,
+    };
+  }
+
+  const downAmount = Number(((totalAmount * percent) / 100).toFixed(2));
+  return {
+    downAmount,
+    finalAmount: Number((totalAmount - downAmount).toFixed(2)),
+  };
+}
 
 function includeBookingRelations() {
   return {
@@ -163,10 +226,19 @@ const operatorConfig =
   });
 
 
-const operatorPercent = Number(
-  operatorConfig
-    ?.downPaymentPercent ?? 30
-);
+/*
+ * A car booking keeps the down payment percentage it was quoted at, even if
+ * the operator changes the setting before accepting.
+ */
+const snapshot = quotedPricing(booking);
+const quotedPercent = Number(snapshot?.depositPct);
+
+const operatorPercent = Number.isFinite(quotedPercent)
+  ? quotedPercent
+  : Number(
+      operatorConfig
+        ?.downPaymentPercent ?? 30
+    );
 
 // The platform down payment floor applies only while the E17 tier policy is on.
 const platformSettings = await getPlatformSettings();
@@ -198,22 +270,11 @@ if (
  *
  * Add-ons remain in the final payment.
  */
-const downAmount = Number(
-  (
-    (
-      totalAmount *
-      parsedPercent
-    ) /
-    100
-  ).toFixed(2)
-);
-
-const finalAmount = Number(
-  (
-    totalAmount -
-    downAmount
-  ).toFixed(2)
-);
+const { downAmount, finalAmount } = splitBookingAmount({
+  snapshot,
+  totalAmount,
+  percent: parsedPercent,
+});
 
 
 console.log(
@@ -255,14 +316,19 @@ console.log(
 
   /*
    * Default final-payment deadline:
-   * 24 hours before pickup.
+   * - Normal: the platform deadline tier the operator selected
+   *   (paymentDeadline, already capped before pickup).
+   * - Caution: 24 hours before pickup.
+   * - High Risk: due straight away, with the down payment.
    */
-  const defaultFinalDueDate = creditTier === "Caution" && booking.pickupDate
-    ? new Date(
-        new Date(booking.pickupDate).getTime() -
-          24 * 60 * 60 * 1000
-      )
-    : defaultDownDueDate;
+  const defaultFinalDueDate = creditTier === "High Risk"
+    ? defaultDownDueDate
+    : creditTier === "Caution" && booking.pickupDate
+      ? new Date(
+          new Date(booking.pickupDate).getTime() -
+            24 * 60 * 60 * 1000
+        )
+      : new Date(paymentDeadline);
 
   let downDue = downPaymentDueDate
     ? parseMalaysiaLocalDateTime(downPaymentDueDate)
@@ -446,15 +512,24 @@ console.log(
         where: { bookingId: booking.id, status: "DUE" },
       });
       
+      /*
+       * The schedule mirrors the Payment row just written: same amounts,
+       * same due dates. The licence entry (car rentals only) shares the
+       * balance due date.
+       */
       const scheduleEntries =
         await createPaymentScheduleEntries(
           booking,
           {
             database: tx,
-            creditTier,
-            downPaymentPercent:
-              parsedPercent,
-            createdAt: acceptedAt,
+            entries: buildAcceptedScheduleEntries({
+              downAmount,
+              downDue,
+              finalAmount,
+              finalDue,
+              requiresLicence:
+                booking.serviceType === "CAR_RENTAL",
+            }),
           }
         );
 

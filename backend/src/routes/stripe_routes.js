@@ -259,6 +259,11 @@ export async function applyPaidState(
     return { payment: paidPayment, updatedBooking: paidBooking };
   };
 
+  // Recording a payment runs 10+ sequential queries; the 5 s Prisma default
+  // is too short over a remote connection or a cold Neon compute, and a
+  // timeout rolls back a payment Stripe has already taken.
+  const PAID_STATE_TX_OPTIONS = { maxWait: 10000, timeout: 20000 };
+
   if (auditAction) {
     ({ payment, updatedBooking } = await prisma.$transaction(async (tx) => {
       const paidState = await persistPaidState(tx);
@@ -279,9 +284,9 @@ export async function applyPaidState(
       });
 
       return paidState;
-    }));
+    }, PAID_STATE_TX_OPTIONS));
   } else {
-    ({ payment, updatedBooking } = await prisma.$transaction(persistPaidState));
+    ({ payment, updatedBooking } = await prisma.$transaction(persistPaidState, PAID_STATE_TX_OPTIONS));
   }
 
   const invoice = payment.status === "PAID"

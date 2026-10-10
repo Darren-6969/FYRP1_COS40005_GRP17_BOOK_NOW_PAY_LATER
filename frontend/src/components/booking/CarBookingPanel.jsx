@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatCustomerDate, formatMoney } from "../../utils/customerUtils";
 import { getMyLicenceDocument } from "../../services/customer_service";
-import { durationText, rateLineLabel } from "../../utils/carPricing";
+import { durationText } from "../../utils/carPricing";
+import { priceBreakdownRows, timeLeft } from "./carBookingParts";
 
 // Car rental sections of the customer booking detail page (SRS 4.2.6).
 // Everything shown comes from the booking record and its pricing snapshot;
 // nothing is recalculated here.
 
 const sen = (n) => formatMoney((n || 0) / 100);
-const senLabel = (n) => formatMoney(n / 100);
 
 function useNow(intervalMs = 30000) {
   const [now, setNow] = useState(() => Date.now());
@@ -18,16 +18,6 @@ function useNow(intervalMs = 30000) {
     return () => clearInterval(t);
   }, [intervalMs]);
   return now;
-}
-
-function timeLeft(iso, now) {
-  const ms = new Date(iso).getTime() - now;
-  if (ms <= 0) return "any moment now";
-  const mins = Math.ceil(ms / 60000);
-  if (mins < 60) return `${mins} min left`;
-  const hours = Math.floor(mins / 60);
-  const rest = mins % 60;
-  return rest ? `${hours} h ${rest} min left` : `${hours} h left`;
 }
 
 function pointText(point) {
@@ -90,19 +80,7 @@ function StatusBanner({ booking, now }) {
 
 function PriceBreakdown({ pricing }) {
   if (!pricing) return null;
-  const days = pricing.days || 0;
-  const rows = [
-    ...(pricing.rateLines || []).map((l) => [`Rental ${rateLineLabel(l, senLabel)}`, l.amountSen]),
-    ...(pricing.overtimeSen ? [["Night handover charge", pricing.overtimeSen]] : []),
-    ...(pricing.addOnLines || []).map((a) => [
-      `${a.label}${a.qty > 1 ? ` × ${a.qty}` : ""}${a.unit === "per_day" ? `, ${days} ${days === 1 ? "day" : "days"}` : ""}`,
-      a.amountSen,
-    ]),
-    // Only bookings priced before driver age was removed carry this.
-    ...(pricing.surchargeSen ? [["Young driver surcharge", pricing.surchargeSen]] : []),
-    ...(pricing.pickupFeeSen ? [[`Pickup at ${pricing.pickupPoint?.label}`, pricing.pickupFeeSen]] : []),
-    ...(pricing.dropoffFeeSen ? [[`Drop-off at ${pricing.dropoffPoint?.label}`, pricing.dropoffFeeSen]] : []),
-  ];
+  const rows = priceBreakdownRows(pricing).map((row) => [row.label, row.amountSen]);
 
   return (
     <article className="customer-glass-card">
