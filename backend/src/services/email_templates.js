@@ -431,6 +431,65 @@ export function alternativeSuggestionTemplate({ booking, customerUrl, introText,
   });
 }
 
+// Module 4: the operator's charges for customer-requested places, sent as an
+// offer on the same car and dates. Figures come from the offer's pricing
+// snapshot (sen), so the email shows what will be charged on acceptance.
+export function locationChargeOfferTemplate({ booking, pricing, customerUrl, emailFooterText }) {
+  const sen = (value) => formatMoney(Number(value || 0) / 100);
+  const quote = pricing?.quote || {};
+  const samePlace = pricing?.dropoffPoint?.id === "requested";
+  const payInFull = Number(pricing?.depositPct) >= 100 || !pricing?.balanceSen;
+
+  const placeRows = [];
+  if (pricing?.requestedLocation) {
+    placeRows.push(
+      {
+        label: samePlace ? "Requested pickup and return place" : "Requested pickup place",
+        value: escapeHtml(pricing.requestedLocation),
+      },
+      { label: "Charge", value: sen(quote.pickupChargeSen), strong: true }
+    );
+  }
+  if (pricing?.requestedDropoffLocation) {
+    placeRows.push(
+      { label: "Requested drop-off place", value: escapeHtml(pricing.requestedDropoffLocation) },
+      { label: "Charge", value: sen(quote.dropoffChargeSen), strong: true }
+    );
+  }
+
+  return baseTemplate({
+    title: "Charge for Your Requested Place",
+    buttonText: "Review and Respond",
+    buttonUrl: customerUrl,
+    operator: booking?.operator,
+    footerText: emailFooterText,
+    body: `
+      <p style="margin-top:0;">Dear ${safe(booking?.customer?.name, "Customer")},</p>
+      <p>
+        ${safe(booking?.operator?.companyName, "The operator")} can hand over or collect your car at the
+        place you requested, for an extra charge. Your car and dates are unchanged.
+      </p>
+
+      ${breakdownTable([
+        ...placeRows,
+        { label: "New total", value: sen(pricing?.totalSen), strong: true },
+        payInFull
+          ? { label: "Pay in full after you accept", value: sen(pricing?.depositSen) }
+          : { label: "Deposit after you accept", value: sen(pricing?.depositSen) },
+        ...(payInFull ? [] : [{ label: "Balance before pick-up", value: sen(pricing?.balanceSen) }]),
+      ])}
+
+      ${
+        booking?.alternativeReason && booking.alternativeReason !== "Charge for the requested location"
+          ? `<p style="margin-top:18px;"><strong>Note from the operator:</strong> ${escapeHtml(booking.alternativeReason)}</p>`
+          : ""
+      }
+
+      <p>Accept to continue with the new total, or decline to close this booking. Nothing is charged until you accept.</p>
+    `,
+  });
+}
+
 export function customerAlternativeResponseTemplate({
   booking,
   accepted,

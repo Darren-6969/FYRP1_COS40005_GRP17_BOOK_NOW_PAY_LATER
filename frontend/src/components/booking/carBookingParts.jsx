@@ -29,10 +29,28 @@ export function priceBreakdownRows(pricing) {
     })),
     ...(youngDriverSen ? [{ label: "Young driver surcharge", amountSen: youngDriverSen }] : []),
     ...(pricing.pickupFeeSen
-      ? [{ label: `Pickup at ${pricing.pickupPoint?.label || "pickup point"}`, amountSen: pricing.pickupFeeSen }]
+      ? [
+          {
+            // A customer-requested location is priced by the operator
+            // (Module 4); a fixed point carries its own pickup charge.
+            label: pricing.pickupPoint?.requested
+              ? pricing.dropoffPoint?.id === pricing.pickupPoint.id
+                ? `Requested place charge (${pricing.pickupPoint.label})`
+                : `Requested pickup charge (${pricing.pickupPoint.label})`
+              : `Pickup at ${pricing.pickupPoint?.label || "pickup point"}`,
+            amountSen: pricing.pickupFeeSen,
+          },
+        ]
       : []),
     ...(pricing.dropoffFeeSen
-      ? [{ label: `Drop-off at ${pricing.dropoffPoint?.label || "drop-off point"}`, amountSen: pricing.dropoffFeeSen }]
+      ? [
+          {
+            label: pricing.dropoffPoint?.requested
+              ? `Requested drop-off charge (${pricing.dropoffPoint.label})`
+              : `Drop-off at ${pricing.dropoffPoint?.label || "drop-off point"}`,
+            amountSen: pricing.dropoffFeeSen,
+          },
+        ]
       : []),
   ];
 }

@@ -56,6 +56,8 @@ function selectionFrom(body) {
       pickupPointId: body.pickupPointId ?? null,
       dropoffPointId: body.dropoffPointId ?? null,
       requestedLocation: body.requestedLocation ?? null,
+      requestedDropoffLocation: body.requestedDropoffLocation ?? null,
+      returnToRequested: body.returnToRequested ?? null,
       cdw: body.cdw === true,
       addOns: Object.fromEntries(body.addOns.map((a) => [String(a.id), a.quantity])),
     },
@@ -78,7 +80,7 @@ function validateSelection(listing, body, pickupAt, returnAt) {
     if (!point || point.usage === usageNot) throw fail(400, code, `That ${label} point is not offered for this car`);
   };
   if (!body.requestedLocation) check(body.pickupPointId, "DROPOFF", "PICKUP_POINT_INVALID", "pickup");
-  check(body.dropoffPointId, "PICKUP", "DROPOFF_POINT_INVALID", "drop-off");
+  if (!body.requestedDropoffLocation) check(body.dropoffPointId, "PICKUP", "DROPOFF_POINT_INVALID", "drop-off");
 
   const addonIds = listing.addons.map((a) => String(a.id));
   const unknown = body.addOns.filter((a) => a.id !== CDW_ID && !addonIds.includes(String(a.id)));
@@ -125,7 +127,7 @@ export async function createCarBooking(req, res, next) {
       listing,
       pickupAt,
       returnAt,
-      pricing: { ...p, dates: r.dates, refundRule: r.refundRule, point: r.point, dropoff: r.dropoff, requestedLocation: r.requestedLocation },
+      pricing: { ...p, dates: r.dates, refundRule: r.refundRule, point: r.point, dropoff: r.dropoff, requestedLocation: r.requestedLocation, requestedDropoffLocation: r.requestedDropoffLocation },
       selection: sel,
       location,
       bookingDetails: body.bookingDetails,

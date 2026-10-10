@@ -508,6 +508,7 @@ export async function getPublicCarsAvailability(
  * again inside its transaction rather than trusting a stored quote.
  *
  * sel: { from, to, ft, tt, pickupPointId, dropoffPointId, requestedLocation,
+ *        requestedDropoffLocation, returnToRequested,
  *        cdw, addOns: {id: qty} }
  *
  * No driver age is asked (client decision, Oct 2026): a valid driving
@@ -580,7 +581,48 @@ function driverAgeOnDate(
   return age;
 }
 
-export function priceSelection(listing, config, sel, peakDates) {
+const cleanLocation = (value) =>
+  typeof value === "string" ? value.trim().slice(0, 300) : "";
+const sameLocation = (a, b) => a.toLowerCase() === b.toLowerCase();
+
+/**
+ * Which ends of the rental the customer asked for at a place that is not on
+ * the operator's list (FR-LIST-004). Pure, shared by priceSelection() and the
+ * re-quote service so both read a selection the same way.
+ *
+ * sel.requestedLocation         the requested pickup place
+ * sel.requestedDropoffLocation  the requested drop-off place
+ * sel.returnToRequested         true: return to the requested pickup place.
+ *   When it is not sent (bookings made before drop-off requests existed), a
+ *   requested pickup with no drop-off point chosen means the same place.
+ *
+ * Returns { pickup, dropoff, samePlace }: the requested text for each end
+ * ("" when that end uses a listed point) and whether both are one place.
+ */
+export function requestedSides(sel = {}) {
+  const pickup = cleanLocation(sel.requestedLocation);
+  let dropoff = cleanLocation(sel.requestedDropoffLocation);
+
+  const flag = sel.returnToRequested;
+  const returnsToPickup =
+    flag === undefined || flag === null ? !sel.dropoffPointId : flag === true || flag === "1";
+
+  const samePlace =
+    Boolean(pickup) &&
+    ((!dropoff && returnsToPickup) || (Boolean(dropoff) && sameLocation(pickup, dropoff)));
+  if (samePlace) dropoff = pickup;
+
+  return { pickup, dropoff, samePlace };
+}
+
+/**
+ * opts.requestedPickupFeeSen and opts.requestedDropoffFeeSen: the operator's
+ * charges for customer-requested places (Module 4). Only the re-quote
+ * service passes them, from the operator's offer; the booking form never
+ * does, so a new request still prices requested places at zero. When both
+ * ends are one place, there is one charge, on the pickup.
+ */
+export function priceSelection(listing, config, sel, peakDates, opts = {}) {
   const pickupAt = klDateTimeToUtc(sel.from, sel.ft);
   const returnAt = klDateTimeToUtc(sel.to, sel.tt);
   const days = pickupAt && returnAt ? rentalDays(pickupAt, returnAt) : 0;
@@ -663,17 +705,44 @@ export function priceSelection(listing, config, sel, peakDates) {
   }
   const pickupPoints = pickupPointsFor(listing.branch);
   const dropoffPoints = dropoffPointsFor(listing.branch);
-  const requestedLocation = typeof sel.requestedLocation === "string" ? sel.requestedLocation.trim().slice(0, 300) : "";
+  const sides = requestedSides(sel);
+  const requestedLocation = sides.pickup;
+  const requestedDropoffLocation = sides.samePlace ? "" : sides.dropoff;
+  const feeOf = (value) => Math.max(0, Math.round(Number(value) || 0));
 
-  // A requested location replaces the pickup point; the operator prices it
-  // when replying with a suggested alternative, so it adds nothing here.
+  // A requested place replaces that end's listed point. It is free on the
+  // booking form; the operator prices it in their reply (FR-LIST-004), and
+  // the charge sits on the point like a listed point's pickup or drop-off
+  // charge. One place for both ends carries one charge, on the pickup.
+  const pickupFeeSen = requestedLocation ? feeOf(opts.requestedPickupFeeSen) : 0;
   const point = requestedLocation
-    ? { id: "requested", label: requestedLocation, pickupFeeSen: 0, dropoffFeeSen: 0, feeSen: 0, requested: true }
+    ? {
+        id: "requested",
+        label: requestedLocation,
+        pickupFeeSen,
+        dropoffFeeSen: 0,
+        feeSen: pickupFeeSen,
+        requested: true,
+      }
     : pickupPoints.find((p) => p.id === String(sel.pickupPointId)) || pickupPoints[0];
-  const dropoffId = sel.dropoffPointId ?? sel.pickupPointId;
-  const dropoff = requestedLocation && !sel.dropoffPointId
-    ? point
-    : dropoffPoints.find((p) => p.id === String(dropoffId)) || dropoffPoints[0];
+
+  const dropoffId = sel.dropoffPointId ?? (requestedLocation ? null : sel.pickupPointId);
+  let dropoff;
+  if (sides.samePlace) {
+    dropoff = point;
+  } else if (requestedDropoffLocation) {
+    const dropoffFeeSen = feeOf(opts.requestedDropoffFeeSen);
+    dropoff = {
+      id: "requested-dropoff",
+      label: requestedDropoffLocation,
+      pickupFeeSen: 0,
+      dropoffFeeSen,
+      feeSen: 0,
+      requested: true,
+    };
+  } else {
+    dropoff = dropoffPoints.find((p) => p.id === String(dropoffId)) || dropoffPoints[0];
+  }
 
   if (!point) problems.push({ code: "PICKUP_POINT_INVALID", message: "This car has no pickup point" });
   if (!dropoff) problems.push({ code: "DROPOFF_POINT_INVALID", message: "This car has no drop-off point" });
@@ -722,7 +791,7 @@ export function priceSelection(listing, config, sel, peakDates) {
   const peakDays = dates.filter((d) => peakDates.has(d)).length;
   const refundRule = peakDays > 0 ? { type: "FORFEIT" } : refundRuleFor(config);
 
-  return { days, downPaymentPct, driverAge, driverDateOfBirth, pickupAt, returnAt, dates, point, dropoff, requestedLocation, priced, peakDays, refundRule, problems };
+  return { days, downPaymentPct, driverAge, driverDateOfBirth, pickupAt, returnAt, dates, point, dropoff, requestedLocation, requestedDropoffLocation, priced, peakDays, refundRule, problems };
 }
 
 function hoursFor(branch) {
@@ -811,6 +880,7 @@ export async function quotePublicCar(id, sel) {
       dropoffPoint: r.dropoff,
       dropoffFeeSen: p.dropoffFeeSen,
       requestedLocation: r.requestedLocation || null,
+      requestedDropoffLocation: r.requestedDropoffLocation || null,
       balanceSen: p.balanceSen,
       totalSen: p.totalSen,
       refundRule: r.refundRule,

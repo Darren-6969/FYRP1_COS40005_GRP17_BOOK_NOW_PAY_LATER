@@ -751,6 +751,19 @@ const BOOKING_PAYMENT_INCLUDE = {
  * dates, points, add-ons and pricing snapshot, and the accept service then
  * requests payment from the new snapshot.
  */
+// How the operator's car offer is named in notifications, by its kind
+// (car_requote_service OFFER_KIND). Free-text host suggestions have no kind.
+function offerWording(booking) {
+  const kind = booking.alternativePricingSnapshot?.quote?.kind;
+  if (kind === "LOCATION_CHARGE") {
+    return { short: "location charge", long: "charge for the requested location" };
+  }
+  if (kind === "NEW_DATES") {
+    return { short: "new dates", long: "suggested new dates" };
+  }
+  return { short: "alternative", long: "alternative suggestion" };
+}
+
 async function applyCarAlternative(req, booking) {
   return prisma.$transaction(async (tx) => {
     const quote = await quoteAlternative({
@@ -758,6 +771,11 @@ async function applyCarAlternative(req, booking) {
       listingId: booking.alternativeListingId,
       pickupAt: booking.alternativePickupDate || booking.pickupDate,
       returnAt: booking.alternativeReturnDate || booking.returnDate,
+      // The operator's requested place charges (Module 4) are part of the
+      // offer, so they are priced again with the rest. Without them the
+      // re-quote would come out lower and read as a price change.
+      pickupChargeSen: booking.alternativePricingSnapshot?.quote?.pickupChargeSen ?? 0,
+      dropoffChargeSen: booking.alternativePricingSnapshot?.quote?.dropoffChargeSen ?? 0,
       db: tx,
       lock: true,
     });
@@ -811,7 +829,9 @@ async function applyCarAlternative(req, booking) {
     });
 
     return { updated };
-  }, { timeout: 15000 });
+    // The locked re-quote is several sequential queries before these
+    // writes; same room as the operator's offer transaction.
+  }, { maxWait: 10000, timeout: 20000 });
 }
 
 export async function acceptAlternativeBooking(req, res, next) {
@@ -960,13 +980,12 @@ export async function acceptAlternativeBooking(req, res, next) {
     await notifyOperatorUsersByBooking({
       booking: paymentReadyBooking,
 
-      title:
-        "Customer accepted alternative",
+      title: `Customer accepted ${offerWording(booking).short}`,
 
       message: `${
         paymentReadyBooking.customer?.name ||
         "Customer"
-      } accepted the alternative suggestion for booking ${
+      } accepted the ${offerWording(booking).long} for booking ${
         paymentReadyBooking.bookingCode ||
         paymentReadyBooking.id
       }.`,
@@ -1044,12 +1063,19 @@ export async function rejectAlternativeBooking(req, res, next) {
       return rejected;
     });
 
+    const wording = offerWording(booking);
+    const ref = updated.bookingCode || updated.id;
+
     await notifyCustomerByBooking({
       booking: updated,
-      title: "Alternative rejected",
-      message: `You rejected the alternative option for booking ${
-        updated.bookingCode || updated.id
-      }.`,
+      title:
+        wording.short === "alternative"
+          ? "Alternative rejected"
+          : `${wording.short[0].toUpperCase()}${wording.short.slice(1)} declined`,
+      message:
+        wording.short === "alternative"
+          ? `You rejected the alternative option for booking ${ref}.`
+          : `You declined the ${wording.long}, so booking ${ref} is closed.`,
       type: "ALTERNATIVE_REJECTED",
     });
 
@@ -1059,10 +1085,14 @@ export async function rejectAlternativeBooking(req, res, next) {
 
     await notifyOperatorUsersByBooking({
       booking: updated,
-      title: "Customer rejected alternative",
-      message: `${updated.customer?.name || "Customer"} rejected the alternative suggestion for booking ${
-        updated.bookingCode || updated.id
-      }.`,
+      title:
+        wording.short === "alternative"
+          ? "Customer rejected alternative"
+          : `Customer declined ${wording.short}`,
+      message:
+        wording.short === "alternative"
+          ? `${updated.customer?.name || "Customer"} rejected the alternative suggestion for booking ${ref}.`
+          : `${updated.customer?.name || "Customer"} declined the ${wording.long} on booking ${ref}. The booking is closed.`,
       type: "CUSTOMER_REJECTED_ALTERNATIVE",
       emailSubject: `Customer Rejected Alternative - ${
         updated.bookingCode || updated.id

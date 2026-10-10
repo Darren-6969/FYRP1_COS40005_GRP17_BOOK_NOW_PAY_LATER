@@ -12,6 +12,8 @@ export const carQuoteSchema = z.object({
   pickupPointId: z.union([z.string(), z.number()]).optional().nullable(),
   dropoffPointId: z.union([z.string(), z.number()]).optional().nullable(),
   requestedLocation: z.string().trim().max(300).optional().nullable(),
+  requestedDropoffLocation: z.string().trim().max(300).optional().nullable(),
+  returnToRequested: z.boolean().optional().nullable(),
   driverDateOfBirth: plainDate.optional().nullable(),
   cdw: z.boolean().default(false),
   addOns: z.record(z.string(), z.number().int().min(0).max(20)).default({}),
@@ -25,8 +27,12 @@ export const carBookingSchema = z.object({
   pickupPointId: z.union([z.string(), z.number()]).optional().nullable(),
   // Defaults to the pickup point when omitted (same-point return).
   dropoffPointId: z.union([z.string(), z.number()]).optional().nullable(),
-  // A location not on the operator's list; the operator prices it in reply.
+  // Places not on the operator's list; the operator prices them in reply.
+  // requestedLocation is the pickup end, requestedDropoffLocation the
+  // drop-off end. returnToRequested: true returns to the requested pickup.
   requestedLocation: z.string().trim().min(3).max(300).optional().nullable(),
+  requestedDropoffLocation: z.string().trim().min(3).max(300).optional().nullable(),
+  returnToRequested: z.boolean().optional().nullable(),
   cdw: z.boolean().default(false),
   addOns: z
     .array(z.object({ id: z.union([z.string(), z.number()]), quantity: z.number().int().min(1).max(20) }))

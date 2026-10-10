@@ -686,3 +686,104 @@
     border-top: 1px solid #e2e8f0;
   }
 }
+
+/* Make an offer (components/operator/OfferModal.jsx): tick what changes. */
+.cam-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cam-change {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.cam-change:hover {
+  border-color: #cbd5e1;
+}
+
+.cam-change.is-on {
+  border: 2px solid #2563eb;
+  padding: 11px 13px;
+  background: #eff6ff;
+}
+
+.cam-change:focus-within {
+  outline: 3px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 2px;
+}
+
+.cam-check {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 2px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #ffffff;
+}
+
+.cam-change.is-on .cam-check {
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+.cam-change-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cam-change-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.cam-change.is-on .cam-change-title {
+  color: #1d4ed8;
+}
+
+.cam-change-hint {
+  font-size: 13px;
+  color: #475569;
+}
+
+/* Which offer card the customer will see. */
+.cam-kind {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  font-size: 13px;
+  color: #334155;
+}
+
+.cam-field-hint {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cam-change {
+    transition: none;
+  }
+}

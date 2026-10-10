@@ -8,7 +8,8 @@ import { fromSen, rateCardFor } from "./car_pricing_service.js";
 /**
  * @param listing  the listing the price is for
  * @param pricing  priceSelection(...).priced plus { dates, refundRule, point,
- *                 dropoff, requestedLocation, driverAge? }
+ *                 dropoff, requestedLocation, requestedDropoffLocation,
+ *                 driverAge? }
  */
 export function buildCarPricingSnapshot(listing, pricing) {
   return {
@@ -36,6 +37,7 @@ export function buildCarPricingSnapshot(listing, pricing) {
     pickupPoint: pricing.point,
     dropoffPoint: pricing.dropoff,
     requestedLocation: pricing.requestedLocation || null,
+    requestedDropoffLocation: pricing.requestedDropoffLocation || null,
   };
 }
 
@@ -74,9 +76,12 @@ export function storedPointId(point) {
 }
 
 // The location text shown on the booking, as the booking form writes it.
-export function bookingLocationText(listing, { requestedLocation, point, dropoff }) {
+export function bookingLocationText(listing, { point, dropoff }) {
   const pointText = (pt) =>
-    pt.id === "branch" ? `${listing.branch.name}, ${listing.branch.address}` : pt.label;
-  if (requestedLocation) return `Requested: ${requestedLocation}`;
+    pt.requested
+      ? `Requested: ${pt.label}`
+      : pt.id === "branch"
+        ? `${listing.branch.name}, ${listing.branch.address}`
+        : pt.label;
   return dropoff.id === point.id ? pointText(point) : `${pointText(point)} → ${pointText(dropoff)}`;
 }

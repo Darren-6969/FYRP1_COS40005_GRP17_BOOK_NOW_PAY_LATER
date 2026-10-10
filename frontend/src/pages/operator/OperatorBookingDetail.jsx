@@ -9,7 +9,7 @@ import {
   operatorStatusLabel,
 } from "../../services/operator_service";
 
-import CarAlternativeModal from "../../components/operator/CarAlternativeModal";
+import OfferModal from "../../components/operator/OfferModal";
 
 import {
   carTitle,
@@ -100,6 +100,18 @@ export default function OperatorBookingDetail() {
       action === "reject" &&
       !window.confirm(
         "Are you sure you want to reject this booking?"
+      )
+    ) {
+      return;
+    }
+
+    // Accepting a request with a requested location provides that location
+    // at no charge (Module 4), so make sure that is what the operator means.
+    if (
+      action === "accept" &&
+      canQuoteLocationCharge &&
+      !window.confirm(
+        `Accept and provide ${requestedPlacesText} at no extra charge? To charge for it, choose Make an offer instead.`
       )
     ) {
       return;
@@ -257,6 +269,44 @@ export default function OperatorBookingDetail() {
   const canSuggestAlternative =
   bookingStatus === "PENDING" &&
   !booking.alternativeUsed;
+
+  // Module 4: a customer-requested location is free until the operator
+  // prices it. The operator can quote a charge, accept as is (no charge) or
+  // reject, while the request is waiting and no offer has been sent.
+  const requestedLocation =
+    carPricing?.requestedLocation ||
+    car?.requestedLocation ||
+    null;
+
+  const requestedDropoffLocation =
+    carPricing?.requestedDropoffLocation ||
+    car?.requestedDropoffLocation ||
+    null;
+
+  // "pickup at Vivacity and drop-off at Hilton", for the accept prompt.
+  const requestedPlacesText = [
+    requestedLocation &&
+      (requestedDropoffLocation || carPricing?.dropoffPoint?.id !== "requested"
+        ? `pickup at "${requestedLocation}"`
+        : `pickup and return at "${requestedLocation}"`),
+    requestedDropoffLocation &&
+      `drop-off at "${requestedDropoffLocation}"`,
+  ]
+    .filter(Boolean)
+    .join(" and ");
+
+  const canQuoteLocationCharge =
+    Boolean(car) &&
+    Boolean(requestedLocation || requestedDropoffLocation) &&
+    canSuggestAlternative;
+
+  // The offer the customer is looking at, when it carries charges for the
+  // places they asked for (with or without another car or new dates).
+  const pendingLocationCharge =
+    bookingStatus === "ALTERNATIVE_SUGGESTED" &&
+    car?.alternative?.pricing?.quote?.locationChargeSen
+      ? car.alternative.pricing
+      : null;
 
   // =========================================================
   // Handover
@@ -702,18 +752,52 @@ export default function OperatorBookingDetail() {
           </span>
 
           <strong>
-            {booking.pickupPoint?.label ||
-              booking.requestedLocation ||
-              "-"}
+            {requestedLocation
+              ? `Requested: ${requestedLocation}`
+              : booking.pickupPoint?.label ||
+                carPricing?.pickupPoint?.label ||
+                "-"}
           </strong>
 
-          {!booking.pickupPoint &&
-            booking.requestedLocation && (
+          {canQuoteLocationCharge && (
               <small className="booking-clean-location-note">
                 <span className="operator-status warning">
                   Needs a charge
                 </span>{" "}
-                Customer-requested location, no charge quoted yet.
+                {requestedLocation && requestedDropoffLocation
+                  ? "Customer-requested pickup and drop-off places"
+                  : requestedDropoffLocation
+                    ? "Customer-requested drop-off place"
+                    : "Customer-requested place"}
+                , no charge quoted yet.{" "}
+                <button
+                  type="button"
+                  className="operator-link-btn"
+                  disabled={!!actionLoading}
+                  onClick={() =>
+                    setShowAlternative(true)
+                  }
+                >
+                  Make an offer
+                </button>
+              </small>
+            )}
+
+          {pendingLocationCharge && (
+              <small className="booking-clean-location-note">
+                <span className="operator-status info">
+                  Offer sent
+                </span>{" "}
+                {formatSen(
+                  pendingLocationCharge.quote
+                    ?.locationChargeSen
+                )}{" "}
+                for the requested place, new total{" "}
+                {formatSen(
+                  pendingLocationCharge.totalSen
+                )}
+                . Waiting for the customer to accept or
+                decline.
               </small>
             )}
 
@@ -730,9 +814,14 @@ export default function OperatorBookingDetail() {
           </span>
 
           <strong>
-            {booking.dropoffPoint?.label ||
-              booking.requestedLocation ||
-              "-"}
+            {requestedDropoffLocation
+              ? `Requested: ${requestedDropoffLocation}`
+              : requestedLocation &&
+                  carPricing?.dropoffPoint?.id === "requested"
+                ? "Same as pickup"
+                : booking.dropoffPoint?.label ||
+                  carPricing?.dropoffPoint?.label ||
+                  "-"}
           </strong>
 
           {booking.dropoffPoint?.address && (
@@ -770,7 +859,7 @@ export default function OperatorBookingDetail() {
 
       {car?.alternative && (
         <div className="booking-clean-section">
-          <h3>Suggested Alternative</h3>
+          <h3>Offer Sent</h3>
 
           <div className="booking-clean-licence-details">
             <InfoRow
@@ -1160,8 +1249,11 @@ export default function OperatorBookingDetail() {
           <small className="booking-clean-location-note">
             Quoted when the customer booked. Payment is requested
             only after you accept.
-            {carPricing.requestedLocation
-              ? " The requested location has no charge yet."
+            {(carPricing.requestedLocation ||
+              carPricing.requestedDropoffLocation) &&
+            !(carPricing.pickupPoint?.requested && carPricing.pickupFeeSen) &&
+            !(carPricing.dropoffPoint?.requested && carPricing.dropoffFeeSen)
+              ? " The requested place has no charge yet. Quote one, or accept to provide it free."
               : ""}
           </small>
 
@@ -1468,7 +1560,7 @@ export default function OperatorBookingDetail() {
               )
             }
           >
-            Suggest Alternative
+            {car ? "Make an offer" : "Suggest Alternative"}
           </button>
         )}
 
@@ -1562,7 +1654,7 @@ export default function OperatorBookingDetail() {
 
       {showAlternative &&
         (booking.car ? (
-          <CarAlternativeModal
+          <OfferModal
             booking={booking}
             onClose={() =>
               setShowAlternative(false)

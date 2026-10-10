@@ -494,6 +494,10 @@ export function quoteCarBooking(listingId, sel) {
   if (sel.pickupPointId) body.pickupPointId = String(sel.pickupPointId);
   if (sel.dropoffPointId) body.dropoffPointId = String(sel.dropoffPointId);
   if (sel.requestedLocation && sel.requestedLocation.trim()) body.requestedLocation = sel.requestedLocation.trim();
+  if (sel.requestedDropoffLocation && sel.requestedDropoffLocation.trim()) {
+    body.requestedDropoffLocation = sel.requestedDropoffLocation.trim();
+  }
+  if (typeof sel.returnToRequested === "boolean") body.returnToRequested = sel.returnToRequested;
   body.cdw = Boolean(sel.cdw);
   return api.post(`/public/cars/${encodeURIComponent(listingId)}/quote`, body);
 }

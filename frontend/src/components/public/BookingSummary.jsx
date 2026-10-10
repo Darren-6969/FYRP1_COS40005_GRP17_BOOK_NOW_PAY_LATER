@@ -88,12 +88,12 @@ export default function BookingSummary({ listing, quote, editHref }) {
         </div>
         <dl className={styles.dl}>
           <div className={styles.row}>
-            <dt>{quote?.requestedLocation ? "Requested location" : "Pickup point"}</dt>
+            <dt>{quote?.requestedLocation ? "Requested pickup place" : "Pickup point"}</dt>
             <dd>{quote?.pickupPoint.label || "Not set"}</dd>
           </div>
-          {quote && !quote.requestedLocation && (
+          {quote && (
             <div className={styles.row}>
-              <dt>Drop-off point</dt>
+              <dt>{quote.requestedDropoffLocation ? "Requested drop-off place" : "Drop-off point"}</dt>
               <dd>{sameReturn ? "Same as pickup" : quote.dropoffPoint?.label || "Not set"}</dd>
             </div>
           )}
@@ -128,9 +128,9 @@ export default function BookingSummary({ listing, quote, editHref }) {
                 <dd>{formatSen(quote.totalSen)}</dd>
               </div>
             </dl>
-            {quote.requestedLocation && (
+            {(quote.requestedLocation || quote.requestedDropoffLocation) && (
               <p className={styles.muted}>
-                The operator replies with any charge for your requested location. You accept it before paying anything.
+                The operator replies with any charge for your requested place. You accept it before paying anything.
               </p>
             )}
           </div>

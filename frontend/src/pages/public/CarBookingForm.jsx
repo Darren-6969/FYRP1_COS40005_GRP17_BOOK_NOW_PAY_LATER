@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { AlertCircle, Check, CircleAlert, Info, TriangleAlert, X } from "lucide-react";
+import { AlertCircle, Check, CircleAlert, CircleDot, Info, MapPin, TriangleAlert, X } from "lucide-react";
 import { getCarListing, quoteCarBooking } from "../../services/listing_public_service";
 import { requestCarBooking } from "../../services/car_booking_service";
 import { parseBookingSelection, toBookingParams, tripParams } from "../../utils/carSearchParams";
@@ -19,11 +19,47 @@ const FIELD_ID = {
   driverName: "bf-driver",
   driverDob: "bf-driver-dob",
   location: "bf-location",
+  dropoffLocation: "bf-dropoff-location",
   chauffeurNote: "bf-chauffeur-note",
   agree: "bf-agree",
   forfeit: "bf-forfeit",
 };
-const ORDER = ["name", "phone", "driverName","driverDob", "location", "chauffeurNote", "agree", "forfeit"];
+const ORDER = ["name", "phone", "driverName","driverDob", "location", "dropoffLocation", "chauffeurNote", "agree", "forfeit"];
+
+// Pickup and drop-off are requested separately: each end is either a listed
+// point or a location the customer types.
+const asksPickup = (f) => Boolean(f.requestPickup);
+const asksDropoff = (f) => Boolean(f.requestDropoff);
+
+// The requested locations the server should price, from the form. Text under
+// three characters is left out until the customer finishes typing. A
+// requested pickup returns to a listed point unless a drop-off location is
+// requested too (returnToRequested: false); the same text on both ends is
+// read by the server as one place.
+function requestedPlaces(f) {
+  const text = (v) => {
+    const t = (v || "").trim();
+    return t.length >= 3 ? t : "";
+  };
+  const pickup = asksPickup(f) ? text(f.requestedLocation) : "";
+  const dropoff = asksDropoff(f) ? text(f.requestedDropoffLocation) : "";
+  return { pickup, dropoff, returnToRequested: pickup ? false : null };
+}
+
+// Drafts saved by the earlier single switch (requestOther + requestSide +
+// returnSame) restore as the two separate switches.
+function migrateDraft(draft) {
+  if (!draft || draft.requestPickup !== undefined || draft.requestOther === undefined) return draft;
+  const { requestOther, requestSide = "BOTH", returnSame = true, ...rest } = draft;
+  const on = Boolean(requestOther);
+  const sameBoth = requestSide === "BOTH" && returnSame;
+  return {
+    ...rest,
+    requestPickup: on && requestSide !== "DROPOFF",
+    requestDropoff: on && requestSide !== "PICKUP",
+    requestedDropoffLocation: sameBoth ? rest.requestedLocation || "" : rest.requestedDropoffLocation || "",
+  };
+}
 const MAX_NOTE = 500;
 const DRAFT_PREFIX = "bnpl_booking_draft:";
 
@@ -55,8 +91,14 @@ function validate(key, f, agreed, forfeitAgreed) {
   return "";
 }
   if (key === "location") {
-    if (!f.requestOther) return "";
+    if (!asksPickup(f)) return "";
     return f.requestedLocation.trim().length >= 3 ? "" : "Enter the place you'd like to pick up from, for example a hotel name.";
+  }
+  if (key === "dropoffLocation") {
+    if (!asksDropoff(f)) return "";
+    return (f.requestedDropoffLocation || "").trim().length >= 3
+      ? ""
+      : "Enter the place you'd like to return the car to, for example a hotel name.";
   }
   if (key === "chauffeurNote") return f.chauffeurNote.length <= MAX_NOTE ? "" : `Keep the note under ${MAX_NOTE} characters.`;
   if (key === "agree") return agreed ? "" : "Tick to agree to the Terms of Service and rental terms.";
@@ -108,13 +150,15 @@ function initialForm(listingId) {
     driverName: "",
     driverDateOfBirth: "",
     licence: "MY",
-    requestOther: false,
+    requestPickup: false,
+    requestDropoff: false,
     requestedLocation: "",
+    requestedDropoffLocation: "",
     chauffeur: false,
     chauffeurNote: "",
   };
   // Drafts saved before the V2.9 fields existed still restore.
-  const draft = readDraft(listingId);
+  const draft = migrateDraft(readDraft(listingId));
   return draft ? { ...blank, ...draft } : blank;
 }
 
@@ -260,14 +304,13 @@ export default function CarBookingForm() {
 
   const agreed = Boolean(agreedAt);
   const forfeitAgreed = Boolean(forfeitAt);
-  // A requested location is quoted once it is complete, not on every keystroke.
-  const [quotedLocation, setQuotedLocation] = useState(() =>
-    form.requestOther && form.requestedLocation.trim().length >= 3 ? form.requestedLocation.trim() : ""
-  );
+  // Requested places are quoted once they are complete, not on every keystroke.
+  const [quotedPlaces, setQuotedPlaces] = useState(() => requestedPlaces(form));
+  const quotedPlacesKey = `${quotedPlaces.pickup}|${quotedPlaces.dropoff}|${quotedPlaces.returnToRequested}`;
   const quotedDriverDob =
   form.driverDateOfBirth || "";
 
-  const quoteKey =`${listingId}?${key}` + `&rl=${quotedLocation}` + `&dob=${quotedDriverDob}`;
+  const quoteKey =`${listingId}?${key}` + `&rl=${quotedPlacesKey}` + `&dob=${quotedDriverDob}`;
 
   useEffect(() => {
     let alive = true;
@@ -288,7 +331,13 @@ export default function CarBookingForm() {
     ...s,
 
     requestedLocation:
-      quotedLocation,
+      quotedPlaces.pickup,
+
+    requestedDropoffLocation:
+      quotedPlaces.dropoff,
+
+    returnToRequested:
+      quotedPlaces.returnToRequested,
 
     driverDateOfBirth:
       quotedDriverDob || null,
@@ -299,7 +348,7 @@ export default function CarBookingForm() {
     return () => {
       alive = false;
     };
-  }, [listingId, key, quotedLocation, quotedDriverDob, quoteKey]);
+  }, [listingId, key, quotedPlaces, quotedDriverDob, quoteKey]);
 
   useEffect(() => {
     writeDraft(listingId, form);
@@ -339,6 +388,57 @@ export default function CarBookingForm() {
   const sending = status.kind === "sending";
   const pickupPointId = sel.pickupPointId || b.pickupPoints[0]?.id || "";
   const dropoffPointId = sel.dropoffPointId || "";
+  // The listed drop-off point when only the pickup place is requested: the
+  // one chosen on the car page, else the pickup point if it takes returns,
+  // else the first drop-off point (as the car page picks it).
+  const pickupServesDropoff = b.dropoffPoints?.some((p) => p.id === pickupPointId);
+  const listedDropoffId =
+    sel.dropoffPointId || (pickupServesDropoff ? pickupPointId : b.dropoffPoints?.[0]?.id) || "";
+  // The listed point on each end while it isn't requested. listedDropoffId
+  // follows the server's choice: the drop-off chosen on the car page, else the
+  // pickup point if it takes returns, else the first drop-off point.
+  const findPoint = (points, id) => points?.find((p) => String(p.id) === String(id)) || null;
+  const listedPickup = findPoint(b.pickupPoints, pickupPointId);
+  const listedDropoff = findPoint(b.dropoffPoints, listedDropoffId);
+  const pointFee = (sen) => (sen ? formatSen(sen) : "Free");
+  // One stop of the pickup and drop-off route.
+  const routeStops = [
+    {
+      key: "pickup",
+      title: "Pickup",
+      Icon: CircleDot,
+      requested: form.requestPickup,
+      flag: "requestPickup",
+      point: listedPickup,
+      pointText: listedPickup?.label || quote?.pickupPoint?.label || "-",
+      feeSen: listedPickup?.pickupFeeSen,
+      inputId: FIELD_ID.location,
+      field: "requestedLocation",
+      errKey: "location",
+      errId: "bf-location-err",
+      inputLabel: "Pickup location",
+      placeholder: "For example Vivacity Megamall, Kuching",
+    },
+    {
+      key: "dropoff",
+      title: "Drop-off",
+      Icon: MapPin,
+      requested: form.requestDropoff,
+      flag: "requestDropoff",
+      point: listedDropoff,
+      pointText:
+        !form.requestPickup && listedDropoff && String(listedDropoff.id) === String(pickupPointId)
+          ? `${listedDropoff.label} (same as pickup)`
+          : listedDropoff?.label || quote?.dropoffPoint?.label || "-",
+      feeSen: listedDropoff?.dropoffFeeSen,
+      inputId: FIELD_ID.dropoffLocation,
+      field: "requestedDropoffLocation",
+      errKey: "dropoffLocation",
+      errId: "bf-dropoff-location-err",
+      inputLabel: "Drop-off location",
+      placeholder: "For example The Spring, Kuching",
+    },
+  ];
   const detailHref = `/cars/${listing.id}?${toBookingParams({ ...sel, pickupPointId })}`;
   const setSel = (changes) => setParams(toBookingParams({ ...sel, pickupPointId, ...changes }), { replace: true });
   const problems = q?.problems || [];
@@ -380,14 +480,15 @@ export default function CarBookingForm() {
   const blur = (k) => setErrors((e) => ({ ...e, [k]: validate(k, form, agreed, forfeitAgreed) }));
 
   const commitLocation = (f = form) => {
-    const value = f.requestOther ? f.requestedLocation.trim() : "";
-    setQuotedLocation(value.length >= 3 ? value : "");
+    setQuotedPlaces(requestedPlaces(f));
   };
 
-  const toggleRequestOther = () => {
-    const next = { ...form, requestOther: !form.requestOther };
+  // Switch changes re-quote straight away and clear errors on fields that may
+  // no longer be shown. The typed text is kept, so switching back restores it.
+  const updateRequest = (changes) => {
+    const next = { ...form, ...changes };
     setForm(next);
-    setErrors((e) => ({ ...e, location: "" }));
+    setErrors((e) => ({ ...e, location: "", dropoffLocation: "" }));
     commitLocation(next);
   };
 
@@ -410,14 +511,22 @@ export default function CarBookingForm() {
     const digits = phoneDigits(form.phone);
 
     // Identifiers and choices only. The server prices the booking.
-    const requested = form.requestOther ? form.requestedLocation.trim() : "";
+    const places = requestedPlaces(form);
     const payload = {
       listingId: listing.id,
       pickupAt: quote.pickupAt,
       returnAt: quote.returnAt,
-      pickupPointId: requested ? null : pickupPointId,
-      dropoffPointId: requested ? null : dropoffPointId || null,
-      requestedLocation: requested || null,
+      pickupPointId: places.pickup ? null : pickupPointId,
+      // A requested pickup returns to the listed drop-off point unless a
+      // drop-off location is requested too.
+      dropoffPointId: places.dropoff
+        ? null
+        : places.pickup
+          ? listedDropoffId || null
+          : dropoffPointId || null,
+      requestedLocation: places.pickup || null,
+      requestedDropoffLocation: places.dropoff || null,
+      returnToRequested: places.returnToRequested,
       cdw: Boolean(sel.cdw),
       addOns: Object.entries(sel.addOns)
         .filter(([, n]) => n > 0)
@@ -939,68 +1048,102 @@ export default function CarBookingForm() {
                 Pickup, drop-off and extras
               </h2>
 
-              {!form.requestOther && quote && (
-                <dl className={styles.miniTerms}>
-                  <div>
-                    <dt>Pickup</dt>
-                    <dd>{quote.pickupPoint.label}</dd>
-                  </div>
-                  <div>
-                    <dt>Drop-off</dt>
-                    <dd>
-                      {quote.dropoffPoint && quote.dropoffPoint.id !== quote.pickupPoint.id
-                        ? quote.dropoffPoint.label
-                        : "Same as pickup"}
-                    </dd>
-                  </div>
-                </dl>
-              )}
-              {!form.requestOther && (
-                <p className={styles.hint}>
-                  <Link to={`${detailHref}#trip`}>Change pickup or drop-off point</Link>
+              {/* Pickup and drop-off as a route: each stop is the operator's
+                  listed point or a location the customer asks for. */}
+              <div className={styles.route}>
+                <p className={styles.routeIntro}>
+                  Collect and return the car at one of {op}&apos;s points, or ask them to meet you somewhere else.
                 </p>
-              )}
 
-              <div className={styles.switchRow}>
-                <span id="bf-other-switch" className={styles.label}>
-                  Request a location that isn&apos;t listed
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={form.requestOther}
-                  aria-labelledby="bf-other-switch"
-                  className={`${styles.switch} ${form.requestOther ? styles.switchOn : ""}`}
-                  onClick={toggleRequestOther}
-                >
-                  <span className={styles.switchKnob} />
-                </button>
+                <ol className={styles.routeStops}>
+                  {routeStops.map((stop) => {
+                    const titleId = `bf-route-${stop.key}`;
+                    const error = errors[stop.errKey];
+                    return (
+                      <li key={stop.key} className={styles.routeStop}>
+                        <span className={styles.routeRail} aria-hidden="true">
+                          <stop.Icon size={20} />
+                        </span>
+
+                        <div className={styles.routeBody}>
+                          <div className={styles.routeHead}>
+                            <span id={titleId} className={styles.routeTitle}>
+                              {stop.title}
+                            </span>
+                            <div role="radiogroup" aria-labelledby={titleId} className={styles.seg}>
+                              {[
+                                [false, `${op} point`],
+                                [true, "Somewhere else"],
+                              ].map(([value, text]) => (
+                                <label
+                                  key={text}
+                                  className={`${styles.segOption} ${stop.requested === value ? styles.segOptionOn : ""}`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`bf-route-${stop.key}`}
+                                    checked={stop.requested === value}
+                                    onChange={() => updateRequest({ [stop.flag]: value })}
+                                    className={styles.srOnly}
+                                  />
+                                  {text}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+
+                          {stop.requested ? (
+                            <div className={styles.field}>
+                              <label htmlFor={stop.inputId} className={styles.routeFieldLabel}>
+                                {stop.inputLabel}
+                              </label>
+                              <input
+                                id={stop.inputId}
+                                type="text"
+                                maxLength={300}
+                                placeholder={stop.placeholder}
+                                value={form[stop.field]}
+                                onChange={(e) => change(stop.field, stop.errKey, e.target.value)}
+                                onBlur={() => {
+                                  blur(stop.errKey);
+                                  commitLocation();
+                                }}
+                                aria-invalid={Boolean(error)}
+                                aria-describedby={describe("bf-location-hint", error && stop.errId)}
+                                className={`${styles.input} ${error ? styles.inputInvalid : ""}`}
+                              />
+                              <FieldError id={stop.errId}>{error}</FieldError>
+                            </div>
+                          ) : (
+                            <div className={styles.routePoint}>
+                              <p className={styles.routePointLine}>
+                                <strong>{stop.pointText}</strong>
+                                <span className={styles.routeFee}>{pointFee(stop.feeSen)}</span>
+                                <Link to={`${detailHref}#trip`} className={styles.routeChange}>
+                                  Change
+                                  <span className={styles.srOnly}> {stop.title.toLowerCase()} point</span>
+                                </Link>
+                              </p>
+                              {stop.point?.address && <p className={styles.routeAddress}>{stop.point.address}</p>}
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+
+                <p id="bf-location-hint" className={styles.routeNote}>
+                  <Info size={16} aria-hidden="true" className={styles.routeNoteIcon} />
+                  <span>
+                    {form.requestPickup || form.requestDropoff
+                      ? `${op} replies with the charge for ${
+                          form.requestPickup && form.requestDropoff ? "each location you asked for" : "the location you asked for"
+                        }. You accept or decline it before paying anything.`
+                      : `Somewhere else is priced by ${op} in their reply. You accept or decline it before paying anything.`}
+                  </span>
+                </p>
               </div>
-              {form.requestOther && (
-                <div className={styles.field}>
-                  <label htmlFor={FIELD_ID.location} className={styles.label}>
-                    Where would you like to pick up and return the car?
-                  </label>
-                  <input
-                    id={FIELD_ID.location}
-                    type="text"
-                    maxLength={300}
-                    value={form.requestedLocation}
-                    onChange={(e) => change("requestedLocation", "location", e.target.value)}
-                    onBlur={() => {
-                      blur("location");
-                      commitLocation();
-                    }}
-                    aria-invalid={Boolean(errors.location)}
-                    aria-describedby={describe("bf-location-hint", errors.location && "bf-location-err")}
-                    className={`${styles.input} ${errors.location ? styles.inputInvalid : ""}`}
-                  />
-                  <p id="bf-location-hint" className={styles.hint}>
-                    {op} replies with the charge for this location. You accept or decline it before paying anything.
-                  </p>
-                  <FieldError id="bf-location-err">{errors.location}</FieldError>
-                </div>
-              )}
 
               {b.cdw && (
                 <div className={styles.switchRow}>
@@ -1022,7 +1165,7 @@ export default function CarBookingForm() {
               )}
               {b.cdw && (
                 <p id="bf-cdw-hint" className={styles.hint}>
-                  Optional. {b.cdw.description} Added to the balance.
+                  {b.cdw.description} Added to the balance.
                 </p>
               )}
 

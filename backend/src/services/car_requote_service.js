@@ -1,4 +1,12 @@
-// Server-side quote for a suggested alternative car (development plan Module 3).
+// Server-side quote for a suggested alternative car (development plan Module 3)
+// and for a charge on a customer-requested location (Module 4, FR-LIST-004).
+//
+// A location charge is an offer on the booking's own listing and dates with
+// pickupChargeSen and/or dropoffChargeSen set, one per requested end (one
+// place for both ends takes the pickup charge only); an alternative car may
+// carry them too. Either way the charges go through priceSelection() as the
+// requested points' pickup and drop-off charges, so the total, deposit and
+// balance follow the same rules as every other charge.
 //
 // The operator picks one of their published car listings (and optionally new
 // dates); the price always comes from priceSelection(), the same rules the
@@ -10,7 +18,13 @@
 import prisma from "../config/db.js";
 import { addDays, klHhmm, klPlainDate, occupiedDates, rentalDays, toSen } from "./car_pricing_service.js";
 import { loadAvailability, loadPeakDates } from "./car_availability_service.js";
-import { CDW_ID, LISTING_INCLUDE, PUBLIC_LISTING_WHERE, priceSelection } from "./public_car_service.js";
+import {
+  CDW_ID,
+  LISTING_INCLUDE,
+  PUBLIC_LISTING_WHERE,
+  priceSelection,
+  requestedSides,
+} from "./public_car_service.js";
 import {
   bookingLocationText,
   buildCarPricingSnapshot,
@@ -23,6 +37,106 @@ import {
 const MIN_LEAD_MINUTES = 60;
 const MAX_RENTAL_DAYS = 90;
 
+// Highest charge an operator can quote for a requested location (Module 4),
+// a guard against a typo such as RM 3000 for RM 30.
+export const MAX_LOCATION_CHARGE_SEN = 100000; // RM 1,000
+
+// What kind of offer the operator is making:
+// - ALTERNATIVE_CAR: another of their cars (dates and place charges optional)
+// - NEW_DATES: the booked car at other times (place charges optional)
+// - LOCATION_CHARGE: the booked car and dates, only charges for the places
+//   the customer asked for
+export const OFFER_KIND = {
+  ALTERNATIVE_CAR: "ALTERNATIVE_CAR",
+  NEW_DATES: "NEW_DATES",
+  LOCATION_CHARGE: "LOCATION_CHARGE",
+};
+
+// Milliseconds, or null when there is no valid time.
+const timeOf = (value) => {
+  const ms = value ? new Date(value).getTime() : Number.NaN;
+  return Number.isNaN(ms) ? null : ms;
+};
+
+// True when the offered times differ from the booked ones.
+export function datesChanged(booking, pickupAt, returnAt) {
+  return (
+    timeOf(pickupAt) !== timeOf(booking.pickupDate) ||
+    timeOf(returnAt) !== timeOf(booking.returnDate)
+  );
+}
+
+export function offerKind(booking, listingId, pickupAt = booking.pickupDate, returnAt = booking.returnDate) {
+  if (Number(listingId) !== Number(booking.listingId)) return OFFER_KIND.ALTERNATIVE_CAR;
+  return datesChanged(booking, pickupAt, returnAt) ? OFFER_KIND.NEW_DATES : OFFER_KIND.LOCATION_CHARGE;
+}
+
+/**
+ * The places a booking asked for, read as priceSelection() reads them. The
+ * booking's pricing snapshot says whether the car returns to the requested
+ * pickup place (its drop-off point is the same "requested" point); bookings
+ * without that fall back to the stored point ids.
+ */
+export function bookingRequestedSel(booking) {
+  const snap = booking.pricingSnapshot || {};
+  const pickup = snap.requestedLocation || booking.requestedLocation || null;
+  const dropoff = snap.requestedDropoffLocation || booking.requestedDropoffLocation || null;
+  const snapDropoffId = snap.dropoffPoint?.id;
+
+  return {
+    requestedLocation: pickup,
+    requestedDropoffLocation: dropoff,
+    returnToRequested:
+      pickup && !dropoff && snapDropoffId !== undefined ? snapDropoffId === "requested" : null,
+    dropoffPointId: booking.dropoffPointId ?? null,
+  };
+}
+
+const senOrZero = (value) => (value === null || value === undefined ? 0 : Number(value));
+
+/**
+ * Checks the operator's charges for the requested places, in sen. Pure, so it
+ * is unit-tested on its own. One place for both ends takes one charge, the
+ * pickup charge. Returns a problem object, or null when the charges are fine.
+ */
+export function locationChargeProblem({ booking, pickupChargeSen, dropoffChargeSen, kind }) {
+  const sides = requestedSides(bookingRequestedSel(booking));
+  const charges = [
+    { sen: senOrZero(pickupChargeSen), requested: Boolean(sides.pickup), end: "pickup" },
+    {
+      sen: senOrZero(dropoffChargeSen),
+      requested: Boolean(sides.dropoff) && !sides.samePlace,
+      end: "drop-off",
+    },
+  ];
+
+  for (const charge of charges) {
+    if (!Number.isInteger(charge.sen) || charge.sen < 0) {
+      return problem("LOCATION_CHARGE_INVALID", "Enter the charge in ringgit, for example 30 or 30.50.");
+    }
+    if (charge.sen > MAX_LOCATION_CHARGE_SEN) {
+      return problem(
+        "LOCATION_CHARGE_TOO_HIGH",
+        `A location charge can be at most RM ${(MAX_LOCATION_CHARGE_SEN / 100).toLocaleString("en-MY")}.`
+      );
+    }
+    if (charge.sen > 0 && !charge.requested) {
+      return problem(
+        "LOCATION_CHARGE_NOT_APPLICABLE",
+        `This booking has no requested ${charge.end} place to charge for.`
+      );
+    }
+  }
+
+  if (kind === OFFER_KIND.LOCATION_CHARGE && charges[0].sen + charges[1].sen <= 0) {
+    return problem(
+      "LOCATION_CHARGE_REQUIRED",
+      "Enter a charge above RM 0, or accept the booking as it is."
+    );
+  }
+  return null;
+}
+
 const normalise = (text) => String(text || "").trim().toLowerCase();
 
 /**
@@ -32,7 +146,7 @@ const normalise = (text) => String(text || "").trim().toLowerCase();
  * - Dates: the ones given (the operator may move them)
  * - Pickup and drop-off points: kept when the new car is at the same branch,
  *   otherwise left to the new branch's first points (reported as changed)
- * - A requested location is kept as is
+ * - Requested pickup and drop-off places are kept as they are
  * - CDW: kept if it was chosen; priceSelection drops it if the new listing
  *   does not offer it
  * - Other add-ons: matched to the new listing by name; unmatched ones are
@@ -41,7 +155,7 @@ const normalise = (text) => String(text || "").trim().toLowerCase();
 export function rebuildSelection({ booking, originalBranchId, listing, pickupAt, returnAt }) {
   const original = booking.pricingSnapshot || {};
   const sameBranch = Boolean(originalBranchId) && originalBranchId === listing.branchId;
-  const requestedLocation = original.requestedLocation || booking.requestedLocation || null;
+  const requested = bookingRequestedSel(booking);
 
   const originalLines = Array.isArray(original.addOnLines) ? original.addOnLines : [];
   const wantsCdw = originalLines.some((line) => String(line.id) === CDW_ID);
@@ -68,7 +182,13 @@ export function rebuildSelection({ booking, originalBranchId, listing, pickupAt,
       driverDateOfBirth: booking.bookingDetails?.driver?.dateOfBirth ?? null,
       pickupPointId: sameBranch && booking.pickupPointId ? String(booking.pickupPointId) : null,
       dropoffPointId: sameBranch && booking.dropoffPointId ? String(booking.dropoffPointId) : null,
-      requestedLocation,
+      requestedLocation: requested.requestedLocation,
+      requestedDropoffLocation: requested.requestedDropoffLocation,
+      // Decided from the original booking, so a listed drop-off at another
+      // branch is never mistaken for a return to the requested place.
+      returnToRequested: requested.requestedLocation
+        ? requestedSides(requested).samePlace
+        : null,
       cdw: wantsCdw,
       addOns,
     },
@@ -97,6 +217,8 @@ export async function quoteAlternative({
   listingId,
   pickupAt,
   returnAt,
+  pickupChargeSen = 0,
+  dropoffChargeSen = 0,
   db = prisma,
   lock = false,
 }) {
@@ -124,6 +246,12 @@ export async function quoteAlternative({
   if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     return { listing, problems: [problem("INVALID_DATES", "Enter a valid pick-up and return time.")] };
   }
+
+  const kind = offerKind(booking, listing.id, start, end);
+  const chargeProblem = locationChargeProblem({ booking, pickupChargeSen, dropoffChargeSen, kind });
+  if (chargeProblem) return { listing, problems: [chargeProblem] };
+  const pickupSen = senOrZero(pickupChargeSen);
+  const dropoffSen = senOrZero(dropoffChargeSen);
 
   const problems = [];
   const days = rentalDays(start, end);
@@ -154,7 +282,10 @@ export async function quoteAlternative({
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
   const peakDates = await loadPeakDates(sel.from, addDays(sel.from, days + 1), db);
-  const r = priceSelection(listing, config, sel, peakDates);
+  const r = priceSelection(listing, config, sel, peakDates, {
+    requestedPickupFeeSen: pickupSen,
+    requestedDropoffFeeSen: dropoffSen,
+  });
   problems.push(...r.problems);
 
   if (!r.priced) {
@@ -182,6 +313,7 @@ export async function quoteAlternative({
     point: r.point,
     dropoff: r.dropoff,
     requestedLocation: r.requestedLocation,
+    requestedDropoffLocation: r.requestedDropoffLocation,
     driverAge: r.driverAge,
   };
   const pricingSnapshot = buildCarPricingSnapshot(listing, pricing);
@@ -195,8 +327,11 @@ export async function quoteAlternative({
     snapshot: {
       ...pricingSnapshot,
       quote: {
-        kind: "ALTERNATIVE_CAR",
+        kind,
         listingId: listing.id,
+        pickupChargeSen: pickupSen,
+        dropoffChargeSen: dropoffSen,
+        locationChargeSen: pickupSen + dropoffSen,
         pickupAt: start.toISOString(),
         returnAt: end.toISOString(),
         pointsChanged,
@@ -215,6 +350,7 @@ export async function quoteAlternative({
       pickupPointId: storedPointId(r.point),
       dropoffPointId: storedPointId(r.dropoff),
       requestedLocation: r.requestedLocation || null,
+      requestedDropoffLocation: r.requestedDropoffLocation || null,
       ...carBookingAmounts(pricing),
       pricingSnapshot,
     },

@@ -101,6 +101,7 @@ export function mapCarBooking(booking) {
     pickupPoint: booking.pickupPoint ?? null,
     dropoffPoint: booking.dropoffPoint ?? null,
     requestedLocation: booking.requestedLocation ?? null,
+    requestedDropoffLocation: booking.requestedDropoffLocation ?? null,
     addons: (booking.addons || []).map((a) => ({
       ...a,
       unitPrice: toNumber(a.unitPrice),

@@ -13,6 +13,7 @@ import {
 } from "../services/notification_email_service.js";
 import {
   alternativeSuggestionTemplate,
+  locationChargeOfferTemplate,
   autoRejectedBookingTemplate,
   bookingStatusTemplate,
   invoiceSentTemplate,
@@ -43,7 +44,13 @@ import {
   mapCarBooking,
   operatorResponseConfigSelect,
 } from "../services/car_booking_view.js";
-import { listAlternativeOptions, quoteAlternative } from "../services/car_requote_service.js";
+import {
+  datesChanged,
+  listAlternativeOptions,
+  OFFER_KIND,
+  offerKind,
+  quoteAlternative,
+} from "../services/car_requote_service.js";
 import { fromSen } from "../services/car_pricing_service.js";
 import { getPlatformSettings } from "../services/platform_settings_service.js";
 import {
@@ -2726,6 +2733,73 @@ function alternativeDates(booking, body = {}) {
   };
 }
 
+// The operator's charges for requested places (Module 4), sent in ringgit as
+// `pickupLocationCharge` and `dropoffLocationCharge`. Returns the amount in
+// sen, 0 when none was sent, or NaN when it is not a valid amount (two
+// decimal places at most), which the re-quote service turns into
+// LOCATION_CHARGE_INVALID.
+export function chargeSenFrom(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === "") return 0;
+  const text = String(raw).trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(text)) return Number.NaN;
+  return Math.round(Number(text) * 100);
+}
+
+export function locationChargesFrom(body = {}) {
+  return {
+    pickupChargeSen: chargeSenFrom(body.pickupLocationCharge),
+    dropoffChargeSen: chargeSenFrom(body.dropoffLocationCharge),
+  };
+}
+
+// The listing the offer is for: the chosen alternative car, or the booking's
+// own car when only new dates and/or location charges are sent. Null when
+// the body changes nothing.
+export function offerListingId(booking, body = {}) {
+  if (body.alternativeListingId) return body.alternativeListingId;
+  const { pickupChargeSen, dropoffChargeSen } = locationChargesFrom(body);
+  const { pickupAt, returnAt } = alternativeDates(booking, body);
+  const changes =
+    pickupChargeSen !== 0 || dropoffChargeSen !== 0 || datesChanged(booking, pickupAt, returnAt);
+  return changes ? booking.listingId : null;
+}
+
+// What the operator's message must be for each kind of offer. A charge alone
+// explains itself; another car or new dates need a reason.
+export function offerReason(kind, rawReason) {
+  const reason = String(rawReason || "").trim();
+  if (reason) return reason;
+  return kind === OFFER_KIND.LOCATION_CHARGE ? LOCATION_CHARGE_REASON : "";
+}
+
+// One line for the booking's status history and the customer notification.
+function offerSummary(kind, snapshot, listing) {
+  if (kind === OFFER_KIND.LOCATION_CHARGE) return `quoted ${locationChargeText(snapshot)}`;
+  const charges = locationChargeText(snapshot);
+  const extra = charges ? `, with ${charges}` : "";
+  return kind === OFFER_KIND.NEW_DATES
+    ? `suggested new dates${extra}`
+    : `suggested ${listing.name} instead${extra}`;
+}
+
+// "RM 30 for pickup at X and RM 20 for drop-off at Y", from an offer snapshot.
+function locationChargeText(snapshot) {
+  const q = snapshot?.quote || {};
+  const parts = [];
+  const same = snapshot?.dropoffPoint?.id === "requested";
+  if (q.pickupChargeSen) {
+    parts.push(
+      `RM ${fromSen(q.pickupChargeSen)} for ${same ? "pickup and return at" : "pickup at"} ${snapshot.requestedLocation}`
+    );
+  }
+  if (q.dropoffChargeSen) {
+    parts.push(`RM ${fromSen(q.dropoffChargeSen)} for drop-off at ${snapshot.requestedDropoffLocation}`);
+  }
+  return parts.join(" and ");
+}
+
+const LOCATION_CHARGE_REASON = "Charge for the requested location";
+
 function mapAlternativeQuote(quote) {
   const listing = quote.listing;
   return {
@@ -2742,6 +2816,7 @@ function mapAlternativeQuote(quote) {
         }
       : null,
     pricing: quote.snapshot || null,
+    kind: quote.snapshot?.quote?.kind ?? null,
     problems: quote.problems || [],
     pointsChanged: quote.pointsChanged ?? false,
     droppedAddons: quote.droppedAddons ?? [],
@@ -2750,10 +2825,10 @@ function mapAlternativeQuote(quote) {
 
 function carAlternativeGuard(booking) {
   if (booking.status !== "PENDING") {
-    return "An alternative car can only be suggested while the request is waiting for your answer.";
+    return "An alternative car or location charge can only be sent while the request is waiting for your answer.";
   }
   if (booking.alternativeUsed) {
-    return "Alternative can only be suggested once for this booking";
+    return "You have already sent the customer an offer for this booking. Accept or reject it instead.";
   }
   return null;
 }
@@ -2808,9 +2883,10 @@ export async function previewAlternativeQuote(req, res, next) {
     const { pickupAt, returnAt } = alternativeDates(booking, req.body);
     const quote = await quoteAlternative({
       booking,
-      listingId: req.body?.alternativeListingId,
+      listingId: offerListingId(booking, req.body),
       pickupAt,
       returnAt,
+      ...locationChargesFrom(req.body),
     });
 
     res.json({ quote: mapAlternativeQuote(quote) });
@@ -2825,23 +2901,36 @@ async function suggestCarAlternative(req, res, booking) {
     return res.status(400).json({ message: blocked });
   }
 
-  const reason = String(req.body?.reason || "").trim();
-  if (!req.body?.alternativeListingId || !reason) {
+  const listingId = offerListingId(booking, req.body);
+  const charges = locationChargesFrom(req.body);
+  // The same dates the preview used: the operator's, else the booked ones.
+  const { pickupAt, returnAt } = alternativeDates(booking, req.body);
+
+  if (!listingId) {
     return res.status(400).json({
-      message: "Choose the car to suggest and give a reason.",
+      message: "Choose what to change: a location charge, another car or new dates.",
     });
   }
 
-  const { pickupAt, returnAt } = alternativeDates(booking, req.body);
+  const reason = offerReason(offerKind(booking, listingId, pickupAt, returnAt), req.body?.reason);
+  if (!reason) {
+    return res.status(400).json({
+      message: "Tell the customer why you're suggesting this.",
+    });
+  }
 
   // Quote again with the suggested car locked, then hand its stock to this
   // booking by moving it to ALTERNATIVE_SUGGESTED in the same transaction.
-  const { updatedBooking, quote } = await prisma.$transaction(async (tx) => {
+  // The quote alone is several sequential queries, so the transaction gets
+  // the same room as the other long booking transactions; the booking is
+  // reloaded for the response after it commits.
+  const quote = await prisma.$transaction(async (tx) => {
     const fresh = await quoteAlternative({
       booking,
-      listingId: req.body.alternativeListingId,
+      listingId,
       pickupAt,
       returnAt,
+      ...charges,
       db: tx,
       lock: true,
     });
@@ -2859,7 +2948,7 @@ async function suggestCarAlternative(req, res, booking) {
       bookingId: booking.id,
       newStatus: "ALTERNATIVE_SUGGESTED",
       actorId: req.user.id,
-      remark: `Operator suggested ${fresh.listing.name} instead.`,
+      remark: `Operator ${offerSummary(fresh.snapshot.quote.kind, fresh.snapshot, fresh.listing)}.`,
       database: tx,
       extraData: {
         alternativeListingId: fresh.listing.id,
@@ -2874,21 +2963,26 @@ async function suggestCarAlternative(req, res, booking) {
       },
     });
 
-    return {
-      quote: fresh,
-      updatedBooking: await tx.booking.findUnique({
-        where: { id: booking.id },
-        include: includeBookingRelations(),
-      }),
-    };
-  }, { timeout: 15000 });
+    return fresh;
+  }, { maxWait: 10000, timeout: 20000 });
+
+  const updatedBooking = await prisma.booking.findUnique({
+    where: { id: booking.id },
+    include: includeBookingRelations(),
+  });
+
+  const kind = quote.snapshot.quote.kind;
+  const isLocationCharge = kind === OFFER_KIND.LOCATION_CHARGE;
 
   const details = {
+    kind,
     alternativeListingId: quote.listing.id,
     alternativeServiceName: quote.listing.name,
     alternativePrice: fromSen(quote.snapshot.totalSen),
     alternativePickupDate: pickupAt,
     alternativeReturnDate: returnAt,
+    pickupLocationCharge: fromSen(quote.snapshot.quote.pickupChargeSen || 0),
+    dropoffLocationCharge: fromSen(quote.snapshot.quote.dropoffChargeSen || 0),
     pointsChanged: quote.pointsChanged,
     droppedAddons: quote.droppedAddons,
     reason,
@@ -2896,7 +2990,7 @@ async function suggestCarAlternative(req, res, booking) {
 
   await createAuditLog({
     req,
-    action: "ALTERNATIVE_SUGGESTED",
+    action: isLocationCharge ? "LOCATION_CHARGE_QUOTED" : "ALTERNATIVE_SUGGESTED",
     entityType: "Booking",
     entityId: String(booking.id),
     details,
@@ -2905,19 +2999,38 @@ async function suggestCarAlternative(req, res, booking) {
   const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;
   const config = await getOperatorEmailConfig(updatedBooking.operatorId);
 
-  await createCustomerNotification({
-    booking: updatedBooking,
-    title: "Alternative car suggested",
-    message: `${updatedBooking.operator?.companyName || "The operator"} suggested ${quote.listing.name} for booking ${booking.bookingCode || booking.id}. Review the new price and accept or decline.`,
-    type: "ALTERNATIVE_SUGGESTED",
-    emailSubject: `Alternative Booking Suggested - ${booking.bookingCode || booking.id}`,
-    emailHtml: alternativeSuggestionTemplate({
-      booking: updatedBooking,
-      customerUrl,
-      introText: config?.alternativeSuggestedEmailText,
-      emailFooterText: config?.emailFooterText,
-    }),
-  });
+  const operatorName = updatedBooking.operator?.companyName || "The operator";
+  const bookingRef = booking.bookingCode || booking.id;
+
+  await createCustomerNotification(
+    isLocationCharge
+      ? {
+          booking: updatedBooking,
+          title: "Charge quoted for your requested location",
+          message: `${operatorName} quoted ${locationChargeText(quote.snapshot)} for booking ${bookingRef}. Review the new total and accept or decline.`,
+          type: "ALTERNATIVE_SUGGESTED",
+          emailSubject: `Charge for Your Requested Location - ${bookingRef}`,
+          emailHtml: locationChargeOfferTemplate({
+            booking: updatedBooking,
+            pricing: quote.snapshot,
+            customerUrl,
+            emailFooterText: config?.emailFooterText,
+          }),
+        }
+      : {
+          booking: updatedBooking,
+          title: kind === OFFER_KIND.NEW_DATES ? "New dates suggested" : "Alternative car suggested",
+          message: `${operatorName} ${offerSummary(kind, quote.snapshot, quote.listing)} for booking ${bookingRef}. Review the new price and accept or decline.`,
+          type: "ALTERNATIVE_SUGGESTED",
+          emailSubject: `${kind === OFFER_KIND.NEW_DATES ? "New Dates Suggested" : "Alternative Booking Suggested"} - ${bookingRef}`,
+          emailHtml: alternativeSuggestionTemplate({
+            booking: updatedBooking,
+            customerUrl,
+            introText: config?.alternativeSuggestedEmailText,
+            emailFooterText: config?.emailFooterText,
+          }),
+        }
+  );
 
   return res.json({
     booking: mapBooking(updatedBooking),

@@ -798,3 +798,201 @@
     padding: 18px;
   }
 }
+
+/* Pickup and drop-off route (section 3). Each stop is the operator's listed
+   point or a location the customer asks for, chosen with a two-way switch. */
+.route {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.routeIntro {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--pub-text);
+}
+
+.routeStops {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.routeStop {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 12px;
+}
+
+.routeRail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 8px;
+  color: var(--pub-brand);
+}
+
+/* The dashed line from pickup down to drop-off. */
+.routeStop:not(:last-child) .routeRail::after {
+  content: "";
+  flex: 1;
+  margin: 6px 0 2px;
+  border-left: 2px dashed var(--pub-control-line);
+}
+
+.routeBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 22px;
+}
+
+.routeStop:last-child .routeBody {
+  padding-bottom: 0;
+}
+
+.routeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.routeTitle {
+  font-family: var(--pub-font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--pub-ink);
+}
+
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--pub-line);
+  border-radius: 999px;
+  background: var(--pub-surface-sunk);
+}
+
+.segOption {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pub-text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.segOption:hover {
+  color: var(--pub-ink);
+}
+
+.segOptionOn,
+.segOptionOn:hover {
+  background: var(--pub-brand);
+  color: var(--pub-on-brand);
+}
+
+.segOption:focus-within {
+  outline: 2px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+.routePoint {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.routePointLine {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 15px;
+  color: var(--pub-ink);
+}
+
+.routePointLine strong {
+  font-weight: 600;
+}
+
+.routeFee {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pub-ok-fg);
+  background: var(--pub-ok-bg);
+  border-radius: 6px;
+  padding: 1px 8px;
+}
+
+.routeChange {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pub-link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.routeChange:hover {
+  color: var(--pub-link-hover);
+}
+
+.routeAddress {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pub-text);
+}
+
+.routeFieldLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pub-text);
+}
+
+.routeNote {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--pub-notice-bg);
+  color: var(--pub-notice-fg);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.routeNoteIcon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+@media (max-width: 640px) {
+  .seg {
+    width: 100%;
+  }
+
+  .segOption {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segOption {
+    transition: none;
+  }
+}

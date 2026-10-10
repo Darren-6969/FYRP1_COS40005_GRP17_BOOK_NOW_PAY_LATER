@@ -15,25 +15,44 @@ import {
 import "../../assets/styles/car-alternative-modal.css";
 
 // ===========================================================
-// Suggest another car (car bookings, Module 3)
+// Make an offer (car bookings, Modules 3 and 4)
 //
-// Desktop: split view. The form (car list, dates, message) on the
-// left and the live price the customer will pay on the right.
-// Mobile (720px and below): a compact bottom sheet with a car
-// picker, the price card in the flow and a sticky footer.
+// One reply to a waiting request. The operator ticks what changes:
+// - a charge for each place the customer asked for (ticked by default)
+// - another of their cars
+// - other pick-up or return times
+// and sends it as one offer, which the customer accepts or declines
+// as a whole. A booking gets one offer.
 //
-// The price always comes from the server quote. It refreshes by
-// itself when the car or dates change, and Send only works once
-// there is a current quote with no problems.
+// Desktop: split view, the form on the left and the live price on
+// the right. Mobile (720px and below): a bottom sheet with the price
+// in the flow and a sticky footer.
+//
+// The price always comes from the server quote. It refreshes when
+// anything ticked changes, and Send only works once there is a
+// current quote with no problems.
 // ===========================================================
 
 const MOBILE_QUERY = "(max-width: 720px)";
+const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
 
-const REASON_PRESETS = [
+const CAR_REASONS = [
   "The requested car is in for servicing on these dates.",
   "The requested car is already booked for these dates.",
   "This car is a similar size at a better price.",
 ];
+
+const DATE_REASONS = [
+  "The car is already booked at the times you asked for.",
+  "We can't hand over or collect the car at that time.",
+];
+
+// What the customer sees, by the offer's kind (car_requote_service OFFER_KIND).
+const KIND_TEXT = {
+  ALTERNATIVE_CAR: "an alternative car",
+  NEW_DATES: "new dates for the same car",
+  LOCATION_CHARGE: "a charge for the place they asked for",
+};
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(
@@ -106,6 +125,25 @@ function optionMeta(option) {
     .join(" · ");
 }
 
+// The places the customer asked for, read from the booking's pricing
+// snapshot the way the server reads them. One place for both ends takes
+// one charge, on the pickup.
+function requestedEnds(booking) {
+  const car = booking.car || {};
+  const pricing = car.pricing || {};
+  const pickup = pricing.requestedLocation || car.requestedLocation || "";
+  const dropoff =
+    pricing.requestedDropoffLocation || car.requestedDropoffLocation || "";
+  const samePlace =
+    Boolean(pickup) &&
+    !dropoff &&
+    (pricing.dropoffPoint
+      ? pricing.dropoffPoint.id === "requested"
+      : !car.dropoffPoint);
+
+  return { pickup, dropoff, samePlace };
+}
+
 function CarIcon() {
   return (
     <svg
@@ -144,20 +182,20 @@ function CloseIcon() {
   );
 }
 
-function Chevron({ up }) {
+function CheckIcon() {
   return (
     <svg
       aria-hidden="true"
-      width="18"
-      height="18"
+      width="14"
+      height="14"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.2"
+      strokeWidth="3"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d={up ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6"} />
+      <path d="M5 12l5 5 9-10" />
     </svg>
   );
 }
@@ -225,6 +263,27 @@ function CarOption({ option, name, selected, onSelect, compact }) {
   );
 }
 
+// One tick box in "What do you want to change?".
+function ChangeOption({ checked, onChange, title, hint }) {
+  return (
+    <label className={`cam-change${checked ? " is-on" : ""}`}>
+      <input
+        className="cam-sr-only"
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="cam-check" aria-hidden="true">
+        {checked && <CheckIcon />}
+      </span>
+      <span className="cam-change-text">
+        <span className="cam-change-title">{title}</span>
+        <span className="cam-change-hint">{hint}</span>
+      </span>
+    </label>
+  );
+}
+
 function PriceSummary({ quote, quoting, originalTotalSen, compact }) {
   const pricing = quote?.pricing;
   const problems = quote?.problems || [];
@@ -232,7 +291,7 @@ function PriceSummary({ quote, quoting, originalTotalSen, compact }) {
   if (!quote && !quoting) {
     return (
       <p className="cam-price-empty">
-        Choose a car to see what the customer will pay.
+        Choose what to change to see what the customer will pay.
       </p>
     );
   }
@@ -307,11 +366,21 @@ function PriceSummary({ quote, quoting, originalTotalSen, compact }) {
           {quote.droppedAddons.join(", ")}.
         </p>
       )}
+
+      {pricing && quote?.kind && KIND_TEXT[quote.kind] && (
+        <p className="cam-kind">
+          Customer sees {KIND_TEXT[quote.kind]}
+          {quote.kind !== "LOCATION_CHARGE" && pricing.quote?.locationChargeSen
+            ? ", with the place charges"
+            : ""}
+          .
+        </p>
+      )}
     </div>
   );
 }
 
-export default function CarAlternativeModal({ booking, onClose, onDone }) {
+export default function OfferModal({ booking, onClose, onDone }) {
   const isMobile = useIsMobile();
   const titleId = useId();
   const radioName = useId();
@@ -319,12 +388,22 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
   const quoteRequest = useRef(0);
   const optionsRequest = useRef(0);
 
-  const [pickup, setPickup] = useState(() =>
-    toLocalInputValue(booking.pickupDate)
-  );
-  const [dropoff, setDropoff] = useState(() =>
-    toLocalInputValue(booking.returnDate)
-  );
+  const ends = requestedEnds(booking);
+  const hasRequestedPlace = Boolean(ends.pickup || ends.dropoff);
+
+  const bookedPickup = toLocalInputValue(booking.pickupDate);
+  const bookedReturn = toLocalInputValue(booking.returnDate);
+
+  // What changes. The charge is ticked by default when the customer asked
+  // for their own place, since pricing it is the usual reason to reply.
+  const [wantCharge, setWantCharge] = useState(hasRequestedPlace);
+  const [wantCar, setWantCar] = useState(false);
+  const [wantDates, setWantDates] = useState(false);
+
+  const [pickupCharge, setPickupCharge] = useState("");
+  const [dropoffCharge, setDropoffCharge] = useState("");
+  const [pickup, setPickup] = useState(bookedPickup);
+  const [dropoff, setDropoff] = useState(bookedReturn);
   const [selectedId, setSelectedId] = useState(null);
   const [reason, setReason] = useState("");
 
@@ -335,22 +414,50 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
   const [quote, setQuote] = useState(null);
   const [quotedKey, setQuotedKey] = useState("");
 
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
 
   const original = booking.car;
   const originalTotalSen = original?.pricing?.totalSen;
-  const selected = options.find((option) => option.id === selectedId) || null;
-  const datesKey = `${pickup}|${dropoff}`;
-  const currentKey = `${selectedId}|${datesKey}`;
-  // Loading states are derived: a result belongs to the inputs it was
-  // fetched for, so anything else is still on its way.
-  const optionsLoading = optionsKey !== datesKey;
-  const quoting = Boolean(selectedId) && quotedKey !== currentKey;
-  const quoteIsCurrent = Boolean(quote) && !quoting;
 
-  // Lock the page behind the dialog and close on Escape.
+  // ── What the offer sends, from what is ticked ───────────────────────
+  const pickupText = wantCharge && ends.pickup ? pickupCharge.trim() : "";
+  const dropoffText = wantCharge && ends.dropoff ? dropoffCharge.trim() : "";
+  const amountOk = (text) => !text || AMOUNT_PATTERN.test(text);
+  const chargesValid = amountOk(pickupText) && amountOk(dropoffText);
+  const anyCharge = Number(pickupText || 0) + Number(dropoffText || 0) > 0;
+
+  const offerPickup = wantDates ? pickup : bookedPickup;
+  const offerReturn = wantDates ? dropoff : bookedReturn;
+  const datesMoved =
+    wantDates && (pickup !== bookedPickup || dropoff !== bookedReturn);
+
+  const carChosen = wantCar && Boolean(selectedId);
+  const changesSomething = carChosen || datesMoved || (wantCharge && anyCharge);
+  const reasonNeeded = wantCar || datesMoved;
+
+  const offerBody = {
+    ...(carChosen ? { alternativeListingId: selectedId } : {}),
+    ...(wantDates
+      ? { alternativePickupDate: pickup || null, alternativeReturnDate: dropoff || null }
+      : {}),
+    ...(pickupText ? { pickupLocationCharge: pickupText } : {}),
+    ...(dropoffText ? { dropoffLocationCharge: dropoffText } : {}),
+  };
+
+  // A quote belongs to the inputs it was fetched for; anything else is
+  // still on its way.
+  const canQuote = chargesValid && changesSomething && !(wantCar && !selectedId);
+  const currentKey = JSON.stringify(offerBody);
+  const quoting = canQuote && quotedKey !== currentKey;
+  const quoteIsCurrent = canQuote && Boolean(quote) && !quoting;
+
+  const datesKey = `${offerPickup}|${offerReturn}`;
+  const optionsLoading = wantCar && optionsKey !== datesKey;
+
+  const selected = options.find((option) => option.id === selectedId) || null;
+
+  // Lock the page behind the dialog.
   useEffect(() => {
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -361,16 +468,18 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
     };
   }, []);
 
-  // Cars and their availability for the chosen dates.
+  // The operator's other cars and their availability for the offer's dates.
   useEffect(() => {
+    if (!wantCar) return undefined;
+
     const request = ++optionsRequest.current;
-    const key = `${pickup}|${dropoff}`;
+    const key = `${offerPickup}|${offerReturn}`;
 
     const timer = setTimeout(async () => {
       try {
         const res = await operatorService.getAlternativeOptions(booking.id, {
-          alternativePickupDate: pickup || null,
-          alternativeReturnDate: dropoff || null,
+          alternativePickupDate: offerPickup || null,
+          alternativeReturnDate: offerReturn || null,
         });
 
         if (request !== optionsRequest.current) return;
@@ -388,22 +497,19 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [booking.id, pickup, dropoff]);
+  }, [booking.id, wantCar, offerPickup, offerReturn]);
 
-  // Live price for the selected car and dates.
+  // Live price for whatever is ticked.
   useEffect(() => {
-    if (!selectedId) return undefined;
+    if (!canQuote) return undefined;
 
     const request = ++quoteRequest.current;
-    const key = `${selectedId}|${pickup}|${dropoff}`;
+    const key = currentKey;
+    const body = JSON.parse(currentKey);
 
     const timer = setTimeout(async () => {
       try {
-        const res = await operatorService.quoteAlternative(booking.id, {
-          alternativeListingId: selectedId,
-          alternativePickupDate: pickup || null,
-          alternativeReturnDate: dropoff || null,
-        });
+        const res = await operatorService.quoteAlternative(booking.id, body);
 
         if (request !== quoteRequest.current) return;
 
@@ -417,7 +523,7 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
             {
               code: "QUOTE_FAILED",
               message:
-                err.response?.data?.message || "Failed to price this car",
+                err.response?.data?.message || "Failed to price this offer",
             },
           ],
         });
@@ -426,31 +532,35 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [booking.id, selectedId, pickup, dropoff]);
+  }, [booking.id, canQuote, currentKey]);
 
-  const problems = quote?.problems || [];
+  const problems = quoteIsCurrent ? quote?.problems || [] : [];
   const canSend =
     quoteIsCurrent &&
     problems.length === 0 &&
     Boolean(quote?.pricing) &&
-    reason.trim().length > 0 &&
+    (!reasonNeeded || reason.trim().length > 0) &&
     !sending;
 
-  const sendHint = !selectedId
-    ? "Choose a car first."
-    : !quoteIsCurrent
-      ? "Waiting for the price."
-      : problems.length
-        ? "This car can't be suggested for these dates."
-        : !reason.trim()
-          ? "Add a message for the customer."
-          : "";
+  const nothingTicked = !wantCharge && !wantCar && !wantDates;
 
-  const handleSelect = (id) => {
-    setSelectedId(id);
-    setSendError("");
-    setPickerOpen(false);
-  };
+  const sendHint = nothingTicked
+    ? "Tick what you want to change."
+    : !chargesValid
+      ? "Enter charges in RM, with at most two decimal places."
+      : wantCar && !selectedId
+        ? "Choose a car."
+        : wantDates && !datesMoved && !wantCar && !(wantCharge && anyCharge)
+          ? "Change the pick-up or return time."
+          : wantCharge && !anyCharge && !wantCar && !datesMoved
+            ? "Enter a charge, or untick it."
+            : !quoteIsCurrent
+              ? "Waiting for the price."
+              : problems.length
+                ? "This offer can't be sent. See the price panel."
+                : reasonNeeded && !reason.trim()
+                  ? "Add a message for the customer."
+                  : "";
 
   const handleSend = async () => {
     if (!canSend) return;
@@ -460,18 +570,14 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
       setSendError("");
 
       await operatorService.suggestAlternative(booking.id, {
-        alternativeListingId: selectedId,
-        alternativePickupDate: pickup || null,
-        alternativeReturnDate: dropoff || null,
+        ...offerBody,
         reason: reason.trim(),
       });
 
       await onDone();
       onClose();
     } catch (err) {
-      setSendError(
-        err.response?.data?.message || "Failed to suggest alternative"
-      );
+      setSendError(err.response?.data?.message || "Failed to send the offer");
     } finally {
       setSending(false);
     }
@@ -484,39 +590,144 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
     }
   };
 
-  const carList = (
-    <div className="cam-options" role="radiogroup" aria-label="Your cars">
-      {optionsLoading && options.length === 0 && (
-        <p className="cam-muted">Loading your cars…</p>
-      )}
+  const clearError = () => setSendError("");
 
-      {optionsError && <p className="cam-error">{optionsError}</p>}
+  // ── Sections ─────────────────────────────────────────────────────────
+  const chargeTitle = [
+    ends.pickup &&
+      `${ends.samePlace ? "pickup and return at" : "pickup at"} ${ends.pickup}`,
+    ends.dropoff && `drop-off at ${ends.dropoff}`,
+  ]
+    .filter(Boolean)
+    .join(" and ");
 
-      {!optionsLoading && !optionsError && options.length === 0 && (
-        <p className="cam-muted">
-          You have no other published cars to suggest. Publish another car
-          first, or reject this request.
-        </p>
-      )}
-
-      {options.map((option) => (
-        <CarOption
-          key={option.id}
-          option={option}
-          name={radioName}
-          selected={option.id === selectedId}
-          onSelect={handleSelect}
-          compact={isMobile}
-        />
-      ))}
-    </div>
-  );
-
-  const dates = (
+  const whatChanges = (
     <fieldset className="cam-fieldset">
       <legend className="cam-label">
-        {isMobile ? "Dates" : "2 · Dates"}
+        {isMobile ? "What changes" : "1 · What do you want to change?"}
       </legend>
+
+      <div className="cam-changes">
+        {hasRequestedPlace && (
+          <ChangeOption
+            checked={wantCharge}
+            onChange={(on) => {
+              setWantCharge(on);
+              clearError();
+            }}
+            title={`Charge for ${chargeTitle}`}
+            hint="The customer asked for a place that isn't on your list."
+          />
+        )}
+
+        <ChangeOption
+          checked={wantCar}
+          onChange={(on) => {
+            setWantCar(on);
+            clearError();
+          }}
+          title="Offer a different car"
+          hint="The requested car isn't free or isn't the best fit."
+        />
+
+        <ChangeOption
+          checked={wantDates}
+          onChange={(on) => {
+            setWantDates(on);
+            clearError();
+          }}
+          title="Change the dates"
+          hint="Offer other pick-up or return times."
+        />
+      </div>
+    </fieldset>
+  );
+
+  const chargeInput = (id, label, value, setValue, placeholder) => (
+    <label className="cam-field" htmlFor={id}>
+      <span>{label}</span>
+      <input
+        id={id}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+          clearError();
+        }}
+      />
+    </label>
+  );
+
+  const chargeSection = wantCharge && hasRequestedPlace && (
+    <fieldset className="cam-fieldset">
+      <legend className="cam-label">Charge for the requested place</legend>
+
+      {ends.pickup &&
+        chargeInput(
+          `${titleId}-pickup-charge`,
+          `${ends.samePlace ? "Pickup and return at" : "Pickup at"} ${ends.pickup} (RM)`,
+          pickupCharge,
+          setPickupCharge,
+          "For example 30"
+        )}
+
+      {ends.dropoff &&
+        chargeInput(
+          `${titleId}-dropoff-charge`,
+          `Drop-off at ${ends.dropoff} (RM)`,
+          dropoffCharge,
+          setDropoffCharge,
+          "For example 20"
+        )}
+
+      <span className="cam-field-hint">
+        Leave a charge empty to provide that place free.
+        {ends.samePlace ? " One charge covers handing over and collecting the car there." : ""}
+      </span>
+    </fieldset>
+  );
+
+  const carSection = wantCar && (
+    <fieldset className="cam-fieldset">
+      <legend className="cam-label">Choose a car</legend>
+
+      <div className="cam-options" role="radiogroup" aria-label="Your cars">
+        {optionsLoading && options.length === 0 && (
+          <p className="cam-muted">Loading your cars…</p>
+        )}
+
+        {optionsError && <p className="cam-error">{optionsError}</p>}
+
+        {!optionsLoading && !optionsError && options.length === 0 && (
+          <p className="cam-muted">
+            You have no other published cars to offer. Publish another car
+            first, or untick this.
+          </p>
+        )}
+
+        {options.map((option) => (
+          <CarOption
+            key={option.id}
+            option={option}
+            name={radioName}
+            selected={option.id === selectedId}
+            onSelect={(id) => {
+              setSelectedId(id);
+              clearError();
+            }}
+            compact={isMobile}
+          />
+        ))}
+      </div>
+    </fieldset>
+  );
+
+  const datesSection = wantDates && (
+    <fieldset className="cam-fieldset">
+      <legend className="cam-label">Dates</legend>
 
       <div className="cam-dates">
         <label className="cam-field">
@@ -524,7 +735,10 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
           <input
             type="datetime-local"
             value={pickup}
-            onChange={(e) => setPickup(e.target.value)}
+            onChange={(e) => {
+              setPickup(e.target.value);
+              clearError();
+            }}
           />
         </label>
 
@@ -533,37 +747,48 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
           <input
             type="datetime-local"
             value={dropoff}
-            onChange={(e) => setDropoff(e.target.value)}
+            onChange={(e) => {
+              setDropoff(e.target.value);
+              clearError();
+            }}
           />
         </label>
       </div>
     </fieldset>
   );
 
+  const presets = wantCar ? CAR_REASONS : datesMoved ? DATE_REASONS : [];
+
   const message = (
     <div className="cam-fieldset">
       <label className="cam-label" htmlFor={`${titleId}-reason`}>
-        {isMobile ? "Message to the customer" : "3 · Message to the customer"}
+        Message to the customer{reasonNeeded ? "" : " (optional)"}
       </label>
 
-      <div className="cam-presets">
-        {REASON_PRESETS.map((preset) => (
-          <button
-            key={preset}
-            type="button"
-            className="cam-preset"
-            onClick={() => setReason(preset)}
-          >
-            {preset.replace(/\.$/, "")}
-          </button>
-        ))}
-      </div>
+      {presets.length > 0 && (
+        <div className="cam-presets">
+          {presets.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              className="cam-preset"
+              onClick={() => setReason(preset)}
+            >
+              {preset.replace(/\.$/, "")}
+            </button>
+          ))}
+        </div>
+      )}
 
       <textarea
         id={`${titleId}-reason`}
         className="cam-textarea"
         rows={isMobile ? 2 : 3}
-        placeholder="Why this car? The customer sees this message."
+        placeholder={
+          reasonNeeded
+            ? "Why this offer? The customer sees this message."
+            : "For example: covers delivery and collection at the airport."
+        }
         value={reason}
         onChange={(e) => setReason(e.target.value)}
       />
@@ -577,6 +802,15 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
       originalTotalSen={originalTotalSen}
       compact={isMobile}
     />
+  );
+
+  const form = (
+    <>
+      {whatChanges}
+      {chargeSection}
+      {carSection}
+      {datesSection}
+    </>
   );
 
   return (
@@ -599,9 +833,9 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
 
         <header className="cam-header">
           <div>
-            <h2 id={titleId}>Suggest another car</h2>
+            <h2 id={titleId}>Make an offer</h2>
             <p>
-              {isMobile ? "Instead of " : `${booking.bookingCode || ""} · requested `}
+              {isMobile ? "" : `${booking.bookingCode || ""} · requested `}
               <strong>
                 {carTitle(original?.listing) || booking.serviceName}
               </strong>
@@ -628,46 +862,14 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
 
         {isMobile ? (
           <div className="cam-body">
-            <div className="cam-fieldset">
-              <span className="cam-label">Car</span>
-
-              <button
-                type="button"
-                className={`cam-picker${pickerOpen ? " is-open" : ""}`}
-                aria-expanded={pickerOpen}
-                onClick={() => setPickerOpen((open) => !open)}
-              >
-                <span className="cam-picker-text">
-                  <span className="cam-option-title">
-                    {selected ? optionTitle(selected) : "Choose a car"}
-                  </span>
-                  <span className="cam-option-meta">
-                    {selected
-                      ? `${selected.branchName || ""} · ${formatSen(
-                          selected.dailyRateSen
-                        )}/day`
-                      : `${options.length} of your cars`}
-                  </span>
-                </span>
-                <Chevron up={pickerOpen} />
-              </button>
-
-              {pickerOpen && carList}
-            </div>
-
-            {dates}
+            {form}
             {price}
             {message}
           </div>
         ) : (
           <div className="cam-split">
             <div className="cam-body">
-              <fieldset className="cam-fieldset">
-                <legend className="cam-label">1 · Choose a car</legend>
-                {carList}
-              </fieldset>
-
-              {dates}
+              {form}
               {message}
             </div>
 
@@ -675,8 +877,8 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
               {price}
 
               <p className="cam-note cam-aside-foot">
-                Worked out by the platform from this car's rates and your
-                shop settings. It updates as you change the car or dates.
+                Worked out by the platform from the car's rates and your shop
+                settings. It updates as you change the offer.
               </p>
             </aside>
           </div>
@@ -685,13 +887,15 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
         <footer className="cam-footer">
           {!isMobile && (
             <p className="cam-muted">
-              {selected
-                ? `The ${optionTitle(selected)} is held for this customer while they decide. If they decline, the booking closes.`
-                : "The customer can accept or decline. Nothing is charged until they accept."}
+              {carChosen && selected
+                ? `The ${optionTitle(selected)} is held for this customer while they decide. `
+                : ""}
+              One offer per booking. The customer accepts or declines all of
+              it, and nothing is charged until they accept.
             </p>
           )}
 
-          {(sendError || (sendHint && selectedId)) && (
+          {(sendError || (sendHint && !nothingTicked)) && (
             <p className={sendError ? "cam-error" : "cam-muted"} role="status">
               {sendError || sendHint}
             </p>
@@ -714,7 +918,7 @@ export default function CarAlternativeModal({ booking, onClose, onDone }) {
               disabled={!canSend}
               title={sendHint}
             >
-              {sending ? "Sending…" : "Send to customer"}
+              {sending ? "Sending…" : "Send offer"}
             </button>
           </div>
         </footer>

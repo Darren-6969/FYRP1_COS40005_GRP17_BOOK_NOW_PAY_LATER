@@ -79,7 +79,10 @@ export async function createBookingOrchestrator({
         dropoffPointId: selection.dropoffPointId && /^\d+$/.test(String(selection.dropoffPointId))
           ? Number(selection.dropoffPointId)
           : null,
-        requestedLocation: selection.requestedLocation || null,
+        // As priced: a drop-off request that names the pickup place is
+        // stored as one place, on requestedLocation.
+        requestedLocation: pricing.requestedLocation || null,
+        requestedDropoffLocation: pricing.requestedDropoffLocation || null,
         quantity: 1,
         ...carBookingAmounts(pricing),
         creditTier: customerTier,

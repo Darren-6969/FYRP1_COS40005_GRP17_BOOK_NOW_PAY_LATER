@@ -97,9 +97,11 @@ function PriceBreakdown({ pricing }) {
           <strong>{sen(pricing.totalSen)}</strong>
         </div>
       </div>
-      {pricing.requestedLocation && (
+      {(pricing.requestedLocation || pricing.requestedDropoffLocation) &&
+        !(pricing.pickupPoint?.requested && pricing.pickupFeeSen) &&
+        !(pricing.dropoffPoint?.requested && pricing.dropoffFeeSen) && (
         <p className="customer-muted">
-          Your requested location has no charge yet. The operator replies with any charge, and you accept it before
+          Your requested place has no charge yet. The operator replies with any charge, and you accept it before
           paying anything.
         </p>
       )}
@@ -280,11 +282,27 @@ export default function CarBookingPanel({ booking }) {
             <span>Return</span>
             <strong>{formatCustomerDate(ret)}</strong>
           </div>
-          {car.requestedLocation ? (
-            <div>
-              <span>Requested location</span>
-              <strong>{car.requestedLocation}</strong>
-            </div>
+          {car.requestedLocation || car.requestedDropoffLocation ? (
+            <>
+              <div>
+                <span>{car.requestedLocation ? "Requested pickup place" : "Pickup point"}</span>
+                <strong>
+                  {car.requestedLocation ||
+                    (car.pickupPoint ? pointText(car.pickupPoint) : pricing?.pickupPoint?.label || "Branch counter")}
+                </strong>
+              </div>
+              <div>
+                <span>{car.requestedDropoffLocation ? "Requested drop-off place" : "Drop-off point"}</span>
+                <strong>
+                  {car.requestedDropoffLocation ||
+                    (pricing?.dropoffPoint?.id === "requested" || (!pricing?.dropoffPoint && !car.dropoffPoint)
+                      ? "Same as pickup"
+                      : car.dropoffPoint
+                        ? pointText(car.dropoffPoint)
+                        : pricing?.dropoffPoint?.label || "Branch counter")}
+                </strong>
+              </div>
+            </>
           ) : (
             <>
               <div>

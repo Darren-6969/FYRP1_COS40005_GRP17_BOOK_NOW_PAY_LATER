@@ -660,9 +660,13 @@ model Booking {
   dropoffPointId Int?
   dropoffPoint   PickupPoint? @relation("BookingDropoffPoint", fields: [dropoffPointId], references: [id])
 
-  // A location the customer asked for that is not on the operator's list.
-  // The operator prices it through suggest alternative (FR-LIST-004).
-  requestedLocation String?
+  // Places the customer asked for that are not on the operator's list. The
+  // operator prices them through suggest alternative (FR-LIST-004).
+  // requestedLocation is the pickup end (and the drop-off too when the car
+  // returns to the same place); requestedDropoffLocation is a different
+  // drop-off place.
+  requestedLocation        String?
+  requestedDropoffLocation String?
 
   quantity Int @default(1)
 

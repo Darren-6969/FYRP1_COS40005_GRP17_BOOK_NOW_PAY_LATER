@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { formatCustomerDate } from "../../utils/customerUtils";
 import { toBookingParams } from "../../utils/carSearchParams";
 import { carTitle, formatSen } from "./carBookingParts";
+import LocationChargeCard from "./LocationChargeCard";
 
 import "../../assets/styles/car-offer-card.css";
 
@@ -105,8 +106,18 @@ function comparisonRows(before, now) {
     before?.youngDriverSurchargeSen || before?.surchargeSen,
     now?.youngDriverSurchargeSen || now?.surchargeSen
   );
-  add("Pick-up charge", before?.pickupFeeSen, now?.pickupFeeSen);
-  add("Drop-off charge", before?.dropoffFeeSen, now?.dropoffFeeSen);
+  add(
+    now?.pickupPoint?.requested ? "Requested pickup charge" : "Pick-up charge",
+    before?.pickupFeeSen,
+    now?.pickupFeeSen
+  );
+  add(
+    now?.dropoffPoint?.requested && now.dropoffPoint.id !== now.pickupPoint?.id
+      ? "Requested drop-off charge"
+      : "Drop-off charge",
+    before?.dropoffFeeSen,
+    now?.dropoffFeeSen
+  );
 
   return rows;
 }
@@ -152,7 +163,23 @@ export default function CarAlternativeCard({
   const before = car.pricing || {};
   const now = alternative.pricing || {};
   const quoteMeta = now.quote || {};
+
+  // Module 4: same car and dates, only a charge for the requested location.
+  if (quoteMeta.kind === "LOCATION_CHARGE") {
+    return (
+      <LocationChargeCard
+        booking={booking}
+        onAccept={onAccept}
+        onDecline={onDecline}
+        busy={busy}
+      />
+    );
+  }
   const operatorName = booking.operator?.companyName || "The operator";
+
+  // The booked car at other times: the car is unchanged, so its change card
+  // is left out and the heading talks about the dates.
+  const sameCar = quoteMeta.kind === "NEW_DATES";
 
   const beforeTitle = carTitle(car.listing) || booking.serviceName;
   const nowTitle = carTitle(alternative.listing) || booking.alternativeServiceName;
@@ -189,9 +216,10 @@ export default function CarAlternativeCard({
   const droppedAddons = quoteMeta.droppedAddons || [];
 
   const changeCount =
-    1 + (placeChanged ? 1 : 0) + (datesChanged ? 1 : 0) + (difference ? 1 : 0);
+    (sameCar ? 0 : 1) + (placeChanged ? 1 : 0) + (datesChanged ? 1 : 0) + (difference ? 1 : 0);
 
   const unchanged = [
+    sameCar && `car (${beforeTitle})`,
     !datesChanged &&
       `dates (${formatCustomerDate(booking.pickupDate)} → ${formatCustomerDate(
         booking.returnDate
@@ -235,10 +263,11 @@ export default function CarAlternativeCard({
     <article className="coc" aria-labelledby={`coc-title-${booking.id}`}>
       <header className="coc-head">
         <div>
-          <p className="coc-eyebrow">Alternative car offer</p>
+          <p className="coc-eyebrow">{sameCar ? "New dates offer" : "Alternative car offer"}</p>
           <h2 id={`coc-title-${booking.id}`}>
-            Your {beforeTitle} isn't available. {operatorName} offered
-            another car.
+            {sameCar
+              ? `${operatorName} suggested new dates for your ${beforeTitle}.`
+              : `Your ${beforeTitle} isn't available. ${operatorName} offered another car.`}
           </h2>
         </div>
         <span className="coc-badge">Your answer needed</span>
@@ -251,6 +280,7 @@ export default function CarAlternativeCard({
         </h3>
 
         <ol className="coc-changes">
+          {!sameCar && (
           <li className="coc-change">
             <span className="coc-change-label">Car</span>
 
@@ -311,6 +341,7 @@ export default function CarAlternativeCard({
               </Link>
             )}
           </li>
+          )}
 
           {placeChanged && (
             <li className={`coc-change${branchChanged ? " is-warning" : ""}`}>
