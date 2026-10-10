@@ -31,7 +31,8 @@ const NEARBY_SEARCH_DAYS = 30;
 export const PUBLIC_LISTING_WHERE = {
   category: "CAR_RENTAL",
   status: "PUBLISHED",
-  operator: { status: "ACTIVE" },
+  // A suspended subscription hides the operator's listings without changing them.
+  operator: { status: "ACTIVE", subscriptionStatus: "ACTIVE" },
   branch: { isActive: true },
 };
 

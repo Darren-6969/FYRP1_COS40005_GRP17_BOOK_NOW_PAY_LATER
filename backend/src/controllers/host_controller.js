@@ -18,6 +18,7 @@ import { issueTokenPair, sanitizeUser } from "./auth_controller.js";
 import { sendEmail } from "../services/email_service.js";
 import { enforceConcurrentExposureCap } from "../services/concurrent_exposure_service.js";
 import { isCreditTierPolicyEnabled } from "../services/platform_settings_service.js";
+import { assertOperatorTakingBookings } from "../services/subscription_admin_service.js";
 
 
 async function mintHandoff(intentId) {
@@ -268,6 +269,9 @@ async function provisionCustomerForIntent(intent) {
 
 // Shared booking creation used by both claim (tab flow) and exchange (modal flow).
 async function createBookingFromIntent(intent, user) {
+  // A suspended operator takes no new booking requests.
+  await assertOperatorTakingBookings(intent.operatorId);
+
   const defaultPaymentDeadline = await calculatePaymentDeadline(
     intent.operatorId,
     null,

@@ -16,3 +16,8 @@ export function operatorPaymentsUrl() {
 export function operatorBookingUrl(bookingId) {
   return `${frontendBase()}/operator/bookings/${bookingId}`;
 }
+
+// App.jsx: /operator/dashboard -> OperatorDashboard (subscription card)
+export function operatorDashboardUrl() {
+  return `${frontendBase()}/operator/dashboard`;
+}

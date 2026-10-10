@@ -5,6 +5,8 @@ import {
   createOperatorUser,
   updateOperatorUserStatus,
   updateOperatorSubscriptionPlan,
+  recordOperatorSubscriptionPayment,
+  getOperatorSubscriptionPayments,
   getSubscriptionUpgradeRequests,
   reviewSubscriptionUpgradeRequest,
   resetOperatorUser,
@@ -132,6 +134,8 @@ router.get("/applications/documents/:documentId", ...masterOnly, downloadOperato
 router.get("/subscription-upgrade-requests", ...masterOnly, getSubscriptionUpgradeRequests);
 router.patch("/subscription-upgrade-requests/:id/review", ...masterOnly, reviewSubscriptionUpgradeRequest);
 router.patch("/:id/subscription-plan", ...masterOnly, updateOperatorSubscriptionPlan);
+router.get("/:id/subscription-payments", ...masterOnly, getOperatorSubscriptionPayments);
+router.post("/:id/subscription-payments", ...masterOnly, recordOperatorSubscriptionPayment);
 router.patch("/:id/status", ...masterOnly, updateOperatorStatus);
 router.delete("/:id", ...masterOnly, deleteOperator);
 router.get("/bookings/:id/refunds",...ownerOrStaffAccess,getBookingRefunds);

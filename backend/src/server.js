@@ -6,6 +6,7 @@ import { startOverdueBookingCron } from "./services/cron_service.js";
 import { startIdempotencyCleanupJob } from "./jobs/idempotencyCleanup_job.js";
 import { startStripeWebhookWorker } from "./jobs/stripeWebhook_worker.js";
 import { startOperatorPayoutJob } from "./jobs/operatorPayout_job.js";
+import { startSubscriptionLifecycleJob } from "./jobs/subscriptionLifecycle_job.js";
 
 dotenv.config();
 
@@ -18,6 +19,7 @@ startOverdueBookingCron();
 startIdempotencyCleanupJob();
 startStripeWebhookWorker();
 startOperatorPayoutJob();
+startSubscriptionLifecycleJob();
 
 server.listen(PORT, () => {
   console.log(`BNPL backend running on http://localhost:${PORT}`);

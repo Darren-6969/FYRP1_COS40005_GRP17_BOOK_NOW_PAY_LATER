@@ -828,3 +828,47 @@ export function adminActionTemplate({ title, intro, rows = [], buttonText, butto
     `,
   });
 }
+
+
+// Platform emails to an operator about their subscription (FR-SUB-002). They
+// come from the platform, so the header carries the platform name and logo.
+export function subscriptionNoticeTemplate({
+  operator,
+  title,
+  badgeLabel,
+  badgeType = "blue",
+  paragraphs = [],
+  facts = [],
+  buttonText,
+  buttonUrl,
+}) {
+  const factRows = facts
+    .filter((fact) => fact && fact.value)
+    .map(
+      (fact) => `
+        <tr>
+          <td style="padding:9px 0;color:#64748b;width:42%;">${escapeHtml(fact.label)}</td>
+          <td style="padding:9px 0;font-weight:800;color:#0f172a;">${escapeHtml(fact.value)}</td>
+        </tr>`
+    )
+    .join("");
+
+  return baseTemplate({
+    title,
+    buttonText,
+    buttonUrl,
+    body: `
+      <p style="margin-top:0;">Dear ${safe(operator?.companyName, "Operator")},</p>
+
+      ${badgeLabel ? `<p>${badge(escapeHtml(badgeLabel), badgeType)}</p>` : ""}
+
+      ${paragraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}
+
+      ${
+        factRows
+          ? `<table style="width:100%;border-collapse:collapse;margin:18px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">${factRows}</table>`
+          : ""
+      }
+    `,
+  });
+}

@@ -15,6 +15,11 @@ export const DEFAULT_REMINDER_TIMING = Object.freeze({
   paymentFirstHours: 24,
   paymentFinalHours: 6,
   licenceReminderHours: 24,
+  // FR-SUB-002: days before the Starter term ends that the operator is asked
+  // whether to continue, and days before a paid period ends that they are
+  // reminded to pay so the account is not suspended.
+  subscriptionTermReminderDays: 7,
+  subscriptionPaymentReminderDays: 3,
 });
 
 export const SUBSCRIPTION_PLAN_KEYS = ["FREE", "BASIC", "PREMIUM"];
@@ -44,13 +49,16 @@ function wholeNumberInRange(value, min, max, label) {
 }
 
 export function normalizeReminderTiming(value, current = DEFAULT_REMINDER_TIMING) {
-  if (value === undefined) return current;
+  // Settings saved before a key existed fall back to its default.
+  if (value === undefined) return { ...DEFAULT_REMINDER_TIMING, ...current };
   if (!isPlainObject(value)) throw invalid("Reminder timing must be a JSON object.");
   const merged = { ...DEFAULT_REMINDER_TIMING, ...current, ...value };
   const timing = {
     paymentFirstHours: wholeNumberInRange(merged.paymentFirstHours, 2, 168, "First payment reminder hours"),
     paymentFinalHours: wholeNumberInRange(merged.paymentFinalHours, 1, 167, "Final payment reminder hours"),
     licenceReminderHours: wholeNumberInRange(merged.licenceReminderHours, 1, 168, "Licence reminder hours"),
+    subscriptionTermReminderDays: wholeNumberInRange(merged.subscriptionTermReminderDays, 1, 60, "Starter term reminder days"),
+    subscriptionPaymentReminderDays: wholeNumberInRange(merged.subscriptionPaymentReminderDays, 1, 30, "Subscription payment reminder days"),
   };
   if (timing.paymentFinalHours >= timing.paymentFirstHours) {
     throw invalid("The final payment reminder must fall closer to the deadline than the first reminder.");

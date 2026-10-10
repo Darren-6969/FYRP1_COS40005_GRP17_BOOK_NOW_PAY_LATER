@@ -3554,3 +3554,15 @@
     align-items: flex-start;
   }
 }
+
+.master-subscription-meta {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  margin-top: 8px;
+}
+
+.master-subscription-meta small {
+  color: #64748b;
+  font-size: 12px;
+}

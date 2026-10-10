@@ -6,6 +6,7 @@ import {
   deleteOperator,
   deleteOperatorUser,
   getOperators,
+  getPlatformSettings,
   getSubscriptionUpgradeRequests,
   reviewSubscriptionUpgradeRequest,
   resetOperatorUser,
@@ -14,6 +15,34 @@ import {
   updateOperatorUserStatus,
   uploadOperatorLogo,
 } from "../../services/admin_service";
+import SubscriptionPaymentDrawer from "../../components/system/SubscriptionPaymentDrawer";
+
+const PLAN_RANK = { FREE: 0, BASIC: 1, PREMIUM: 2 };
+const PLAN_ORDER = ["FREE", "BASIC", "PREMIUM"];
+
+// Mirrors the server: a tier is paid when its price is above zero; an
+// unconfirmed (empty) price counts as paid except for the entry plan.
+function isPaidTier(plan, tiers) {
+  const price = tiers?.[plan]?.monthlyPriceRm;
+  if (price === null || price === undefined) return plan !== "FREE" && Boolean(tiers?.[plan]);
+  return Number(price) > 0;
+}
+
+function tierOptionLabel(plan, tier) {
+  const price = tier?.monthlyPriceRm;
+  const priceText = price == null ? "price to be confirmed" : Number(price) === 0 ? "free" : `RM${price}/month`;
+  return `${tier?.label || plan} · ${tier?.listingLimit ?? "?"} listings · ${priceText}`;
+}
+
+function shortDate(value) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("en-MY", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Kuala_Lumpur",
+  }).format(new Date(value));
+}
 
 const LOGO_MAX_FILE_SIZE = 500 * 1024; // 500KB
 const LOGO_MAX_WIDTH = 600;
@@ -146,6 +175,8 @@ export default function Operators() {
 
   const [upgradeRequests, setUpgradeRequests,] = useState([]);
   const [reviewingUpgradeId, setReviewingUpgradeId,] = useState(null);
+  const [tierConfig, setTierConfig] = useState(null);
+  const [paymentOperatorId, setPaymentOperatorId] = useState(null);
 
   const [companyForm, setCompanyForm] = useState(initialCompanyForm);
   const [staffForm, setStaffForm] = useState(initialStaffForm);
@@ -171,12 +202,17 @@ export default function Operators() {
       const [
         operatorsRes,
         upgradeRequestsRes,
+        settingsRes,
       ] = await Promise.all([
         getOperators(),
         getSubscriptionUpgradeRequests(
           "PENDING"
         ),
+        // The tier names, limits and prices are edited in System Settings.
+        getPlatformSettings().catch(() => null),
       ]);
+
+      setTierConfig(settingsRes?.data?.subscriptionTiers || null);
 
       setOperators(
         operatorsRes.data || []
@@ -506,9 +542,13 @@ export default function Operators() {
       return;
     }
 
+    const downgrade = (PLAN_RANK[nextPlan] ?? 0) < (PLAN_RANK[currentPlan] ?? 0);
+
     const confirmed =
       window.confirm(
-        `Change ${op.companyName} subscription from ${currentPlan} to ${nextPlan}?`
+        downgrade
+          ? `Downgrade ${op.companyName} from ${currentPlan} to ${nextPlan}?\n\nEvery published listing will be withdrawn and hidden (not deleted). The operator must republish up to the new limit.`
+          : `Change ${op.companyName} subscription from ${currentPlan} to ${nextPlan}? It takes effect immediately.`
       );
 
     if (!confirmed) {
@@ -1256,18 +1296,40 @@ const toggleUserStatus = async (op, user) => {
                             )
                           }
                         >
-                          <option value="FREE">
-                            FREE · 3 Listings
-                          </option>
-
-                          <option value="BASIC">
-                            BASIC · 10 Listings
-                          </option>
-
-                          <option value="PREMIUM">
-                            PREMIUM · 20 Listings
-                          </option>
+                          {PLAN_ORDER.map((plan) => (
+                            <option key={plan} value={plan}>
+                              {tierOptionLabel(plan, tierConfig?.[plan])}
+                            </option>
+                          ))}
                         </select>
+
+                        <div className="master-subscription-meta">
+                          {isPaidTier(op.subscriptionPlan || "FREE", tierConfig) ? (
+                            <>
+                              <span
+                                className={`badge ${
+                                  op.subscriptionStatus === "SUSPENDED" ? "suspended" : "active"
+                                }`}
+                              >
+                                {op.subscriptionStatus === "SUSPENDED" ? "SUSPENDED" : "ACTIVE"}
+                              </span>
+                              <small>
+                                {op.subscriptionPaidUntil
+                                  ? `Paid until ${shortDate(op.subscriptionPaidUntil)}`
+                                  : "No payment recorded"}
+                              </small>
+                              <button
+                                className="master-action-btn"
+                                type="button"
+                                onClick={() => setPaymentOperatorId(op.id)}
+                              >
+                                Record payment
+                              </button>
+                            </>
+                          ) : (
+                            op.subscriptionEndsAt && <small>Term ends {shortDate(op.subscriptionEndsAt)}</small>
+                          )}
+                        </div>
                       </td>
 
                       {/* =========================================
@@ -1453,6 +1515,21 @@ const toggleUserStatus = async (op, user) => {
           </table>
         )}
       </section>
+
+      {paymentOperatorId && (() => {
+        const payingOperator = operators.find((op) => op.id === paymentOperatorId);
+        return payingOperator ? (
+          <SubscriptionPaymentDrawer
+            operator={payingOperator}
+            tier={tierConfig?.[payingOperator.subscriptionPlan || "FREE"]}
+            onClose={() => setPaymentOperatorId(null)}
+            onRecorded={async (text) => {
+              setMessage(text);
+              await load();
+            }}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }

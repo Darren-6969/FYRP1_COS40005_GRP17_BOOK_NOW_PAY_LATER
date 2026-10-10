@@ -771,19 +771,26 @@ const operationalMetrics = useMemo(() => {
 
           background:
             subscription.activityStatus ===
-            "ACTIVE"
+              "ACTIVE" &&
+            subscription.status !==
+              "SUSPENDED"
               ? "#dcfce7"
               : "#fee2e2",
 
           color:
             subscription.activityStatus ===
-            "ACTIVE"
+              "ACTIVE" &&
+            subscription.status !==
+              "SUSPENDED"
               ? "#166534"
               : "#991b1b",
         }}
       >
-        {subscription.activityStatus ||
-          "UNKNOWN"}
+        {subscription.status ===
+        "SUSPENDED"
+          ? "SUSPENDED"
+          : subscription.activityStatus ||
+            "UNKNOWN"}
       </span>
     </div>
 
@@ -875,7 +882,9 @@ const operationalMetrics = useMemo(() => {
             marginBottom: "5px",
           }}
         >
-          Term End
+          {subscription.paidUntil
+            ? "Paid Until"
+            : "Term End"}
         </div>
 
         <div
@@ -886,11 +895,44 @@ const operationalMetrics = useMemo(() => {
           }}
         >
           {formatSubscriptionDate(
-            subscription.endsAt
+            subscription.paidUntil ||
+              subscription.endsAt
           )}
         </div>
       </div>
     </div>
+
+    {subscription.status ===
+      "SUSPENDED" && (
+      <div
+        role="alert"
+        style={{
+          marginBottom: "20px",
+          padding: "14px 16px",
+          borderRadius: "12px",
+          background: "#fee2e2",
+          border: "1px solid #fecaca",
+          color: "#991b1b",
+          fontSize: "13px",
+          fontWeight: 600,
+          lineHeight: 1.5,
+        }}
+      >
+        Your subscription is suspended
+        {subscription.suspensionReason
+          ? ` (${subscription.suspensionReason})`
+          : ""}
+        . Your listings are hidden and
+        customers cannot send new
+        booking requests. Bookings you
+        have already accepted are
+        unaffected and you can still
+        manage them. Contact the
+        platform administrator to
+        record your payment and
+        reactivate your account.
+      </div>
+    )}
 
     <div
       style={{

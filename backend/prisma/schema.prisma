@@ -31,6 +31,21 @@ enum SubscriptionUpgradeRequestStatus {
   REJECTED
 }
 
+// FR-SUB-002: an operator whose paid period lapsed is suspended until the
+// administrator records the next payment. Separate from Operator.status, which
+// is the administrator's full account lock.
+enum SubscriptionStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+// Scheduled subscription emails, recorded so each is sent once per period.
+enum SubscriptionNoticeKind {
+  STARTER_ENDING
+  STARTER_ENDED
+  PAYMENT_DUE_SOON
+}
+
 enum OperatorApplicationStatus {
   SUBMITTED
   UNDER_REVIEW
@@ -363,6 +378,11 @@ model Operator {
   subscriptionStartedAt DateTime?
   subscriptionEndsAt    DateTime?
 
+  subscriptionStatus           SubscriptionStatus @default(ACTIVE)
+  subscriptionPaidUntil        DateTime?
+  subscriptionSuspendedAt      DateTime?
+  subscriptionSuspensionReason String?
+
   // Seller page (FR-CUST-007). The slug gives the operator a short link to
   // share (/o/<slug>); the rest is written by the operator.
   slug                   String?  @unique
@@ -393,12 +413,15 @@ model Operator {
   payouts      OperatorPayout[]
 
   subscriptionUpgradeRequests SubscriptionUpgradeRequest[]
+  subscriptionPayments        SubscriptionPayment[]
+  subscriptionNotices         SubscriptionNotice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([operatorCode])
   @@index([status])
+  @@index([subscriptionStatus, subscriptionPaidUntil])
 }
 
 model SubscriptionUpgradeRequest {
@@ -422,6 +445,47 @@ model SubscriptionUpgradeRequest {
   @@index([operatorId])
   @@index([operatorId, status])
   @@index([createdAt])
+}
+
+// A subscription payment arranged outside Stripe and recorded by the
+// administrator (FR-SUB-002). amount is in ringgit.
+model SubscriptionPayment {
+  id Int @id @default(autoincrement())
+
+  operatorId Int
+  operator   Operator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+
+  plan      SubscriptionPlan
+  amount    Decimal          @db.Decimal(10, 2)
+  paidOn    DateTime
+  paidUntil DateTime
+
+  reference String?
+  note      String? @db.Text
+
+  recordedById Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([operatorId, paidOn])
+  @@index([createdAt])
+}
+
+// One row per scheduled notice sent to an operator. The unique key makes the
+// claim atomic, so overlapping job runs cannot email the same period twice.
+// periodEnd is the term end or paid-until date the notice was about.
+model SubscriptionNotice {
+  id Int @id @default(autoincrement())
+
+  operatorId Int
+  operator   Operator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+
+  kind      SubscriptionNoticeKind
+  periodEnd DateTime
+  sentAt    DateTime               @default(now())
+
+  @@unique([operatorId, kind, periodEnd])
+  @@index([sentAt])
 }
 
 model OperatorApplication {
@@ -537,7 +601,7 @@ model PlatformSettings {
   exposureLimits             Json     @default("{}") @db.JsonB
   licenceReuploadWindowHours Int      @default(24)
   featureFlags               Json     @default("{\"allowReceiptUpload\":true,\"automaticOverdueHandling\":true}") @db.JsonB
-  reminderTiming             Json     @default("{\"paymentFirstHours\":24,\"paymentFinalHours\":6,\"licenceReminderHours\":24}") @db.JsonB
+  reminderTiming             Json     @default("{\"paymentFirstHours\":24,\"paymentFinalHours\":6,\"licenceReminderHours\":24,\"subscriptionTermReminderDays\":7,\"subscriptionPaymentReminderDays\":3}") @db.JsonB
   downPaymentFloorPercent    Int      @default(0)
   subscriptionTiers          Json     @default("{\"FREE\":{\"label\":\"Starter\",\"listingLimit\":5,\"monthlyPriceRm\":0,\"termDays\":90},\"BASIC\":{\"label\":\"Standard\",\"listingLimit\":10,\"monthlyPriceRm\":20,\"termDays\":null},\"PREMIUM\":{\"label\":\"Premium\",\"listingLimit\":20,\"monthlyPriceRm\":null,\"termDays\":null}}") @db.JsonB
   createdAt                  DateTime @default(now())

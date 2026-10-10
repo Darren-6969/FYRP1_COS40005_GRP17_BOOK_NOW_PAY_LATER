@@ -15,6 +15,7 @@ import {
 } from "../services/car_availability_service.js";
 
 import { getPlatformSettings } from "../services/platform_settings_service.js";
+import { assertSubscriptionActive } from "../services/subscription_admin_service.js";
 
 function isPlainDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(
@@ -1550,6 +1551,9 @@ export async function publishListing(
       });
     }
 
+    // A suspended subscription cannot put listings on sale.
+    await assertSubscriptionActive(listing.operatorId);
+
     const listingLimit =
       getListingLimit(operator.subscriptionPlan, (await getPlatformSettings()).subscriptionTiers);
 
@@ -1849,6 +1853,8 @@ export async function bulkUpdateListingStatus(
           group,
         ] of operatorGroups
       ) {
+        await assertSubscriptionActive(operatorId);
+
         const listingLimit =
           getListingLimit(group.subscriptionPlan, subscriptionTiers);
 

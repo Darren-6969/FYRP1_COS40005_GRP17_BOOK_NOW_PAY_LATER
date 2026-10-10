@@ -7,6 +7,8 @@ import { createInAppNotification, notifyMasterUsers } from "../services/notifica
 import { generateUserCode } from "../services/userCode.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
 import {validateSecureDocument,} from "../utils/secure_upload.js";
+import { getPlatformSettings } from "../services/platform_settings_service.js";
+import { initialTermData } from "../services/subscription_rules.js";
 
 const DOCUMENT_TYPES = new Set(["BUSINESS_REGISTRATION", "BUSINESS_LICENSE", "OWNER_IDENTITY"]);
 const APPLICATION_DECISIONS = new Set(["APPROVED", "REJECTED", "NEEDS_INFORMATION"]);
@@ -283,7 +285,16 @@ export async function reviewOperatorApplication(req, res, next) {
       });
 
       if (decision === "APPROVED") {
-        await tx.operator.update({ where: { id: application.operatorId }, data: { status: "ACTIVE" } });
+        // FR-SUB-002: the Starter term starts when the administrator approves the operator.
+        const approved = await tx.operator.findUnique({
+          where: { id: application.operatorId },
+          select: { subscriptionPlan: true, subscriptionStartedAt: true },
+        });
+        const tiers = (await getPlatformSettings(tx)).subscriptionTiers;
+        await tx.operator.update({
+          where: { id: application.operatorId },
+          data: { status: "ACTIVE", ...initialTermData(approved, tiers) },
+        });
         await tx.user.updateMany({ where: { operatorId: application.operatorId, operatorAccessLevel: "OWNER" }, data: { operatorUserStatus: "ACTIVE" } });
         await tx.operatorDocument.updateMany({ where: { applicationId }, data: { status: "APPROVED", reviewedAt: new Date(), reviewedById: req.user.id } });
       } else if (decision === "REJECTED") {

@@ -15,7 +15,9 @@ import {
 } from "../../src/services/feature_flag_service.js";
 
 test("reminder timing keeps current values when nothing is submitted", () => {
-  assert.equal(normalizeReminderTiming(undefined), DEFAULT_REMINDER_TIMING);
+  assert.deepEqual(normalizeReminderTiming(undefined), DEFAULT_REMINDER_TIMING);
+  // Settings saved before the subscription keys existed fall back to their defaults.
+  assert.equal(normalizeReminderTiming(undefined, { paymentFirstHours: 12 }).subscriptionTermReminderDays, 7);
 });
 
 test("reminder timing merges partial updates and rejects a final reminder that is not closer to the deadline", () => {
@@ -23,7 +25,12 @@ test("reminder timing merges partial updates and rejects a final reminder that i
     paymentFirstHours: 24,
     paymentFinalHours: 4,
     licenceReminderHours: 24,
+    subscriptionTermReminderDays: 7,
+    subscriptionPaymentReminderDays: 3,
   });
+  assert.equal(normalizeReminderTiming({ subscriptionTermReminderDays: 14 }).subscriptionTermReminderDays, 14);
+  assert.throws(() => normalizeReminderTiming({ subscriptionTermReminderDays: 0 }), /Starter term reminder days/);
+  assert.throws(() => normalizeReminderTiming({ subscriptionPaymentReminderDays: 31 }), /payment reminder days/);
   assert.throws(() => normalizeReminderTiming({ paymentFirstHours: 6, paymentFinalHours: 6 }), /closer to the deadline/);
   assert.throws(() => normalizeReminderTiming({ paymentFinalHours: 0 }), /whole number/);
   assert.throws(() => normalizeReminderTiming({ licenceReminderHours: 2.5 }), /whole number/);

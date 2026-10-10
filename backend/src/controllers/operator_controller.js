@@ -46,6 +46,10 @@ import {
 import {
   getListingLimit,
 } from "../services/subscription_service.js";
+import {
+  changeOperatorSubscriptionPlan,
+  recordSubscriptionPayment,
+} from "../services/subscription_admin_service.js";
 
 const SETUP_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
@@ -528,143 +532,85 @@ export async function getOperators(req, res, next) {
   }
 }
 
-/// Add Operator Subscription Function
-export async function updateOperatorSubscriptionPlan(
-  req,
-  res,
-  next
-) {
+/// Apply a subscription tier change (FR-SUB-003). An upgrade takes effect at
+/// once; a downgrade withdraws every published listing instead of refusing.
+export async function updateOperatorSubscriptionPlan(req, res, next) {
   try {
-    const id = parseId(
-      req.params.id,
-      "operator id"
-    );
+    const id = parseId(req.params.id, "operator id");
+    const subscriptionPlan = String(req.body.subscriptionPlan || "").toUpperCase();
 
-    const subscriptionPlan =
-      String(
-        req.body.subscriptionPlan || ""
-      ).toUpperCase();
-
-    if (
-      ![
-        "FREE",
-        "BASIC",
-        "PREMIUM",
-      ].includes(subscriptionPlan)
-    ) {
-      return res.status(400).json({
-        message:
-          "Invalid subscription plan.",
-      });
+    if (!["FREE", "BASIC", "PREMIUM"].includes(subscriptionPlan)) {
+      return res.status(400).json({ message: "Invalid subscription plan." });
     }
 
-    const currentOperator =
-      await prisma.operator.findUnique({
-        where: {
-          id,
-        },
-
-        select: {
-          id: true,
-          companyName: true,
-          subscriptionPlan: true,
-        },
-      });
-
-    if (!currentOperator) {
-      return res.status(404).json({
-        message:
-          "Operator/company not found.",
-      });
-    }
-
-    const listingLimit =
-      getListingLimit(subscriptionPlan, (await getPlatformSettings()).subscriptionTiers);
-
-    const publishedCount =
-      await prisma.listing.count({
-        where: {
-          operatorId: id,
-          status: "PUBLISHED",
-        },
-      });
-
-    // Do not allow downgrade when the
-    // operator already exceeds the new limit.
-    if (
-      publishedCount >
-      listingLimit
-    ) {
-      return res.status(409).json({
-        message:
-          `Cannot change ${currentOperator.companyName} to the ${subscriptionPlan} plan. ` +
-          `The operator currently has ${publishedCount} published listings, ` +
-          `but this plan only allows ${listingLimit}.`,
-
-        subscriptionPlan,
-        listingLimit,
-        publishedCount,
-      });
-    }
-
-    const operator =
-      await prisma.operator.update({
-        where: {
-          id,
-        },
-
-        data: {
-          subscriptionPlan,
-        },
-      });
-
-    await createAuditLog({
+    const result = await changeOperatorSubscriptionPlan({
+      operatorId: id,
+      plan: subscriptionPlan,
       req,
-
-      action:
-        "OPERATOR_SUBSCRIPTION_UPDATED",
-
-      entityType:
-        "Operator",
-
-      entityId:
-        id,
-
-      before: {
-        subscriptionPlan:
-          currentOperator.subscriptionPlan,
-      },
-
-      after: {
-        subscriptionPlan:
-          operator.subscriptionPlan,
-      },
-
-      details: {
-        listingLimit,
-        publishedCount,
-      },
     });
+
+    const listingLimit = getListingLimit(subscriptionPlan, result.tiers);
+    const publishedCount = await prisma.listing.count({
+      where: { operatorId: id, status: "PUBLISHED" },
+    });
+    const withdrawn = result.withdrawnListingIds.length;
 
     res.json({
       message:
-        `${currentOperator.companyName} subscription plan updated to ${subscriptionPlan}.`,
-
-      operator,
-
+        `${result.operator.companyName} subscription plan updated to ${subscriptionPlan}.` +
+        (withdrawn
+          ? ` ${withdrawn} published listing${withdrawn === 1 ? " was" : "s were"} withdrawn, not deleted. The operator can republish up to ${listingLimit}.`
+          : ""),
+      operator: result.operator,
       subscription: {
-        plan:
-          subscriptionPlan,
-
+        plan: subscriptionPlan,
         listingLimit,
-
         publishedCount,
-
-        remaining:
-          listingLimit -
-          publishedCount,
+        remaining: Math.max(0, listingLimit - publishedCount),
+        listingsWithdrawn: withdrawn,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/// Record a subscription payment arranged outside Stripe (FR-SUB-002).
+export async function recordOperatorSubscriptionPayment(req, res, next) {
+  try {
+    const id = parseId(req.params.id, "operator id");
+    const result = await recordSubscriptionPayment({
+      operatorId: id,
+      amount: req.body.amount,
+      paidOn: req.body.paidOn || null,
+      paidUntil: req.body.paidUntil,
+      reference: req.body.reference,
+      note: req.body.note,
+      req,
+    });
+
+    res.status(201).json({
+      message: result.reactivated
+        ? `Payment recorded. ${result.operator.companyName} is reactivated and listings are visible again.`
+        : "Payment recorded.",
+      reactivated: result.reactivated,
+      payment: result.payment,
+      operator: result.operator,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getOperatorSubscriptionPayments(req, res, next) {
+  try {
+    const id = parseId(req.params.id, "operator id");
+    const payments = await prisma.subscriptionPayment.findMany({
+      where: { operatorId: id },
+      orderBy: [{ paidOn: "desc" }, { id: "desc" }],
+      take: 60,
+    });
+    res.json(payments);
   } catch (err) {
     next(err);
   }
@@ -998,6 +944,10 @@ export async function getOperatorDashboard(req, res, next) {
               subscriptionPlan: true,
               subscriptionStartedAt: true,
               subscriptionEndsAt: true,
+              subscriptionStatus: true,
+              subscriptionPaidUntil: true,
+              subscriptionSuspendedAt: true,
+              subscriptionSuspensionReason: true,
 
               createdAt: true,
 
@@ -1146,6 +1096,19 @@ if (operator) {
 
         activityStatus:
           operator.status,
+
+        // FR-SUB-002: suspended for an unpaid month until payment is recorded.
+        status:
+          operator.subscriptionStatus,
+
+        paidUntil:
+          operator.subscriptionPaidUntil,
+
+        suspendedAt:
+          operator.subscriptionSuspendedAt,
+
+        suspensionReason:
+          operator.subscriptionSuspensionReason,
 
         canRequestUpgrade:
           req.user

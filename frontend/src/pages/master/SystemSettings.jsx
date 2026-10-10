@@ -61,6 +61,8 @@ const DEFAULT_REMINDER_TIMING = {
   paymentFirstHours: 24,
   paymentFinalHours: 6,
   licenceReminderHours: 24,
+  subscriptionTermReminderDays: 7,
+  subscriptionPaymentReminderDays: 3,
 };
 
 const SUBSCRIPTION_PLANS = ["FREE", "BASIC", "PREMIUM"];
@@ -615,7 +617,7 @@ export default function SystemSettings() {
           <SettingsSection
             icon={<Bell size={20} />}
             title="Reminders & Licence"
-            description="When customers are reminded, and how long they have to re-upload a rejected licence."
+            description="When customers and operators are reminded, and how long a customer has to re-upload a rejected licence."
           >
             <div className="operator-settings-form-grid">
               <FormField label="First payment reminder (hours before deadline)">
@@ -632,6 +634,14 @@ export default function SystemSettings() {
 
               <FormField label="Licence reminder (hours before it is due)">
                 <input name="licenceReminderHours" type="number" min="1" max="168" value={platformForm.reminderTiming.licenceReminderHours} onChange={handleReminderChange} required />
+              </FormField>
+
+              <FormField label="Starter term email (days before the term ends)" helper="Asks the operator whether they want to continue. A second email goes out when the term ends.">
+                <input name="subscriptionTermReminderDays" type="number" min="1" max="60" value={platformForm.reminderTiming.subscriptionTermReminderDays} onChange={handleReminderChange} required />
+              </FormField>
+
+              <FormField label="Subscription payment reminder (days before paid-until)" helper="Warns a paid operator that their account is suspended if payment is not recorded.">
+                <input name="subscriptionPaymentReminderDays" type="number" min="1" max="30" value={platformForm.reminderTiming.subscriptionPaymentReminderDays} onChange={handleReminderChange} required />
               </FormField>
             </div>
           </SettingsSection>

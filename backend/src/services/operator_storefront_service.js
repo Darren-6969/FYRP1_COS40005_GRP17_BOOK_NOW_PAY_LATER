@@ -168,6 +168,7 @@ async function findOperator(handle) {
       establishedYear: true,
       languages: true,
       status: true,
+      subscriptionStatus: true,
       createdAt: true,
       branches: {
         where: { isActive: true },
@@ -189,7 +190,7 @@ export async function getStorefront(handle) {
     throw fail(404, "OPERATOR_NOT_FOUND", "Operator not found");
   }
 
-  const suspended = operator.status === "SUSPENDED";
+  const suspended = operator.status === "SUSPENDED" || operator.subscriptionStatus === "SUSPENDED";
   const listings = suspended
     ? []
     : await prisma.listing.findMany({

@@ -23,6 +23,7 @@ import { getPlatformSettings, isCreditTierPolicyEnabled, isFeatureEnabled } from
 import { assignCreditTier } from "../services/credit_tier_service.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 import { enforceConcurrentExposureCap } from "../services/concurrent_exposure_service.js";
+import { assertOperatorTakingBookings } from "../services/subscription_admin_service.js";
 import { transitionBookingStatus } from "../services/booking_status_service.js";
 
 function toNumber(value) {
@@ -279,6 +280,9 @@ export async function createCustomerBooking(req, res, next) {
     const parsedReturnDate = returnDate
       ? parseMalaysiaLocalDateTime(returnDate)
       : null;
+
+    // A suspended operator takes no new booking requests.
+    await assertOperatorTakingBookings(resolvedOperatorId);
 
     const defaultPaymentDeadline = await calculatePaymentDeadline(
       resolvedOperatorId,
