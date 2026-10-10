@@ -18,6 +18,7 @@ import PaymentSchedule from "../../components/public/PaymentSchedule";
 import RefundBox from "../../components/public/RefundBox";
 import OperatorStrip from "../../components/public/OperatorStrip";
 import BookingBar from "../../components/public/BookingBar";
+import OfferModeBanner, { OfferAddonStatus } from "../../components/public/OfferModeBanner";
 import styles from "../../assets/styles/public/CarDetail.module.css";
 import AvailabilityCalendar from "../../components/public/AvailabilityCalendar";
 
@@ -237,6 +238,11 @@ export default function CarDetail() {
   const location = useLocation();
   const uid = useId();
   const key = params.toString();
+  // Opened from an alternative car offer (?offer=<booking id>): the page is
+  // for looking only, so the trip picker, payment schedule and booking bar
+  // are replaced with links back to the offer.
+  const offerParam = params.get("offer") || "";
+  const offerId = /^\d+$/.test(offerParam) ? offerParam : null;
   const sel = useMemo(() => parseBookingSelection(new URLSearchParams(key)), [key]);
   const [saved, toggleSaved] = useSavedListings();
   const signedIn = Boolean(getToken());
@@ -477,9 +483,9 @@ export default function CarDetail() {
   return (
     <div className={styles.page}>
       <div className={styles.topRow}>
-        <Link to={backTo} className={styles.back}>
+        <Link to={offerId ? `/customer/bookings/${offerId}` : backTo} className={styles.back}>
           <ChevronLeft size={18} aria-hidden="true" />
-          Back to results
+          {offerId ? "Back to your offer" : "Back to results"}
         </Link>
         <nav aria-label="Breadcrumb">
           <ol className={styles.crumbs}>
@@ -493,6 +499,8 @@ export default function CarDetail() {
           </ol>
         </nav>
       </div>
+
+      {offerId && <OfferModeBanner bookingId={offerId} operatorName={listing.operator.companyName} />}
 
       <Gallery listing={listing} saved={saved.has(listing.id)} onSave={() => toggleSaved(listing.id)} signedIn={signedIn} />
 
@@ -516,6 +524,8 @@ export default function CarDetail() {
 
       <OperatorStrip operator={listing.operator} branch={listing.branch} stats={listing.operatorStats} />
 
+      {!offerId && (
+        <>
       <section id="trip" ref={tripRef} className={styles.card} aria-labelledby="trip-h">
         <div className={styles.cardHead}>
           <h2 id="trip-h" className={styles.h2}>
@@ -719,6 +729,8 @@ export default function CarDetail() {
           </div>
         )}
       </section>
+        </>
+      )}
 
       <RefundBox rule={b.refundRule} />
 
@@ -786,7 +798,11 @@ export default function CarDetail() {
         <h2 id="add-h" className={`${styles.h2} ${styles.cardTitle}`}>
           Add-ons
         </h2>
-        <p className={styles.text}>Add-ons are paid with the balance. Your deposit stays the same.</p>
+        <p className={styles.text}>
+          {offerId
+            ? "These are the add-ons in your offer. To change them, decline the offer and book the car yourself, or ask the operator."
+            : "Add-ons are paid with the balance. Your deposit stays the same."}
+        </p>
         <ul className={styles.addons}>
           {b.cdw && (
             <li className={`${styles.addon} ${sel.cdw ? styles.addonOn : ""}`}>
@@ -795,6 +811,9 @@ export default function CarDetail() {
                 <div className={styles.addonDesc}>{b.cdw.description}</div>
               </div>
               <span className={styles.addonPrice}>{formatSen(b.cdw.priceSen)} / day</span>
+              {offerId ? (
+                <OfferAddonStatus qty={sel.cdw ? 1 : 0} />
+              ) : (
               <button
                 type="button"
                 className={`${styles.addToggle} ${sel.cdw ? styles.addToggleOn : ""}`}
@@ -804,6 +823,7 @@ export default function CarDetail() {
               >
                 {sel.cdw ? "Added" : "Add"}
               </button>
+              )}
             </li>
           )}
           {b.addOns.map((a) => {
@@ -818,7 +838,9 @@ export default function CarDetail() {
                 <span className={styles.addonPrice}>
                   {formatSen(a.priceSen)} / {a.unit === "per_day" ? "day" : "booking"}
                 </span>
-                {a.maxQty > 1 ? (
+                {offerId ? (
+                  <OfferAddonStatus qty={qty} />
+                ) : a.maxQty > 1 ? (
                   <div role="group" aria-label={`${a.label} quantity`} className={styles.stepper}>
                     <button
                       type="button"
@@ -901,6 +923,9 @@ export default function CarDetail() {
         })}
       </section>
 
+      {offerId ? (
+        <OfferModeBanner bookingId={offerId} placement="bottom" />
+      ) : (
       <BookingBar
         {...bar}
         lowStockText={lowStockText}
@@ -913,6 +938,7 @@ export default function CarDetail() {
         note={`Free to request. You won't be charged until ${listing.operator.companyName} accepts.`}
         onRequest={requestBooking}
       />
+      )}
     </div>
   );
 }

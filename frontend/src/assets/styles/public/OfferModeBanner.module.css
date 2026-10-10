@@ -1,0 +1,185 @@
+/* Offer mode on the public car page (components/public/OfferModeBanner.jsx).
+   Public site tokens (tokens.css), so both bars follow light and dark. */
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 12px 0 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--pub-line);
+  border-left: 4px solid var(--pub-brand);
+  border-radius: var(--pub-radius-lg);
+  background: var(--pub-ok-bg);
+  color: var(--pub-ink);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.text strong {
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+  color: var(--pub-ink);
+}
+
+.text span {
+  color: var(--pub-text);
+  font-size: 14px;
+}
+
+.button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: var(--pub-radius);
+  background: var(--pub-brand);
+  color: var(--pub-on-brand);
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+  font-size: 15px;
+  text-decoration: none;
+  transition: background 0.18s ease;
+}
+
+.button:hover {
+  background: var(--pub-brand-hover);
+  color: var(--pub-on-brand);
+}
+
+.button:focus-visible {
+  outline: 3px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+/* Same frame as the booking bar (BookingBar.module.css): fixed, full width,
+   content lined up with the page column. The page keeps 220px of bottom
+   padding for it. */
+.bottom {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 14px max(clamp(16px, 3vw, 32px), calc((100% - 860px) / 2))
+    calc(16px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--pub-line);
+  background: var(--pub-surface);
+  box-shadow: 0 -14px 34px -22px rgba(20, 35, 31, 0.45);
+}
+
+.bottomText {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pub-ink);
+}
+
+.bottomLabel {
+  font-family: var(--pub-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pub-label);
+}
+
+.bottomButton {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 52px;
+  padding: 0 28px;
+  border-radius: 12px;
+  background: var(--pub-brand);
+  color: var(--pub-on-brand);
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+  font-size: 16px;
+  text-decoration: none;
+  transition: background 0.18s ease;
+}
+
+.bottomButton:hover {
+  background: var(--pub-brand-hover);
+  color: var(--pub-on-brand);
+}
+
+.bottomButton:focus-visible {
+  outline: 3px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+/* Add-on rows in offer mode: shown in place of the add/remove controls. */
+.addonIn,
+.addonOut {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.addonIn {
+  background: var(--pub-ok-bg);
+  color: var(--pub-ok-fg);
+}
+
+.addonOut {
+  background: var(--pub-surface-sunk);
+  color: var(--pub-text);
+}
+
+@media (max-width: 640px) {
+  .banner,
+  .bottom {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bottom {
+    gap: 10px;
+    padding-top: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .button,
+  .bottomButton {
+    justify-content: center;
+  }
+
+  .bottomButton {
+    min-height: 48px;
+    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .bottomButton {
+    transition: none;
+  }
+}
