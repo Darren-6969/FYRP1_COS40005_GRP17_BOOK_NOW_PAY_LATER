@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import prisma from "../config/db.js";
 import { enqueueJob, requestDrain } from "./job_queue_service.js";
-import { getPlatformSettings, isCreditTierPolicyEnabled } from "./platform_settings_service.js";
+import { applyDownPaymentFloor, getPlatformSettings, isCreditTierPolicyEnabled } from "./platform_settings_service.js";
 
 // FR-ANL-002: product event instrumentation.
 //
@@ -47,6 +47,8 @@ export const EVENT_PROPERTIES = {
   // Risk
   no_show_marked: ["down_payment_percentage", "balance_paid", "credit_tier", "tier_policy_enabled"],
   exposure_blocked: ["credit_tier", "limit", "open_unpaid_count"],
+  // A booking took the last unit on one or more dates (4.1.10, reported under 4.4.9).
+  allocation_exhausted: ["listing_id", "dates", "date_count"],
   // Commercial and support
   payout_settled: ["payout_id", "amount_sen"],
   chat_escalated: ["conversation_id"],
@@ -71,8 +73,10 @@ function cleanScalar(value) {
   if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
   if (typeof value === "string") {
     const text = value.trim();
-    if (!text || text.length > MAX_STRING_LENGTH || looksPersonal(text)) return undefined;
-    return text;
+    if (!text || text.length > MAX_STRING_LENGTH) return undefined;
+    // A plain calendar date (2026-10-15) is not personal data.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+    return looksPersonal(text) ? undefined : text;
   }
   return undefined;
 }
@@ -248,10 +252,24 @@ async function creditContext(booking, database) {
   const settings = await getPlatformSettings(database);
   const policyOn = await isCreditTierPolicyEnabled(settings, booking.operatorId, database);
 
-  return { credit_tier: tier, tier_policy_enabled: Boolean(policyOn) };
+  // A booking request has no payment row until the operator accepts it, so the
+  // down payment percentage is the one the operator has set, raised to the
+  // platform floor where the tier policy applies: the terms the customer was offered.
+  let offeredPercent = null;
+  if (!booking.payment) {
+    const config = await database.bNPLConfig.findFirst({
+      where: { operatorId: booking.operatorId },
+      orderBy: { createdAt: "desc" },
+      select: { downPaymentPercent: true },
+    });
+    offeredPercent = applyDownPaymentFloor(Number(config?.downPaymentPercent ?? 30), settings.downPaymentFloorPercent, policyOn);
+  }
+
+  return { credit_tier: tier, tier_policy_enabled: Boolean(policyOn), _offeredPercent: offeredPercent };
 }
 
-function bookingEventProperties(name, booking, credit, extra) {
+function bookingEventProperties(name, booking, context, extra) {
+  const { _offeredPercent: offeredPercent, ...credit } = context;
   const base = { listing_id: booking.listingId };
 
   switch (name) {
@@ -259,7 +277,7 @@ function bookingEventProperties(name, booking, credit, extra) {
       return {
         ...base,
         channel: booking.channel,
-        down_payment_percentage: downPaymentPercentage(booking.payment),
+        down_payment_percentage: downPaymentPercentage(booking.payment) ?? offeredPercent,
         days_before_service_start: daysBeforeServiceStart(booking),
         ...credit,
         ...extra,

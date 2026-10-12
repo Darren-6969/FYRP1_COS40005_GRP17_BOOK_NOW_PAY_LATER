@@ -46,6 +46,9 @@ test("pilot metrics aggregate period events, due-cohort tier rates, finance and 
     booking: {
       findMany: async ({ where }) => where.createdAt ? cohort : [{ id: 7 }],
     },
+    bookingStatusHistory: { findMany: async () => [] },
+    analyticsEvent: { findMany: async () => [] },
+    operator: { findMany: async () => [] },
     payment: { findMany: async () => [{ bookingId: 1 }] },
     auditLog: { findMany: async ({ where }) => eventLogs[where.action] || [] },
     commissionLedgerEntry: {

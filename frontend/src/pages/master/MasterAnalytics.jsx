@@ -77,6 +77,43 @@ function downloadPilotCSV(report) {
     ["Operator cancellations", report.operatorCancellation.count],
     ["Operator cancellation rate (%)", report.operatorCancellation.rate ?? "N/A"],
     [],
+    ...(report.requests
+      ? [
+          ["Operator responses (decided in period)"],
+          ["Requests submitted", report.requests.submitted],
+          ["Accepted", report.requests.accepted],
+          ["Rejected by the operator", report.requests.rejectedByOperator],
+          ["Rejected automatically", report.requests.rejectedAutomatically],
+          ["Still pending", report.requests.stillPending],
+          ["Acceptance rate (%)", report.requests.acceptanceRate ?? "N/A"],
+          ["Median response time (minutes)", report.requests.medianResponseMinutes ?? "N/A"],
+          ["Average response time (minutes)", report.requests.averageResponseMinutes ?? "N/A"],
+          ["Allocation exhausted (events)", report.allocationExhausted?.events ?? "N/A"],
+          ["Allocation exhausted (dates)", report.allocationExhausted?.dates ?? "N/A"],
+          [],
+          ["By operator"],
+          [
+            "Operator", "Code", "Requests submitted", "Accepted", "Rejected by operator", "Rejected automatically",
+            "Acceptance rate (%)", "Median response (minutes)", "Average response (minutes)",
+            "Operator cancellations", "Allocation exhausted (events)", "Allocation exhausted (dates)",
+          ],
+          ...(report.operators || []).map((operator) => [
+            operator.companyName,
+            operator.operatorCode,
+            operator.submitted,
+            operator.accepted,
+            operator.rejectedByOperator,
+            operator.rejectedAutomatically,
+            operator.acceptanceRate ?? "N/A",
+            operator.medianResponseMinutes ?? "N/A",
+            operator.averageResponseMinutes ?? "N/A",
+            operator.operatorCancellations,
+            operator.allocationExhaustedEvents,
+            operator.allocationExhaustedDates,
+          ]),
+        ]
+      : []),
+    [],
     ["Rates by credit tier"],
     ["Credit tier", "Cohort bookings", "Due bookings", "On-time payment rate (%)", "Expired bookings", "Expiry rate (%)"],
     ...report.paymentByCreditTier.map((tier) => [
@@ -97,6 +134,17 @@ function downloadPilotCSV(report) {
   anchor.download = `pilot-scorecard-${report.period.from}-to-${report.period.to}.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+// Response times are stored in minutes; show hours once a figure is long.
+function formatMinutes(minutes) {
+  if (minutes == null) return "N/A";
+  if (minutes < 60) return `${minutes} min`;
+  return `${(minutes / 60).toFixed(1)} h`;
+}
+
+function percent(value) {
+  return value == null ? "N/A" : `${value}%`;
 }
 
 function isoDay(date) {
@@ -354,6 +402,18 @@ export default function MasterAnalytics() {
               <Metric label="No-show" value={pilotMetrics.counts.noShow.toLocaleString()} variant="warning" />
             </div>
 
+            {pilotMetrics.requests && (
+              <div className="master-analytics-metric-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", marginBottom: 16 }}>
+                <Metric label="Requests submitted" value={pilotMetrics.requests.submitted.toLocaleString()} sub={`${pilotMetrics.requests.stillPending.toLocaleString()} still pending`} />
+                <Metric label="Accepted" value={pilotMetrics.requests.accepted.toLocaleString()} sub="By the operator" />
+                <Metric label="Rejected by operator" value={pilotMetrics.requests.rejectedByOperator.toLocaleString()} variant="warning" />
+                <Metric label="Rejected automatically" value={pilotMetrics.requests.rejectedAutomatically.toLocaleString()} sub="No answer before the deadline" variant="warning" />
+                <Metric label="Acceptance rate" value={percent(pilotMetrics.requests.acceptanceRate)} sub="Accepted ÷ decided requests" />
+                <Metric label="Median response" value={formatMinutes(pilotMetrics.requests.medianResponseMinutes)} sub={`Average ${formatMinutes(pilotMetrics.requests.averageResponseMinutes)}`} />
+                <Metric label="Allocation exhausted" value={(pilotMetrics.allocationExhausted?.events ?? 0).toLocaleString()} sub={`${(pilotMetrics.allocationExhausted?.dates ?? 0).toLocaleString()} dates reached zero`} variant="warning" />
+              </div>
+            )}
+
             <div className="master-analytics-metric-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", marginBottom: 20 }}>
               <Metric label="GMV" value={formatOperatorMoney(pilotMetrics.finance.gmv)} sub="Gross booking value" />
               <Metric label="Commission revenue" value={formatOperatorMoney(pilotMetrics.finance.commissionRevenue)} sub="Recorded commission ledger" />
@@ -361,6 +421,44 @@ export default function MasterAnalytics() {
               <Metric label="Allocation utilisation" value={pilotMetrics.allocation.utilisationRate == null ? "N/A" : `${pilotMetrics.allocation.utilisationRate}%`} sub={`${pilotMetrics.allocation.reservedUnitDays.toLocaleString()} / ${pilotMetrics.allocation.allocatedUnitDays.toLocaleString()} unit-days`} />
               <Metric label="Operator cancellation rate" value={pilotMetrics.operatorCancellation.rate == null ? "N/A" : `${pilotMetrics.operatorCancellation.rate}%`} sub={`${pilotMetrics.operatorCancellation.count.toLocaleString()} cancellations in created-booking cohort`} variant="warning" />
             </div>
+
+            {pilotMetrics.requests && (
+              <>
+                <div className="master-analytics-card-head">
+                  <div>
+                    <h2>Operator acceptance and allocation</h2>
+                    <p>Requests decided in the period. Acceptance rate = accepted ÷ (accepted + rejected + rejected automatically); a suggested alternative is not yet a decision. Response time runs from the request to the operator's decision, so automatic rejections have none. Allocation exhausted counts bookings that took the last unit on one or more dates.</p>
+                  </div>
+                </div>
+                {pilotMetrics.operators?.length ? (
+                  <div className="master-analytics-chart-scroll" style={{ marginBottom: 20 }}>
+                    <table className="analytics-services-table">
+                      <thead>
+                        <tr>
+                          <th>Operator</th><th>Requests</th><th>Accepted</th><th>Rejected</th><th>Rejected automatically</th>
+                          <th>Acceptance rate</th><th>Median response</th><th>Average response</th>
+                          <th>Operator cancellations</th><th>Allocation exhausted</th>
+                        </tr>
+                      </thead>
+                      <tbody>{pilotMetrics.operators.map((operator) => (
+                        <tr key={operator.operatorId}>
+                          <td>{operator.companyName}{operator.operatorCode ? ` (${operator.operatorCode})` : ""}</td>
+                          <td>{operator.submitted.toLocaleString()}</td>
+                          <td>{operator.accepted.toLocaleString()}</td>
+                          <td>{operator.rejectedByOperator.toLocaleString()}</td>
+                          <td>{operator.rejectedAutomatically.toLocaleString()}</td>
+                          <td>{percent(operator.acceptanceRate)}</td>
+                          <td>{formatMinutes(operator.medianResponseMinutes)}</td>
+                          <td>{formatMinutes(operator.averageResponseMinutes)}</td>
+                          <td>{operator.operatorCancellations.toLocaleString()}</td>
+                          <td>{operator.allocationExhaustedEvents.toLocaleString()}{operator.allocationExhaustedDates ? ` (${operator.allocationExhaustedDates.toLocaleString()} dates)` : ""}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                ) : <div className="operator-empty-state" style={{ marginBottom: 20 }}>No operator requests, responses or exhausted allocations in this period.</div>}
+              </>
+            )}
 
             <div className="master-analytics-card-head">
               <div>

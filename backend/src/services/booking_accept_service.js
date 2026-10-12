@@ -111,7 +111,9 @@ function includeBookingRelations() {
 }
 
 /**
- * Automatically prepares a booking for payment.
+ * Prepares a booking for payment once an operator (or staff member) accepts it,
+ * or once the customer accepts an alternative the operator suggested. Nothing
+ * calls this on its own: operators never auto-accept a request.
  *
  * Flow:
  *
@@ -132,7 +134,7 @@ export async function acceptBookingAndRequestPayment({
   downPaymentDueDate = null,
   finalPaymentDueDate = null,
 }) {
-  console.log("1️⃣ AUTO ACCEPT: starting", {
+  console.log("1️⃣ ACCEPT: starting", {
     bookingId: booking?.id,
     bookingCode: booking?.bookingCode,
     status: booking?.status,
@@ -151,7 +153,7 @@ export async function acceptBookingAndRequestPayment({
   }
 
   console.log(
-    "2️⃣ AUTO ACCEPT: status check passed",
+    "2️⃣ ACCEPT: status check passed",
     booking.status
   );
 
@@ -174,7 +176,7 @@ export async function acceptBookingAndRequestPayment({
     );
 
   console.log(
-    "3️⃣ AUTO ACCEPT: payment deadline",
+    "3️⃣ ACCEPT: payment deadline",
     paymentDeadline
   );
 
@@ -391,7 +393,7 @@ console.log(
     throw error;
   }
 
-  console.log("4️⃣ AUTO ACCEPT: payment schedule", {
+  console.log("4️⃣ ACCEPT: payment schedule", {
     bookingId: booking.id,
     totalAmount,
     downPaymentPercent: parsedPercent,
@@ -454,7 +456,7 @@ console.log(
   const result = await prisma.$transaction(
     async (tx) => {
       console.log(
-        "5️⃣ AUTO ACCEPT: creating payment"
+        "5️⃣ ACCEPT: creating payment"
       );
 
       const payment = await tx.payment.upsert({
@@ -535,7 +537,7 @@ console.log(
         );
 
       console.log(
-        "6️⃣ AUTO ACCEPT: payment created",
+        "6️⃣ ACCEPT: payment created",
         {
           paymentId: payment.id,
           status: payment.status,
@@ -556,7 +558,7 @@ console.log(
         );
 
       console.log(
-        "7️⃣ AUTO ACCEPT: invoice created",
+        "7️⃣ ACCEPT: invoice created",
         {
           invoiceId: invoice.id,
           invoiceNo: invoice.invoiceNo,
@@ -567,7 +569,7 @@ console.log(
       // Change booking to PENDING_PAYMENT
       // =====================================================
       console.log(
-        "8️⃣ AUTO ACCEPT: changing booking to PENDING_PAYMENT"
+        "8️⃣ ACCEPT: changing booking to PENDING_PAYMENT"
       );
 
       // Through the status service, so the move is recorded in the
@@ -597,7 +599,7 @@ console.log(
         });
 
       console.log(
-        "9️⃣ AUTO ACCEPT: booking updated",
+        "9️⃣ ACCEPT: booking updated",
         {
           bookingId: updatedBooking.id,
           bookingCode:
@@ -613,7 +615,7 @@ console.log(
       await createAuditLog({
         req,
         userId: actorUserId,
-        action: "BOOKING_AUTO_ACCEPTED",
+        action: "BOOKING_ACCEPTED",
         entityType: "Booking",
         entityId: booking.id,
         before: {
@@ -741,7 +743,7 @@ console.log(
     });
 
     console.log(
-      "🔟 AUTO ACCEPT: customer notified",
+      "🔟 ACCEPT: customer notified",
       {
         bookingId:
           updatedBooking.id,
@@ -753,7 +755,7 @@ console.log(
      * just because email/notification delivery failed.
      */
     console.error(
-      "⚠️ AUTO ACCEPT: customer notification failed",
+      "⚠️ ACCEPT: customer notification failed",
       {
         bookingId:
           updatedBooking.id,
@@ -764,7 +766,7 @@ console.log(
   }
 
   console.log(
-    "✅ AUTO ACCEPT COMPLETE",
+    "✅ ACCEPT COMPLETE",
     {
       bookingId:
         updatedBooking.id,

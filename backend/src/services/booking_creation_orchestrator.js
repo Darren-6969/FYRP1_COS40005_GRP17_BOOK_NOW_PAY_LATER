@@ -10,6 +10,13 @@ import { enforceConcurrentExposureCap } from "./concurrent_exposure_service.js";
 import { isCreditTierPolicyEnabled } from "./platform_settings_service.js";
 import { formatBookingCode, tempBookingCode } from "../utils/bookingCode.js";
 
+// The dates on which taking `quantity` more units leaves nothing available: the
+// allocation for that date is exhausted by this booking. `remaining` maps each
+// date to the units available before the booking.
+export function datesExhaustedBy(dates, remaining, quantity = 1) {
+  return dates.filter((date) => (remaining.get(date) ?? 0) - quantity <= 0);
+}
+
 // Creates a car booking REQUEST. Booking requests wait for the operator to
 // accept (manual acceptance flow), so nothing payment-related is created here:
 // no Payment row and no PaymentScheduleEntry rows. booking_accept_service.js
@@ -125,6 +132,10 @@ export async function createBookingOrchestrator({
       },
     });
 
-    return { booking: withCode };
+    // The dates on which this booking took the last allocated unit. Reported
+    // by the caller once the booking has committed (FR-ANL-002).
+    const exhaustedDates = datesExhaustedBy(pricing.dates, stock.remaining, 1);
+
+    return { booking: withCode, exhaustedDates };
   }, { timeout: 15000 });
 }

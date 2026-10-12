@@ -52,11 +52,12 @@ const booking = (overrides = {}) => ({
   ...overrides,
 });
 
-function makeDb({ row = booking(), tierPolicyOn = false, profileTier = null } = {}) {
+function makeDb({ row = booking(), tierPolicyOn = false, profileTier = null, configuredPercent = 40, floorPercent = 0 } = {}) {
   return {
+    bNPLConfig: { findFirst: async () => ({ downPaymentPercent: configuredPercent }) },
     booking: { findUnique: async () => (row ? structuredClone(row) : null) },
     customerCreditProfile: { findUnique: async () => (profileTier ? { tier: profileTier } : null) },
-    platformSettings: { upsert: async () => ({ id: 1, featureFlags: {} }) },
+    platformSettings: { upsert: async () => ({ id: 1, featureFlags: {}, downPaymentFloorPercent: floorPercent }) },
     featureFlag: {
       findMany: async () =>
         tierPolicyOn
@@ -94,7 +95,9 @@ test("every event in FR-ANL-002 has a defined set of properties", () => {
     "no_show_marked", "exposure_blocked",
     "payout_settled", "chat_escalated",
   ];
-  assert.deepEqual([...EVENT_NAMES].sort(), [...specified].sort());
+  // allocation_exhausted is not in the FR-ANL-002 table; 4.1.10 requires the
+  // platform to report how often an allocation runs out (4.4.9).
+  assert.deepEqual([...EVENT_NAMES].sort(), [...specified, "allocation_exhausted"].sort());
 });
 
 test("the properties the SRS requires are allowed on the events that need them", () => {
@@ -153,6 +156,16 @@ test("only plain values are kept: no objects, no long text, no non-finite number
     filters_applied: ["seats", { a: 1 }, 42, null],
   });
   assert.deepEqual(clean, { filters_applied: ["seats", 42] });
+});
+
+test("an exhausted allocation records its dates, which are calendar dates and not personal data", () => {
+  const clean = sanitizeProperties("allocation_exhausted", {
+    listing_id: 12,
+    dates: ["2026-10-15", "2026-10-16", "siti@example.com", "0123456789"],
+    date_count: 4,
+    customer_name: "Siti",
+  });
+  assert.deepEqual(clean, { listing_id: 12, dates: ["2026-10-15", "2026-10-16"], date_count: 4 });
 });
 
 test("identifiers must be positive whole numbers", () => {
@@ -317,6 +330,29 @@ test("booking_created records the credit tier, the down payment percentage and t
     tier_policy_enabled: false,
   });
   assert.equal(h.jobs[0].jobType, ANALYTICS_JOB_TYPE);
+});
+
+test("a request not yet accepted has no payment row, so the percentage is the one the operator offered", async () => {
+  const request = booking({ payment: null });
+
+  const plain = harness({ row: request, configuredPercent: 40 });
+  trackBookingEvent("booking_created", 9, { database: plain.database, schedule: plain.schedule, record: plain.record });
+  await plain.settle();
+  assert.equal(plain.events()[0].properties.down_payment_percentage, 40);
+
+  // Where the tier policy applies the platform floor lifts a lower percentage...
+  clearFeatureFlagCache();
+  const floored = harness({ row: request, configuredPercent: 20, floorPercent: 50, tierPolicyOn: true });
+  trackBookingEvent("booking_created", 9, { database: floored.database, schedule: floored.schedule, record: floored.record });
+  await floored.settle();
+  assert.equal(floored.events()[0].properties.down_payment_percentage, 50);
+
+  // ...and while it is off the floor has no effect.
+  clearFeatureFlagCache();
+  const unfloored = harness({ row: request, configuredPercent: 20, floorPercent: 50, tierPolicyOn: false });
+  trackBookingEvent("booking_created", 9, { database: unfloored.database, schedule: unfloored.schedule, record: unfloored.record });
+  await unfloored.settle();
+  assert.equal(unfloored.events()[0].properties.down_payment_percentage, 20);
 });
 
 test("the tier policy flag is recorded so tier outcomes can be compared where it applied", async () => {
@@ -546,6 +582,7 @@ const WIRED = {
   down_payment_forfeited: ["jobs/paymentExpiry_job.js", "services/booking_status_service.js"],
   no_show_marked: ["services/booking_status_service.js"],
   exposure_blocked: ["services/concurrent_exposure_service.js"],
+  allocation_exhausted: ["controllers/car_booking_controller.js"],
 };
 
 // Events in the SRS list that nothing in the product can raise yet.

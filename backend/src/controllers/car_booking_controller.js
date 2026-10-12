@@ -25,7 +25,7 @@ import {
 } from "../services/idempotency_service.js";
 import { createBookingOrchestrator } from "../services/booking_creation_orchestrator.js";
 import { bookingLocationText } from "../services/car_booking_snapshot.js";
-import { trackBookingEvent } from "../services/analytics_service.js";
+import { trackBookingEvent, trackEvent } from "../services/analytics_service.js";
 
 const ENDPOINT = "POST /customer/car-bookings";
 const MIN_LEAD_MINUTES = 60;
@@ -122,7 +122,7 @@ export async function createCarBooking(req, res, next) {
       select: { tier: true },
     });
     const customerTier = creditProfile?.tier || "Normal";
-    const { booking } = await createBookingOrchestrator({
+    const { booking, exhaustedDates } = await createBookingOrchestrator({
       customerId: req.user.id,
       operatorId: listing.operatorId,
       listing,
@@ -148,6 +148,17 @@ export async function createCarBooking(req, res, next) {
     // FR-ANL-002: credit tier, down payment percentage and lead time are read
     // from the booking after the response has gone out.
     trackBookingEvent("booking_created", booking.id);
+
+    // A date reaching zero available is how the pilot sees an allocation run out.
+    if (exhaustedDates?.length) {
+      trackEvent({
+        name: "allocation_exhausted",
+        userId: req.user.id,
+        operatorId: listing.operatorId,
+        bookingId: booking.id,
+        properties: { listing_id: listing.id, dates: exhaustedDates, date_count: exhaustedDates.length },
+      });
+    }
 
     res.status(201).json(response);
 

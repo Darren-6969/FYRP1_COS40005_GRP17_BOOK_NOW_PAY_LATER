@@ -100,7 +100,8 @@ async function responseTimes(ids, since) {
       SELECT "entityId", min("createdAt") AS first_at
       FROM "AuditLog"
       WHERE "entityType" = 'Booking'
-        AND action IN ('BOOKING_AUTO_ACCEPTED', 'BOOKING_REJECTED', 'ALTERNATIVE_SUGGESTED')
+        -- BOOKING_AUTO_ACCEPTED is the old name for BOOKING_ACCEPTED; keep it for earlier rows.
+        AND action IN ('BOOKING_ACCEPTED', 'BOOKING_AUTO_ACCEPTED', 'BOOKING_REJECTED', 'ALTERNATIVE_SUGGESTED')
       GROUP BY "entityId"
     ) a ON a."entityId" = b.id::text
     WHERE b."operatorId" = ANY(${ids}) AND b."createdAt" >= ${since}

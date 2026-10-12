@@ -309,9 +309,8 @@ async function createBookingFromIntent(intent, user) {
         location: intent.location,
         totalAmount: intent.totalAmount,
         creditTier: assignCreditTier(intent.totalAmount, tierPolicyOn ? platformSettings.creditTierThresholds : {}),
-        // No operator acceptance queue.
-      // Once the customer claims the host booking,
-      // the booking is confirmed and awaits payment.
+        // Starts as a normal request: the operator still has to accept it
+        // (or it is rejected automatically at the response deadline).
         status: "PENDING",
         paymentDeadline: defaultPaymentDeadline,
       },
