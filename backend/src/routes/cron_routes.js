@@ -8,6 +8,7 @@ import {
   runIdempotencyCleanup,
   runStripeWebhookWorker,
   runSubscriptionLifecycle,
+  runOperatorInactivity,
   runNoResponseCron,
   runOverdueCheck,
   runPaymentReminderCron,
@@ -92,6 +93,7 @@ router.get("/vercel-daily-recovery-sweep", verifyCronSecret, runDailyRecovery);
 router.get("/vercel-idempotency-cleanup", verifyCronSecret, runIdempotencyCleanup);
 router.get("/vercel-stripe-webhook-worker", verifyCronSecret, runStripeWebhookWorker);
 router.get("/vercel-subscription-lifecycle", verifyCronSecret, runSubscriptionLifecycle);
+router.get("/vercel-operator-inactivity", verifyCronSecret, runOperatorInactivity);
 
 // Keep old endpoint for backward compatibility.
 router.get("/vercel-overdue-check", verifyCronSecret, runMaintenanceChecks);

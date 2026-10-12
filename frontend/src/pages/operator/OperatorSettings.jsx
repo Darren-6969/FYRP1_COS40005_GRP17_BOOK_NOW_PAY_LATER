@@ -30,6 +30,8 @@ import {
 
 import { operatorService } from "../../services/operator_service";
 
+import { useDirtyState } from "../../hooks/useDirtyState";
+
 import IntegrationSettings from "../../components/operator/IntegrationSettings";
 
 const SETTINGS_STORAGE_KEY = "bnpl_operator_settings_v1";
@@ -241,6 +243,7 @@ export default function OperatorSettings() {
   const [successMessage, setSuccessMessage] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeSection, setActiveSection] = useState(null);
+  const { dirty, markClean } = useDirtyState(form);
   const loadSettings = async () => {
     try {
       setLoading(true);
@@ -261,7 +264,7 @@ export default function OperatorSettings() {
       setSettings(res.data);
         const config = res.data.config;
         const operator = res.data.operator;
-        setForm((prev) => ({
+        const applyServerSettings = (prev) => ({
           ...prev,
 
         downPaymentPercent:
@@ -354,7 +357,24 @@ export default function OperatorSettings() {
 
           emailFooterText:
             config?.emailFooterText || "",
-        }));
+        });
+
+        // What is on screen once loading ends. The save buttons stay disabled
+        // until the operator changes something relative to this.
+        const loadedForm = applyServerSettings(
+          savedSettings
+            ? {
+                ...DEFAULT_SETTINGS,
+                ...JSON.parse(savedSettings),
+                acceptedPaymentMethods: {
+                  ...DEFAULT_SETTINGS.acceptedPaymentMethods,
+                  ...JSON.parse(savedSettings).acceptedPaymentMethods,
+                },
+              }
+            : DEFAULT_SETTINGS
+        );
+        setForm(loadedForm);
+        markClean(loadedForm);
     } catch (err) {
 
       setError(
@@ -377,6 +397,8 @@ export default function OperatorSettings() {
 
     loadSettings();
 
+    // markClean is stable; load once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Strip the ?stripe= param from the URL after reading it once
@@ -588,6 +610,9 @@ const handleSave = async () => {
       config: res.data.config,
 
     }));
+
+    // What was just saved is the new starting point for "has anything changed".
+    markClean(form);
 
     setSuccessMessage("Operator settings saved successfully.");
 
@@ -1286,7 +1311,7 @@ const activeMenu = SETTINGS_MENU.find(
           type="button"
           className="operator-primary-btn"
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !dirty}
         >
           <Save size={16} />
           {saving ? "Saving..." : "Save Settings"}
@@ -1406,7 +1431,7 @@ const activeMenu = SETTINGS_MENU.find(
                 <button
                   type="button"
                   className="operator-primary-btn"
-                  disabled={saving}
+                  disabled={saving || !dirty}
                   onClick={async () => {
                     await handleSave();
                     setActiveSection(null);

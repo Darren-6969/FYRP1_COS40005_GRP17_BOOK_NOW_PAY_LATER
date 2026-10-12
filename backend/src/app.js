@@ -32,6 +32,7 @@ import { requestLogger } from "./middlewares/logger_middleware.js";
 import { generalLimiter } from "./middlewares/rate_limit_middleware.js";
 
 import { getOperatorOrigins } from "./config/originCache.js";
+import { operatorActivityMiddleware } from "./services/operator_activity_service.js";
 dotenv.config();
 
 const app = express();
@@ -169,6 +170,10 @@ app.get("/health", (_req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// ── Operator activity (FR-SUB-004) ──────────────────────────────────────────
+// Any saved action by an operator user refreshes their 90-day activity window.
+app.use(operatorActivityMiddleware());
 
 // ── API routes ───────────────────────────────────────────────────────────────
 app.use("/api/auth",      authRoutes);

@@ -7,7 +7,7 @@ import {
   DEFAULT_SUBSCRIPTION_TIERS,
   getPlatformSettings,
 } from "./platform_settings_service.js";
-import { initialTermData, isPaidPlan } from "./subscription_rules.js";
+import { INACTIVITY_DAYS, INACTIVITY_GRACE_DAYS, initialTermData, isPaidPlan } from "./subscription_rules.js";
 import { operatorDashboardUrl } from "../utils/frontendUrls.js";
 
 // FR-SUB-002: emails and in-app notices about an operator's subscription.
@@ -33,6 +33,9 @@ const EMAIL_TYPES = {
   PAYMENT_DUE_SOON: "SUBSCRIPTION_PAYMENT_DUE_SOON",
   SUSPENDED: "SUBSCRIPTION_SUSPENDED",
   REACTIVATED: "SUBSCRIPTION_REACTIVATED",
+  INACTIVITY_WARNING: "SUBSCRIPTION_INACTIVITY_WARNING",
+  INACTIVITY_SUSPENDED: "SUBSCRIPTION_INACTIVITY_SUSPENDED",
+  REACTIVATED_BY_ADMIN: "SUBSCRIPTION_REACTIVATED_BY_ADMIN",
 };
 
 function formatDate(value) {
@@ -54,7 +57,10 @@ const SUSPENSION_EFFECT =
   + "Bookings you have already accepted are still honoured, and you keep access to view them, verify payments and record handover and return.";
 
 // The wording for each notice. Pure, so the copy is easy to test.
-export function buildSubscriptionMessage(kind, { operator, tier, endsAt, paidUntil, reason, now = new Date() }) {
+export function buildSubscriptionMessage(
+  kind,
+  { operator, tier, endsAt, paidUntil, reason, lastActivityAt, graceEndsAt, now = new Date() }
+) {
   const plan = tier?.label || operator.subscriptionPlan;
   const listings = tier?.listingLimit != null ? `${tier.listingLimit} listings` : "";
   const dashboardUrl = operatorDashboardUrl();
@@ -149,6 +155,57 @@ export function buildSubscriptionMessage(kind, { operator, tier, endsAt, paidUnt
     },
   };
 
+  messages.INACTIVITY_WARNING = {
+    subject: `No activity on your account for ${INACTIVITY_DAYS} days`,
+    title: "Your account will be suspended soon",
+    badgeLabel: "Inactive",
+    badgeType: "yellow",
+    inApp: `There has been no activity on your account for ${INACTIVITY_DAYS} days. Take any action before ${formatDate(graceEndsAt)} to keep it active, otherwise it will be suspended.`,
+    paragraphs: [
+      `There has been no activity on your Book Now Pay Later operator account for ${INACTIVITY_DAYS} days.`,
+      `You have a ${INACTIVITY_GRACE_DAYS}-day grace period, ending on ${formatDate(graceEndsAt)}. Any action you save, such as editing a listing, changing settings, blocking dates, or responding to, verifying or fulfilling a booking, ends the grace period and keeps your account active.`,
+      `If there is no activity by then, the account is suspended. ${SUSPENSION_EFFECT} Nothing is deleted: your account, listings and bookings are kept.`,
+    ],
+    facts: [
+      { label: "Plan", value: plan },
+      { label: "Last activity", value: formatDate(lastActivityAt) },
+      { label: "Grace period ends", value: formatDate(graceEndsAt) },
+    ],
+    buttonText: "Open dashboard",
+  };
+
+  messages.INACTIVITY_SUSPENDED = {
+    subject: "Your account has been suspended for inactivity",
+    title: "Your account is suspended",
+    badgeLabel: "Suspended",
+    badgeType: "red",
+    inApp: `Your account was suspended after ${INACTIVITY_DAYS} days without activity and a ${INACTIVITY_GRACE_DAYS}-day grace period. ${SUSPENSION_EFFECT} Request reactivation from your dashboard or contact the platform administrator.`,
+    paragraphs: [
+      `Your account was suspended because there was no activity for ${INACTIVITY_DAYS} days and no action was taken during the ${INACTIVITY_GRACE_DAYS}-day grace period.`,
+      SUSPENSION_EFFECT,
+      "Nothing has been deleted. To reactivate your account, request it from your dashboard or contact the platform administrator, who reactivates accounts on request.",
+    ],
+    facts: [
+      { label: "Plan", value: plan },
+      { label: "Last activity", value: formatDate(lastActivityAt) },
+    ],
+    buttonText: "Open dashboard",
+  };
+
+  messages.REACTIVATED_BY_ADMIN = {
+    subject: "Your account has been reactivated",
+    title: "Your account is active again",
+    badgeLabel: "Reactivated",
+    badgeType: "green",
+    inApp: "The platform administrator has reactivated your account. Your listings are visible again and new booking requests are open.",
+    paragraphs: [
+      "The platform administrator has reactivated your account.",
+      `Your listings are visible to customers again, and customers can send new booking requests. The ${INACTIVITY_DAYS}-day activity period starts again from today.`,
+    ],
+    facts: [{ label: "Plan", value: plan }],
+    buttonText: "Open dashboard",
+  };
+
   const message = messages[kind];
   if (!message) throw new Error(`Unknown subscription notice: ${kind}`);
 
@@ -198,6 +255,8 @@ export async function notifySubscriptionEvent({
       subscriptionEndsAt: true,
       subscriptionPaidUntil: true,
       subscriptionSuspensionReason: true,
+      lastActivityAt: true,
+      inactivityGraceStartedAt: true,
     },
   });
   if (!operator) return { delivered: 0, failed: 0, recipients: 0 };
@@ -211,6 +270,12 @@ export async function notifySubscriptionEvent({
     endsAt: details.endsAt ?? operator.subscriptionEndsAt,
     paidUntil: details.paidUntil ?? operator.subscriptionPaidUntil,
     reason: details.reason ?? operator.subscriptionSuspensionReason,
+    lastActivityAt: details.lastActivityAt ?? operator.lastActivityAt,
+    graceEndsAt:
+      details.graceEndsAt
+      ?? (operator.inactivityGraceStartedAt
+        ? new Date(new Date(operator.inactivityGraceStartedAt).getTime() + INACTIVITY_GRACE_DAYS * DAY_MS)
+        : null),
     now,
   });
 

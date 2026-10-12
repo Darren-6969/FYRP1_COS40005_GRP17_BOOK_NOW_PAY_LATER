@@ -9,6 +9,7 @@ import {
 } from "../../services/auth_service";
 import { clearSession, getUser as getStoredUser, saveUser } from "../../utils/session";
 import "../../assets/styles/operator.css";
+import { useDirtyState } from "../../hooks/useDirtyState";
 import {
   UserRound,
   LockKeyhole,
@@ -67,6 +68,10 @@ export default function OperatorProfile() {
     notifyPromotions: false,
   });
 
+  // Save stays disabled until something has changed (FR-SUB-004).
+  const profileState = useDirtyState(profileForm);
+  const notificationState = useDirtyState(notificationForm);
+
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
@@ -108,18 +113,25 @@ export default function OperatorProfile() {
   const syncUserToForms = (nextUser) => {
     if (!nextUser) return;
 
-    setProfileForm({
+    const profileValues = {
       name: nextUser.name || "",
       phone: nextUser.phone || "",
       profileImageUrl: nextUser.profileImageUrl || "",
-    });
+    };
 
-    setNotificationForm({
+    const notificationValues = {
       notifyBookingUpdates: Boolean(nextUser.notifyBookingUpdates),
       notifyPaymentReminders: Boolean(nextUser.notifyPaymentReminders),
       notifyInvoices: Boolean(nextUser.notifyInvoices),
       notifyPromotions: Boolean(nextUser.notifyPromotions),
-    });
+    };
+
+    setProfileForm(profileValues);
+    setNotificationForm(notificationValues);
+
+    // What the server holds now is the starting point for "has anything changed".
+    profileState.markClean(profileValues);
+    notificationState.markClean(notificationValues);
   };
 
   const loadProfile = async () => {
@@ -471,7 +483,7 @@ export default function OperatorProfile() {
                 <button
                   type="submit"
                   className="operator-primary-btn"
-                  disabled={savingProfile}
+                  disabled={savingProfile || !profileState.dirty}
                 >
                   {savingProfile ? "Saving..." : "Save Profile"}
                 </button>
@@ -529,7 +541,12 @@ export default function OperatorProfile() {
                 <button
                   type="submit"
                   className="operator-primary-btn"
-                  disabled={savingPassword}
+                  disabled={
+                    savingPassword ||
+                    !passwordForm.currentPassword ||
+                    !passwordForm.newPassword ||
+                    !passwordForm.confirmPassword
+                  }
                 >
                   {savingPassword ? "Updating..." : "Change Password"}
                 </button>
@@ -587,7 +604,7 @@ export default function OperatorProfile() {
                 <button
                   type="submit"
                   className="operator-primary-btn"
-                  disabled={savingNotifications}
+                  disabled={savingNotifications || !notificationState.dirty}
                 >
                   {savingNotifications ? "Saving..." : "Save Preferences"}
                 </button>

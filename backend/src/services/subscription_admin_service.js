@@ -49,13 +49,15 @@ function subscriptionState(operator) {
     subscriptionPlan: operator.subscriptionPlan,
     subscriptionStatus: operator.subscriptionStatus,
     subscriptionPaidUntil: operator.subscriptionPaidUntil ?? null,
+    subscriptionSuspensionCause: operator.subscriptionSuspensionCause ?? null,
   };
 }
 
-const REACTIVATE = {
+export const REACTIVATE = {
   subscriptionStatus: "ACTIVE",
   subscriptionSuspendedAt: null,
   subscriptionSuspensionReason: null,
+  subscriptionSuspensionCause: null,
 };
 
 const OPERATOR_SUBSCRIPTION_SELECT = {
@@ -65,6 +67,7 @@ const OPERATOR_SUBSCRIPTION_SELECT = {
   subscriptionStatus: true,
   subscriptionPaidUntil: true,
   subscriptionEndsAt: true,
+  subscriptionSuspensionCause: true,
 };
 
 // Records a payment and the date the subscription is now paid to. Recording a
@@ -124,13 +127,17 @@ export async function recordSubscriptionPayment({
       },
     });
 
-    const reactivated = operator.subscriptionStatus === "SUSPENDED";
+    // A payment lifts a suspension for non-payment. An account suspended for
+    // inactivity stays suspended until the administrator reactivates it.
+    const suspendedForInactivity =
+      operator.subscriptionStatus === "SUSPENDED" && operator.subscriptionSuspensionCause === "INACTIVITY";
+    const reactivated = operator.subscriptionStatus === "SUSPENDED" && !suspendedForInactivity;
     const updated = await tx.operator.update({
       where: { id: operatorId },
       data: {
         subscriptionPaidUntil: paidUntilDate,
         subscriptionEndsAt: paidUntilDate,
-        ...REACTIVATE,
+        ...(reactivated ? REACTIVATE : {}),
       },
       select: OPERATOR_SUBSCRIPTION_SELECT,
     });
@@ -151,7 +158,7 @@ export async function recordSubscriptionPayment({
       },
     }, tx);
 
-    return { payment, operator: updated, reactivated };
+    return { payment, operator: updated, reactivated, stillSuspended: suspendedForInactivity };
   });
 
   // Tell the operator they are active again. The payment is already saved, so
@@ -202,6 +209,7 @@ export async function suspendLapsedSubscriptions({
             subscriptionStatus: "SUSPENDED",
             subscriptionSuspendedAt: now,
             subscriptionSuspensionReason: reason,
+            subscriptionSuspensionCause: "NON_PAYMENT",
           },
         });
         if (!changed.count) return false;
@@ -293,7 +301,10 @@ export async function changeOperatorSubscriptionPlan({
     if (!paid) {
       // Nothing is owed on a free tier, so a lapse no longer applies.
       data.subscriptionPaidUntil = null;
-      Object.assign(data, REACTIVATE);
+      // An inactivity suspension is not lifted by a plan change.
+      if (operator.subscriptionStatus === "SUSPENDED" && operator.subscriptionSuspensionCause !== "INACTIVITY") {
+        Object.assign(data, REACTIVATE);
+      }
     }
 
     const updated = await tx.operator.update({

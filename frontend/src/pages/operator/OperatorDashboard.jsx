@@ -23,6 +23,7 @@ export default function OperatorDashboard() {
   const [stripeConnect, setStripeConnect] = useState(null);
   const [subscription, setSubscription] = useState(null);
   const [upgradeSubmitting, setUpgradeSubmitting,] = useState(false);
+  const [reactivationSubmitting, setReactivationSubmitting] = useState(false);
   const [forecastData, setForecastData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -170,6 +171,26 @@ export default function OperatorDashboard() {
     setUpgradeSubmitting(false);
   }
 };
+
+  const handleReactivationRequest = async () => {
+    const message = window.prompt(
+      "Add a message for the administrator (optional):",
+      ""
+    );
+
+    // Cancel leaves the request unsent.
+    if (message === null) return;
+
+    try {
+      setReactivationSubmitting(true);
+      const response = await operatorService.requestReactivation(message);
+      alert(response.data?.message || "Your request was sent.");
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to send the request.");
+    } finally {
+      setReactivationSubmitting(false);
+    }
+  };
 
   // ========== PREPARE FORECAST CHART DATA ==========
   const prepareForecastData = () => {
@@ -902,8 +923,32 @@ const operationalMetrics = useMemo(() => {
       </div>
     </div>
 
-    {subscription.status ===
-      "SUSPENDED" && (
+    {subscription.inactivityGraceEndsAt &&
+      subscription.status !== "SUSPENDED" && (
+        <div
+          role="alert"
+          style={{
+            marginBottom: "20px",
+            padding: "14px 16px",
+            borderRadius: "12px",
+            background: "#fef3c7",
+            border: "1px solid #fde68a",
+            color: "#92400e",
+            fontSize: "13px",
+            fontWeight: 600,
+            lineHeight: 1.5,
+          }}
+        >
+          There has been no activity on your account for 90 days. It will be
+          suspended on{" "}
+          {formatSubscriptionDate(subscription.inactivityGraceEndsAt)} unless you
+          take any action, such as editing a listing, changing settings,
+          blocking dates or responding to a booking. Nothing is deleted if it
+          is suspended.
+        </div>
+      )}
+
+    {subscription.status === "SUSPENDED" && (
       <div
         role="alert"
         style={{
@@ -918,19 +963,39 @@ const operationalMetrics = useMemo(() => {
           lineHeight: 1.5,
         }}
       >
-        Your subscription is suspended
-        {subscription.suspensionReason
-          ? ` (${subscription.suspensionReason})`
-          : ""}
-        . Your listings are hidden and
-        customers cannot send new
-        booking requests. Bookings you
-        have already accepted are
-        unaffected and you can still
-        manage them. Contact the
-        platform administrator to
-        record your payment and
-        reactivate your account.
+        {subscription.suspensionCause === "INACTIVITY"
+          ? "Your account is suspended after 90 days without activity. "
+          : `Your subscription is suspended${
+              subscription.suspensionReason
+                ? ` (${subscription.suspensionReason})`
+                : ""
+            }. `}
+        Your listings are hidden and customers cannot send new booking
+        requests. Bookings you have already accepted are unaffected and you
+        can still manage them.{" "}
+        {subscription.suspensionCause === "INACTIVITY"
+          ? "Nothing has been deleted. Request reactivation below, or contact the platform administrator."
+          : "Contact the platform administrator to record your payment and reactivate your account."}
+        {subscription.suspensionCause === "INACTIVITY" && (
+          <div style={{ marginTop: "12px" }}>
+            <button
+              type="button"
+              disabled={reactivationSubmitting}
+              onClick={handleReactivationRequest}
+              style={{
+                padding: "9px 16px",
+                borderRadius: "10px",
+                border: "1px solid #b91c1c",
+                background: "#ffffff",
+                color: "#991b1b",
+                fontWeight: 700,
+                cursor: reactivationSubmitting ? "wait" : "pointer",
+              }}
+            >
+              {reactivationSubmitting ? "Sending..." : "Request reactivation"}
+            </button>
+          </div>
+        )}
       </div>
     )}
 

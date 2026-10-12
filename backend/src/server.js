@@ -7,6 +7,7 @@ import { startIdempotencyCleanupJob } from "./jobs/idempotencyCleanup_job.js";
 import { startStripeWebhookWorker } from "./jobs/stripeWebhook_worker.js";
 import { startOperatorPayoutJob } from "./jobs/operatorPayout_job.js";
 import { startSubscriptionLifecycleJob } from "./jobs/subscriptionLifecycle_job.js";
+import { startOperatorInactivityJob } from "./jobs/operatorInactivity_job.js";
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ startIdempotencyCleanupJob();
 startStripeWebhookWorker();
 startOperatorPayoutJob();
 startSubscriptionLifecycleJob();
+startOperatorInactivityJob();
 
 server.listen(PORT, () => {
   console.log(`BNPL backend running on http://localhost:${PORT}`);

@@ -33,6 +33,8 @@ export const deletePeakDate = (id) => api.delete(`/licence-verification/peak-dat
 export const getPlatformDeadlineSettings = () => api.get("/config/platform-deadlines");
 export const updatePlatformDeadlineSettings = (payload) => api.patch("/config/platform-deadlines", payload);
 export const getPlatformSettings = () => api.get("/config/platform-settings");
+export const reactivateOperatorSubscription = (id, reason) =>
+  api.post(`/operators/${id}/subscription/reactivate`, { reason });
 export const getOperatorSubscriptionPayments = (id) => api.get(`/operators/${id}/subscription-payments`);
 export const recordOperatorSubscriptionPayment = (id, payload) =>
   api.post(`/operators/${id}/subscription-payments`, payload);

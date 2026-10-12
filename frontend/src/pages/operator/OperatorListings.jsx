@@ -645,6 +645,13 @@ function ListingCard({
 
   const [savingEdit, setSavingEdit] =
     useState(false);
+
+  // Save stays disabled until the price or quantity differs from what is stored.
+  const inlineDirty =
+    String(editPrice) !==
+      String(listing.price ?? "") ||
+    Number(editQuantity) !==
+      Number(listing.quantity ?? 0);
   
   const startInlineEdit = () => {
   setEditPrice(
@@ -989,7 +996,7 @@ const cancelInlineEdit = () => {
           <button
             type="button"
             className="operator-primary-btn"
-            disabled={savingEdit}
+            disabled={savingEdit || !inlineDirty}
             onClick={
               saveInlineEdit
             }
@@ -1081,6 +1088,13 @@ function QuickEditListingModal({
 
   const [loading, setLoading] =
     useState(false);
+
+  // Save stays disabled until the price or quantity differs from what is stored.
+  const dirty =
+    String(price) !==
+      String(listing.price || "") ||
+    Number(quantity) !==
+      Number(listing.quantity || 1);
 
   const handleSave = async () => {
     const parsedPrice =
@@ -1213,7 +1227,7 @@ function QuickEditListingModal({
             type="button"
             className="operator-primary-btn"
             onClick={handleSave}
-            disabled={loading}
+            disabled={loading || !dirty}
           >
             {loading
               ? "Saving..."

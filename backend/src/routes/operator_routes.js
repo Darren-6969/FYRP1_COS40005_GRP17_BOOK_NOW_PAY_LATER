@@ -6,6 +6,8 @@ import {
   updateOperatorUserStatus,
   updateOperatorSubscriptionPlan,
   recordOperatorSubscriptionPayment,
+  reactivateOperatorSubscription,
+  requestOperatorReactivation,
   getOperatorSubscriptionPayments,
   getSubscriptionUpgradeRequests,
   reviewSubscriptionUpgradeRequest,
@@ -138,6 +140,8 @@ router.patch("/subscription-upgrade-requests/:id/review", ...masterOnly, reviewS
 router.patch("/:id/subscription-plan", ...masterOnly, updateOperatorSubscriptionPlan);
 router.get("/:id/subscription-payments", ...masterOnly, getOperatorSubscriptionPayments);
 router.post("/:id/subscription-payments", ...masterOnly, recordOperatorSubscriptionPayment);
+router.post("/:id/subscription/reactivate", ...masterOnly, reactivateOperatorSubscription);
+router.post("/subscription/reactivation-request", ...ownerOrStaffAccess, requestOperatorReactivation);
 router.patch("/:id/status", ...masterOnly, updateOperatorStatus);
 router.delete("/:id", ...masterOnly, deleteOperator);
 router.get("/bookings/:id/refunds",...ownerOrStaffAccess,getBookingRefunds);

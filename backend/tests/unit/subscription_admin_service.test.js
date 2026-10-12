@@ -347,3 +347,41 @@ test("suspending an operator notifies them once, and a notification failure does
   assert.equal(result.failureCount, 1);
   assert.equal(result.errors[0].operatorId, 2);
 });
+
+test("a payment does not lift an inactivity suspension; the administrator must reactivate", async () => {
+  const db = makeDb({
+    operators: [operator({ subscriptionStatus: "SUSPENDED", subscriptionSuspensionCause: "INACTIVITY", subscriptionPaidUntil: new Date(NOW.getTime() + 2 * DAY) })],
+  });
+
+  const result = await recordSubscriptionPayment({ operatorId: 1, amount: 20, paidUntil: "2026-11-30", req: admin, now: NOW, database: db, notify });
+
+  assert.equal(result.reactivated, false);
+  assert.equal(result.stillSuspended, true);
+  assert.equal(db.state.operators[0].subscriptionStatus, "SUSPENDED");
+  assert.equal(db.state.operators[0].subscriptionSuspensionCause, "INACTIVITY");
+  assert.equal(db.state.payments.length, 1, "the payment itself is still recorded");
+  assert.equal(db.state.audits[0].action, "SUBSCRIPTION_PAYMENT_RECORDED");
+  assert.equal(notifications.length, 0, "no reactivation notice for an account that is still suspended");
+});
+
+test("moving an inactivity-suspended operator to the free tier does not reactivate them", async () => {
+  const db = makeDb({
+    operators: [operator({ subscriptionStatus: "SUSPENDED", subscriptionSuspensionCause: "INACTIVITY" })],
+  });
+
+  const result = await changeOperatorSubscriptionPlan({ operatorId: 1, plan: "FREE", req: admin, now: NOW, database: db, notify });
+
+  assert.equal(result.reactivated, false);
+  assert.equal(db.state.operators[0].subscriptionStatus, "SUSPENDED");
+  assert.equal(notifications.length, 0);
+});
+
+test("an unpaid-period suspension records its cause so payment can lift it", async () => {
+  const db = makeDb({ operators: [operator({ subscriptionPaidUntil: new Date(NOW.getTime() - DAY) })] });
+  await suspendLapsedSubscriptions({ now: NOW, database: db, notify });
+  assert.equal(db.state.operators[0].subscriptionSuspensionCause, "NON_PAYMENT");
+
+  await recordSubscriptionPayment({ operatorId: 1, amount: 20, paidUntil: "2026-11-30", req: admin, now: NOW, database: db, notify });
+  assert.equal(db.state.operators[0].subscriptionStatus, "ACTIVE");
+  assert.equal(db.state.operators[0].subscriptionSuspensionCause, null);
+});

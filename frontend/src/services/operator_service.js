@@ -29,6 +29,11 @@ export const operatorService = {
     );
   },
 
+  // A suspended operator asks the administrators to reactivate the account.
+  requestReactivation(message) {
+    return api.post("/operators/subscription/reactivation-request", { message });
+  },
+
   getBookings(params = {}) {
     return api.get("/operators/bookings", { params });
   },

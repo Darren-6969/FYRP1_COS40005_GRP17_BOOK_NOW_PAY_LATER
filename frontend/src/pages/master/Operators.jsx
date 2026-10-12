@@ -8,6 +8,7 @@ import {
   getOperators,
   getPlatformSettings,
   getSubscriptionUpgradeRequests,
+  reactivateOperatorSubscription,
   reviewSubscriptionUpgradeRequest,
   resetOperatorUser,
   updateOperatorStatus,
@@ -18,6 +19,8 @@ import {
 import SubscriptionPaymentDrawer from "../../components/system/SubscriptionPaymentDrawer";
 
 const PLAN_RANK = { FREE: 0, BASIC: 1, PREMIUM: 2 };
+// FR-SUB-004: the grace period before an inactive account is suspended is fixed.
+const INACTIVITY_GRACE_DAYS = 14;
 const PLAN_ORDER = ["FREE", "BASIC", "PREMIUM"];
 
 // Mirrors the server: a tier is paid when its price is above zero; an
@@ -576,6 +579,33 @@ export default function Operators() {
         err.response?.data?.message ||
           "Failed to update subscription plan."
       );
+    }
+  };
+
+  // Reactivate an account suspended for inactivity, at the operator's request.
+  const reactivateSubscription = async (op) => {
+    const reason = window.prompt(
+      `Reactivate ${op.companyName}?
+
+Their listings become visible again and the 90-day activity period starts over.
+
+Reason (at least 5 characters):`,
+      "Requested by the operator"
+    );
+
+    // Cancel leaves the account suspended.
+    if (reason === null) return;
+
+    try {
+      setError("");
+      setMessage("");
+
+      const response = await reactivateOperatorSubscription(op.id, reason);
+
+      setMessage(response.data?.message || `${op.companyName} is reactivated.`);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to reactivate the operator.");
     }
   };
 
@@ -1328,6 +1358,30 @@ const toggleUserStatus = async (op, user) => {
                             </>
                           ) : (
                             op.subscriptionEndsAt && <small>Term ends {shortDate(op.subscriptionEndsAt)}</small>
+                          )}
+
+                          {/* FR-SUB-004: no activity for 90 days */}
+                          {op.inactivityGraceStartedAt && op.subscriptionStatus !== "SUSPENDED" && (
+                            <small style={{ color: "#b45309" }}>
+                              Inactive. Suspends{" "}
+                              {shortDate(new Date(new Date(op.inactivityGraceStartedAt).getTime() + INACTIVITY_GRACE_DAYS * 86400000))}
+                            </small>
+                          )}
+
+                          {op.subscriptionStatus === "SUSPENDED" && op.subscriptionSuspensionCause === "INACTIVITY" && (
+                            <>
+                              {!isPaidTier(op.subscriptionPlan || "FREE", tierConfig) && (
+                                <span className="badge suspended">SUSPENDED</span>
+                              )}
+                              <small>Inactive for 90+ days</small>
+                              <button
+                                className="master-action-btn"
+                                type="button"
+                                onClick={() => reactivateSubscription(op)}
+                              >
+                                Reactivate account
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>

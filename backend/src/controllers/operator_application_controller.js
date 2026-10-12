@@ -293,7 +293,8 @@ export async function reviewOperatorApplication(req, res, next) {
         const tiers = (await getPlatformSettings(tx)).subscriptionTiers;
         await tx.operator.update({
           where: { id: application.operatorId },
-          data: { status: "ACTIVE", ...initialTermData(approved, tiers) },
+          // FR-SUB-004: inactivity is measured from approval.
+          data: { status: "ACTIVE", lastActivityAt: new Date(), ...initialTermData(approved, tiers) },
         });
         await tx.user.updateMany({ where: { operatorId: application.operatorId, operatorAccessLevel: "OWNER" }, data: { operatorUserStatus: "ACTIVE" } });
         await tx.operatorDocument.updateMany({ where: { applicationId }, data: { status: "APPROVED", reviewedAt: new Date(), reviewedById: req.user.id } });

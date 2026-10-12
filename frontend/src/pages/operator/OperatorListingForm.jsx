@@ -12,6 +12,7 @@ import {
 import {
   operatorService,
 } from "../../services/operator_service";
+import { useDirtyState } from "../../hooks/useDirtyState";
 
 const initialForm = {
   category: "CAR_RENTAL",
@@ -62,6 +63,11 @@ export default function OperatorListingForm() {
 
   const [form, setForm] =
     useState(initialForm);
+
+  // FR-SUB-004: an untouched edit form cannot be saved, so opening and saving
+  // it does not count as activity.
+  const { dirty, markClean } =
+    useDirtyState(form);
 
   const [branches, setBranches] =
     useState([]);
@@ -144,7 +150,7 @@ export default function OperatorListingForm() {
         return;
       }
 
-      setForm({
+      const loadedForm = {
         category:
           listing.category ||
           "CAR_RENTAL",
@@ -247,7 +253,12 @@ export default function OperatorListingForm() {
         termsAndConditions:
           listing.termsAndConditions ||
           "",
-      });
+      };
+
+      setForm(loadedForm);
+
+      // What is stored now. Saving stays disabled until the operator changes it.
+      markClean(loadedForm);
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -1831,7 +1842,8 @@ export default function OperatorListingForm() {
               type="submit"
               className="operator-primary-btn"
               disabled={
-                saving
+                saving ||
+                (isEdit && !dirty)
               }
             >
               {saving

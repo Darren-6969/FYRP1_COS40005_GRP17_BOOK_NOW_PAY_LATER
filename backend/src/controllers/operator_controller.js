@@ -64,6 +64,8 @@ import {
   changeOperatorSubscriptionPlan,
   recordSubscriptionPayment,
 } from "../services/subscription_admin_service.js";
+import { reactivateOperatorAccount, requestReactivation } from "../services/operator_activity_service.js";
+import { INACTIVITY_GRACE_DAYS } from "../services/subscription_rules.js";
 
 const SETUP_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
@@ -655,11 +657,53 @@ export async function recordOperatorSubscriptionPayment(req, res, next) {
     res.status(201).json({
       message: result.reactivated
         ? `Payment recorded. ${result.operator.companyName} is reactivated and listings are visible again.`
-        : "Payment recorded.",
+        : result.stillSuspended
+          ? `Payment recorded, but ${result.operator.companyName} is suspended for inactivity and stays suspended until you reactivate the account.`
+          : "Payment recorded.",
+      stillSuspended: result.stillSuspended,
       reactivated: result.reactivated,
       payment: result.payment,
       operator: result.operator,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/// Reactivate a suspended account at the operator's request (FR-SUB-004).
+export async function reactivateOperatorSubscription(req, res, next) {
+  try {
+    const id = parseId(req.params.id, "operator id");
+    const result = await reactivateOperatorAccount({
+      operatorId: id,
+      reason: req.body.reason,
+      req,
+    });
+
+    res.json({
+      message: `${result.operator.companyName} is reactivated. Its listings are visible again and the 90-day activity period starts over.`,
+      operator: result.operator,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/// A suspended operator asks the administrators to reactivate the account.
+export async function requestOperatorReactivation(req, res, next) {
+  try {
+    if (!req.user.operatorId) {
+      return res.status(400).json({ message: "No operator profile is linked to this account." });
+    }
+
+    await requestReactivation({
+      operatorId: req.user.operatorId,
+      user: req.user,
+      message: req.body?.message,
+      req,
+    });
+
+    res.status(201).json({ message: "Your request was sent. The administrator will reactivate your account." });
   } catch (err) {
     next(err);
   }
@@ -703,7 +747,10 @@ export async function updateOperatorStatus(req, res, next) {
     const operator = await prisma.$transaction(async (tx) => {
       const updatedOperator = await tx.operator.update({
         where: { id },
-        data: { status },
+        // Switching a company back on is a fresh start for the 90-day activity window.
+        data: status === "ACTIVE"
+          ? { status, lastActivityAt: new Date(), inactivityGraceStartedAt: null }
+          : { status },
       });
 
       if (status === "SUSPENDED" || status === "PENDING") {
@@ -1011,6 +1058,9 @@ export async function getOperatorDashboard(req, res, next) {
               subscriptionPaidUntil: true,
               subscriptionSuspendedAt: true,
               subscriptionSuspensionReason: true,
+              subscriptionSuspensionCause: true,
+              lastActivityAt: true,
+              inactivityGraceStartedAt: true,
 
               createdAt: true,
 
@@ -1172,6 +1222,22 @@ if (operator) {
 
         suspensionReason:
           operator.subscriptionSuspensionReason,
+
+        suspensionCause:
+          operator.subscriptionSuspensionCause,
+
+        // FR-SUB-004: set while the 14-day grace period before an inactivity
+        // suspension is running; any action ends it.
+        lastActivityAt:
+          operator.lastActivityAt,
+
+        inactivityGraceEndsAt:
+          operator.inactivityGraceStartedAt
+            ? new Date(
+                operator.inactivityGraceStartedAt.getTime() +
+                  INACTIVITY_GRACE_DAYS * 24 * 60 * 60 * 1000
+              )
+            : null,
 
         canRequestUpgrade:
           req.user

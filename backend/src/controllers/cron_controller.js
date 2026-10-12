@@ -10,6 +10,7 @@ import {
 } from "../services/cron_service.js";
 import { runIdempotencyCleanupJob } from "../jobs/idempotencyCleanup_job.js";
 import { runSubscriptionLifecycleJob } from "../jobs/subscriptionLifecycle_job.js";
+import { runOperatorInactivityJob } from "../jobs/operatorInactivity_job.js";
 import { processStripeWebhookEvents } from "../jobs/stripeWebhook_worker.js";
 
 export async function getCronJobStatus(req, res, next) {
@@ -121,6 +122,15 @@ export async function runIdempotencyCleanup(_req, res, next) {
     const result = await runIdempotencyCleanupJob();
     const deleted = result?.deleted || 0;
     res.json({ message: "Expired idempotency keys cleaned up", deleted });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function runOperatorInactivity(_req, res, next) {
+  try {
+    const result = await runOperatorInactivityJob();
+    res.json({ message: "Operator inactivity check completed", result });
   } catch (err) {
     next(err);
   }

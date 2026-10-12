@@ -7,6 +7,11 @@ export const PLAN_RANK = { FREE: 0, BASIC: 1, PREMIUM: 2 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// FR-SUB-004. The window is rolling: every saved action starts it again. The
+// grace period is fixed by the SRS and deliberately not configurable.
+export const INACTIVITY_DAYS = 90;
+export const INACTIVITY_GRACE_DAYS = 14;
+
 export function isDowngrade(fromPlan, toPlan) {
   return (PLAN_RANK[toPlan] ?? 0) < (PLAN_RANK[fromPlan] ?? 0);
 }

@@ -32,6 +32,15 @@ export default function OperatorBranches() {
   const [form, setForm] =
     useState(emptyForm);
 
+  // What the form held when it was opened, so the save button stays disabled
+  // until something has changed (FR-SUB-004).
+  const [baselineForm, setBaselineForm] =
+    useState(emptyForm);
+
+  const formChanged =
+    JSON.stringify(form) !==
+    JSON.stringify(baselineForm);
+
   const [editingId, setEditingId] =
     useState(null);
 
@@ -103,6 +112,7 @@ export default function OperatorBranches() {
 
   const resetForm = () => {
     setForm(emptyForm);
+    setBaselineForm(emptyForm);
     setEditingId(null);
     setError("");
   };
@@ -195,7 +205,7 @@ export default function OperatorBranches() {
   const handleEdit = (branch) => {
     setEditingId(branch.id);
 
-    setForm({
+    const values = {
       name:
         branch.name || "",
 
@@ -214,7 +224,10 @@ export default function OperatorBranches() {
 
       phone:
         branch.phone || "",
-    });
+    };
+
+    setForm(values);
+    setBaselineForm(values);
   };
 
   const handleSubmit = async (
@@ -592,7 +605,7 @@ export default function OperatorBranches() {
             <button
               type="submit"
               className="operator-primary-btn"
-              disabled={saving}
+              disabled={saving || !formChanged}
             >
               {saving
                 ? "Saving..."

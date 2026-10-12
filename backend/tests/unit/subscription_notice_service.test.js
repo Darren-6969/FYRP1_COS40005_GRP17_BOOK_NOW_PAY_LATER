@@ -328,3 +328,35 @@ test("operator-supplied text is escaped in the email", () => {
   assert.doesNotMatch(message.html, /<script>alert/);
   assert.match(message.html, /&lt;script&gt;/);
 });
+
+test("the inactivity warning names the grace period, what counts as activity and that nothing is deleted", () => {
+  const message = buildSubscriptionMessage("INACTIVITY_WARNING", {
+    operator: operator(),
+    tier: DEFAULT_SUBSCRIPTION_TIERS.FREE,
+    lastActivityAt: new Date("2026-07-12T04:00:00Z"),
+    graceEndsAt: new Date("2026-10-26T02:00:00Z"),
+    now: NOW,
+  });
+
+  assert.match(message.subject, /No activity on your account for 90 days/);
+  assert.match(message.text, /14-day grace period, ending on 26 October 2026/);
+  assert.match(message.text, /editing a listing, changing settings, blocking dates/);
+  assert.match(message.text, /Nothing is deleted/);
+  assert.match(message.text, /hidden from customers/);
+  assert.match(message.inApp, /before 26 October 2026/);
+  assert.match(message.html, /12 July 2026/);
+});
+
+test("the inactivity suspension and admin reactivation emails say what happened and what the operator keeps", () => {
+  const base = { operator: operator(), tier: DEFAULT_SUBSCRIPTION_TIERS.FREE, lastActivityAt: new Date("2026-07-12T04:00:00Z"), now: NOW };
+
+  const suspended = buildSubscriptionMessage("INACTIVITY_SUSPENDED", base);
+  assert.match(suspended.text, /no activity for 90 days and no action was taken during the 14-day grace period/);
+  assert.match(suspended.text, /already accepted are still honoured/);
+  assert.match(suspended.text, /Nothing has been deleted/);
+  assert.match(suspended.text, /request it from your dashboard/);
+
+  const reactivated = buildSubscriptionMessage("REACTIVATED_BY_ADMIN", base);
+  assert.match(reactivated.text, /administrator has reactivated your account/);
+  assert.match(reactivated.text, /90-day activity period starts again from today/);
+});

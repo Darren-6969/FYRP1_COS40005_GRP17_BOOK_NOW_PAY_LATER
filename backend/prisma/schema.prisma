@@ -39,6 +39,13 @@ enum SubscriptionStatus {
   SUSPENDED
 }
 
+// Why an operator is suspended. Recording a payment only lifts a NON_PAYMENT
+// suspension; an INACTIVITY suspension (FR-SUB-004) is lifted by the administrator.
+enum SubscriptionSuspensionCause {
+  NON_PAYMENT
+  INACTIVITY
+}
+
 // Scheduled subscription emails, recorded so each is sent once per period.
 enum SubscriptionNoticeKind {
   STARTER_ENDING
@@ -382,6 +389,13 @@ model Operator {
   subscriptionPaidUntil        DateTime?
   subscriptionSuspendedAt      DateTime?
   subscriptionSuspensionReason String?
+  subscriptionSuspensionCause  SubscriptionSuspensionCause?
+
+  // FR-SUB-004: any saved operator action refreshes lastActivityAt. After 90
+  // days without one the operator is warned and a fixed 14-day grace period
+  // starts (inactivityGraceStartedAt); any action ends it.
+  lastActivityAt           DateTime @default(now())
+  inactivityGraceStartedAt DateTime?
 
   // Seller page (FR-CUST-007). The slug gives the operator a short link to
   // share (/o/<slug>); the rest is written by the operator.
@@ -422,6 +436,7 @@ model Operator {
   @@index([operatorCode])
   @@index([status])
   @@index([subscriptionStatus, subscriptionPaidUntil])
+  @@index([status, lastActivityAt])
 }
 
 model SubscriptionUpgradeRequest {
