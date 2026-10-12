@@ -11,6 +11,8 @@ import {
 import { runIdempotencyCleanupJob } from "../jobs/idempotencyCleanup_job.js";
 import { runSubscriptionLifecycleJob } from "../jobs/subscriptionLifecycle_job.js";
 import { runOperatorInactivityJob } from "../jobs/operatorInactivity_job.js";
+import { runJobQueue } from "../jobs/jobQueue_worker.js";
+import { getQueueOverview } from "../services/job_queue_service.js";
 import { processStripeWebhookEvents } from "../jobs/stripeWebhook_worker.js";
 
 export async function getCronJobStatus(req, res, next) {
@@ -122,6 +124,24 @@ export async function runIdempotencyCleanup(_req, res, next) {
     const result = await runIdempotencyCleanupJob();
     const deleted = result?.deleted || 0;
     res.json({ message: "Expired idempotency keys cleaned up", deleted });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function runJobQueueNow(_req, res, next) {
+  try {
+    const result = await runJobQueue();
+    res.json({ message: "Job queue drained", result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// What is still owed, and the jobs that failed five times (FR-ARCH-001).
+export async function getJobQueue(_req, res, next) {
+  try {
+    res.json(await getQueueOverview());
   } catch (err) {
     next(err);
   }

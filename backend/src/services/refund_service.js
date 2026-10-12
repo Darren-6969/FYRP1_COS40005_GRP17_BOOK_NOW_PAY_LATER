@@ -1,5 +1,6 @@
 import prisma from "../config/db.js";
 import { peakDatesForBooking } from "./platform_policy_service.js";
+import { trackBookingEvent } from "./analytics_service.js";
 
 const REFUNDABLE_BOOKING_STATUSES = [
   "PENDING_PAYMENT",
@@ -200,6 +201,14 @@ export async function createPartialRefundForBooking({
         data: {
           status: "CANCELLED",
         },
+      });
+
+      // FR-ANL-002: written directly inside a transaction, so the event waits
+      // and checks the booking really ended up cancelled.
+      trackBookingEvent("booking_cancelled", booking.id, {
+        verifyStatus: "CANCELLED",
+        delayMs: 1500,
+        extra: { from_status: "PENDING_PAYMENT" },
       });
     }
 

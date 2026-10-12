@@ -15,6 +15,8 @@ import { runLoggedCronJob } from "./cron_job_service.js";
 import { runPaymentExpiryJob } from "../jobs/paymentExpiry_job.js";
 import { getPlatformSettings, isFeatureEnabled, normalizeReminderTiming } from "./platform_settings_service.js";
 import { recordCreditEvent } from "./customer_credit_service.js";
+import { trackBookingEvent } from "./analytics_service.js";
+import { runJobQueue } from "../jobs/jobQueue_worker.js";
 
 let lastOverdueRun = null;
 let lastOverdueResult = null;
@@ -541,6 +543,9 @@ async function performCompletedBookingCheck({
         },
         include: includeBookingRelations(),
       });
+
+      // FR-ANL-002: this path writes the status directly, so it raises the event itself.
+      trackBookingEvent("booking_completed", booking.id, { verifyStatus: "COMPLETED" });
 
       await prisma.auditLog.create({
         data: {
@@ -1109,7 +1114,17 @@ export function runDailyRecoverySweep() {
       triggerSource: "DAILY_RECOVERY_SWEEP",
     });
 
+    // Where no long-running worker exists (a serverless deployment) this is
+    // what records queued product events and retries any that failed.
+    let jobQueue;
+    try {
+      jobQueue = await runJobQueue();
+    } catch (error) {
+      jobQueue = { error: error.message };
+    }
+
     return {
+      jobQueue,
       checkedAt: new Date(),
       reconciliation,
       overdue,

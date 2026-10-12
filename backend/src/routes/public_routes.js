@@ -22,6 +22,9 @@ import {
   listOperators,
 } from "../controllers/storefront_controller.js";
 
+import { reportClientEvent } from "../controllers/public_events_controller.js";
+import { attachUserIdIfPresent } from "../middlewares/auth_middleware.js";
+
 const router = express.Router();
 
 // Quotes run several queries each;
@@ -37,6 +40,22 @@ const quoteLimiter = rateLimit({
     code: "RATE_LIMITED",
   },
 });
+
+// The page reports what it alone can know (what was searched and how many cars
+// matched, and that a booking form was opened). It sends one per search or form
+// open, so a modest limit is plenty.
+const eventLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message: "Too many events. Please slow down.",
+    code: "RATE_LIMITED",
+  },
+});
+
+router.post("/events", eventLimiter, attachUserIdIfPresent, reportClientEvent);
 
 // No authentication:
 // everything here is safe to show

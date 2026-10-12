@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useSearchParams } from "react-router-dom";
 import { X } from "lucide-react";
 import { searchCars } from "../../services/listing_public_service";
+import { reportClientEvent } from "../../services/analytics";
 import {
   FACET_GROUPS,
   SORTS,
@@ -69,6 +70,32 @@ export default function CarResults() {
   const loading = res.key !== requestKey;
   const data = res.data;
   const widgetOpen = editing || !dates;
+
+  // FR-ANL-002: a search is dates or filters that have been answered. It is
+  // reported once for each distinct search, with how many cars matched, so
+  // searches that find nothing can be counted. Browsing with nothing chosen is
+  // not a search.
+  const reportedSearch = useRef(null);
+  useEffect(() => {
+    if (loading || !data || reportedSearch.current === key) return;
+    reportedSearch.current = key;
+
+    const filters = [];
+    if (dates) filters.push("dates");
+    if (criteria.city) filters.push("city");
+    FACET_GROUPS.forEach((group) => {
+      if (criteria.sel[group].length) filters.push(group);
+    });
+    if (criteria.pmin !== null || criteria.pmax !== null) filters.push("price");
+    if (criteria.dmin !== null || criteria.dmax !== null) filters.push("deposit");
+    if (!filters.length) return;
+
+    reportClientEvent("search_performed", {
+      input_mode: "interface",
+      filters_applied: filters,
+      result_count: data.total,
+    });
+  }, [loading, data, key, dates, criteria]);
 
   const update = (changes, { replace = false } = {}) => {
     setParams(toCarSearchParams({ ...criteria, ...changes }), { replace });

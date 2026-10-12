@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Check, ChevronLeft, ChevronRight, Heart, Minus, Plus } from "lucide-react";
 import { getCarListing, quoteCarBooking } from "../../services/listing_public_service";
+import { reportClientEvent } from "../../services/analytics";
 import { parseBookingSelection, toBookingParams, tripParams } from "../../utils/carSearchParams";
 import {
   formatDateList,
@@ -256,7 +257,12 @@ export default function CarDetail() {
   useEffect(() => {
     let alive = true;
     getCarListing(listingId)
-      .then((r) => alive && setListingRes({ id: listingId, data: r.data, error: null }))
+      .then((r) => {
+        if (!alive) return;
+        setListingRes({ id: listingId, data: r.data, error: null });
+        // FR-ANL-002: one listing view each time the detail page loads this car.
+        reportClientEvent("listing_viewed", { listing_id: listingId });
+      })
       .catch((err) => alive && setListingRes({ id: listingId, data: null, error: err }));
     return () => {
       alive = false;

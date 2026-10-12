@@ -104,14 +104,14 @@ export async function getPlatformSettings(database = prisma) {
   });
 }
 
-export async function isFeatureEnabled(settings, feature, operatorId = null) {
-  const enabled = await isDatabaseFeatureEnabled(feature, operatorId);
+export async function isFeatureEnabled(settings, feature, operatorId = null, database = prisma) {
+  const enabled = await isDatabaseFeatureEnabled(feature, operatorId, database);
   if (!enabled) return false;
   return settings?.featureFlags?.[feature] !== false;
 }
 
-export function isCreditTierPolicyEnabled(settings, operatorId = null) {
-  return isFeatureEnabled(settings, CREDIT_TIER_POLICY_FLAG, operatorId);
+export function isCreditTierPolicyEnabled(settings, operatorId = null, database = prisma) {
+  return isFeatureEnabled(settings, CREDIT_TIER_POLICY_FLAG, operatorId, database);
 }
 
 // The operator's own percentage stands unless the tier policy is on and the

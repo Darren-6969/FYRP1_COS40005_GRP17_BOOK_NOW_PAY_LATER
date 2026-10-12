@@ -9,6 +9,8 @@ import {
   runStripeWebhookWorker,
   runSubscriptionLifecycle,
   runOperatorInactivity,
+  runJobQueueNow,
+  getJobQueue,
   runNoResponseCron,
   runOverdueCheck,
   runPaymentReminderCron,
@@ -94,6 +96,8 @@ router.get("/vercel-idempotency-cleanup", verifyCronSecret, runIdempotencyCleanu
 router.get("/vercel-stripe-webhook-worker", verifyCronSecret, runStripeWebhookWorker);
 router.get("/vercel-subscription-lifecycle", verifyCronSecret, runSubscriptionLifecycle);
 router.get("/vercel-operator-inactivity", verifyCronSecret, runOperatorInactivity);
+router.get("/vercel-job-queue", verifyCronSecret, runJobQueueNow);
+router.get("/job-queue", verifyToken, allowRoles("MASTER_SELLER"), getJobQueue);
 
 // Keep old endpoint for backward compatibility.
 router.get("/vercel-overdue-check", verifyCronSecret, runMaintenanceChecks);

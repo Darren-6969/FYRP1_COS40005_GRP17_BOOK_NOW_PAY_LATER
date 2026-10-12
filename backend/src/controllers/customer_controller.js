@@ -28,6 +28,7 @@ import { transitionBookingStatus } from "../services/booking_status_service.js";
 import { carListingSelect, mapCarBooking } from "../services/car_booking_view.js";
 import { quoteAlternative } from "../services/car_requote_service.js";
 import { fromSen } from "../services/car_pricing_service.js";
+import { trackBookingEvent } from "../services/analytics_service.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -248,7 +249,7 @@ export async function createCustomerBooking(req, res, next) {
       // Exposure limits and credit thresholds act only while the E17 tier policy is on.
       const tierPolicyOn = await isCreditTierPolicyEnabled(platformSettings, resolvedOperatorId);
       if (tierPolicyOn) {
-        await enforceConcurrentExposureCap({ customerId: req.user.id, database: tx });
+        await enforceConcurrentExposureCap({ customerId: req.user.id, operatorId: resolvedOperatorId, database: tx });
       }
       const created = await tx.booking.create({
         data: {
@@ -296,6 +297,8 @@ export async function createCustomerBooking(req, res, next) {
 
       return withCode;
     });
+
+    trackBookingEvent("booking_created", booking.id);
 
     const notifications = [notifyCustomerByBooking({
       booking,

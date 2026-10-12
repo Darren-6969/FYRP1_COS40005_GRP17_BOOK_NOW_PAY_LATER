@@ -38,6 +38,7 @@ export async function createBookingOrchestrator({
     if (tierPolicyOn) {
       await enforceConcurrentExposureCap({
         customerId,
+        operatorId: listing.operatorId,
         tier: customerTier,
         exposureLimits: platformSettings.exposureLimits,
         database: tx,

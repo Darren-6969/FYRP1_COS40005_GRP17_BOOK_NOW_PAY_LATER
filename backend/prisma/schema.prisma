@@ -1449,3 +1449,62 @@ model StripeWebhookEvent {
 
   @@index([status, nextAttemptAt, receivedAt])
 }
+
+
+// FR-ARCH-001: the PostgreSQL job queue. Work that must not block a request, or
+// must survive a restart, is written here and drained by a worker. A job whose
+// lease has expired is reclaimed, so a crashed worker strands nothing, and one
+// that fails five times moves to FAILED where an administrator can see it.
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model JobQueue {
+  id Int @id @default(autoincrement())
+
+  jobType String
+  payload Json    @db.JsonB
+
+  status         JobStatus @default(PENDING)
+  claimedAt      DateTime?
+  leaseExpiresAt DateTime?
+
+  retryCount   Int      @default(0)
+  nextRetryAt  DateTime @default(now())
+  errorMessage String?  @db.Text
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([status, nextRetryAt])
+  @@index([status, leaseExpiresAt])
+  @@index([jobType, status])
+  @@map("job_queue")
+}
+
+// FR-ANL-002: one row per product event. The property bag holds reference
+// identifiers and counts only, never personal data. The columns are plain
+// integers rather than foreign keys: events are append-only facts that must
+// outlive the account, listing or booking they describe. jobId makes the queue
+// handler idempotent, so a job that runs twice records its event once.
+model AnalyticsEvent {
+  id Int @id @default(autoincrement())
+
+  name       String
+  userId     Int?
+  operatorId Int?
+  bookingId  Int?
+  properties Json   @default("{}") @db.JsonB
+
+  jobId     Int?     @unique
+  createdAt DateTime @default(now())
+
+  @@index([name, createdAt])
+  @@index([operatorId, createdAt])
+  @@index([bookingId])
+  @@index([userId])
+  @@map("analytics_events")
+}

@@ -51,6 +51,22 @@ export async function verifyToken(req, res, next) {
   }
 }
 
+// For public endpoints that only want to know who is signed in, if anyone, to
+// attribute an analytics event. It never rejects a request and never sets
+// req.user, so it cannot grant access to anything.
+export function attachUserIdIfPresent(req, _res, next) {
+  try {
+    const header = req.headers.authorization;
+    if (header && header.startsWith("Bearer ")) {
+      const decoded = jwt.verify(header.split(" ")[1], process.env.JWT_SECRET);
+      if (Number.isInteger(decoded?.id)) req.analyticsUserId = decoded.id;
+    }
+  } catch {
+    // An expired or invalid token just means the visitor counts as signed out.
+  }
+  next();
+}
+
 // Blocks host-provisioned customers who haven't completed OTP step-up from
 // credit-committing actions. Verified customers (customerStatus ACTIVE) pass.
 export function requireVerifiedCustomer(req, res, next) {

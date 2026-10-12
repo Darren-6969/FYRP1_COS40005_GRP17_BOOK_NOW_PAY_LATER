@@ -1,4 +1,5 @@
 import prisma from "../config/db.js";
+import { trackBookingEvent } from "./analytics_service.js";
 
 export const TERMINAL_BOOKING_STATUSES = new Set([
   "COMPLETED",
@@ -25,6 +26,30 @@ const TRANSITIONS = {
   NO_SHOW_UNPAID: [],
   REJECTED: [],
 };
+
+// FR-ANL-002: the product events a booking reaching each outcome produces.
+// Cancellation is a booking_cancelled; the two no-show outcomes share
+// no_show_marked and are told apart by the balance_paid property. A no-show
+// where the balance was not paid also loses the customer their down payment.
+function trackOutcome({ bookingId, from, to }) {
+  // Inside a transaction the change may not have committed yet, so an event
+  // raised outside a request waits a moment and then checks the status.
+  const options = { verifyStatus: to, delayMs: 1500, database: prisma };
+
+  if (to === "COMPLETED") {
+    trackBookingEvent("booking_completed", bookingId, options);
+  } else if (to === "CANCELLED") {
+    trackBookingEvent("booking_cancelled", bookingId, { ...options, extra: { from_status: from } });
+  } else if (to === "NO_SHOW" || to === "NO_SHOW_UNPAID") {
+    trackBookingEvent("no_show_marked", bookingId, options);
+    if (to === "NO_SHOW_UNPAID") {
+      trackBookingEvent("down_payment_forfeited", bookingId, {
+        ...options,
+        extra: { cause: "no_show_unpaid" },
+      });
+    }
+  }
+}
 
 export function isValidBookingTransition(oldStatus, newStatus) {
   return oldStatus !== newStatus && (TRANSITIONS[oldStatus] || []).includes(newStatus);
@@ -63,6 +88,10 @@ export async function transitionBookingStatus({
       remark: cleanRemark,
     },
   });
+
+  // Never blocks or fails the transition: it only schedules the event.
+  trackOutcome({ bookingId, from: booking.status, to: newStatus });
+
   return updated;
 }
 

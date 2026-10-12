@@ -66,6 +66,7 @@ import {
 } from "../services/subscription_admin_service.js";
 import { reactivateOperatorAccount, requestReactivation } from "../services/operator_activity_service.js";
 import { INACTIVITY_GRACE_DAYS } from "../services/subscription_rules.js";
+import { trackPaymentSuccess } from "../services/analytics_service.js";
 
 const SETUP_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
@@ -3483,6 +3484,9 @@ export async function approvePayment(req, res, next) {
       payment: updatedPayment,
       previousPayment: payment,
     });
+
+    // FR-ANL-002: a manually verified payment is a product event too.
+    trackPaymentSuccess({ bookingId: payment.bookingId, payment: updatedPayment, previousPayment: payment });
 
     const existingReceipt = await prisma.receipt.findUnique({
       where: {

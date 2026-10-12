@@ -10,8 +10,38 @@ import {
   voidOutstandingScheduleEntries,
 } from "../services/payment_schedule_entry_service.js";
 import { transitionBookingStatus } from "../services/booking_status_service.js";
+import { trackBookingEvent } from "../services/analytics_service.js";
 
 const ACTIVE_STATUSES = ["PENDING", "ACCEPTED", "PENDING_PAYMENT", "CONFIRMED", "PAID"];
+
+// FR-ANL-002: which part of the payment was missed, and by how long. A missed
+// balance after a paid down payment also loses the customer that down payment.
+function trackExpiryEvents(booking, owedEntries, now) {
+  const hoursPast = (entries) =>
+    Math.round(Math.max(0, ...entries.map((entry) => (now - new Date(entry.dueAt)) / 3_600_000)) * 10) / 10;
+
+  const payments = owedEntries.filter((entry) => entry.type === "PAYMENT");
+  const downPart = payments.filter((entry) => entry.paymentPart !== "FINAL_PAYMENT");
+  const balancePart = payments.filter((entry) => entry.paymentPart === "FINAL_PAYMENT");
+  const options = { verifyStatus: "EXPIRED" };
+
+  if (downPart.length) {
+    trackBookingEvent("payment_expired", booking.id, {
+      ...options,
+      extra: { hours_past_deadline: hoursPast(downPart) },
+    });
+  }
+  if (balancePart.length) {
+    trackBookingEvent("balance_expired", booking.id, {
+      ...options,
+      extra: { hours_past_deadline: hoursPast(balancePart) },
+    });
+    trackBookingEvent("down_payment_forfeited", booking.id, {
+      ...options,
+      extra: { cause: "expired_unpaid" },
+    });
+  }
+}
 
 function expiryReason(owedEntries) {
   const licence = owedEntries.some((entry) => entry.type === "LICENCE");
@@ -152,6 +182,8 @@ export function runPaymentExpiryJob() {
         return true;
       });
       if (!cancelled) continue;
+
+      trackExpiryEvents(booking, owed, now);
 
       // Send email
       const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;

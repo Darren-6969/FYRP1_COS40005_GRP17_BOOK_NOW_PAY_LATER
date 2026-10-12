@@ -25,6 +25,7 @@ import {
 } from "../services/idempotency_service.js";
 import { createBookingOrchestrator } from "../services/booking_creation_orchestrator.js";
 import { bookingLocationText } from "../services/car_booking_snapshot.js";
+import { trackBookingEvent } from "../services/analytics_service.js";
 
 const ENDPOINT = "POST /customer/car-bookings";
 const MIN_LEAD_MINUTES = 60;
@@ -143,6 +144,11 @@ export async function createCarBooking(req, res, next) {
     };
     await completeIdempotencyKey(claim.record, 201, response);
     claim = null;
+
+    // FR-ANL-002: credit tier, down payment percentage and lead time are read
+    // from the booking after the response has gone out.
+    trackBookingEvent("booking_created", booking.id);
+
     res.status(201).json(response);
 
     // Notifications must never turn a recorded booking into a failed request.

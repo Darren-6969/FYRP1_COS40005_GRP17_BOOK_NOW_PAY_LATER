@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AlertCircle, Check, CircleAlert, CircleDot, Info, MapPin, TriangleAlert, X } from "lucide-react";
 import { getCarListing, quoteCarBooking } from "../../services/listing_public_service";
+import { reportClientEvent } from "../../services/analytics";
 import { requestCarBooking } from "../../services/car_booking_service";
 import { parseBookingSelection, toBookingParams, tripParams } from "../../utils/carSearchParams";
 import { formatDateList, formatSen, formatShortDateTime } from "../../utils/formatPublic";
@@ -315,7 +316,12 @@ export default function CarBookingForm() {
   useEffect(() => {
     let alive = true;
     getCarListing(listingId)
-      .then((r) => alive && setListingRes({ id: listingId, data: r.data }))
+      .then((r) => {
+        if (!alive) return;
+        setListingRes({ id: listingId, data: r.data });
+        // FR-ANL-002: opening the booking form is the start of a booking.
+        reportClientEvent("booking_started", { listing_id: listingId });
+      })
       .catch(() => alive && setListingRes({ id: listingId, data: null }));
     return () => {
       alive = false;

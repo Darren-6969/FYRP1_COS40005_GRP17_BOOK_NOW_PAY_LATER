@@ -33,6 +33,8 @@ import { generalLimiter } from "./middlewares/rate_limit_middleware.js";
 
 import { getOperatorOrigins } from "./config/originCache.js";
 import { operatorActivityMiddleware } from "./services/operator_activity_service.js";
+import { analyticsContextMiddleware } from "./services/analytics_service.js";
+import "./jobs/jobQueue_worker.js";
 dotenv.config();
 
 const app = express();
@@ -174,6 +176,10 @@ app.get("/health", (_req, res) => {
 // ── Operator activity (FR-SUB-004) ──────────────────────────────────────────
 // Any saved action by an operator user refreshes their 90-day activity window.
 app.use(operatorActivityMiddleware());
+
+// ── Product events (FR-ANL-002) ──────────────────────────────────────────────
+// Lets an event raised anywhere under a request wait until the response has gone out.
+app.use(analyticsContextMiddleware);
 
 // ── API routes ───────────────────────────────────────────────────────────────
 app.use("/api/auth",      authRoutes);

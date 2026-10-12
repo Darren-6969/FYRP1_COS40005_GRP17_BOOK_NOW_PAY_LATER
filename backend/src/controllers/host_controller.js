@@ -19,6 +19,7 @@ import { sendEmail } from "../services/email_service.js";
 import { enforceConcurrentExposureCap } from "../services/concurrent_exposure_service.js";
 import { isCreditTierPolicyEnabled } from "../services/platform_settings_service.js";
 import { assertOperatorTakingBookings } from "../services/subscription_admin_service.js";
+import { trackBookingEvent } from "../services/analytics_service.js";
 
 
 async function mintHandoff(intentId) {
@@ -292,7 +293,7 @@ async function createBookingFromIntent(intent, user) {
     // Exposure limits and credit thresholds act only while the E17 tier policy is on.
     const tierPolicyOn = await isCreditTierPolicyEnabled(platformSettings, intent.operatorId);
     if (tierPolicyOn) {
-      await enforceConcurrentExposureCap({ customerId: user.id, database: tx });
+      await enforceConcurrentExposureCap({ customerId: user.id, operatorId: intent.operatorId, database: tx });
     }
     const created = await tx.booking.create({
       data: {
@@ -359,6 +360,8 @@ async function createBookingFromIntent(intent, user) {
 
       return full;
     }, { timeout: 15000 });
+
+    trackBookingEvent("booking_created", booking.id);
 
     const operatorUrl = frontendUrl(
     `/operator/bookings/${booking.id}`

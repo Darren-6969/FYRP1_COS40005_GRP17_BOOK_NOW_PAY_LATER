@@ -33,6 +33,7 @@ import {
   getStripeAccountState,
   syncStripeAccountUpdated,
 } from "../services/stripe_connect_service.js";
+import { trackPaymentSuccess } from "../services/analytics_service.js";
 
 const router = express.Router();
 
@@ -288,6 +289,10 @@ export async function applyPaidState(
   } else {
     ({ payment, updatedBooking } = await prisma.$transaction(persistPaidState, PAID_STATE_TX_OPTIONS));
   }
+
+  // FR-ANL-002: the part just paid (down payment, balance, or both) is a
+  // product event, raised once the payment is saved. It never blocks or fails this.
+  trackPaymentSuccess({ bookingId, payment, previousPayment: booking.payment });
 
   const invoice = payment.status === "PAID"
     ? await generateInvoiceForBooking(bookingId, booking.totalAmount, prisma, { status: "PAID" })

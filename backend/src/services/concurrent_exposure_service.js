@@ -1,4 +1,5 @@
 import prisma from "../config/db.js";
+import { trackEvent } from "./analytics_service.js";
 
 export const DEFAULT_EXPOSURE_LIMITS = Object.freeze({
   Normal: 2,
@@ -30,6 +31,7 @@ export function getExposureLimit(exposureLimits, tier = "Normal") {
  */
 export async function enforceConcurrentExposureCap({
   customerId,
+  operatorId = null,
   tier: suppliedTier = null,
   exposureLimits: suppliedExposureLimits = null,
   database = prisma,
@@ -65,6 +67,15 @@ export async function enforceConcurrentExposureCap({
   });
 
   if (openUnpaidCount >= limit) {
+    // FR-ANL-002: a refusal by the exposure cap is a product event. It is
+    // scheduled, never awaited, so it cannot change the response to the customer.
+    trackEvent({
+      name: "exposure_blocked",
+      userId: customerId,
+      operatorId,
+      properties: { credit_tier: tier, limit, open_unpaid_count: openUnpaidCount },
+    });
+
     const error = new Error(
       `Concurrent booking limit reached for your ${tier} credit tier. You may hold up to ${limit} unpaid booking${limit === 1 ? "" : "s"} at a time.`
     );

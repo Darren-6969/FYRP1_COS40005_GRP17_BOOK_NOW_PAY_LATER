@@ -4,11 +4,15 @@ import {
   listFeaturedOperators,
   updateOwnStorefront,
 } from "../services/operator_storefront_service.js";
+import { trackEvent } from "../services/analytics_service.js";
 
 // GET /api/public/operators/:handle (slug or id)
 export async function getOperatorStorefront(req, res, next) {
   try {
-    res.json(await getStorefront(req.params.handle));
+    const page = await getStorefront(req.params.handle);
+    // FR-ANL-002: a seller page view, recorded after the response has gone out.
+    trackEvent({ name: "seller_page_viewed", operatorId: page.operator?.id });
+    res.json(page);
   } catch (err) {
     next(err);
   }
