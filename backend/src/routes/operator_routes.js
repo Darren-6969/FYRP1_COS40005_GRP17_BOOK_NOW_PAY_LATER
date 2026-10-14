@@ -25,6 +25,7 @@ import {
   acceptBooking,
   rejectBooking,
   cancelOperatorBooking,
+  bulkBookingAction,
   confirmBooking,
   markBookingNoShow,
   suggestAlternative,
@@ -171,6 +172,7 @@ router.post("/subscription-upgrade-request", ...ownerOnlyAccess, requestSubscrip
  */
 router.get("/bookings", ...ownerOrStaffAccess, getOperatorBookings);
 router.get("/bookings/:id", ...ownerOrStaffAccess, getOperatorBookingById);
+router.post("/bookings/bulk-action", ...ownerOrStaffAccess, bulkBookingAction);
 
 router.patch(
   "/bookings/:id/handover",

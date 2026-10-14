@@ -39,6 +39,7 @@ import {
 } from "../services/platform_policy_service.js";
 import { createAuditLog as writeAuditLog } from "../services/log_service.js";
 import { transitionBookingStatus } from "../services/booking_status_service.js";
+import { createOperatorFullRefundForBooking } from "../services/refund_service.js";
 import {
   carListingSelect,
   mapCarBooking,
@@ -1989,25 +1990,19 @@ export async function rejectBooking(req, res, next) {
       req.body?.reason || ""
     ).trim();
 
-    if (reason.length < 5) {
-      return res.status(400).json({
-        message:
-          "A rejection reason of at least 5 characters is required.",
+    const updatedBooking = await prisma.$transaction(async (tx) => {
+      await transitionBookingStatus({
+        bookingId: booking.id,
+        newStatus: "REJECTED",
+        actorId: req.user.id,
+        remark: reason || "Rejected by operator.",
+        database: tx,
       });
-    }
-
-    const updatedBooking =
-      await prisma.booking.update({
-        where: {
-          id: booking.id,
-        },
-
-        data: {
-          status: "REJECTED",
-        },
-
+      return tx.booking.findUnique({
+        where: { id: booking.id },
         include: includeBookingRelations(),
       });
+    });
 
     await createAuditLog({
       req,
@@ -2066,41 +2061,9 @@ export async function cancelOperatorBooking(req, res, next) {
       });
     }
 
-    // Only these statuses can be cancelled
-    if (
-      ![
-        "ACCEPTED",
-        "PENDING_PAYMENT",
-      ].includes(booking.status)
-    ) {
+    if (!["CONFIRMED", "PAID", "READY_FOR_PICKUP"].includes(booking.status)) {
       return res.status(400).json({
-        message:
-          "Only accepted bookings that have not been paid can be cancelled by the operator.",
-      });
-    }
-
-    const paymentStatus = String(
-      booking.payment?.status || ""
-    ).toUpperCase();
-
-    const downPaymentStatus = String(
-      booking.payment?.downPaymentStatus || ""
-    ).toUpperCase();
-
-    const finalPaymentStatus = String(
-      booking.payment?.finalPaymentStatus || ""
-    ).toUpperCase();
-
-    const hasAnyPayment =
-      paymentStatus === "PAID" ||
-      paymentStatus === "PARTIALLY_PAID" ||
-      downPaymentStatus === "PAID" ||
-      finalPaymentStatus === "PAID";
-
-    if (hasAnyPayment) {
-      return res.status(400).json({
-        message:
-          "This booking cannot be cancelled because payment has already been made.",
+        message: "Only confirmed bookings can be cancelled by the operator.",
       });
     }
 
@@ -2115,19 +2078,13 @@ export async function cancelOperatorBooking(req, res, next) {
       });
     }
 
-    const updatedBooking = await prisma.$transaction(async (tx) => {
-      await transitionBookingStatus({
-        bookingId: booking.id,
-        newStatus: "CANCELLED",
-        actorId: req.user.id,
-        remark: reason,
-        database: tx,
-      });
-      return tx.booking.findUnique({
-        where: { id: booking.id },
-        include: includeBookingRelations(),
-      });
+    const result = await createOperatorFullRefundForBooking({
+      bookingId: booking.id,
+      operatorId: booking.operatorId,
+      actorId: req.user.id,
+      reason,
     });
+    const updatedBooking = await findOperatorBooking(req, booking.id);
 
     await createAuditLog({
       req,
@@ -2167,7 +2124,68 @@ export async function cancelOperatorBooking(req, res, next) {
 
     res.json({
       booking: mapBooking(updatedBooking),
+      refund: result.refund,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function bulkBookingAction(req, res, next) {
+  try {
+    const bookingIds = Array.isArray(req.body?.bookingIds)
+      ? [...new Set(req.body.bookingIds.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
+      : [];
+    const action = String(req.body?.action || "").trim().toLowerCase();
+    if (!bookingIds.length || !["accept", "reject", "alternative"].includes(action)) {
+      return res.status(400).json({ message: "bookingIds and a valid action are required." });
+    }
+    const results = await Promise.all(bookingIds.map(async (id) => {
+      try {
+        const booking = await findOperatorBooking(req, id);
+        if (!booking) throw Object.assign(new Error("Booking not found"), { statusCode: 404 });
+        let updated;
+        if (action === "accept") {
+          ({ booking: updated } = await acceptBookingAndRequestPayment({
+            booking, actorUserId: req.user.id, req,
+            downPaymentPercent: req.body?.downPaymentPercent,
+            downPaymentDueDate: req.body?.downPaymentDueDate,
+            finalPaymentDueDate: req.body?.finalPaymentDueDate,
+          }));
+        } else {
+          const note = String(req.body?.reason || (action === "reject" ? "Rejected by operator." : "")).trim();
+          if (action === "alternative" && !note) throw Object.assign(new Error("A reason is required for an alternative proposal."), { statusCode: 400 });
+          updated = await prisma.$transaction(async (tx) => {
+            await transitionBookingStatus({
+              bookingId: id,
+              newStatus: action === "reject" ? "REJECTED" : "ALTERNATIVE_SUGGESTED",
+              actorId: req.user.id,
+              remark: note,
+              database: tx,
+              extraData: action === "alternative" ? {
+                alternativeServiceName: req.body?.alternativeServiceName || null,
+                alternativePrice: req.body?.alternativePrice == null ? null : Number(req.body.alternativePrice),
+                alternativeReason: note,
+                alternativeSuggestedAt: new Date(),
+              } : {},
+            });
+            return tx.booking.findUnique({ where: { id }, include: includeBookingRelations() });
+          });
+          if (action === "reject") {
+            await notifyCustomerByBooking({
+              booking: updated,
+              title: "Booking rejected",
+              message: `Your booking ${updated.bookingCode || updated.id} was rejected by the operator.${note ? ` Reason: ${note}` : ""}`,
+              type: "BOOKING_REJECTED",
+            });
+          }
+        }
+        return { bookingId: id, ok: true, booking: mapBooking(updated) };
+      } catch (error) {
+        return { bookingId: id, ok: false, error: error.message, statusCode: error.statusCode || 400 };
+      }
+    }));
+    res.json({ action, results, succeeded: results.filter((item) => item.ok).length, failed: results.filter((item) => !item.ok).length });
   } catch (err) {
     next(err);
   }

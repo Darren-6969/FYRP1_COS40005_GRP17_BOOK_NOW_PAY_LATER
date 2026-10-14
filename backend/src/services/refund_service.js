@@ -23,6 +23,58 @@ function money(value) {
   return Number(value || 0);
 }
 
+export async function createOperatorFullRefundForBooking({
+  bookingId,
+  operatorId = null,
+  actorId = null,
+  reason,
+}) {
+  const id = Number(bookingId);
+  if (!Number.isInteger(id) || id <= 0) throw refundError("Invalid booking id.");
+  const cleanReason = String(reason || "").trim();
+  if (cleanReason.length < 5) throw refundError("A cancellation reason of at least 5 characters is required.");
+
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findFirst({
+      where: { id, ...(operatorId ? { operatorId } : {}) },
+      include: { payment: true, refunds: true },
+    });
+    if (!booking) throw refundError("Booking not found.", 404);
+    if (!["CONFIRMED", "PAID", "READY_FOR_PICKUP"].includes(booking.status)) {
+      throw refundError(`Operator cancellation is not available when booking status is ${booking.status}.`);
+    }
+    const payment = booking.payment;
+    const paidAmount = payment?.status === "PAID"
+      ? money(payment.amount)
+      : payment?.downPaymentStatus === "PAID"
+        ? money(payment.downPaymentAmount)
+        : 0;
+    const paymentPart = payment?.status === "PAID" ? "PAYMENT" : "DOWN_PAYMENT";
+    const refunded = booking.refunds
+      .filter((item) => item.paymentPart === paymentPart && ["PENDING", "PROCESSING", "REFUNDED"].includes(item.status))
+      .reduce((sum, item) => sum + money(item.amount), 0);
+    const amount = Math.max(0, Number((paidAmount - refunded).toFixed(2)));
+    await transitionBookingStatus({ bookingId: id, newStatus: "CANCELLED", actorId, remark: cleanReason, database: tx });
+    const refund = amount > 0 && payment
+      ? await tx.refund.create({
+        data: {
+          bookingId: id,
+          paymentId: payment.id,
+          paymentPart,
+          paidAmount: amount.toFixed(2),
+          refundPercent: 100,
+          amount: amount.toFixed(2),
+          method: payment.method,
+          status: "PENDING",
+          reason: `Operator cancellation: ${cleanReason}`,
+          originalTransactionId: payment.downPaymentTransactionId || payment.transactionId || null,
+        },
+      })
+      : null;
+    return { booking, refund, refundAmount: amount };
+  });
+}
+
 export async function createPartialRefundForBooking({
   bookingId,
   operatorId = null,
