@@ -106,6 +106,15 @@ export const markAllCustomerNotificationsRead = () =>
   api.patch("/customer/notifications/read-all");
 
 export const getMyLicenceDocument = () => api.get("/licence-verification/me");
+export const getBookingLicenceDocument = (bookingId) =>
+  api.get(`/licence-verification/bookings/${bookingId}`);
+export const submitBookingLicenceDocument = (bookingId, file) => {
+  const formData = new FormData();
+  formData.append("licence", file);
+  return api.post(`/licence-verification/bookings/${bookingId}`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
 export const submitLicenceDocument = (file) => {
   const formData = new FormData();
   formData.append("licence", file);

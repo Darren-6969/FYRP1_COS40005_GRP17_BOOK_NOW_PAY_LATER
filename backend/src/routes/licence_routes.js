@@ -7,6 +7,7 @@ import {
   getLicenceQueue,
   getPeakDates,
   getMyLicenceDocument,
+  getBookingLicenceDocument,
   licenceUpload,
   reviewLicenceDocument,
   submitLicenceDocument,
@@ -78,6 +79,7 @@ router.get(
   ...customerOnly,
   getMyLicenceDocument
 );
+router.get("/bookings/:bookingId", ...customerOnly, getBookingLicenceDocument);
 
 /*
  * Customer uploads a driving licence.
@@ -89,6 +91,12 @@ router.get(
  */
 router.post(
   "/me",
+  ...customerOnly,
+  licenceUpload.single("licence"),
+  submitLicenceDocument
+);
+router.post(
+  "/bookings/:bookingId",
   ...customerOnly,
   licenceUpload.single("licence"),
   submitLicenceDocument

@@ -7,6 +7,7 @@ import { sendEmail } from "../services/email_service.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
 import { getPlatformSettings } from "../services/platform_settings_service.js";
 import { createAuditLog } from "../services/log_service.js";
+import { storePrivateDocument } from "../services/private_document_storage.js";
 
 const SLA_HOURS = 48;
 const REJECTION_REASONS = new Set(["EXPIRED", "UNREADABLE", "NOT_A_LICENCE"]);
@@ -131,6 +132,22 @@ export async function getMyLicenceDocument(req, res, next) {
   } catch (err) {
     next(err);
   }
+
+}
+
+export async function getBookingLicenceDocument(req, res, next) {
+  try {
+    const bookingId = Number(req.params.bookingId);
+    const booking = await prisma.booking.findFirst({ where: { id: bookingId, customerId: req.user.id }, select: { id: true } });
+    if (!booking) return res.status(404).json({ message: "Booking not found." });
+    const document = await prisma.customerLicenceDocument.findFirst({
+      where: { bookingId, customerId: req.user.id },
+      orderBy: { submittedAt: "desc" },
+    });
+    res.json({ document: publicDocument(document) });
+  } catch (err) {
+    next(err);
+  }
 }
 
 export async function submitLicenceDocument(req, res, next) {
@@ -153,8 +170,13 @@ export async function submitLicenceDocument(req, res, next) {
         }
       );
 
+    const bookingId = req.params.bookingId ? Number(req.params.bookingId) : null;
+    if (req.params.bookingId) {
+      const booking = await prisma.booking.findFirst({ where: { id: bookingId, customerId: req.user.id }, select: { id: true } });
+      if (!booking) return res.status(404).json({ message: "Booking not found." });
+    }
     const latest = await prisma.customerLicenceDocument.findFirst({
-      where: { customerId: req.user.id },
+      where: { customerId: req.user.id, ...(bookingId ? { bookingId } : {}) },
       orderBy: { submittedAt: "desc" },
     });
     if (latest?.status === "UNDER_REVIEW") {
@@ -169,13 +191,22 @@ export async function submitLicenceDocument(req, res, next) {
       return res.status(409).json({ message: "The licence re-upload window has closed. Please contact support." });
     }
 
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120);
+    const storageKey = await storePrivateDocument({
+      customerId: req.user.id,
+      bookingId,
+      originalName: safeName,
+      buffer: validatedDocument.buffer,
+    });
     const document = await prisma.customerLicenceDocument.create({
       data: {
         customerId: req.user.id,
-        originalName: file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120),
+        bookingId,
+        originalName: safeName,
         mimeType: validatedDocument.mime,
         sizeBytes: validatedDocument.size,
         content: validatedDocument.buffer,
+        storageKey,
         reviewDueAt: new Date(Date.now() + SLA_HOURS * 60 * 60 * 1000),
       },
     });
@@ -279,28 +310,9 @@ export async function getLicenceQueue(
         where: {
           status:
             "UNDER_REVIEW",
-
-          /*
-           * NORMAL_SELLER:
-           * Only show customers who
-           * have an active booking
-           * with this operator.
-           *
-           * MASTER_SELLER:
-           * Can see all licences.
-           */
-          ...(operatorId
-            ? {
-                customer: {
-                  bookings: {
-                    some:
-                      licenceBookingScope(
-                        operatorId
-                      ),
-                  },
-                },
-              }
-            : {}),
+          booking: {
+            ...licenceBookingScope(operatorId),
+          },
         },
 
         orderBy: [
@@ -315,49 +327,8 @@ export async function getLicenceQueue(
         ],
 
         include: {
-          customer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              phone: true,
-
-              bookings: {
-                where: {
-                  ...licenceBookingScope(
-                    operatorId
-                  ),
-
-                  paymentDeadline: {
-                    not: null,
-                  },
-                },
-
-                orderBy: [
-                  {
-                    paymentDeadline:
-                      "asc",
-                  },
-                  {
-                    createdAt:
-                      "asc",
-                  },
-                ],
-
-                take: 1,
-
-                select: {
-                  id: true,
-                  bookingCode:
-                    true,
-                  paymentDeadline:
-                    true,
-                  operatorId:
-                    true,
-                },
-              },
-            },
-          },
+          customer: { select: { id: true, name: true, email: true, phone: true } },
+          booking: { select: { id: true, bookingCode: true, paymentDeadline: true, operatorId: true } },
         },
       });
 
@@ -367,23 +338,12 @@ export async function getLicenceQueue(
     const queue =
       documents.map(
         (document) => {
-          const {
-            bookings,
-            ...customer
-          } =
-            document.customer;
-
-          const booking =
-            bookings[0] ||
-            null;
-
           return {
             ...publicDocument({
               ...document,
-              customer,
             }),
 
-            booking,
+            booking: document.booking,
 
             sla: {
               overdue:
@@ -487,18 +447,7 @@ export async function downloadLicenceDocument(
            * customers who have a
            * booking with their company.
            */
-          ...(operatorId
-            ? {
-                customer: {
-                  bookings: {
-                    some:
-                      licenceBookingScope(
-                        operatorId
-                      ),
-                  },
-                },
-              }
-            : {}),
+          booking: { ...licenceBookingScope(operatorId) },
         },
       });
 
@@ -620,18 +569,7 @@ export async function reviewLicenceDocument(
           status:
             "UNDER_REVIEW",
 
-          ...(operatorId
-            ? {
-                customer: {
-                  bookings: {
-                    some:
-                      licenceBookingScope(
-                        operatorId
-                      ),
-                  },
-                },
-              }
-            : {}),
+          booking: { ...licenceBookingScope(operatorId) },
         },
 
         include: {
@@ -698,8 +636,7 @@ export async function reviewLicenceDocument(
           const readyBookings =
             await tx.booking.findMany({
               where: {
-                customerId:
-                  document.customerId,
+                id: document.bookingId,
 
                 status:
                   "PAID",
@@ -711,11 +648,6 @@ export async function reviewLicenceDocument(
                   },
                 },
 
-                ...(operatorId
-                  ? {
-                      operatorId,
-                    }
-                  : {}),
               },
 
               select: {

@@ -4,6 +4,8 @@ import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import OperatorRegister from "./pages/auth/OperatorRegister";
 import SetupPassword from "./pages/auth/SetupPassword";
+import ForgotPassword from "./pages/auth/ForgotPassword";
+import ResetPassword from "./pages/auth/ResetPassword";
 
 // Master Pages
 import MasterLayout from "./pages/master/layout/MasterLayout";
@@ -37,7 +39,6 @@ import CustomerPayments from "./pages/customer/CustomerPayments";
 import CustomerInvoices from "./pages/customer/CustomerInvoices";
 import CustomerNotifications from "./pages/customer/CustomerNotifications";
 import CustomerProfile from "./pages/customer/CustomerProfile";
-import CustomerLicence from "./pages/customer/CustomerLicence";
 import CustomerInvoiceDetail from "./pages/customer/CustomerInvoiceDetail";
 import CustomerHelp from "./pages/customer/CustomerHelp";
 
@@ -95,6 +96,8 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/operator-register" element={<OperatorRegister />} />
         <Route path="/setup-password" element={<SetupPassword />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/embed" element={<EmbedEntry />} />
         {/* Protected Routes */}
           {/* Master Routes */}
@@ -237,7 +240,6 @@ export default function App() {
               <Route path="invoices/:id" element={<CustomerInvoiceDetail />} />
               <Route path="notifications" element={<CustomerNotifications />} />
               <Route path="profile" element={<CustomerProfile />} />
-              <Route path="licence" element={<CustomerLicence />} />
               <Route path="help" element={<CustomerHelp />} />
             </Route>
           </Route>

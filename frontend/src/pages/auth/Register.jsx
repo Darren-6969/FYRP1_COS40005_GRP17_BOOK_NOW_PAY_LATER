@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { login, register } from "../../services/auth_service";
 import { saveSession, unbindTab } from "../../utils/session";
@@ -43,15 +43,8 @@ export default function Register() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    setForm((prev) => ({
-      ...prev,
-      name: nameParam || prev.name,
-      email: emailParam || prev.email,
-    }));
-  }, [emailParam, nameParam]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -75,7 +68,7 @@ export default function Register() {
     const email = form.email.trim().toLowerCase();
     const password = form.password;
 
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !consent) {
       setError("Please complete all fields.");
       return;
     }
@@ -108,6 +101,8 @@ export default function Register() {
         name,
         email,
         password,
+        privacyPolicyAccepted: consent,
+        termsAccepted: consent,
       });
 
       // Host (GoCar) sign-ups keep the login step, which claims the booking.
@@ -189,6 +184,16 @@ export default function Register() {
               autoComplete="name"
               disabled={loading}
             />
+
+            <label className="bnpl-auth-consent">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(event) => setConsent(event.target.checked)}
+                disabled={loading}
+              />
+              I agree to the Privacy Policy and Terms & Conditions.
+            </label>
 
             <input
               name="email"

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCustomerBooking } from "../../hooks/useBookings";
 import {
@@ -12,6 +12,7 @@ import {
 import { refreshNotifications } from "../../utils/notifyRefresh";
 import CarBookingPanel from "../../components/booking/CarBookingPanel";
 import CarAlternativeCard from "../../components/booking/CarAlternativeCard";
+import { getBookingLicenceDocument, submitBookingLicenceDocument } from "../../services/customer_service";
 
 export default function BookingDetail() {
   const { id } = useParams();
@@ -28,6 +29,9 @@ export default function BookingDetail() {
   } = useCustomerBooking(id);
 
   const [alternativeBusy, setAlternativeBusy] = useState(false);
+  const [licence, setLicence] = useState(null);
+  const [licenceFile, setLicenceFile] = useState(null);
+  const [licenceBusy, setLicenceBusy] = useState(false);
 
   const gocarThankYouUrl = import.meta.env.VITE_GOCAR_THANK_YOU_URL;
 
@@ -35,6 +39,36 @@ export default function BookingDetail() {
     if (!window.confirm("Cancel this booking?")) return;
     await cancelBooking();
     refreshNotifications();
+  };
+
+  useEffect(() => {
+    let active = true;
+    getBookingLicenceDocument(id)
+      .then((response) => {
+        if (active) setLicence(response.data.document);
+      })
+      .catch(() => {
+        if (active) setLicence(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const handleLicenceSubmit = async (event) => {
+    event.preventDefault();
+    if (!licenceFile) return;
+    try {
+      setLicenceBusy(true);
+      await submitBookingLicenceDocument(id, licenceFile);
+      setLicenceFile(null);
+      const response = await getBookingLicenceDocument(id);
+      setLicence(response.data.document);
+    } catch (err) {
+      alert(err.response?.data?.message || "Could not upload the licence.");
+    } finally {
+      setLicenceBusy(false);
+    }
   };
 
   // A car alternative is re-checked when accepted: it may have sold out, or
@@ -196,6 +230,20 @@ export default function BookingDetail() {
               >
                 Return to GoCar
               </a>
+            )}
+          </div>
+          <div className="customer-info-box">
+            <strong>Driving licence for this booking</strong>
+            <p className="customer-muted">
+              Status: {licence?.status?.replaceAll("_", " ") || "Not submitted"}
+            </p>
+            {!["COMPLETED", "CANCELLED", "REJECTED", "EXPIRED"].includes(booking.status) && (
+              <form onSubmit={handleLicenceSubmit}>
+                <input type="file" accept=".pdf,image/jpeg,image/png" onChange={(event) => setLicenceFile(event.target.files?.[0] || null)} />
+                <button className="customer-secondary-btn" disabled={!licenceFile || licenceBusy}>
+                  {licenceBusy ? "Uploading..." : "Upload licence"}
+                </button>
+              </form>
             )}
           </div>
         </article>

@@ -23,6 +23,21 @@ export const registerSchema = z.object({
     .email("Invalid email address")
     .max(254, "Email is too long"),
   password: passwordSchema,
+  privacyPolicyAccepted: z.literal(true, { error: "Privacy policy consent is required" }),
+  termsAccepted: z.literal(true, { error: "Terms acceptance is required" }),
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Invalid email address").max(254),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(32).max(256),
+  newPassword: passwordSchema,
+  confirmPassword: z.string().min(1),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "New password and confirm password do not match",
+  path: ["confirmPassword"],
 });
 
 export const loginSchema = z.object({

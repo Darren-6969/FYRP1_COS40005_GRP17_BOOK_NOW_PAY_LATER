@@ -266,6 +266,10 @@ model User {
   otpCodeHash    String?
   otpExpiresAt   DateTime?
   otpAttempts    Int       @default(0)
+  privacyPolicyAcceptedAt DateTime?
+  privacyPolicyAcceptedIp String?
+  termsAcceptedAt DateTime?
+  termsAcceptedIp String?
 
   operatorId Int?
   operator   Operator? @relation(fields: [operatorId], references: [id])
@@ -570,10 +574,13 @@ model CustomerLicenceDocument {
   id              Int                       @id @default(autoincrement())
   customerId      Int
   customer        User                      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  bookingId       Int?
+  booking         Booking?                  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   originalName    String
   mimeType        String
   sizeBytes       Int
   content         Bytes                     @db.ByteA
+  storageKey      String?                   @unique
   status          LicenceVerificationStatus @default(UNDER_REVIEW)
   rejectionReason String?                   @db.Text
   submittedAt     DateTime                  @default(now())
@@ -587,6 +594,7 @@ model CustomerLicenceDocument {
   @@index([status])
   @@index([reviewDueAt])
   @@index([customerId])
+  @@index([bookingId])
 }
 
 model PlatformPeakDate {
@@ -729,6 +737,7 @@ model Booking {
   refunds                 Refund[]
   commissionLedgerEntries CommissionLedgerEntry[]
   paymentScheduleEntries  PaymentScheduleEntry[]
+  licenceDocuments        CustomerLicenceDocument[]
   statusHistory           BookingStatusHistory[]
   receipt                 Receipt?
   invoice                 Invoice?

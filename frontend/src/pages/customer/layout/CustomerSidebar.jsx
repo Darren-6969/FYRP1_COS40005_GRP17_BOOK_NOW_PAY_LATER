@@ -6,7 +6,6 @@ import {
   Bell,
   User,
   HelpCircle,
-  BadgeCheck,
   X,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -59,11 +58,6 @@ export default function CustomerSidebar({ open, onClose, onLogout }) {
         <NavLink to="/customer/profile" onClick={onClose}>
           <span><User size={22} /></span>
           Profile
-        </NavLink>
-
-        <NavLink to="/customer/licence" onClick={onClose}>
-          <span><BadgeCheck size={22} /></span>
-          Driving Licence
         </NavLink>
 
         <NavLink to="/customer/help" onClick={onClose}>

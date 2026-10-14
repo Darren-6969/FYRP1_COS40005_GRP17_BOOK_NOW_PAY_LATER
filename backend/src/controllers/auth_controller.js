@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import prisma from "../config/db.js";
 import { generateUserCode } from "../services/userCode.js";
+import { sendEmail } from "../services/email_service.js";
 
 // ── Token configuration ───────────────────────────────────────────────────────
 // Access token: short-lived (OWASP 2025 A07 / NIST SP 800-63B)
@@ -65,7 +66,7 @@ export async function issueTokenPair(userId, role, operatorAccessLevel = null) {
   return { accessToken, refreshToken: plainRefresh };
 }
 
-async function createCustomerWithRetry({ name, email, password }) {
+async function createCustomerWithRetry({ name, email, password, consent }) {
   const safeRole      = "CUSTOMER";
   const hashedPassword = await bcrypt.hash(password, 12); // cost factor 12
 
@@ -75,7 +76,13 @@ async function createCustomerWithRetry({ name, email, password }) {
     try {
       const userCode = await generateUserCode(safeRole);
       const user = await prisma.user.create({
-        data: { userCode, name, email, password: hashedPassword, role: safeRole },
+        data: {
+          userCode, name, email, password: hashedPassword, role: safeRole,
+          privacyPolicyAcceptedAt: consent.acceptedAt,
+          privacyPolicyAcceptedIp: consent.ip,
+          termsAcceptedAt: consent.acceptedAt,
+          termsAcceptedIp: consent.ip,
+        },
       });
       if (safeRole === "CUSTOMER") {
         await prisma.customerCreditProfile.create({
@@ -102,13 +109,15 @@ export async function register(req, res, next) {
   try {
     // Input already validated and sanitised by Zod middleware
     const { name, email, password } = req.body;
+    const acceptedAt = new Date();
+    const ip = req.ip || req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || null;
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       return res.status(409).json({ message: "Email already exists. Please login instead." });
     }
 
-    const user = await createCustomerWithRetry({ name, email, password });
+    const user = await createCustomerWithRetry({ name, email, password, consent: { acceptedAt, ip } });
 
     await prisma.auditLog.create({
       data: {
@@ -124,6 +133,53 @@ export async function register(req, res, next) {
     if (err.code === "P2002") {
       return res.status(409).json({ message: "Duplicate value detected. Please try again." });
     }
+
+    next(err);
+  }
+}
+
+export async function forgotPassword(req, res, next) {
+  try {
+    const { email } = req.body;
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user) {
+      const plainToken = crypto.randomBytes(40).toString("hex");
+      await prisma.passwordSetupToken.deleteMany({ where: { userId: user.id } });
+      await prisma.passwordSetupToken.create({
+        data: { tokenHash: hashToken(plainToken), userId: user.id, expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
+      });
+      const resetUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password?token=${plainToken}`;
+      await sendEmail({
+        to: user.email,
+        subject: "Reset your Book Now Pay Later password",
+        type: "PASSWORD_RESET",
+        userId: user.id,
+        text: `Reset your password using this link: ${resetUrl}`,
+        html: `<p>Reset your password using this link:</p><p><a href="${resetUrl}">${resetUrl}</a></p>`,
+      });
+    }
+    res.json({ message: "If an account exists for that email, reset instructions have been sent." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resetPassword(req, res, next) {
+  try {
+    const { token, newPassword } = req.body;
+    const stored = await prisma.passwordSetupToken.findUnique({ where: { tokenHash: hashToken(token) } });
+    if (!stored || stored.usedAt || stored.expiresAt <= new Date()) {
+      return res.status(400).json({ message: "This password reset link is invalid or expired." });
+    }
+    const password = await bcrypt.hash(newPassword, 12);
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: stored.userId }, data: { password } }),
+      prisma.passwordSetupToken.update({ where: { id: stored.id }, data: { usedAt: new Date() } }),
+      prisma.refreshToken.deleteMany({ where: { userId: stored.userId } }),
+      prisma.auditLog.create({ data: { userId: stored.userId, action: "PASSWORD_RESET", entityType: "User", entityId: String(stored.userId) } }),
+    ]);
+    res.json({ message: "Password reset successfully. You can now sign in." });
+  } catch (err) {
     next(err);
   }
 }
