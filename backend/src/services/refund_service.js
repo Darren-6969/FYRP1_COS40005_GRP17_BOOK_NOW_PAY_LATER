@@ -1,11 +1,15 @@
 import prisma from "../config/db.js";
-import { peakDatesForBooking } from "./platform_policy_service.js";
 import { trackBookingEvent } from "./analytics_service.js";
+import {
+  resolveCancellationPolicy,
+} from "./payment_deadline_service.js";
+import { transitionBookingStatus } from "./booking_status_service.js";
 
 const REFUNDABLE_BOOKING_STATUSES = [
   "PENDING_PAYMENT",
+  "PAID",
   "CANCELLED",
-  "OVERDUE",
+  "EXPIRED",
   "NO_SHOW_UNPAID",
 ];
 
@@ -81,126 +85,40 @@ export async function createPartialRefundForBooking({
      * Deposit has been paid,
      * but final payment has NOT been paid.
      */
-    if (
-      payment.downPaymentStatus !== "PAID"
-    ) {
+    const paidAmount = payment.status === "PAID"
+      ? money(payment.amount)
+      : payment.downPaymentStatus === "PAID"
+        ? money(payment.downPaymentAmount)
+        : 0;
+    if (paidAmount <= 0) {
       throw refundError(
-        "The down payment has not been paid, so there is nothing to refund."
+        "No amount has been paid, so there is nothing to refund."
       );
     }
 
-    if (
-      payment.finalPaymentStatus === "PAID"
-    ) {
-      throw refundError(
-        "This booking has already been fully paid. Full-payment refunds require a separate refund flow."
-      );
-    }
-
-    const paidDeposit = money(
-      payment.downPaymentAmount
-    );
-
-    if (paidDeposit <= 0) {
-      throw refundError(
-        "The paid down-payment amount is RM0.00."
-      );
-    }
-
-    /*
-     * Prevent duplicate refund records.
-     */
-    const existingRefund =
-      booking.refunds.find(
-        (refund) =>
-          refund.paymentPart ===
-            "DOWN_PAYMENT" &&
-          [
-            "PENDING",
-            "PROCESSING",
-            "REFUNDED",
-          ].includes(refund.status)
-      );
-
-    if (existingRefund) {
-      throw refundError(
-        "A refund already exists for this booking.",
-        409
-      );
-    }
-
-    /*
-     * Load latest Operator Refund Settings.
-     */
-    const config =
-      await tx.bNPLConfig.findFirst({
-        where: {
-          operatorId:
-            booking.operatorId,
-        },
-
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
-
-    if (!config?.partialRefundElected) {
-      throw refundError(
-        "Partial refund is disabled in Operator Settings."
-      );
-    }
-
-    // The platform peak calendar decides where the election is available.
-    const peakDates = await peakDatesForBooking(booking, tx);
-    if (peakDates.length) {
-      throw refundError(
-        `A partial refund is not available for bookings that include a platform peak date (${peakDates.join(", ")}).`
-      );
-    }
-
-    const refundPercent = Number(
-      config.partialRefundPercent
-    );
-
-    if (
-      !Number.isInteger(refundPercent) ||
-      refundPercent < 1 ||
-      refundPercent > 99
-    ) {
-      throw refundError(
-        "Partial refund percentage must be between 1 and 99."
-      );
-    }
-
-    const refundAmount = Number(
-      (
-        paidDeposit *
-        (refundPercent / 100)
-      ).toFixed(2)
-    );
+    const policy = await resolveCancellationPolicy({ booking, database: tx });
+    const paymentPart = payment.status === "PAID" ? "PAYMENT" : "DOWN_PAYMENT";
+    const priorRefunded = booking.refunds
+      .filter((refund) => refund.paymentPart === paymentPart && ["PENDING", "PROCESSING", "REFUNDED"].includes(refund.status))
+      .reduce((sum, refund) => sum + money(refund.amount), 0);
+    const remainingPaid = Math.max(0, Number((paidAmount - priorRefunded).toFixed(2)));
+    const refundAmount = Math.min(remainingPaid, policy.refundableAmount(remainingPaid));
 
     if (refundAmount <= 0) {
-      throw refundError(
-        "Calculated refund amount must be greater than RM0.00."
-      );
+      throw refundError("The paid amount has already been refunded.", 409);
     }
 
     /*
      * A booking that is still awaiting final payment
      * becomes CANCELLED once the refund workflow starts.
      */
-    if (
-      booking.status ===
-      "PENDING_PAYMENT"
-    ) {
-      await tx.booking.update({
-        where: {
-          id: booking.id,
-        },
-
-        data: {
-          status: "CANCELLED",
-        },
+    if (booking.status !== "CANCELLED") {
+      await transitionBookingStatus({
+        bookingId: booking.id,
+        newStatus: "CANCELLED",
+        actorId: null,
+        remark: "Cancellation refund requested.",
+        database: tx,
       });
 
       // FR-ANL-002: written directly inside a transaction, so the event waits
@@ -208,7 +126,7 @@ export async function createPartialRefundForBooking({
       trackBookingEvent("booking_cancelled", booking.id, {
         verifyStatus: "CANCELLED",
         delayMs: 1500,
-        extra: { from_status: "PENDING_PAYMENT" },
+        extra: { from_status: booking.status },
       });
     }
 
@@ -222,12 +140,12 @@ export async function createPartialRefundForBooking({
             payment.id,
 
           paymentPart:
-            "DOWN_PAYMENT",
+            paymentPart,
 
           paidAmount:
-            paidDeposit.toFixed(2),
+            remainingPaid.toFixed(2),
 
-          refundPercent,
+          refundPercent: policy.refundPercent,
 
           amount:
             refundAmount.toFixed(2),
@@ -239,8 +157,7 @@ export async function createPartialRefundForBooking({
             "PENDING",
 
           reason:
-            String(reason).trim() ||
-            "Partial refund according to operator refund policy",
+            String(reason).trim() || policy.reason,
 
           originalTransactionId:
             payment.downPaymentTransactionId ||
@@ -257,16 +174,45 @@ export async function createPartialRefundForBooking({
           booking.bookingCode,
         previousStatus:
           booking.status,
-        status:
-          booking.status ===
-          "PENDING_PAYMENT"
-            ? "CANCELLED"
-            : booking.status,
+        status: "CANCELLED",
+        cancellationPolicy: policy,
       },
     };
   });
 }
 
+
+export async function getCancellationQuote({ bookingId, customerId }) {
+  const id = Number(bookingId);
+  if (!Number.isInteger(id) || id <= 0) throw refundError("Invalid booking id.");
+  const booking = await prisma.booking.findFirst({
+    where: { id, ...(customerId ? { customerId } : {}) },
+    include: { payment: true },
+  });
+  if (!booking) throw refundError("Booking not found.", 404);
+  const policy = await resolveCancellationPolicy({ booking });
+  const paidAmount = booking.payment?.status === "PAID"
+    ? money(booking.payment.amount)
+    : booking.payment?.downPaymentStatus === "PAID"
+      ? money(booking.payment.downPaymentAmount)
+      : 0;
+  const refundedAmount = await prisma.refund.aggregate({
+    where: { bookingId: id, status: { in: ["PENDING", "PROCESSING", "REFUNDED"] } },
+    _sum: { amount: true },
+  });
+  const alreadyRefunded = money(refundedAmount._sum.amount);
+  const remainingPaid = Math.max(0, Number((paidAmount - alreadyRefunded).toFixed(2)));
+  return {
+    bookingId: id,
+    tier: policy.tier,
+    reason: policy.reason,
+    refundPercent: policy.refundPercent,
+    paidAmount,
+    alreadyRefunded,
+    refundAmount: policy.refundableAmount(remainingPaid),
+    paymentDeadline: policy.paymentDeadline,
+  };
+}
 
 export async function getRefundsForBooking({
   bookingId,
@@ -401,6 +347,34 @@ export async function completeManualRefund({
                 : refund.providerRefundId,
           },
         });
+
+      const sourceLedger = await tx.commissionLedgerEntry.findFirst({
+        where: { paymentId: refund.paymentId },
+        orderBy: { createdAt: "desc" },
+      });
+      if (sourceLedger) {
+        const sourceAmount = Math.max(1, Number(sourceLedger.netAmountSen));
+        const ratio = Math.min(1, Number(refund.amount) * 100 / sourceAmount);
+        const proportion = (value) => -Math.round(Number(value || 0) * ratio);
+        await tx.commissionLedgerEntry.create({
+          data: {
+            bookingId: refund.bookingId,
+            paymentId: refund.paymentId,
+            transactionId: `refund:${refund.id}`,
+            paymentType: "REFUND",
+            grossAmountSen: proportion(sourceLedger.grossAmountSen),
+            netAmountSen: proportion(sourceLedger.netAmountSen),
+            discountAmountSen: proportion(sourceLedger.discountAmountSen),
+            feeRateBps: sourceLedger.feeRateBps,
+            fundedBy: sourceLedger.fundedBy,
+            feeAmountSen: proportion(sourceLedger.feeAmountSen),
+            stripeFeeAmountSen: proportion(sourceLedger.stripeFeeAmountSen),
+            operatorPayoutAmountSen: proportion(sourceLedger.operatorPayoutAmountSen),
+            platformMarginSen: proportion(sourceLedger.platformMarginSen),
+            currency: sourceLedger.currency,
+          },
+        });
+      }
 
       return {
         refund: updated,

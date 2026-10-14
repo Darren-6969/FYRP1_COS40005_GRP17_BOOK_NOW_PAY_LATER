@@ -2,6 +2,7 @@ import {
   createPartialRefundForBooking,
   getRefundsForBooking,
   completeManualRefund,
+  getCancellationQuote,
 } from "../services/refund_service.js";
 
 function operatorScope(req) {
@@ -61,8 +62,20 @@ export async function createBookingRefund(
   } catch (err) {
     next(err);
   }
+
 }
 
+export async function getBookingCancellationQuote(req, res, next) {
+  try {
+    const quote = await getCancellationQuote({
+      bookingId: req.params.id,
+      customerId: req.user?.role === "CUSTOMER" ? req.user.id : undefined,
+    });
+    res.json(quote);
+  } catch (err) {
+    next(err);
+  }
+}
 
 export async function getBookingRefunds(
   req,

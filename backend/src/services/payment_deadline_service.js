@@ -9,6 +9,13 @@ import { getPlatformSettings } from "./platform_settings_service.js";
 const MALAYSIA_TIMEZONE_OFFSET_HOURS = 8;
 const DEFAULT_PICKUP_BUFFER_MINUTES = 60;
 
+export const CANCELLATION_POLICY_TIERS = Object.freeze({
+  FULL_REFUND: "FULL_REFUND",
+  PARTIAL_REFUND: "PARTIAL_REFUND",
+  FORFEIT: "FORFEIT",
+  PLATFORM_FAULT: "PLATFORM_FAULT",
+});
+
 function malaysiaDateTimeToUtcDate({
   year,
   month,
@@ -152,4 +159,88 @@ export async function calculatePaymentDeadline(
   }
 
   return finalDeadline;
+}
+
+function money(value) {
+  return Math.max(0, Number(Number(value || 0).toFixed(2)));
+}
+
+/**
+ * Resolves the cancellation policy without changing the booking. This is used
+ * by both the confirmation screen and the cancellation transaction.
+ */
+export async function resolveCancellationPolicy({
+  booking,
+  now = new Date(),
+  database = prisma,
+}) {
+  if (!booking?.operatorId) {
+    throw Object.assign(new Error("Booking operator is required to resolve cancellation policy."), { statusCode: 400 });
+  }
+
+  const [config, settings, rejectedLicence] = await Promise.all([
+    database.bNPLConfig.findFirst({
+      where: { operatorId: booking.operatorId },
+      orderBy: { createdAt: "desc" },
+      select: { partialRefundElected: true, partialRefundPercent: true },
+    }),
+    getPlatformSettings(database),
+    database.customerLicenceDocument.findFirst({
+      where: {
+        customerId: booking.customerId,
+        status: "REUPLOAD_REQUIRED",
+        reviewedAt: { not: null },
+      },
+      orderBy: { reviewedAt: "desc" },
+      select: { reviewedAt: true },
+    }),
+  ]);
+
+  const pickupDate = booking.pickupDate ? new Date(booking.pickupDate) : null;
+  const reuploadWindowHours = Number(settings.licenceReuploadWindowHours ?? 24);
+  const rejectedAt = rejectedLicence?.reviewedAt ? new Date(rejectedLicence.reviewedAt) : null;
+  const licenceWindowEnds = rejectedAt
+    ? new Date(rejectedAt.getTime() + reuploadWindowHours * 60 * 60 * 1000)
+    : null;
+  const platformFault = Boolean(
+    pickupDate &&
+    rejectedAt &&
+    licenceWindowEnds &&
+    pickupDate <= licenceWindowEnds &&
+    new Date(now) >= rejectedAt
+  );
+  const deadlineBreached = Boolean(
+    booking.paymentDeadline && new Date(booking.paymentDeadline) <= new Date(now)
+  );
+
+  let tier = CANCELLATION_POLICY_TIERS.FULL_REFUND;
+  let refundPercent = 100;
+  let reason = "Cancellation before the payment deadline.";
+
+  if (platformFault) {
+    tier = CANCELLATION_POLICY_TIERS.PLATFORM_FAULT;
+    reason = "Full refund because the licence rejection left no usable re-upload window.";
+  } else if (deadlineBreached) {
+    tier = CANCELLATION_POLICY_TIERS.FORFEIT;
+    refundPercent = 0;
+    reason = "Payment deadline breached; the paid amount is forfeited.";
+  } else if (config?.partialRefundElected) {
+    const configuredPercent = Number(config.partialRefundPercent);
+    if (!Number.isInteger(configuredPercent) || configuredPercent < 0 || configuredPercent > 100) {
+      throw Object.assign(new Error("Operator partial refund percentage is invalid."), { statusCode: 500 });
+    }
+    tier = CANCELLATION_POLICY_TIERS.PARTIAL_REFUND;
+    refundPercent = configuredPercent;
+    reason = "Refund calculated using the operator's elected partial refund policy.";
+  }
+
+  return {
+    tier,
+    refundPercent,
+    reason,
+    deadlineBreached,
+    platformFault,
+    paymentDeadline: booking.paymentDeadline || null,
+    refundableAmount: (paidAmount) => Number((money(paidAmount) * refundPercent / 100).toFixed(2)),
+  };
 }

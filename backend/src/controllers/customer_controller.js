@@ -29,6 +29,7 @@ import { carListingSelect, mapCarBooking } from "../services/car_booking_view.js
 import { quoteAlternative } from "../services/car_requote_service.js";
 import { fromSen } from "../services/car_pricing_service.js";
 import { trackBookingEvent } from "../services/analytics_service.js";
+import { createPartialRefundForBooking } from "../services/refund_service.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -380,11 +381,10 @@ export async function cancelCustomerBooking(req, res, next) {
 
     if (
       [
-        "PAID",
         "COMPLETED",
         "CANCELLED",
         "REJECTED",
-        "OVERDUE",
+        "EXPIRED",
       ].includes(booking.status)
     ) {
       return res.status(400).json({
@@ -392,15 +392,17 @@ export async function cancelCustomerBooking(req, res, next) {
       });
     }
 
-    if (booking.payment?.status === "PAID") {
-      return res.status(400).json({
-        message: "Paid bookings cannot be cancelled.",
+    const hasPaidAmount = booking.payment?.status === "PAID"
+      || booking.payment?.downPaymentStatus === "PAID";
+    if (hasPaidAmount) {
+      const result = await createPartialRefundForBooking({
+        bookingId: booking.id,
+        reason: req.body?.reason || "Customer cancellation",
       });
-    }
-
-    if (booking.paymentDeadline && new Date(booking.paymentDeadline) <= new Date()) {
-      return res.status(400).json({
-        message: "Booking cannot be cancelled after the payment deadline.",
+      const updated = await assertCustomerBooking(req.params.id, req.user.id);
+      return res.json({
+        ...mapBooking(updated),
+        cancellation: result.refund,
       });
     }
 

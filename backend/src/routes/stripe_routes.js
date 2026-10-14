@@ -34,6 +34,7 @@ import {
   syncStripeAccountUpdated,
 } from "../services/stripe_connect_service.js";
 import { trackPaymentSuccess } from "../services/analytics_service.js";
+import { completeProviderRefund } from "../services/refund_service.js";
 
 const router = express.Router();
 
@@ -618,6 +619,11 @@ export async function processStripeWebhookEvent(event, requestIp = null, databas
           });
 
           const refundAmount = charge.amount_refunded / 100;
+          await completeProviderRefund({
+            paymentId: refundedPayment.id,
+            amount: refundAmount,
+            providerRefundId: charge.id,
+          });
 
           await createAuditLog({
             ipAddress: requestIp,
