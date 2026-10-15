@@ -23,6 +23,7 @@ import {
 } from "../controllers/storefront_controller.js";
 
 import { reportClientEvent } from "../controllers/public_events_controller.js";
+import { getSubscriptionPlans } from "../controllers/public_platform_controller.js";
 import { attachUserIdIfPresent } from "../middlewares/auth_middleware.js";
 
 const router = express.Router();
@@ -100,6 +101,14 @@ router.get(
 router.get(
   "/operators/:handle",
   getOperatorStorefront
+);
+
+// Operator recruitment page
+// (FR-CUST-010): tiers, commission and
+// the activity rule, from PlatformSettings.
+router.get(
+  "/subscription-tiers",
+  getSubscriptionPlans
 );
 
 export default router;
