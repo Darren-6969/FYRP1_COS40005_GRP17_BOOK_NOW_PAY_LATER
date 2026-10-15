@@ -10,7 +10,7 @@ const NAV = [
   { to: "/cars", label: "Car rental" },
   { to: "/tours", label: "Tours" },
   { to: { pathname: "/", hash: "#how" }, label: "How it works" },
-  { to: { pathname: "/", hash: "#operators" }, label: "Operators" },
+  { to: "/for-operators", label: "Operators" },
   { to: { pathname: "/", hash: "#faq" }, label: "FAQ" },
 ];
 

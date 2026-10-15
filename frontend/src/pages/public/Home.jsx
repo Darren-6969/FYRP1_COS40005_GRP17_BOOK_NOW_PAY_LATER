@@ -775,7 +775,7 @@ function Landing() {
             <strong className={styles.operatorsStrong}>Run a rental or tour business?</strong> List only the vehicles you
             can spare, set your own deposit split, and keep the rest of your yard on your own counter.
           </p>
-          <Link to="/operator-register" className={styles.outlineButton}>
+          <Link to="/for-operators" className={styles.outlineButton}>
             List your fleet
           </Link>
         </div>

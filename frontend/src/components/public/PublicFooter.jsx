@@ -25,6 +25,7 @@ const COLUMNS = [
   {
     head: "Operators",
     items: [
+      { label: "Why list with us", to: "/for-operators" },
       { label: "Apply to list", to: "/operator-register" },
       { label: "Allocation explained", to: "/info/allocation" },
       { label: "Commission and payouts", to: "/info/commission-and-payouts" },

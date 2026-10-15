@@ -74,6 +74,7 @@ import CarResults from "./pages/public/CarResults";
 import CarDetail from "./pages/public/CarDetail";
 import CarBookingForm from "./pages/public/CarBookingForm";
 import NotAvailable from "./pages/public/NotAvailable";
+import ForOperators from "./pages/public/ForOperators";
 
 export default function App() {
   return (
@@ -84,6 +85,8 @@ export default function App() {
           <Route path="/cars" element={<CarResults />} />
           <Route path="/o/:slug" element={<OperatorStorefront />} />
           <Route path="/operators/:handle" element={<OperatorStorefront />} />
+          {/* Operator recruitment page (FR-CUST-010). /operators/:handle is taken by seller pages. */}
+          <Route path="/for-operators" element={<ForOperators />} />
           <Route path="/cars/:listingId" element={<CarDetail />} />
           {/* Signed-out visitors go to /login?redirect=<this URL>, which keeps every selection. */}
           <Route element={<ProtectedRoute allowedRoles={["CUSTOMER"]} />}>
