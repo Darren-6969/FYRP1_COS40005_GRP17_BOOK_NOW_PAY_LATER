@@ -435,3 +435,122 @@ export async function completeManualRefund({
     }
   );
 }
+
+// Settles a refund that Stripe has already carried out (charge.refunded
+// webhook). Safe to run twice: a redelivered event finds the refund it
+// already recorded and changes nothing.
+export async function completeProviderRefund({
+  paymentId,
+  amount,
+  providerRefundId,
+}) {
+  const id = Number(paymentId);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw refundError("Invalid payment id.");
+  }
+
+  const refundAmount = Number(money(amount).toFixed(2));
+  if (!(refundAmount > 0)) {
+    throw refundError("Refund amount must be greater than zero.");
+  }
+
+  const providerId = String(providerRefundId || "").trim();
+  if (!providerId) {
+    throw refundError("A provider refund id is required.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    // Webhook redelivery: this provider refund is already recorded.
+    const existing = await tx.refund.findUnique({
+      where: { providerRefundId: providerId },
+    });
+    if (existing) {
+      return { refund: existing, created: false };
+    }
+
+    const payment = await tx.payment.findUnique({ where: { id } });
+    if (!payment) {
+      throw refundError("Payment not found.", 404);
+    }
+
+    // A refund the platform started (operator cancellation or the
+    // cancellation policy) is waiting for Stripe to confirm it.
+    const pending = await tx.refund.findFirst({
+      where: {
+        paymentId: id,
+        method: "STRIPE",
+        status: { in: ["PENDING", "PROCESSING"] },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const refund = pending
+      ? await tx.refund.update({
+          where: { id: pending.id },
+          data: {
+            status: "REFUNDED",
+            processedAt: new Date(),
+            providerRefundId: providerId,
+          },
+        })
+      : // Refunded outside the platform's refund workflow (Stripe
+        // dashboard or the auto-refund in applyPaidState): record it so
+        // the booking's refunds and the ledger stay complete.
+        await tx.refund.create({
+          data: {
+            bookingId: payment.bookingId,
+            paymentId: payment.id,
+            paymentPart: payment.status === "PAID" ? "PAYMENT" : "DOWN_PAYMENT",
+            paidAmount: refundAmount.toFixed(2),
+            refundPercent: null,
+            amount: refundAmount.toFixed(2),
+            method: "STRIPE",
+            status: "REFUNDED",
+            reason: "Refund issued in Stripe.",
+            originalTransactionId:
+              payment.downPaymentTransactionId || payment.transactionId || null,
+            providerRefundId: providerId,
+            processedAt: new Date(),
+          },
+        });
+
+    // Reverse the commission ledger in proportion, as completeManualRefund
+    // does. transactionId is unique, so skip if the reversal already exists.
+    const reversalId = `refund:${refund.id}`;
+    const alreadyReversed = await tx.commissionLedgerEntry.findUnique({
+      where: { transactionId: reversalId },
+    });
+    const sourceLedger = alreadyReversed
+      ? null
+      : await tx.commissionLedgerEntry.findFirst({
+          where: { paymentId: refund.paymentId, paymentType: { not: "REFUND" } },
+          orderBy: { createdAt: "desc" },
+        });
+    if (sourceLedger) {
+      const sourceAmount = Math.max(1, Number(sourceLedger.netAmountSen));
+      const refundSen = Math.round(money(refund.amount) * 100);
+      const ratio = Math.min(1, refundSen / sourceAmount);
+      const proportion = (value) => -Math.round(Number(value || 0) * ratio);
+      await tx.commissionLedgerEntry.create({
+        data: {
+          bookingId: refund.bookingId,
+          paymentId: refund.paymentId,
+          transactionId: reversalId,
+          paymentType: "REFUND",
+          grossAmountSen: proportion(sourceLedger.grossAmountSen),
+          netAmountSen: proportion(sourceLedger.netAmountSen),
+          discountAmountSen: proportion(sourceLedger.discountAmountSen),
+          feeRateBps: sourceLedger.feeRateBps,
+          fundedBy: sourceLedger.fundedBy,
+          feeAmountSen: proportion(sourceLedger.feeAmountSen),
+          stripeFeeAmountSen: proportion(sourceLedger.stripeFeeAmountSen),
+          operatorPayoutAmountSen: proportion(sourceLedger.operatorPayoutAmountSen),
+          platformMarginSen: proportion(sourceLedger.platformMarginSen),
+          currency: sourceLedger.currency,
+        },
+      });
+    }
+
+    return { refund, created: !pending };
+  });
+}
