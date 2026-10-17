@@ -177,7 +177,7 @@ export function runPaymentExpiryJob() {
         });
         await voidOutstandingScheduleEntries(booking.id, tx);
         return true;
-      });
+      }, { maxWait: 10_000, timeout: 30_000 });
       if (!cancelled) continue;
 
       trackExpiryEvents(booking, owed, now);
