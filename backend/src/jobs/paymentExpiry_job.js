@@ -146,12 +146,6 @@ export function runPaymentExpiryJob() {
         });
 
         await Promise.all([
-          ...(booking.payment
-            ? [tx.payment.update({
-              where: { bookingId: booking.id },
-              data: { status: "EXPIRED" },
-            })]
-            : []),
           tx.auditLog.create({
             data: {
               action: "BOOKING_EXPIRED",
