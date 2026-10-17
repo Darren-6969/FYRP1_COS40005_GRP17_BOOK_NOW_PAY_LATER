@@ -1,0 +1,5 @@
+# Dokploy (Nixpacks) start command for the backend.
+# Applies pending Prisma migrations to the database, then starts the
+# long-running server (API + Socket.IO + node-cron jobs).
+[start]
+cmd = "npx prisma migrate deploy && node src/server.js"
