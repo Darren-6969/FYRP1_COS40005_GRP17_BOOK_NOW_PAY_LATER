@@ -108,7 +108,10 @@ export function runPaymentExpiryJob() {
     console.log(`[PaymentExpiry] Found ${overdue.length} bookings with overdue entries`);
 
     let processedCount = 0;
+    let failureCount = 0;
+    const errors = [];
     for (const booking of overdue) {
+      try {
       const entries = booking.paymentScheduleEntries;
 
       // Catch the schedule up with payments recorded on the Payment row only,
@@ -150,7 +153,7 @@ export function runPaymentExpiryJob() {
             data: {
               action: "BOOKING_EXPIRED",
               entityType: "Booking",
-              entityId: booking.id,
+              entityId: String(booking.id),
               details: {
                 reason,
                 expiredEntryIds: owed.map((entry) => entry.id),
@@ -196,8 +199,14 @@ export function runPaymentExpiryJob() {
 
       processedCount += 1;
       console.log(`[PaymentExpiry] Cancelled expired booking: ${booking.id}`);
+      } catch (err) {
+        // One bad booking must not stop the rest of the run.
+        failureCount += 1;
+        errors.push({ bookingId: booking.id, message: err.message });
+        console.error(`[PaymentExpiry] Booking ${booking.id} failed:`, err.message);
+      }
     }
 
-    return { processedCount };
+    return { processedCount, failureCount, errors };
   }, { lockName: "PAYMENT_EXPIRY" });
 }
