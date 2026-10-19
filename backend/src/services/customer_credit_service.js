@@ -39,6 +39,7 @@ export function getDefaultCreditProfile(customerId) {
 
 export async function recordCreditEvent({
   customerId,
+  bookingId = null,
   eventKey,
   eventType,
   actorUserId = null,
@@ -64,7 +65,7 @@ export async function recordCreditEvent({
   };
   const afterTier = resolveCreditTier(projected);
   const event = await database.creditProfileEvent.createMany({
-    data: [{ customerId, eventKey, eventType, actorUserId, reason, beforeTier, afterTier }],
+    data: [{ customerId, bookingId, eventKey, eventType, actorUserId, reason, beforeTier, afterTier }],
     skipDuplicates: true,
   });
 
@@ -89,11 +90,13 @@ export async function getCreditHistory(customerId, database = prisma) {
       id: true, eventKey: true, eventType: true, reason: true,
       beforeTier: true, afterTier: true, actorUserId: true,
       reversalOfId: true, createdAt: true,
+      bookingId: true,
+      booking: { select: { id: true, bookingCode: true, noShowRemark: true, operator: { select: { companyName: true } } } },
     },
   });
 }
 
-export async function upholdCreditAppeal({ appealId, actorUserId, resolution, database = prisma }) {
+export async function decideCreditAppeal({ appealId, actorUserId, decision, resolution, database = prisma }) {
   return database.$transaction(async (tx) => {
     const appeal = await tx.creditAppeal.findUnique({
       where: { id: appealId },
@@ -106,40 +109,58 @@ export async function upholdCreditAppeal({ appealId, actorUserId, resolution, da
     const profile = await tx.customerCreditProfile.findUnique({ where: { customerId: appeal.customerId } });
     if (!profile) throw Object.assign(new Error("Customer credit profile not found"), { statusCode: 404 });
 
-    const decrement = original.eventType === "EXPIRED_BOOKING"
+    if (!["UPHELD", "REJECTED"].includes(decision)) {
+      throw Object.assign(new Error("A valid appeal decision is required"), { statusCode: 400 });
+    }
+    const decrement = decision === "UPHELD" && original.eventType === "EXPIRED_BOOKING"
       ? { expiredBookings: Math.max(0, profile.expiredBookings - 1) }
-      : original.eventType === "SUCCESSFUL_ON_TIME_PAYMENT"
+      : decision === "UPHELD" && original.eventType === "SUCCESSFUL_ON_TIME_PAYMENT"
         ? { successfulOnTimePayments: Math.max(0, profile.successfulOnTimePayments - 1) }
         : null;
-    if (!decrement) throw Object.assign(new Error("This event type cannot be appealed"), { statusCode: 400 });
 
     const beforeTier = profile.tier;
-    const nextProfile = await tx.customerCreditProfile.update({
-      where: { customerId: appeal.customerId },
-      data: { ...decrement, tier: resolveCreditTier({ ...profile, ...decrement }) },
-    });
-    const reversal = await tx.creditProfileEvent.create({
+    const nextProfile = decrement
+      ? await tx.customerCreditProfile.update({
+          where: { customerId: appeal.customerId },
+          data: { ...decrement, tier: resolveCreditTier({ ...profile, ...decrement }) },
+        })
+      : profile;
+    const reversal = decrement
+      ? await tx.creditProfileEvent.create({
+          data: {
+            customerId: appeal.customerId,
+            bookingId: original.bookingId,
+            actorUserId,
+            eventKey: `appeal:${appeal.id}`,
+            eventType: `REVERSED_${original.eventType}`,
+            reason: resolution || "Credit appeal upheld",
+            beforeTier,
+            afterTier: nextProfile.tier,
+            reversalOfId: original.id,
+          },
+        })
+      : null;
+    await tx.auditLog.create({
       data: {
-        customerId: appeal.customerId,
-        actorUserId,
-        eventKey: `appeal:${appeal.id}`,
-        eventType: `REVERSED_${original.eventType}`,
-        reason: resolution || "Credit appeal upheld",
-        beforeTier,
-        afterTier: nextProfile.tier,
-        reversalOfId: original.id,
+        userId: actorUserId,
+        action: decision === "UPHELD" ? "CREDIT_APPEAL_UPHELD" : "CREDIT_APPEAL_REJECTED",
+        entityType: "CreditAppeal",
+        entityId: String(appeal.id),
+        details: { eventId: original.id, bookingId: original.bookingId, resolution: resolution || null, beforeTier, afterTier: nextProfile.tier },
       },
     });
     return {
       appeal: await tx.creditAppeal.update({
         where: { id: appeal.id },
-        data: { status: "UPHELD", resolution: resolution || "Credit appeal upheld", upheldById: actorUserId, resolvedAt: new Date() },
+        data: { status: decision, resolution: resolution || (decision === "UPHELD" ? "Credit appeal upheld" : "Credit appeal rejected"), upheldById: actorUserId, resolvedAt: new Date() },
       }),
       reversal,
       profile: nextProfile,
     };
   });
 }
+
+export const upholdCreditAppeal = (options) => decideCreditAppeal({ ...options, decision: "UPHELD" });
 
 export function paymentWasOnTime(payment, paymentType) {
   const paidAt = paymentType === "DOWN_PAYMENT"

@@ -1,5 +1,5 @@
 import prisma from "../config/db.js";
-import { getCreditHistory, upholdCreditAppeal } from "../services/customer_credit_service.js";
+import { getCreditHistory, decideCreditAppeal } from "../services/customer_credit_service.js";
 
 export async function getMyCreditHistory(req, res, next) {
   try {
@@ -39,31 +39,35 @@ export async function createCreditAppeal(req, res, next) {
   }
 }
 
-export async function upholdAppeal(req, res, next) {
+export async function listCreditAppeals(req, res, next) {
   try {
-    const result = await upholdCreditAppeal({
-      appealId: Number(req.params.id),
-      actorUserId: req.user.id,
-      resolution: req.body?.resolution,
+    const appeals = await prisma.creditAppeal.findMany({
+      where: { status: req.query.status || undefined },
+      include: {
+        event: { select: { id: true, bookingId: true, eventType: true, reason: true, beforeTier: true, afterTier: true, createdAt: true, booking: { select: { id: true, bookingCode: true, status: true, noShowRemark: true, pickupDate: true, returnDate: true, operator: { select: { companyName: true } } } } } },
+        customer: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: { createdAt: "asc" },
     });
-    res.json(result);
+    res.json({ appeals });
   } catch (error) {
     next(error);
   }
 }
 
-export async function listCreditAppeals(req, res, next) {
-    try {
-      const appeals = await prisma.creditAppeal.findMany({
-        where: { status: req.query.status || undefined },
-        include: {
-          event: { select: { id: true, eventType: true, reason: true, beforeTier: true, afterTier: true, createdAt: true } },
-          customer: { select: { id: true, name: true, email: true } },
-        },
-        orderBy: { createdAt: "asc" },
-      });
-      res.json({ appeals });
-    } catch (error) {
-      next(error);
+export async function decideAppeal(req, res, next) {
+  try {
+    const decision = String(req.body?.decision || "").toUpperCase();
+    const resolution = typeof req.body?.resolution === "string" ? req.body.resolution.trim() : "";
+    if (!resolution) return res.status(400).json({ message: "A resolution is required." });
+    const result = await decideCreditAppeal({
+      appealId: Number(req.params.id),
+      actorUserId: req.user.id,
+      decision,
+      resolution,
+    });
+    res.json(result);
+  } catch (error) {
+    next(error);
   }
 }

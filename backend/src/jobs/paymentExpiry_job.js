@@ -171,8 +171,10 @@ export function runPaymentExpiryJob() {
         ]);
         await recordCreditEvent({
           customerId: booking.customer.id,
+          bookingId: booking.id,
           eventKey: `expiry:${booking.id}`,
           eventType: "EXPIRED_BOOKING",
+          reason,
           database: tx,
         });
         await voidOutstandingScheduleEntries(booking.id, tx);

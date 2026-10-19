@@ -395,8 +395,10 @@ async function performOverdueBookingCheck({
 
       await recordCreditEvent({
         customerId: booking.customerId,
+        bookingId: booking.id,
         eventKey: `expiry:${booking.id}`,
         eventType: "EXPIRED_BOOKING",
+        reason: "Payment deadline expired.",
       });
 
       // Notify customer that their payment deadline passed and booking is now overdue

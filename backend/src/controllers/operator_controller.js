@@ -31,7 +31,7 @@ import {
   getPaymentConfirmationData,
   PAYMENT_TYPES,
 } from "../services/payment_schedule_service.js";
-import { recordSuccessfulPaymentEvents } from "../services/customer_credit_service.js";
+import { recordSuccessfulPaymentEvents, recordCreditEvent } from "../services/customer_credit_service.js";
 import {
   getOperatorDeadlineTierStatus,
   getPlatformDeadlinePolicy,
@@ -2794,6 +2794,15 @@ export async function markBookingNoShow(req, res, next) {
           data: { status: "VOID", voidedAt: now },
         });
       }
+      await recordCreditEvent({
+        customerId: booking.customerId,
+        bookingId: booking.id,
+        eventKey: `no-show:${booking.id}`,
+        eventType: "EXPIRED_BOOKING",
+        actorUserId: req.user.id,
+        reason: `No-show marked: ${remark}`,
+        database: tx,
+      });
       return tx.booking.findUnique({ where: { id: booking.id }, include: includeBookingRelations() });
     });
 

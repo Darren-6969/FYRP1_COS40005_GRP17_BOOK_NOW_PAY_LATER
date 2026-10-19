@@ -18,6 +18,7 @@ import {
   UserRound,
   ClipboardCheck,
   Store,
+  Gavel,
 } from "lucide-react";
 
 const links = [
@@ -38,6 +39,7 @@ const links = [
   { to: "/master/system-logs", label: "System Logs", icon: FileText },
   { to: "/master/profile", label: "Profile", icon: UserRound },
   { to: "/master/help", label: "Help & Support", icon: HelpCircle },
+  { to: "/master/credit-appeals", label: "Credit Appeals", icon: Gavel },
 ];
 
 export default function MasterSidebar({

@@ -339,10 +339,13 @@ model CreditProfileEvent {
   reversalOf   CreditProfileEvent?   @relation("CreditEventReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
   reversals    CreditProfileEvent[]  @relation("CreditEventReversal")
   appeals      CreditAppeal[]
+  bookingId    Int?
+  booking      Booking?              @relation("CreditEventBooking", fields: [bookingId], references: [id], onDelete: SetNull)
   createdAt    DateTime              @default(now())
 
   @@unique([customerId, eventKey])
   @@index([customerId, eventType])
+  @@index([bookingId])
 }
 
 model CreditAppeal {
@@ -739,6 +742,7 @@ model Booking {
   paymentScheduleEntries  PaymentScheduleEntry[]
   licenceDocuments        CustomerLicenceDocument[]
   statusHistory           BookingStatusHistory[]
+  creditEvents            CreditProfileEvent[] @relation("CreditEventBooking")
   receipt                 Receipt?
   invoice                 Invoice?
 
