@@ -87,6 +87,7 @@ router.get(
 router.post(
   "/cars/:id/quote",
   quoteLimiter,
+  attachUserIdIfPresent,
   validate(carQuoteSchema),
   quoteCar
 );

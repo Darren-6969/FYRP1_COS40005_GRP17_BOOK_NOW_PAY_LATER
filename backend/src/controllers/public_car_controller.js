@@ -31,7 +31,7 @@ export async function getCar(req, res, next) {
 export async function quoteCar(req, res, next) {
   try {
     res.set("Cache-Control", "no-store");
-    res.json(await quotePublicCar(parseId(req.params.id, "listing id"), req.body));
+    res.json(await quotePublicCar(parseId(req.params.id, "listing id"), req.body, req.analyticsUserId || null));
   } catch (err) {
     next(err);
   }

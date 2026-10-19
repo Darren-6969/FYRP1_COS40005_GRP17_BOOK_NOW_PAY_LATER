@@ -1,11 +1,11 @@
 import { formatSen, formatShortDateTime } from "../../utils/formatPublic";
+import { useEffect, useState } from "react";
 import styles from "../../assets/styles/public/PaymentSchedule.module.css";
 
-const DAY_MS = 86400000;
-
 function countdown(iso) {
-  const days = Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / DAY_MS));
-  if (days === 0) return "today";
+  const hours = Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 3600000));
+  if (hours < 24) return hours === 0 ? "due now" : `in ${hours} ${hours === 1 ? "hour" : "hours"}`;
+  const days = Math.ceil(hours / 24);
   return `in ${days} ${days === 1 ? "day" : "days"}`;
 }
 
@@ -38,6 +38,36 @@ export default function PaymentSchedule({
   licenceNote = "Photo of the front and back, from your booking page",
   showCountdown = false,
 }) {
+  const [, refresh] = useState(0);
+  useEffect(() => {
+    if (!showCountdown) return undefined;
+    const timer = window.setInterval(() => refresh((value) => value + 1), 60000);
+    return () => window.clearInterval(timer);
+  }, [showCountdown]);
+  if (quote.paymentSchedule?.length) {
+    return (
+      <div>
+        <ol className={styles.steps}>
+          {quote.paymentSchedule.map((entry, index) => (
+            <Step
+              key={`${entry.type}-${entry.paymentPart || "licence"}`}
+              n={index + 1}
+              filled
+              title={entry.type === "LICENCE"
+                ? `Upload your driving licence by ${formatShortDateTime(entry.dueAt)}`
+                : `${entry.paymentPart === "DOWN_PAYMENT" ? "Pay the deposit" : entry.paymentPart === "FINAL_PAYMENT" ? "Pay the balance" : "Pay the full amount"} by ${formatShortDateTime(entry.dueAt)}`}
+              extra={showCountdown ? countdown(entry.dueAt) : null}
+              note={entry.type === "LICENCE" ? licenceNote : null}
+              amount={entry.amountSen ? formatSen(entry.amountSen) : null}
+            />
+          ))}
+        </ol>
+        <p className={styles.consequence}>
+          If any payment or the driving licence is not submitted by its deadline, the booking is cancelled and the outstanding schedule entries are voided.
+        </p>
+      </div>
+    );
+  }
   const due = formatShortDateTime(quote.balanceDueAt);
   const deposit = formatSen(quote.depositSen);
   const balance = formatSen(quote.balanceSen);

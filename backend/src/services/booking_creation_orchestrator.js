@@ -1,5 +1,5 @@
 import prisma from "../config/db.js";
-import { addDays } from "./car_pricing_service.js";
+import { addDays, fromSen } from "./car_pricing_service.js";
 import {
   buildCarPricingSnapshot,
   carBookingAddonRows,
@@ -9,6 +9,8 @@ import { loadAvailability } from "./car_availability_service.js";
 import { enforceConcurrentExposureCap } from "./concurrent_exposure_service.js";
 import { isCreditTierPolicyEnabled } from "./platform_settings_service.js";
 import { formatBookingCode, tempBookingCode } from "../utils/bookingCode.js";
+import { getScheduleForCreditTier } from "./payment_schedule_entry_service.js";
+import { transitionBookingStatus } from "./booking_status_service.js";
 
 // The dates on which taking `quantity` more units leaves nothing available: the
 // allocation for that date is exhausted by this booking. `remaining` maps each
@@ -17,10 +19,8 @@ export function datesExhaustedBy(dates, remaining, quantity = 1) {
   return dates.filter((date) => (remaining.get(date) ?? 0) - quantity <= 0);
 }
 
-// Creates a car booking REQUEST. Booking requests wait for the operator to
-// accept (manual acceptance flow), so nothing payment-related is created here:
-// no Payment row and no PaymentScheduleEntry rows. booking_accept_service.js
-// upserts the payment and builds the schedule when the operator accepts.
+// Creates a car booking and its payment obligations atomically. The operator
+// does not accept the booking before the customer can see or pay its schedule.
 // Customer and operator notifications are sent by car_booking_controller.js
 // after the transaction commits.
 export async function createBookingOrchestrator({
@@ -112,6 +112,57 @@ export async function createBookingOrchestrator({
         operator: true,
       },
     });
+    const rentalAmount = fromSen(pricing.rentalSen);
+    const addonAmount = fromSen(pricing.addOnsSen);
+    const scheduleEntries = getScheduleForCreditTier({
+      creditTier: customerTier,
+      rentalAmount,
+      addonAmount,
+      createdAt: withCode.createdAt,
+      serviceStart: pickupAt,
+    });
+    const downAmount = customerTier === "Caution" ? rentalAmount * 0.3 : 0;
+    const finalAmount = customerTier === "Caution"
+      ? Number((Number(withCode.totalAmount) - downAmount).toFixed(2))
+      : Number((rentalAmount + addonAmount).toFixed(2));
+    if (customerTier === "Caution") {
+      const balanceEntry = scheduleEntries.find((entry) => entry.paymentPart === "FINAL_PAYMENT");
+      if (balanceEntry) balanceEntry.amount = Number((Number(withCode.totalAmount) - downAmount).toFixed(2));
+    }
+    const payment = await tx.payment.create({
+      data: {
+        bookingId: created.id,
+        amount: withCode.totalAmount,
+        method: "PENDING",
+        status: "UNPAID",
+        downPaymentAmount: downAmount,
+        finalPaymentAmount: finalAmount,
+        downPaymentDueDate: scheduleEntries.find((entry) => entry.paymentPart === "DOWN_PAYMENT")?.dueAt || null,
+        finalPaymentDueDate: scheduleEntries.find((entry) => entry.paymentPart !== "DOWN_PAYMENT" && entry.type === "PAYMENT")?.dueAt || null,
+        downPaymentStatus: downAmount > 0 ? "UNPAID" : "PAID",
+        finalPaymentStatus: "UNPAID",
+        downPaymentPaidAt: downAmount > 0 ? null : withCode.createdAt,
+      },
+    });
+    await tx.paymentScheduleEntry.createMany({
+      data: scheduleEntries.map((entry) => ({ ...entry, bookingId: created.id })),
+    });
+    await transitionBookingStatus({
+      bookingId: created.id,
+      newStatus: "PENDING_PAYMENT",
+      actorId: customerId,
+      remark: "Booking created; payment schedule issued.",
+      database: tx,
+    });
+    const scheduledBooking = await tx.booking.findUnique({
+      where: { id: created.id },
+      include: {
+        customer: { select: { id: true, userCode: true, name: true, email: true } },
+        operator: true,
+        payment: true,
+        paymentScheduleEntries: { orderBy: { dueAt: "asc" } },
+      },
+    });
     await tx.bookingStatusHistory.create({
       data: {
         bookingId: created.id,
@@ -136,6 +187,6 @@ export async function createBookingOrchestrator({
     // by the caller once the booking has committed (FR-ANL-002).
     const exhaustedDates = datesExhaustedBy(pricing.dates, stock.remaining, 1);
 
-    return { booking: withCode, exhaustedDates };
+    return { booking: scheduledBooking, payment, scheduleEntries, exhaustedDates };
   }, { timeout: 15000 });
 }

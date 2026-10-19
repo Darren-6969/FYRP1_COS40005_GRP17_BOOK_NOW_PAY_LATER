@@ -474,6 +474,9 @@ export default function CarBookingForm() {
   } else if (showUnavailable) {
     blockReason =
       "You can't request these dates. Choose other dates or a similar car above.";
+  } else if (quote?.exposure?.blocked) {
+    blockReason =
+      `Your ${quote.creditTier} credit tier allows up to ${quote.exposure.limit} unpaid booking${quote.exposure.limit === 1 ? "" : "s"}, and you already have ${quote.exposure.openUnpaidCount}. Complete or cancel an existing booking before starting another one.`;
   }
 
   // Once a field has shown an error, re-check it as the user types.
@@ -566,7 +569,7 @@ export default function CarBookingForm() {
     requestCarBooking(payload, idemKey.current)
       .then((res) => {
         clearDraft(listingId);
-        navigate(`/customer/bookings/${res.data.id}`);
+        navigate(`/customer/checkout/${res.data.id}`);
       })
       .catch((err) => {
         const data =
@@ -707,6 +710,25 @@ export default function CarBookingForm() {
       <div className={styles.layout}>
         <form className={styles.form} onSubmit={onSubmit} noValidate aria-busy={sending}>
           <h1 className={styles.h1}>Send your booking request</h1>
+          {quote?.creditTier && (
+            <div className={styles.banner} role="status">
+              <div className={styles.bannerBody}>
+                <Info size={22} aria-hidden="true" className={styles.bannerIcon} />
+                <div>
+                  <h2 className={styles.bannerTitle}>Your payment standing: {quote.creditTier}</h2>
+                  <p className={styles.bannerText}>
+                    {quote.creditTier === "Trusted"
+                      ? "Your reliable payment history gives you the most flexible unpaid-booking limit."
+                      : quote.creditTier === "Caution"
+                        ? "A 30% deposit is due within 12 hours; the balance and licence are due 24 hours before service."
+                        : quote.creditTier === "High Risk"
+                          ? "Full payment is due immediately to confirm this booking."
+                          : "Your first payment is due 24 hours after this booking is created."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className={styles.statusSlot}>
             {errorList.length > 0 && summaryTick > 0 && (

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useCustomerBooking } from "../../hooks/useBookings";
 import { submitCustomerPayment } from "../../hooks/usePayments";
@@ -12,6 +12,13 @@ const PAYMENT_TYPES = {
   FINAL_PAYMENT: "FINAL_PAYMENT",
   FULL_PAYMENT: "FULL_PAYMENT",
 };
+
+function dueCountdown(value) {
+  const hours = Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 3600000));
+  if (hours < 24) return hours === 0 ? "Due now" : `Due in ${hours} ${hours === 1 ? "hour" : "hours"}`;
+  const days = Math.ceil(hours / 24);
+  return `Due in ${days} ${days === 1 ? "day" : "days"}`;
+}
 
 function PaymentChoice({ label, description, selected, disabled, onClick }) {
   return (
@@ -45,6 +52,12 @@ export default function Checkout() {
   const [chosenType, setChosenType] = useState(requestedType);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [, refreshCountdown] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => refreshCountdown((value) => value + 1), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const downPaymentPaid = booking?.payment?.downPaymentStatus === "PAID";
   const finalPaymentPaid = booking?.payment?.finalPaymentStatus === "PAID";
@@ -141,6 +154,20 @@ const effectiveMethod = paymentOptions.some(([value]) => value === method)
         <article className="customer-glass-card">
           <p className="customer-eyebrow">Checkout</p>
           <h1>Complete Payment</h1>
+          {booking.creditTier && (
+            <div className="customer-alert">
+              <strong>Your credit tier: {booking.creditTier}</strong>
+              <p>
+                {booking.creditTier === "Trusted"
+                  ? "Your on-time history gives you the most flexible unpaid-booking limit."
+                  : booking.creditTier === "Caution"
+                    ? "A 30% deposit is due first; the remaining balance and licence are due 24 hours before service."
+                    : booking.creditTier === "High Risk"
+                      ? "Full prepayment is required immediately before this booking can proceed."
+                      : "Your first full payment is due 24 hours after the booking was created."}
+              </p>
+            </div>
+          )}
 
           <div className="customer-info-list detail">
             <div>
@@ -188,6 +215,33 @@ const effectiveMethod = paymentOptions.some(([value]) => value === method)
         </article>
 
         <article className="customer-glass-card">
+          {booking.paymentSchedule?.length > 0 && (
+            <>
+              <h2>Full payment schedule</h2>
+              <div className="customer-info-list detail">
+                {booking.paymentSchedule.map((entry) => (
+                  <div key={entry.id}>
+                    <span>
+                      {entry.type === "LICENCE"
+                        ? "Driving licence"
+                        : entry.paymentPart === "DOWN_PAYMENT"
+                          ? "Deposit"
+                          : entry.paymentPart === "FINAL_PAYMENT"
+                            ? "Balance"
+                            : "Full payment"}
+                    </span>
+                    <strong>
+                      {entry.amount ? formatMoney(entry.amount) : "Required"}
+                      {" · "}
+                      {formatCustomerDate(entry.dueAt)}
+                      {" · "}
+                      {dueCountdown(entry.dueAt)}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
           <h2>Payment Plan</h2>
           <div className="customer-payment-options">
             <PaymentChoice

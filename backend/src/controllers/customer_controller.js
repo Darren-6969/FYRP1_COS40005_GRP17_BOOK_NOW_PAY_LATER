@@ -57,6 +57,7 @@ function mapBooking(booking) {
     returnDate: booking.returnDate,
     location: booking.location,
     totalAmount: toNumber(booking.totalAmount),
+    creditTier: booking.creditTier || "Normal",
     status: booking.status,
     paymentDeadline: booking.paymentDeadline,
 
@@ -100,6 +101,10 @@ function mapBooking(booking) {
               : 0),
         }
       : null,
+    paymentSchedule: (booking.paymentScheduleEntries || []).map((entry) => ({
+      ...entry,
+      amount: toNumber(entry.amount),
+    })),
 
       refunds: Array.isArray(booking.refunds)
   ? booking.refunds.map((refund) => ({
@@ -173,6 +178,7 @@ async function assertCustomerBooking(bookingId, customerId) {
       pickupPoint: { select: { id: true, label: true, address: true, note: true } },
       dropoffPoint: { select: { id: true, label: true, address: true, note: true } },
       addons: { select: { id: true, name: true, unit: true, unitPrice: true, quantity: true, totalPrice: true } },
+      paymentScheduleEntries: { orderBy: { dueAt: "asc" } },
     },
   });
 
