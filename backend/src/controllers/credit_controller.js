@@ -4,7 +4,16 @@ import { getCreditHistory, upholdCreditAppeal } from "../services/customer_credi
 export async function getMyCreditHistory(req, res, next) {
   try {
     const history = await getCreditHistory(req.user.id);
-    res.json({ history });
+    const profile = await prisma.customerCreditProfile.findUnique({
+      where: { customerId: req.user.id },
+      select: {
+        tier: true,
+        successfulOnTimePayments: true,
+        expiredBookings: true,
+        updatedAt: true,
+      },
+    });
+    res.json({ profile, history });
   } catch (error) {
     next(error);
   }

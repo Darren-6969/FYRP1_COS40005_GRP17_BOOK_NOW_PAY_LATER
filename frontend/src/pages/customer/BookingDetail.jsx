@@ -208,8 +208,14 @@ export default function BookingDetail() {
                 className="customer-secondary-btn"
                 onClick={handleCancel}
               >
-                Cancel Booking
+                Request cancellation
               </button>
+            )}
+
+            {["NO_SHOW", "NO_SHOW_UNPAID"].includes(booking.status) && (
+              <Link className="customer-secondary-btn" to={`/customer/credit?booking=${booking.id}`}>
+                Appeal no-show decision
+              </Link>
             )}
 
             {booking.invoice?.id && (

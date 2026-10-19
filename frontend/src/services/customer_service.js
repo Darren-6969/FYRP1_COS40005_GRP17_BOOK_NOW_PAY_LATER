@@ -90,6 +90,9 @@ export const uploadCustomerReceipt = (id, payload) =>
   postIdempotent(`customer-receipt-${id}`, `/customer/bookings/${id}/receipt`, payload);
 
 export const getCustomerPayments = () => api.get("/customer/payments");
+export const getCustomerCreditHistory = () => api.get("/credit/history");
+export const createCreditAppeal = (eventId, reason) =>
+  api.post("/credit/appeals", { eventId, reason });
 
 export const getCustomerInvoices = () => api.get("/customer/invoices");
 

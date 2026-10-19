@@ -6,6 +6,8 @@ import {
   Bell,
   User,
   HelpCircle,
+  Bookmark,
+  ShieldCheck,
   X,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -43,6 +45,16 @@ export default function CustomerSidebar({ open, onClose, onLogout }) {
         <NavLink to="/customer/payments" onClick={onClose}>
           <span><CreditCard size={22} /></span>
           Payments
+        </NavLink>
+
+        <NavLink to="/customer/saved" onClick={onClose}>
+          <span><Bookmark size={22} /></span>
+          Saved Listings
+        </NavLink>
+
+        <NavLink to="/customer/credit" onClick={onClose}>
+          <span><ShieldCheck size={22} /></span>
+          Credit Record
         </NavLink>
 
         <NavLink to="/customer/invoices" onClick={onClose}>

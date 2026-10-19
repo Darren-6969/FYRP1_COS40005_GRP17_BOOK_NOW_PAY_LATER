@@ -660,6 +660,9 @@ export async function getCustomerPayments(req, res, next) {
       payments.map((payment) => ({
         ...payment,
         amount: toNumber(payment.amount),
+        paidAmount:
+          (payment.downPaymentStatus === "PAID" ? toNumber(payment.downPaymentAmount) : 0) +
+          (payment.finalPaymentStatus === "PAID" ? toNumber(payment.finalPaymentAmount) : 0),
         booking: mapBooking(payment.booking),
       }))
     );

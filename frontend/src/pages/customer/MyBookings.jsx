@@ -127,15 +127,6 @@ function getPrimaryAction(booking) {
   };
 }
 
-function getBookingDateLabel(booking) {
-  return (
-    booking.pickupDate ||
-    booking.bookingDate ||
-    booking.createdAt ||
-    booking.updatedAt
-  );
-}
-
 function getDeadlineText(booking) {
   if (!booking.paymentDeadline) return "-";
   return formatCustomerDate(booking.paymentDeadline);
@@ -206,6 +197,7 @@ function BookingCard({ booking }) {
 export default function MyBookings() {
   const { bookings, loading, error, reload } = useCustomerBookings();
   const [activeTab, setActiveTab] = useState("ACTIVE");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   const activeBookings = useMemo(
     () => bookings.filter(isActiveBooking),
@@ -223,10 +215,11 @@ export default function MyBookings() {
   );
 
   const filteredBookings = useMemo(() => {
-    if (activeTab === "ACTIVE") return activeBookings;
-    if (activeTab === "PAST") return pastBookings;
-    return bookings;
-  }, [activeTab, activeBookings, pastBookings, bookings]);
+    const byTab = activeTab === "ACTIVE" ? activeBookings : activeTab === "PAST" ? pastBookings : bookings;
+    return statusFilter === "ALL"
+      ? byTab
+      : byTab.filter((booking) => normalize(booking.status) === statusFilter);
+  }, [activeTab, activeBookings, pastBookings, bookings, statusFilter]);
 
   const stats = useMemo(
     () => ({
@@ -335,6 +328,15 @@ export default function MyBookings() {
             </button>
           ))}
         </div>
+        <label className="customer-field-label" htmlFor="booking-status-filter">
+          Filter by status
+          <select id="booking-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="ALL">All statuses</option>
+            {[...new Set(bookings.map((booking) => normalize(booking.status)))].sort().map((status) => (
+              <option key={status} value={status}>{statusLabel(status)}</option>
+            ))}
+          </select>
+        </label>
 
         <div className="customer-section-label">
           <h3>
