@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import crypto from "crypto";
-import { put } from "@vercel/blob";
+import { savePublicFile } from "../services/media_storage.js";
 import {processSecureImage,} from "../utils/secure_upload.js";
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import { allowRoles } from "../middlewares/rbac_middleware.js";
@@ -52,17 +52,10 @@ router.post(
           processed.extension
         }`;
 
-      const blob = await put(
+      const blob = await savePublicFile(
         `listing-images/${safeName}`,
         processed.buffer,
-        {
-          access: "public",
-
-          contentType:
-            processed.mime,
-
-          addRandomSuffix: false,
-        }
+        processed.mime
       );
 
       res.status(201).json({
@@ -136,17 +129,10 @@ router.post(
           processed.extension
         }`;
 
-      const blob = await put(
+      const blob = await savePublicFile(
         `listing-images/${safeName}`,
         processed.buffer,
-        {
-          access: "public",
-
-          contentType:
-            processed.mime,
-
-          addRandomSuffix: false,
-        }
+        processed.mime
       );
 
       res.status(201).json({

@@ -13,3 +13,5 @@ CLAUDE.local.md
 CLAUDE.md
 docs/
 BNPL_SRS_V2_11.docx.pdf
+# Local media storage (MEDIA_ROOT)
+media/

@@ -35,6 +35,7 @@ import { getOperatorOrigins } from "./config/originCache.js";
 import { operatorActivityMiddleware } from "./services/operator_activity_service.js";
 import { analyticsContextMiddleware } from "./services/analytics_service.js";
 import "./jobs/jobQueue_worker.js";
+import { MEDIA_ROOT } from "./services/media_storage.js";
 dotenv.config();
 
 const app = express();
@@ -94,6 +95,27 @@ app.use(
     crossOriginOpenerPolicy: { policy: "same-origin" },
   })
 );
+
+// ── Public media (listing images, operator logos) ───────────────────────────
+// Served only when local media storage is enabled (Dokploy volume).
+// Placed before CORS and rate limiting: <img> loads need neither, and the
+// client's embed site must be able to display these images (CORP override).
+if (MEDIA_ROOT) {
+  app.use(
+    "/media",
+    (_req, res, next) => {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      next();
+    },
+    express.static(MEDIA_ROOT, {
+      maxAge: "30d",
+      immutable: true,
+      index: false,
+      dotfiles: "deny",
+    }),
+    (_req, res) => res.status(404).end()
+  );
+}
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 const allowedOrigins = [
