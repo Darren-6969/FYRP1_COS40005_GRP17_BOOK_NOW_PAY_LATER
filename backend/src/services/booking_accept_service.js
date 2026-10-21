@@ -166,7 +166,15 @@ export async function acceptBookingAndRequestPayment({
   const creditProfile = await prisma.customerCreditProfile.findUnique({
     where: { customerId: booking.customerId },
   });
-  const creditTier = creditProfile?.tier || getDefaultCreditProfile(booking.customerId).tier;
+  // Tiers are recorded from day one, but they change deadlines only while the
+  // E17 credit tier policy is on. With it off, every customer gets the Normal
+  // schedule: the operator's deposit percentage and deadline tier.
+  const recordedTier = creditProfile?.tier || getDefaultCreditProfile(booking.customerId).tier;
+  const tierPolicyOn = await isCreditTierPolicyEnabled(
+    await getPlatformSettings(),
+    booking.operatorId
+  );
+  const creditTier = tierPolicyOn ? recordedTier : "Normal";
   const paymentDeadline = creditTier === "High Risk"
     ? new Date()
     : await calculatePaymentDeadline(

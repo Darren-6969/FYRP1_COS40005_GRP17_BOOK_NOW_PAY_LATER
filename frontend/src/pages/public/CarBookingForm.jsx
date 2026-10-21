@@ -569,7 +569,7 @@ export default function CarBookingForm() {
     requestCarBooking(payload, idemKey.current)
       .then((res) => {
         clearDraft(listingId);
-        navigate(`/customer/checkout/${res.data.id}`);
+        navigate(`/customer/bookings/${res.data.id}`);
       })
       .catch((err) => {
         const data =
@@ -710,7 +710,7 @@ export default function CarBookingForm() {
       <div className={styles.layout}>
         <form className={styles.form} onSubmit={onSubmit} noValidate aria-busy={sending}>
           <h1 className={styles.h1}>Send your booking request</h1>
-          {quote?.creditTier && (
+          {quote?.creditTier && quote.creditTier !== "Normal" && (
             <div className={styles.banner} role="status">
               <div className={styles.bannerBody}>
                 <Info size={22} aria-hidden="true" className={styles.bannerIcon} />
@@ -718,12 +718,10 @@ export default function CarBookingForm() {
                   <h2 className={styles.bannerTitle}>Your payment standing: {quote.creditTier}</h2>
                   <p className={styles.bannerText}>
                     {quote.creditTier === "Trusted"
-                      ? "Your reliable payment history gives you the most flexible unpaid-booking limit."
+                      ? "Your on-time payment history lets you hold more unpaid bookings at once."
                       : quote.creditTier === "Caution"
-                        ? "A 30% deposit is due within 12 hours; the balance and licence are due 24 hours before service."
-                        : quote.creditTier === "High Risk"
-                          ? "Full payment is due immediately to confirm this booking."
-                          : "Your first payment is due 24 hours after this booking is created."}
+                        ? "If the operator accepts, your deadlines are shorter: the deposit is due within 12 hours of acceptance, and the balance and your licence 24 hours before pickup. The platform may also ask for a higher deposit than the operator's usual rate."
+                        : "If the operator accepts, the full amount is due straight away."}
                   </p>
                 </div>
               </div>
@@ -1098,7 +1096,11 @@ export default function CarBookingForm() {
                             <span id={titleId} className={styles.routeTitle}>
                               {stop.title}
                             </span>
-                            <div role="radiogroup" aria-labelledby={titleId} className={styles.seg}>
+                            <div
+                              role="radiogroup"
+                              aria-labelledby={titleId}
+                              className={`${styles.seg} ${stop.requested ? styles.segSecond : ""}`}
+                            >
                               {[
                                 [false, `${op} point`],
                                 [true, "Somewhere else"],

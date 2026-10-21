@@ -142,11 +142,6 @@ export async function createCarBooking(req, res, next) {
       bookingCode: booking.bookingCode,
       status: booking.status,
       creditTier: customerTier,
-      payment: booking.payment,
-      paymentSchedule: (booking.paymentScheduleEntries || []).map((entry) => ({
-        ...entry,
-        amount: Number(entry.amount),
-      })),
     };
     await completeIdempotencyKey(claim.record, 201, response);
     claim = null;
@@ -173,9 +168,9 @@ export async function createCarBooking(req, res, next) {
     Promise.allSettled([
       notifyCustomerByBooking({
         booking,
-        title: "Booking created",
-        message: `Your booking ${booking.bookingCode} is ready. Follow the payment schedule shown in your account.`,
-        type: "BOOKING_CREATED",
+        title: "Booking request sent",
+        message: `Your booking request ${booking.bookingCode} has been submitted and is waiting for operator approval.`,
+        type: "BOOKING_REQUEST_RECEIVED",
         emailSubject: `Booking Request Sent - ${booking.bookingCode}`,
         emailHtml: bookingRequestReceivedTemplate({
           booking,
@@ -184,9 +179,9 @@ export async function createCarBooking(req, res, next) {
       }),
       notifyOperatorUsersByBooking({
         booking,
-        title: "New booking",
-        message: `${booking.bookingCode} has been created and its payment schedule is available.`,
-        type: "BOOKING_CREATED",
+        title: "New booking request",
+        message: `${booking.bookingCode} requires operator review and approval.`,
+        type: "BOOKING_SUBMITTED",
         emailSubject: `New Booking Request - ${booking.bookingCode}`,
         emailHtml: bookingSubmittedTemplate({ booking, operatorUrl }),
       }),

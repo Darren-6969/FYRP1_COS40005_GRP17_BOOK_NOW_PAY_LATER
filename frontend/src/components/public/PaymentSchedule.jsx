@@ -44,30 +44,6 @@ export default function PaymentSchedule({
     const timer = window.setInterval(() => refresh((value) => value + 1), 60000);
     return () => window.clearInterval(timer);
   }, [showCountdown]);
-  if (quote.paymentSchedule?.length) {
-    return (
-      <div>
-        <ol className={styles.steps}>
-          {quote.paymentSchedule.map((entry, index) => (
-            <Step
-              key={`${entry.type}-${entry.paymentPart || "licence"}`}
-              n={index + 1}
-              filled
-              title={entry.type === "LICENCE"
-                ? `Upload your driving licence by ${formatShortDateTime(entry.dueAt)}`
-                : `${entry.paymentPart === "DOWN_PAYMENT" ? "Pay the deposit" : entry.paymentPart === "FINAL_PAYMENT" ? "Pay the balance" : "Pay the full amount"} by ${formatShortDateTime(entry.dueAt)}`}
-              extra={showCountdown ? countdown(entry.dueAt) : null}
-              note={entry.type === "LICENCE" ? licenceNote : null}
-              amount={entry.amountSen ? formatSen(entry.amountSen) : null}
-            />
-          ))}
-        </ol>
-        <p className={styles.consequence}>
-          If any payment or the driving licence is not submitted by its deadline, the booking is cancelled and the outstanding schedule entries are voided.
-        </p>
-      </div>
-    );
-  }
   const due = formatShortDateTime(quote.balanceDueAt);
   const deposit = formatSen(quote.depositSen);
   const balance = formatSen(quote.balanceSen);

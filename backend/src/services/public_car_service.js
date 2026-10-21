@@ -4,6 +4,7 @@
 
 import prisma from "../config/db.js";
 import { getExposureLimit } from "./concurrent_exposure_service.js";
+import { isCreditTierPolicyEnabled } from "./platform_settings_service.js";
 import {
   addDays,
   klDateTimeToUtc,
@@ -859,15 +860,20 @@ export async function quotePublicCar(id, sel, customerId = null) {
 
   const timing = paymentTiming(r.pickupAt);
   const p = r.priced;
+  // Tier and exposure limit reach the customer only while the E17 credit tier
+  // policy is on, the same switch the booking orchestrator uses for the cap.
   const [profile, platformSettings] = customerId
     ? await Promise.all([
         prisma.customerCreditProfile.findUnique({ where: { customerId }, select: { tier: true } }),
-        prisma.platformSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {}, select: { exposureLimits: true } }),
+        prisma.platformSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {}, select: { exposureLimits: true, featureFlags: true } }),
       ])
     : [null, null];
-  const creditTier = profile?.tier || "Normal";
-  const exposureLimit = platformSettings ? getExposureLimit(platformSettings.exposureLimits, creditTier) : null;
-  const openUnpaidCount = customerId
+  const tierPolicyOn = platformSettings
+    ? await isCreditTierPolicyEnabled(platformSettings, listing.operatorId)
+    : false;
+  const creditTier = tierPolicyOn ? profile?.tier || "Normal" : null;
+  const exposureLimit = tierPolicyOn ? getExposureLimit(platformSettings.exposureLimits, creditTier) : null;
+  const openUnpaidCount = tierPolicyOn
     ? await prisma.booking.count({
         where: {
           customerId,
@@ -877,23 +883,6 @@ export async function quotePublicCar(id, sel, customerId = null) {
       })
     : null;
   const exposureBlocked = exposureLimit !== null && openUnpaidCount >= exposureLimit;
-  const rentalAmount = Number(p.rentalSen) / 100;
-  const createdAt = new Date();
-  const licenceDueAt = creditTier === "High Risk"
-    ? createdAt
-    : creditTier === "Caution"
-      ? new Date(r.pickupAt.getTime() - 24 * 60 * 60 * 1000)
-      : new Date(createdAt.getTime() + 24 * 60 * 60 * 1000);
-  const paymentSchedule = creditTier === "Caution"
-    ? [
-        { type: "PAYMENT", paymentPart: "DOWN_PAYMENT", amountSen: Math.round(rentalAmount * 0.3 * 100), dueAt: new Date(createdAt.getTime() + 12 * 60 * 60 * 1000).toISOString() },
-        { type: "PAYMENT", paymentPart: "FINAL_PAYMENT", amountSen: p.totalSen - Math.round(rentalAmount * 0.3 * 100), dueAt: licenceDueAt.toISOString() },
-        { type: "LICENCE", paymentPart: null, amountSen: 0, dueAt: licenceDueAt.toISOString() },
-      ]
-    : [
-        { type: "PAYMENT", paymentPart: "FULL_PAYMENT", amountSen: p.totalSen, dueAt: (creditTier === "High Risk" ? createdAt : new Date(createdAt.getTime() + 24 * 60 * 60 * 1000)).toISOString() },
-        { type: "LICENCE", paymentPart: null, amountSen: 0, dueAt: licenceDueAt.toISOString() },
-      ];
 
   return {
     quote: {
@@ -925,8 +914,7 @@ export async function quotePublicCar(id, sel, customerId = null) {
       returnAt: r.returnAt.toISOString(),
       ...timing,
       creditTier,
-      paymentSchedule,
-      exposure: customerId ? { limit: exposureLimit, openUnpaidCount, blocked: exposureBlocked } : null,
+      exposure: tierPolicyOn ? { limit: exposureLimit, openUnpaidCount, blocked: exposureBlocked } : null,
     },
     availability: {
       available,

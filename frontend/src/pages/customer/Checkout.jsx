@@ -53,6 +53,8 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [, refreshCountdown] = useState(0);
+  // The tier only changes deadlines while the platform's credit tier policy is on.
+  const { enabled: tierPolicyOn } = useFeatureFlag("creditTierPolicy", booking?.operatorId);
 
   useEffect(() => {
     const timer = window.setInterval(() => refreshCountdown((value) => value + 1), 60000);
@@ -148,23 +150,46 @@ const effectiveMethod = paymentOptions.some(([value]) => value === method)
 
   if (!booking) return null;
 
+  // Payment opens only once the operator has accepted: acceptance creates the
+  // payment row and the schedule. Until then there is nothing to pay.
+  if (!booking.payment || ["PENDING", "ALTERNATIVE_SUGGESTED"].includes(booking.status)) {
+    return (
+      <div className="customer-page">
+        <div className="customer-glass-card">
+          <p className="customer-eyebrow">Checkout</p>
+          <h1>Waiting for the operator</h1>
+          <p>
+            {booking.status === "ALTERNATIVE_SUGGESTED"
+              ? "The operator has sent you an offer. Accept or decline it on your booking page first."
+              : "Your booking request has not been accepted yet. You can pay once the operator accepts it."}
+          </p>
+          <button
+            type="button"
+            className="customer-primary-btn"
+            onClick={() => navigate(`/customer/bookings/${id}`)}
+          >
+            Back to my booking
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="customer-page">
       <section className="customer-checkout-layout">
         <article className="customer-glass-card">
           <p className="customer-eyebrow">Checkout</p>
           <h1>Complete Payment</h1>
-          {booking.creditTier && (
+          {tierPolicyOn && booking.creditTier && booking.creditTier !== "Normal" && (
             <div className="customer-alert">
               <strong>Your credit tier: {booking.creditTier}</strong>
               <p>
                 {booking.creditTier === "Trusted"
-                  ? "Your on-time history gives you the most flexible unpaid-booking limit."
+                  ? "Your on-time payment history lets you hold more unpaid bookings at once."
                   : booking.creditTier === "Caution"
-                    ? "A 30% deposit is due first; the remaining balance and licence are due 24 hours before service."
-                    : booking.creditTier === "High Risk"
-                      ? "Full prepayment is required immediately before this booking can proceed."
-                      : "Your first full payment is due 24 hours after the booking was created."}
+                    ? "Your deadlines are shorter than usual. The due dates in the schedule below already include this."
+                    : "The full amount is due straight away. The schedule below shows what is owed."}
               </p>
             </div>
           )}
