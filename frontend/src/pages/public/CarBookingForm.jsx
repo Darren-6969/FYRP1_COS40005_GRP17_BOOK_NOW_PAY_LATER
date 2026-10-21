@@ -934,7 +934,7 @@ export default function CarBookingForm() {
                 </div>
               )}
 
-              <fieldset className={styles.group}>
+              <div className={styles.group}>
                 <div className={styles.field}>
                   <label
                     htmlFor={FIELD_ID.driverDob}
@@ -1038,6 +1038,9 @@ export default function CarBookingForm() {
                     </p>
                   )}
 
+              </div>
+
+              <fieldset className={styles.group}>
                 <legend className={styles.label}>Licence issued in</legend>
                 <div className={styles.radioRow}>
                   {[

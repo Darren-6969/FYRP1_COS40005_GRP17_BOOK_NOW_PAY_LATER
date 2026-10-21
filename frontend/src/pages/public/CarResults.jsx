@@ -8,6 +8,7 @@ import {
   SORTS,
   hasDates,
   parseCarSearch,
+  rangeText,
   toCarSearchParams,
   tripParams,
 } from "../../utils/carSearchParams";
@@ -156,18 +157,16 @@ export default function CarResults() {
     )
   );
   if (criteria.pmin !== null || criteria.pmax !== null) {
-    const b = data?.bounds.price;
     chips.push({
       key: "price",
-      label: `RM${criteria.pmin ?? b?.min ?? 0} - RM${criteria.pmax ?? b?.max ?? ""} per day`,
+      label: `${rangeText(criteria.pmin, criteria.pmax)} per day`,
       clear: () => update({ pmin: null, pmax: null }),
     });
   }
   if (dates && (criteria.dmin !== null || criteria.dmax !== null)) {
-    const b = data?.bounds.deposit;
     chips.push({
       key: "dep",
-      label: `RM${criteria.dmin ?? b?.min ?? 0} - RM${criteria.dmax ?? b?.max ?? ""} now`,
+      label: `${rangeText(criteria.dmin, criteria.dmax)} now`,
       clear: () => update({ dmin: null, dmax: null }),
     });
   }

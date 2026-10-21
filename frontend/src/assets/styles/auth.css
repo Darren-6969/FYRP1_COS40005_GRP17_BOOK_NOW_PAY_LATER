@@ -129,6 +129,28 @@
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
 
+.bnpl-auth-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 18px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.bnpl-auth-form .bnpl-auth-consent input {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin: 2px 0 0;
+  padding: 0;
+  border-radius: 4px;
+  box-shadow: none;
+  accent-color: #2563eb;
+}
+
 .bnpl-password-field {
   position: relative;
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import RangeSlider from "./RangeSlider";
+import { rangeText } from "../../utils/carSearchParams";
 import styles from "../../assets/styles/public/FilterPanel.module.css";
 
 function Facet({ facet, selected, onToggle, idPrefix }) {
@@ -62,7 +63,7 @@ export default function FilterPanel({ data, criteria, onToggle, onRange, idPrefi
         hi={criteria.pmax}
         disabled={price.min === price.max}
         note="Bounds follow the cars currently matching your other filters."
-        format={(lo, hi, any) => (any ? "Any" : `RM${lo} - RM${hi}`)}
+        format={(lo, hi, any, open) => (any ? "Any" : rangeText(open.lo ? null : lo, open.hi ? null : hi))}
         onCommit={(lo, hi) => onRange("price", lo, hi)}
       />
     </div>
@@ -82,7 +83,9 @@ export default function FilterPanel({ data, criteria, onToggle, onRange, idPrefi
             ? "Computed for your selected dates."
             : "Needs dates. Without a date range there is no exact deposit to filter on."
         }
-        format={(lo, hi, any) => (!days ? "Set dates" : any ? "Any" : `RM${lo} - RM${hi}`)}
+        format={(lo, hi, any, open) =>
+          !days ? "Set dates" : any ? "Any" : rangeText(open.lo ? null : lo, open.hi ? null : hi)
+        }
         onCommit={(lo, hi) => onRange("dep", lo, hi)}
       />
     </div>

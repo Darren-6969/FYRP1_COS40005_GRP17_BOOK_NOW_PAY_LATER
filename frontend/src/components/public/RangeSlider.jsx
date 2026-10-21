@@ -15,17 +15,24 @@ export default function RangeSlider({ label, min, max, lo, hi, step, disabled, n
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const span = Math.max(1, max - min);
-  const cur = draft || { lo: Math.max(min, lo ?? min), hi: Math.min(max, hi ?? max) };
-  const isAny = draft ? draft.lo <= min && draft.hi >= max : lo === null && hi === null;
+  // A committed value can sit outside the current bounds (a RM200 cap when the
+  // cheapest deposit is RM225). Widen the track so the handles stay on it.
+  const lowest = Math.min(min, lo ?? min, hi ?? min);
+  const highest = Math.max(max, lo ?? max, hi ?? max);
+  const span = Math.max(1, highest - lowest);
+  const cur = draft || { lo: lo ?? lowest, hi: hi ?? highest };
+  const isAny = draft ? draft.lo <= lowest && draft.hi >= highest : lo === null && hi === null;
+  const open = draft
+    ? { lo: draft.lo <= lowest, hi: draft.hi >= highest }
+    : { lo: lo === null, hi: hi === null };
   const stepSize = step || (span > 400 ? 10 : 5);
-  const pct = (v) => ((v - min) / span) * 100;
-
+  const pct = (v) => ((v - lowest) / span) * 100;
+  
   const schedule = (next) => {
     setDraft(next);
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      onCommit(next.lo <= min ? null : next.lo, next.hi >= max ? null : next.hi);
+      onCommit(next.lo <= lowest ? null : next.lo, next.hi >= highest ? null : next.hi);
       setDraft(null);
     }, COMMIT_DELAY_MS);
   };
@@ -40,7 +47,7 @@ export default function RangeSlider({ label, min, max, lo, hi, step, disabled, n
       <legend className={styles.head}>
         <span className={styles.label}>{label}</span>
         <output className={`${styles.value} ${disabled ? styles.valueMuted : ""}`} aria-live="polite">
-          {format(cur.lo, cur.hi, isAny)}
+          {format(cur.lo, cur.hi, isAny, open)}
         </output>
       </legend>
       <div
@@ -49,8 +56,8 @@ export default function RangeSlider({ label, min, max, lo, hi, step, disabled, n
       >
         <input
           type="range"
-          min={min}
-          max={max}
+          min={lowest}
+          max={highest}
           step={stepSize}
           value={cur.lo}
           onChange={onLo}
@@ -60,8 +67,8 @@ export default function RangeSlider({ label, min, max, lo, hi, step, disabled, n
         />
         <input
           type="range"
-          min={min}
-          max={max}
+          min={lowest}
+          max={highest}
           step={stepSize}
           value={cur.hi}
           onChange={onHi}

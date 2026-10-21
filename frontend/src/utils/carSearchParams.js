@@ -25,6 +25,14 @@ function num(p, key) {
   return Number.isFinite(n) ? n : null;
 }
 
+// "RM100 - RM200", "Up to RM200" or "From RM100" for a filter range where
+// either end can be open (null).
+export function rangeText(lo, hi) {
+  if (lo !== null && hi !== null) return `RM${lo} - RM${hi}`;
+  if (hi !== null) return `Up to RM${hi}`;
+  return `From RM${lo}`;
+}
+
 export function parseCarSearch(params) {
   const p = params instanceof URLSearchParams ? params : new URLSearchParams(params);
   const sel = {};

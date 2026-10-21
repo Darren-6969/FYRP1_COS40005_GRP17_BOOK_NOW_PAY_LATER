@@ -185,16 +185,6 @@ export default function Register() {
               disabled={loading}
             />
 
-            <label className="bnpl-auth-consent">
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(event) => setConsent(event.target.checked)}
-                disabled={loading}
-              />
-              I agree to the Privacy Policy and Terms & Conditions.
-            </label>
-
             <input
               name="email"
               type="email"
@@ -215,6 +205,16 @@ export default function Register() {
               disabled={loading}
             />
 
+            <label className="bnpl-auth-consent">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(event) => setConsent(event.target.checked)}
+                disabled={loading}
+              />
+              I agree to the Privacy Policy and Terms & Conditions.
+            </label>
+            
             <button className="bnpl-auth-submit" disabled={loading}>
               {loading ? "Creating account..." : "Register"}
             </button>
