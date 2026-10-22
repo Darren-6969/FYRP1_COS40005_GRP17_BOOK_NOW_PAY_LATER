@@ -21,6 +21,7 @@ import OperatorStrip from "../../components/public/OperatorStrip";
 import BookingBar from "../../components/public/BookingBar";
 import OfferModeBanner, { OfferAddonStatus } from "../../components/public/OfferModeBanner";
 import styles from "../../assets/styles/public/CarDetail.module.css";
+import disclosure from "../../assets/styles/public/Disclosure.module.css";
 import AvailabilityCalendar from "../../components/public/AvailabilityCalendar";
 
 const TRANSMISSION = { AUTOMATIC: "Automatic", MANUAL: "Manual" };
@@ -61,6 +62,8 @@ function Gallery({ listing, saved, onSave, signedIn }) {
     : captions.map((caption) => ({ src: null, caption }));
   const [index, setIndex] = useState(0);
   const [signinOpen, setSigninOpen] = useState(false);
+  // The heart pops only when the customer saves, not when a saved car loads.
+  const [pop, setPop] = useState(false);
   const mainRef = useRef(null);
   const signinRef = useRef(null);
   const saveRef = useRef(null);
@@ -84,15 +87,23 @@ function Gallery({ listing, saved, onSave, signedIn }) {
   }, [signinOpen]);
 
   const onSaveClick = () => {
-    if (signedIn) onSave();
-    else setSigninOpen((v) => !v);
+    if (signedIn) {
+      if (!saved) setPop(true);
+      onSave();
+    } else setSigninOpen((v) => !v);
   };
 
   return (
     <section className={styles.gallery} aria-label="Photos">
       <div className={styles.main} ref={mainRef} tabIndex={-1}>
         {current.src ? (
-          <img src={current.src} alt={`${title}: ${current.caption}`} className={styles.photoImg} />
+          // key remounts the image so each new photo fades in over the last
+          <img
+            key={index}
+            src={current.src}
+            alt={`${title}: ${current.caption}`}
+            className={`${styles.photoImg} ${styles.photoFade}`}
+          />
         ) : (
           <span className={styles.photoSlot}>
             Photo {index + 1} · {current.caption}
@@ -145,11 +156,12 @@ function Gallery({ listing, saved, onSave, signedIn }) {
         <button
           ref={saveRef}
           type="button"
-          className={`${styles.save} ${saved ? styles.saveOn : ""}`}
+          className={`${styles.save} ${saved ? styles.saveOn : ""} ${pop ? styles.savePop : ""}`}
           aria-label="Save to favourites"
           aria-pressed={signedIn ? saved : undefined}
           aria-expanded={signedIn ? undefined : signinOpen}
           onClick={onSaveClick}
+          onAnimationEnd={() => setPop(false)}
         >
           <Heart size={18} aria-hidden="true" fill={saved ? "currentColor" : "none"} />
         </button>
@@ -918,12 +930,14 @@ export default function CarDetail() {
                   onClick={() => setOpenFaq(open ? -1 : i)}
                 >
                   {f.q}
-                  <Plus size={18} aria-hidden="true" className={`${styles.faqIcon} ${open ? styles.faqIconOpen : ""}`} />
+                  <Plus size={18} aria-hidden="true" className={`${styles.faqIcon} ${disclosure.icon} ${open ? disclosure.iconOpen : ""}`} />
                 </button>
               </h3>
-              <p id={`${uid}-faq-${i}`} className={styles.faqA} hidden={!open}>
-                {f.a}
-              </p>
+              <div id={`${uid}-faq-${i}`} className={`${disclosure.panel} ${open ? disclosure.panelOpen : ""}`}>
+                <div className={disclosure.panelInner}>
+                  <p className={styles.faqA}>{f.a}</p>
+                </div>
+              </div>
             </div>
           );
         })}

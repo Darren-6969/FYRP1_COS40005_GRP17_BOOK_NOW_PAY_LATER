@@ -163,7 +163,7 @@
   color: var(--pub-on-deep);
   font: 600 15px var(--pub-font-body);
   cursor: pointer;
-  transition: background-color 160ms ease;
+  transition: var(--pub-t-control);
 }
 
 .shareButton:hover {
@@ -224,12 +224,34 @@
   font-size: 15px;
   color: var(--pub-text);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
+  position: relative;
+  transition: color var(--pub-dur-fast) ease;
 }
 
-.sectionNav a:hover {
+/* Same grow-in underline as the header; it stays under the section being
+   read. */
+.sectionNav a::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--pub-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--pub-dur) var(--pub-ease);
+}
+
+.sectionNav a:hover,
+.sectionNav a.sectionNavCurrent {
   color: var(--pub-ink);
-  border-bottom-color: var(--pub-accent);
+}
+
+.sectionNav a:hover::after,
+.sectionNav a.sectionNavCurrent::after {
+  transform: scaleX(1);
 }
 
 .sectionNav a:focus-visible {
@@ -311,7 +333,7 @@
   color: var(--pub-ink);
   font: 600 14px var(--pub-font-body);
   cursor: pointer;
-  transition: background-color 160ms ease, border-color 160ms ease;
+  transition: var(--pub-t-control);
 }
 
 .branchTab:hover {
@@ -420,6 +442,7 @@
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+  transition: var(--pub-t-control);
 }
 
 .textButton:hover {
@@ -457,7 +480,7 @@
   font-weight: 600;
   font-size: 14px;
   text-decoration: none;
-  transition: border-color 160ms ease, background-color 160ms ease;
+  transition: var(--pub-t-control);
 }
 
 .actionLink:hover {
@@ -598,5 +621,50 @@
   .branchTab,
   .actionLink {
     transition: none;
+  }
+}
+
+/* ── shared control feel (motion tokens in tokens.css) ─────────── */
+@media (hover: hover) {
+  .shareButton:hover:not(:disabled),
+  .actionLink:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
+}
+
+.shareButton:active:not(:disabled),
+.actionLink:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+
+.branchTab:active:not(:disabled),
+.textButton:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ── phase 4 motion ── */
+
+/* Share: the tick turns in when the link is copied. */
+.shareIcon {
+  display: grid;
+  place-items: center;
+  animation: iconIn var(--pub-dur) var(--pub-ease) backwards;
+}
+
+@keyframes iconIn {
+  from {
+    opacity: 0;
+    transform: scale(0.6) rotate(-30deg);
+  }
+}
+
+/* Loading hero pulses like every other public skeleton. */
+.heroSkeleton {
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeletonPulse {
+  50% {
+    opacity: 0.55;
   }
 }

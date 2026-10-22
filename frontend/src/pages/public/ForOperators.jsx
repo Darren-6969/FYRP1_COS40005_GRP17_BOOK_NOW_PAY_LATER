@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Check, Plus } from "lucide-react";
 import RequestDemo from "../../components/public/recruit/RequestDemo";
@@ -6,6 +6,8 @@ import DashboardShowcase from "../../components/public/recruit/DashboardShowcase
 import { getRecruitPlans } from "../../services/platform_public_service";
 import { BRAND } from "../../constants/brand";
 import styles from "../../assets/styles/public/ForOperators.module.css";
+import disclosure from "../../assets/styles/public/Disclosure.module.css";
+import useReveal from "../../hooks/useReveal";
 
 // Operator recruitment page, /for-operators (SRS 4.2.8, FR-CUST-010, BNPLB-126).
 // Sells the platform to rental companies; every apply button opens the
@@ -79,7 +81,7 @@ function JoiningSteps() {
   return (
     <section className={styles.section} aria-labelledby="join-title">
       <div className={styles.wrap}>
-        <div className={styles.sectionHead}>
+        <div data-reveal className={styles.sectionHead}>
           <div>
             <p className={styles.kicker}>How joining works</p>
             <h2 id="join-title" className={styles.h2}>
@@ -363,7 +365,7 @@ function Faq({ data }) {
             const btnId = `${baseId}-q${i}`;
             const panelId = `${baseId}-a${i}`;
             return (
-              <div key={f.q} className={`${styles.faq} ${isOpen ? styles.faqOpen : ""}`}>
+              <div key={f.q} data-reveal className={`${styles.faq} ${isOpen ? styles.faqOpen : ""}`}>
                 <h3 style={{ margin: 0 }}>
                   <button
                     id={btnId}
@@ -374,13 +376,18 @@ function Faq({ data }) {
                     onClick={() => setOpen(isOpen ? -1 : i)}
                   >
                     <span>{f.q}</span>
-                    <span className={styles.faqIcon} aria-hidden="true">
+                    <span className={`${styles.faqIcon} ${disclosure.icon} ${isOpen ? disclosure.iconOpen : ""}`} aria-hidden="true">
                       <Plus size={14} strokeWidth={2.2} />
                     </span>
                   </button>
                 </h3>
-                <div id={panelId} role="region" aria-labelledby={btnId} className={styles.answer}>
-                  <div className={styles.answerInner}>
+                <div
+                  id={panelId}
+                  role="region"
+                  aria-labelledby={btnId}
+                  className={`${disclosure.panel} ${isOpen ? disclosure.panelOpen : ""}`}
+                >
+                  <div className={disclosure.panelInner}>
                     <p className={styles.answerText}>{f.a}</p>
                   </div>
                 </div>
@@ -396,6 +403,7 @@ function Faq({ data }) {
 /* ── page ────────────────────────────────────────────────────────── */
 
 export default function ForOperators() {
+  const rootRef = useRef(null);
   const [plans, setPlans] = useState({ status: "loading", data: null });
 
   const fetchPlans = useCallback(() => {
@@ -413,12 +421,15 @@ export default function ForOperators() {
     fetchPlans();
   };
 
+  // Sections below the hero fade in as they scroll into view (marketing page).
+  useReveal(rootRef, [plans.status]);
+
   useEffect(() => {
     document.title = `List your cars · ${BRAND.name}${BRAND.suffix}`;
   }, []);
 
   return (
-    <div className={styles.page}>
+    <div ref={rootRef} className={styles.page}>
       <section className={styles.hero} aria-labelledby="ops-hero-title">
         <div className={styles.road} aria-hidden="true" />
         <div className={`${styles.wrap} ${styles.heroInner}`}>
@@ -449,7 +460,7 @@ export default function ForOperators() {
 
       <section id="plans" className={`${styles.section} ${styles.plansBand}`} aria-labelledby="plans-title">
         <div className={styles.wrap}>
-          <div className={styles.sectionHead}>
+          <div data-reveal className={styles.sectionHead}>
             <div>
               <p className={styles.kicker}>Plans</p>
               <h2 id="plans-title" className={styles.h2}>
@@ -467,7 +478,7 @@ export default function ForOperators() {
 
       <section className={`${styles.section} ${styles.showBand}`} aria-labelledby="dash-title">
         <div className={styles.wrap}>
-          <div className={styles.sectionHead}>
+          <div data-reveal className={styles.sectionHead}>
             <div>
               <p className={styles.kicker}>Your dashboard</p>
               <h2 id="dash-title" className={styles.h2}>
@@ -484,7 +495,7 @@ export default function ForOperators() {
 
       <section className={styles.ctaSection} aria-labelledby="ops-cta-title">
         <div className={styles.wrap}>
-          <div className={styles.cta}>
+          <div data-reveal className={styles.cta}>
             <div>
               <h2 id="ops-cta-title" className={styles.ctaTitle}>
                 Ready to list your first car?

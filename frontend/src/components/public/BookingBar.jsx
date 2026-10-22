@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Clock, Info } from "lucide-react";
 import styles from "../../assets/styles/public/BookingBar.module.css";
 
@@ -17,6 +18,16 @@ export default function BookingBar({
   onRequest,
 }) {
   const blocked = Boolean(reason);
+
+  // Highlight the figure when the quote changes (not on first render), so the
+  // customer notices the total moved. The new value shows at once; only the
+  // highlight animates. Stored-previous-value pattern from the React docs.
+  const [prevFigure, setPrevFigure] = useState(figure);
+  const [flash, setFlash] = useState(0);
+  if (figure !== prevFigure) {
+    setPrevFigure(figure);
+    setFlash((n) => n + 1);
+  }
   return (
     <aside className={styles.bar} aria-label="Booking summary">
       <div className={styles.inner}>
@@ -34,7 +45,9 @@ export default function BookingBar({
                 {lowStockText && <span className={styles.lowStock}>{lowStockText}</span>}
               </div>
               <div className={styles.figureRow}>
-                <span className={styles.figure}>{figure}</span>
+                <span key={flash} className={`${styles.figure} ${flash ? styles.figureFlash : ""}`}>
+                  {figure}
+                </span>
                 <span className={styles.rate}>{rate}</span>
               </div>
             </div>

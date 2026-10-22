@@ -150,7 +150,7 @@
   padding: 14px 36px;
   border-radius: 12px;
   min-height: 52px;
-  transition: background 0.18s ease;
+  transition: var(--pub-t-control);
 }
 
 .button:hover:not(:disabled) {
@@ -252,5 +252,48 @@
   .reason {
     font-size: 12px;
     padding: 6px 10px;
+  }
+}
+
+/* ── shared control feel (motion tokens in tokens.css) ─────────── */
+@media (hover: hover) {
+  .button:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
+}
+
+.button:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+
+/* ── motion (tokens in tokens.css) ── */
+
+/* The bar slides up into place when the page opens. */
+.bar {
+  animation: barUp var(--pub-dur-slow) var(--pub-ease) backwards;
+}
+
+@keyframes barUp {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+/* Changed total: a short lift and a soft highlight behind the figure. */
+.figureFlash {
+  border-radius: 6px;
+  animation: figureFlash 900ms var(--pub-ease);
+}
+
+@keyframes figureFlash {
+  0% {
+    background-color: var(--pub-notice-bg);
+    transform: translateY(-3px);
+  }
+  30% {
+    transform: none;
+  }
+  100% {
+    background-color: transparent;
   }
 }

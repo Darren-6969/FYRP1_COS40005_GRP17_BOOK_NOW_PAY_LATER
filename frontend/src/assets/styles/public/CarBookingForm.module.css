@@ -322,12 +322,11 @@
   background: #75705f;
   display: flex;
   justify-content: flex-start;
-  transition: background 0.18s ease;
+  transition: background var(--pub-dur-fast) ease;
 }
 
 .switchOn {
   background: var(--pub-brand);
-  justify-content: flex-end;
 }
 
 .switchKnob {
@@ -504,6 +503,7 @@
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+  transition: var(--pub-t-control);
 }
 
 .agreeButton:hover {
@@ -532,7 +532,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  transition: background 0.18s ease;
+  transition: var(--pub-t-control);
 }
 
 .submit:hover:not(:disabled) {
@@ -713,6 +713,7 @@
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
+  transition: var(--pub-t-control);
 }
 
 .secondaryButton:hover {
@@ -892,7 +893,9 @@
   color: var(--pub-text);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background var(--pub-dur-fast) ease,
+    color var(--pub-dur-fast) ease;
 }
 
 .segOption:hover {
@@ -901,7 +904,6 @@
 
 .segOptionOn,
 .segOptionOn:hover {
-  background: var(--pub-brand);
   color: var(--pub-on-brand);
 }
 
@@ -945,6 +947,7 @@
   color: var(--pub-link);
   text-decoration: underline;
   text-underline-offset: 3px;
+  transition: var(--pub-t-control);
 }
 
 .routeChange:hover {
@@ -994,5 +997,114 @@
 @media (prefers-reduced-motion: reduce) {
   .segOption {
     transition: none;
+  }
+}
+
+/* ── shared control feel (motion tokens in tokens.css) ─────────── */
+@media (hover: hover) {
+  .submit:hover:not(:disabled),
+  .secondaryButton:hover:not(:disabled),
+  .agreeButton:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
+}
+
+.submit:active:not(:disabled),
+.secondaryButton:active:not(:disabled),
+.agreeButton:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+
+.routeChange:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ── phase 4 motion (tokens in tokens.css) ── */
+
+/* Segmented control: one highlight that slides to the chosen option.
+   Two equal columns so the slide is exact; .segSecond moves it across. */
+.seg {
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  isolation: isolate;
+}
+
+.seg::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 8px) / 2);
+  border-radius: 999px;
+  background: var(--pub-brand);
+  transition: transform var(--pub-dur) var(--pub-ease);
+}
+
+.segSecond::before {
+  transform: translateX(calc(100% + 2px));
+}
+
+/* Switch knob slides instead of jumping. */
+.switchKnob {
+  transition: transform var(--pub-dur) var(--pub-ease);
+}
+
+.switchOn .switchKnob {
+  transform: translateX(22px);
+}
+
+/* Radio cards: border and fill ease in, press on tap. */
+.radioCard {
+  transition: var(--pub-t-control);
+}
+
+.radioCard:active {
+  transform: scale(0.98);
+}
+
+/* Progress dots ease into their new state. */
+.progressDot {
+  transition: var(--pub-t-control);
+}
+
+/* Errors and notices fade in under the field or at the top, so they are
+   noticed without a jolt. No shaking. */
+.fieldError,
+.noteError,
+.errorSummary,
+.banner {
+  animation: noticeIn var(--pub-dur) var(--pub-ease) backwards;
+}
+
+@keyframes noticeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* Terms dialog: overlay fades, dialog scales in. */
+.scrim {
+  animation: fadeIn var(--pub-dur) ease backwards;
+}
+
+.dialog {
+  animation: dialogIn var(--pub-dur-slow) var(--pub-ease) backwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
   }
 }

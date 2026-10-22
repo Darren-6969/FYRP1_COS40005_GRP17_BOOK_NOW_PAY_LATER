@@ -169,7 +169,7 @@
   font-weight: 700;
   font-size: 15px;
   min-height: 46px;
-  transition: background 0.18s ease, transform 0.12s ease;
+  transition: var(--pub-t-control);
 }
 
 .primaryButton:hover {
@@ -190,6 +190,7 @@
   font-weight: 600;
   font-size: 14px;
   min-height: 46px;
+  transition: var(--pub-t-control);
 }
 
 .secondaryButton:hover {
@@ -206,7 +207,7 @@
   padding: 10px 18px;
   border-radius: 10px;
   min-height: 44px;
-  transition: background 0.18s ease, color 0.18s ease;
+  transition: var(--pub-t-control);
 }
 
 .outlineAccent:hover {
@@ -342,6 +343,7 @@
   color: var(--pub-sky-text);
   min-height: 44px;
   padding: 0 4px;
+  transition: var(--pub-t-control);
 }
 
 .whyButton:hover {
@@ -455,6 +457,7 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: var(--pub-t-control);
 }
 
 .chip:hover {
@@ -466,7 +469,7 @@
   display: flex;
   flex-direction: column;
   gap: 28px;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--pub-dur) ease;
 }
 
 .listBusy {
@@ -661,18 +664,7 @@
   width: 100%;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .sheet {
-    animation: rise 0.28s var(--pub-ease);
-  }
-}
-
-@keyframes rise {
-  from {
-    transform: translateY(40px);
-    opacity: 0;
-  }
-}
+/* Sheet entrance: see the phase 3 motion block at the end of the file. */
 
 @media (max-width: 560px) {
   .tools {
@@ -686,5 +678,60 @@
   .sortSelect {
     max-width: none;
     width: 100%;
+  }
+}
+
+/* ── shared control feel (motion tokens in tokens.css) ─────────── */
+@media (hover: hover) {
+  .primaryButton:hover:not(:disabled),
+  .secondaryButton:hover:not(:disabled),
+  .outlineAccent:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
+}
+
+.primaryButton:active:not(:disabled),
+.secondaryButton:active:not(:disabled),
+.outlineAccent:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+
+.chip:active:not(:disabled),
+.whyButton:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ── phase 3 motion ── */
+
+/* A new filter chip scales in, so the customer sees what was added. */
+.chip {
+  animation: chipIn var(--pub-dur) var(--pub-ease) backwards;
+}
+
+@keyframes chipIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+/* Mobile filter sheet slides up over a fading overlay. */
+.scrim {
+  animation: fadeIn var(--pub-dur) ease backwards;
+}
+
+.sheet {
+  animation: sheetUp var(--pub-dur-slow) var(--pub-ease) backwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
   }
 }

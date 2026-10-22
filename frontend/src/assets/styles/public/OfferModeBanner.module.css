@@ -49,7 +49,7 @@
   font-weight: 700;
   font-size: 15px;
   text-decoration: none;
-  transition: background 0.18s ease;
+  transition: var(--pub-t-control);
 }
 
 .button:hover {
@@ -116,7 +116,7 @@
   font-weight: 700;
   font-size: 16px;
   text-decoration: none;
-  transition: background 0.18s ease;
+  transition: var(--pub-t-control);
 }
 
 .bottomButton:hover {
@@ -182,4 +182,17 @@
   .bottomButton {
     transition: none;
   }
+}
+
+/* ── shared control feel (motion tokens in tokens.css) ─────────── */
+@media (hover: hover) {
+  .button:hover:not(:disabled),
+  .bottomButton:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
+}
+
+.button:active:not(:disabled),
+.bottomButton:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
 }

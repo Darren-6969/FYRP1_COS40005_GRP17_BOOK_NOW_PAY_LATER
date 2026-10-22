@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
-import { ChevronDown, Menu, Moon, Sun, X } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ChevronDown, Moon, Sun } from "lucide-react";
 import { BRAND } from "../../constants/brand";
 import { clearSession, getUser, getToken } from "../../utils/session";
 import { logout } from "../../services/auth_service";
@@ -9,10 +9,17 @@ import styles from "../../assets/styles/public/PublicHeader.module.css";
 const NAV = [
   { to: "/cars", label: "Car rental" },
   { to: "/tours", label: "Tours" },
-  { to: { pathname: "/", hash: "#how" }, label: "How it works" },
+  { to: "/", hash: "#how", label: "How it works" },
   { to: "/for-operators", label: "Operators" },
-  { to: { pathname: "/", hash: "#faq" }, label: "FAQ" },
+  { to: "/", hash: "#faq", label: "FAQ" },
 ];
+
+// NavLink treats every "/#…" link as the home page, so on Home both How it
+// works and FAQ would show as current. Hash links match on the hash instead.
+function isCurrent(item, { pathname, hash }) {
+  if (item.hash) return pathname === "/" && hash === item.hash;
+  return pathname === item.to || pathname.startsWith(`${item.to}/`);
+}
 
 const ACCOUNT_LINKS = [
   { to: "/customer/bookings", label: "My bookings" },
@@ -96,7 +103,7 @@ function AccountMenu({ user }) {
           {initialsOf(user)}
         </span>
         <span className={styles.srOnly}>Account menu</span>
-        <ChevronDown size={16} aria-hidden="true" />
+        <ChevronDown size={16} aria-hidden="true" className={`${styles.chevron} ${open ? styles.chevronOpen : ""}`} />
       </button>
       {open && (
         <div id="public-account-menu" className={styles.menu}>
@@ -124,29 +131,66 @@ function ThemeToggle({ theme, onToggle }) {
   const label = toDark ? "Switch to dark mode" : "Switch to light mode";
   return (
     <button type="button" className={styles.themeToggle} onClick={onToggle} aria-label={label} title={label}>
-      {toDark ? <Moon size={18} aria-hidden="true" /> : <Sun size={18} aria-hidden="true" />}
+      {/* key remounts the icon so it turns in on every switch */}
+      <span key={theme} className={styles.themeIcon} aria-hidden="true">
+        {toDark ? <Moon size={18} /> : <Sun size={18} />}
+      </span>
     </button>
   );
 }
 
 export default function PublicHeader({ theme, onToggleTheme }) {
   const [navOpen, setNavOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const sentinelRef = useRef(null);
+  const toggleRef = useRef(null);
+  const location = useLocation();
   const user = getToken() ? getUser() : null;
   const role = user?.role ? String(user.role).toUpperCase() : null;
 
+  // Scrolled state from a 1px marker at the top of the page, so nothing runs
+  // on every scroll event.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return undefined;
+    const io = new IntersectionObserver(([entry]) => setScrolled(!entry.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  // Escape closes the mobile menu and returns focus to its button.
+  useEffect(() => {
+    if (!navOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      setNavOpen(false);
+      toggleRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [navOpen]);
+
   return (
-    <header className={styles.header}>
+    <>
+    <span ref={sentinelRef} className={styles.sentinel} aria-hidden="true" />
+    <header className={`${styles.header} ${scrolled ? styles.headerScrolled : ""}`}>
       <div className={styles.inner}>
         <BrandMark />
 
         <button
+          ref={toggleRef}
           type="button"
           className={styles.navToggle}
           aria-expanded={navOpen}
           aria-controls="public-nav"
           onClick={() => setNavOpen((v) => !v)}
         >
-          {navOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+          {/* three lines that fold into a cross */}
+          <span className={`${styles.burger} ${navOpen ? styles.burgerOpen : ""}`} aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
           <span className={styles.srOnly}>{navOpen ? "Close menu" : "Open menu"}</span>
         </button>
 
@@ -155,17 +199,20 @@ export default function PublicHeader({ theme, onToggleTheme }) {
           aria-label="Main"
           className={`${styles.nav} ${navOpen ? styles.navOpen : ""}`}
         >
-          {NAV.map((item) => (
-            <NavLink
-              key={item.label}
-              to={item.to}
-              end
-              className={styles.navLink}
-              onClick={() => setNavOpen(false)}
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          {NAV.map((item) => {
+            const current = isCurrent(item, location);
+            return (
+              <Link
+                key={item.label}
+                to={item.hash ? { pathname: item.to, hash: item.hash } : item.to}
+                aria-current={current ? "page" : undefined}
+                className={`${styles.navLink} ${current ? styles.navLinkCurrent : ""}`}
+                onClick={() => setNavOpen(false)}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className={styles.actions}>
@@ -196,5 +243,6 @@ export default function PublicHeader({ theme, onToggleTheme }) {
         </div>
       </div>
     </header>
+    </>
   );
 }

@@ -52,10 +52,10 @@
   white-space: nowrap;
   cursor: pointer;
   transition:
-    transform 0.3s var(--pub-ease),
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.3s var(--pub-ease);
+    transform var(--pub-dur) var(--pub-ease),
+    background-color var(--pub-dur-fast) ease,
+    border-color var(--pub-dur-fast) ease,
+    box-shadow var(--pub-dur) var(--pub-ease);
 }
 
 .btn:hover {
@@ -67,7 +67,7 @@
 }
 
 .arrow {
-  transition: transform 0.35s var(--pub-ease);
+  transition: transform var(--pub-dur) var(--pub-ease);
 }
 
 .btn:hover .arrow {
@@ -264,7 +264,7 @@ a.btnGhost:hover {
   background: var(--pub-surface);
   color: var(--pub-ink);
   box-shadow: 0 34px 70px -24px rgba(0, 0, 0, 0.7);
-  transition: transform 0.5s var(--pub-ease);
+  transition: transform var(--pub-dur) var(--pub-ease);
 }
 
 .stage:hover .req {
@@ -434,9 +434,9 @@ a.btnGhost:hover {
   font-size: 14px;
   cursor: pointer;
   transition:
-    transform 0.25s var(--pub-ease),
-    background-color 0.2s ease,
-    border-color 0.2s ease;
+    transform var(--pub-dur) var(--pub-ease),
+    background-color var(--pub-dur-fast) ease,
+    border-color var(--pub-dur-fast) ease;
 }
 
 .reqBtn:hover {
@@ -619,7 +619,7 @@ a.btnGhost:hover {
   inset: 0;
   background: var(--pub-brand);
   transform-origin: left;
-  transition: transform 0.7s var(--pub-ease);
+  transition: transform var(--pub-dur-slow) var(--pub-ease);
 }
 
 .steps {
@@ -641,10 +641,10 @@ a.btnGhost:hover {
   text-align: left;
   cursor: pointer;
   transition:
-    background-color 0.3s ease,
-    border-color 0.3s ease,
-    transform 0.35s var(--pub-ease),
-    box-shadow 0.35s var(--pub-ease);
+    background-color var(--pub-dur-fast) ease,
+    border-color var(--pub-dur-fast) ease,
+    transform var(--pub-dur) var(--pub-ease),
+    box-shadow var(--pub-dur) var(--pub-ease);
 }
 
 .step:hover {
@@ -788,7 +788,7 @@ a.btnGhost:hover {
   background: var(--pub-surface);
   border: 3px solid var(--pub-brand);
   box-shadow: 0 6px 14px -6px rgba(20, 35, 31, 0.6);
-  transition: transform 0.2s var(--pub-ease);
+  transition: transform var(--pub-dur) var(--pub-ease);
 }
 
 .range::-webkit-slider-thumb:hover {
@@ -873,9 +873,9 @@ a.btnGhost:hover {
   border: 1px solid var(--pub-line);
   background: var(--pub-surface);
   transition:
-    transform 0.45s var(--pub-ease),
-    box-shadow 0.45s var(--pub-ease),
-    border-color 0.3s ease;
+    transform var(--pub-dur) var(--pub-ease),
+    box-shadow var(--pub-dur) var(--pub-ease),
+    border-color var(--pub-dur-fast) ease;
 }
 
 .plan:hover {
@@ -959,7 +959,7 @@ a.btnGhost:hover {
   border-radius: 999px;
   background: var(--pub-moss);
   transform-origin: left;
-  transition: transform 0.6s var(--pub-ease);
+  transition: transform var(--pub-dur-slow) var(--pub-ease);
 }
 
 .barMarker {
@@ -971,8 +971,8 @@ a.btnGhost:hover {
   border-radius: 4px;
   background: var(--pub-ink);
   transition:
-    left 0.45s var(--pub-ease),
-    background-color 0.3s ease;
+    left var(--pub-dur) var(--pub-ease),
+    background-color var(--pub-dur-fast) ease;
 }
 
 .planShort .barMarker {
@@ -1001,17 +1001,17 @@ a.btnGhost:hover {
   color: var(--pub-moss-text);
 }
 
+/* Pulses like every other public skeleton. */
 .skeleton {
   min-height: 330px;
   border-radius: 16px;
-  background: linear-gradient(90deg, var(--pub-line-soft) 25%, var(--pub-surface-sunk) 50%, var(--pub-line-soft) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
+  background: var(--pub-line-soft);
+  animation: skeletonPulse 1.4s ease-in-out infinite;
 }
 
-@keyframes shimmer {
-  to {
-    background-position: -200% 0;
+@keyframes skeletonPulse {
+  50% {
+    opacity: 0.55;
   }
 }
 
@@ -1095,9 +1095,9 @@ a.btnGhost:hover {
   text-align: left;
   cursor: pointer;
   transition:
-    background-color 0.3s ease,
-    border-color 0.3s ease,
-    transform 0.3s var(--pub-ease);
+    background-color var(--pub-dur-fast) ease,
+    border-color var(--pub-dur-fast) ease,
+    transform var(--pub-dur) var(--pub-ease);
 }
 
 .tab:hover {
@@ -1405,7 +1405,7 @@ a.btnGhost:hover {
   font-weight: 600;
   letter-spacing: -0.01em;
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: color var(--pub-dur-fast) ease;
 }
 
 .faqBtn:hover {
@@ -1421,40 +1421,19 @@ a.btnGhost:hover {
   border-radius: 50%;
   border: 1px solid var(--pub-control-line);
   transition:
-    transform 0.4s var(--pub-ease),
-    background-color 0.3s ease,
-    border-color 0.3s ease,
-    color 0.3s ease;
+    transform var(--pub-dur) var(--pub-ease),
+    background-color var(--pub-dur-fast) ease,
+    border-color var(--pub-dur-fast) ease,
+    color var(--pub-dur-fast) ease;
 }
 
 .faqOpen .faqIcon {
-  transform: rotate(45deg);
   background: var(--pub-ink);
   border-color: var(--pub-ink);
   color: var(--pub-ground);
 }
 
-.answer {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.45s var(--pub-ease);
-}
-
-.faqOpen .answer {
-  grid-template-rows: 1fr;
-}
-
-.answerInner {
-  overflow: hidden;
-  /* Hidden from screen readers and Tab once the collapse has finished. */
-  visibility: hidden;
-  transition: visibility 0s linear 0.45s;
-}
-
-.faqOpen .answerInner {
-  visibility: visible;
-  transition-delay: 0s;
-}
+/* Panel motion: Disclosure.module.css (shared). */
 
 .answerText {
   max-width: 68ch;

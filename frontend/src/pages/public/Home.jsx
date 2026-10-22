@@ -12,6 +12,8 @@ import {
 import { PICKUP_CITIES, PICKUP_SHORTCUTS } from "../../services/mock/listings.mock";
 import { parseCarSearch, toCarSearchParams } from "../../utils/carSearchParams";
 import styles from "../../assets/styles/public/Home.module.css";
+import disclosure from "../../assets/styles/public/Disclosure.module.css";
+import useReveal, { prefersReducedMotion } from "../../hooks/useReveal";
 
 // The hero photo is optional: until src/assets/public/hero-road.png is added,
 // the hero falls back to the design's animated gradient.
@@ -50,47 +52,6 @@ const SEAT_OPTIONS = [
   { value: "5", label: "5+ seats" },
   { value: "7", label: "7+ seats" },
 ];
-
-function prefersReducedMotion() {
-  return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-}
-
-// Fades [data-reveal] elements in as they scroll into view. Re-scans whenever
-// `deps` change so cards that arrive after a fetch are picked up too.
-function useReveal(rootRef, deps) {
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return undefined;
-    const els = Array.from(root.querySelectorAll("[data-reveal]:not([data-shown])"));
-    const showAll = () => els.forEach((el) => el.setAttribute("data-shown", ""));
-    if (prefersReducedMotion() || typeof IntersectionObserver === "undefined") {
-      showAll();
-      return undefined;
-    }
-    root.setAttribute("data-motion", "");
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          entry.target.setAttribute("data-shown", "");
-          io.unobserve(entry.target);
-        });
-      },
-      { threshold: 0.18, rootMargin: "0px 0px -8% 0px" }
-    );
-    els.forEach((el, i) => {
-      el.style.transitionDelay = `${(i % 4) * 0.06}s`;
-      io.observe(el);
-    });
-    // Never leave content hidden if the observer misbehaves.
-    const safety = setTimeout(showAll, 2600);
-    return () => {
-      io.disconnect();
-      clearTimeout(safety);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-}
 
 // Counts a sen amount up from zero once visible. Screen readers get the final value.
 function CountUp({ sen }) {
@@ -530,7 +491,7 @@ function Faq() {
                     onClick={() => setOpen(isOpen ? -1 : i)}
                   >
                     <span>{f.q}</span>
-                    <span className={`${styles.faqIcon} ${isOpen ? styles.faqIconOpen : ""}`} aria-hidden="true">
+                    <span className={`${styles.faqIcon} ${disclosure.icon} ${isOpen ? disclosure.iconOpen : ""}`} aria-hidden="true">
                       +
                     </span>
                   </button>
@@ -539,9 +500,9 @@ function Faq() {
                   id={`faq-a-${i}`}
                   role="region"
                   aria-labelledby={`faq-q-${i}`}
-                  className={`${styles.faqPanel} ${isOpen ? styles.faqPanelOpen : ""}`}
+                  className={`${disclosure.panel} ${isOpen ? disclosure.panelOpen : ""}`}
                 >
-                  <div className={styles.faqPanelInner}>
+                  <div className={disclosure.panelInner}>
                     <p className={styles.faqA}>{f.a}</p>
                   </div>
                 </div>

@@ -7,6 +7,7 @@ import {
   SORTS,
   hasDates,
   parseCarSearch,
+  rangeText,
   toCarSearchParams,
   tripParams,
 } from "../../utils/carSearchParams";
@@ -124,7 +125,10 @@ function ShareButton({ name }) {
   return (
     <>
       <button type="button" className={styles.shareButton} onClick={share}>
-        {state === "copied" ? <Check size={18} aria-hidden="true" /> : <Share2 size={18} aria-hidden="true" />}
+        {/* key remounts the icon so the swap to the tick is animated */}
+        <span key={state} className={styles.shareIcon} aria-hidden="true">
+          {state === "copied" ? <Check size={18} /> : <Share2 size={18} />}
+        </span>
         {state === "copied" ? "Link copied" : "Share"}
       </button>
       <span role="status" className={styles.srOnly}>
@@ -190,12 +194,41 @@ function Hero({ operator, carCount, cities }) {
 }
 
 function SectionNav({ items }) {
+  const [active, setActive] = useState(null);
+  const ids = items.map((it) => it.id).join(",");
+
+  // Marks the section being read: the one crossing the band just under the
+  // sticky header and this nav.
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return undefined;
+    const els = ids
+      .split(",")
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
+    if (!els.length) return undefined;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const hit = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (hit) setActive(hit.target.id);
+      },
+      { rootMargin: "-130px 0px -55% 0px" }
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [ids]);
+
   return (
     <nav className={styles.sectionNav} aria-label="On this page">
       <ul>
         {items.map((it) => (
           <li key={it.id}>
-            <a href={`#${it.id}`}>{it.label}</a>
+            <a
+              href={`#${it.id}`}
+              aria-current={active === it.id ? "location" : undefined}
+              className={active === it.id ? styles.sectionNavCurrent : undefined}
+            >
+              {it.label}
+            </a>
           </li>
         ))}
       </ul>
@@ -504,14 +537,14 @@ export default function OperatorStorefront() {
   if (criteria.pmin !== null || criteria.pmax !== null) {
     chips.push({
       key: "price",
-      label: `RM${criteria.pmin ?? view.bounds.price?.min ?? 0} - RM${criteria.pmax ?? view.bounds.price?.max ?? ""} per day`,
+      label: `${rangeText(criteria.pmin, criteria.pmax)} per day`,
       clear: () => update({ pmin: null, pmax: null }),
     });
   }
   if (dates && (criteria.dmin !== null || criteria.dmax !== null)) {
     chips.push({
       key: "dep",
-      label: `RM${criteria.dmin ?? view.bounds.deposit?.min ?? 0} - RM${criteria.dmax ?? view.bounds.deposit?.max ?? ""} now`,
+      label: `${rangeText(criteria.dmin, criteria.dmax)} now`,
       clear: () => update({ dmin: null, dmax: null }),
     });
   }

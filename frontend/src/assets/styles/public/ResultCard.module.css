@@ -5,13 +5,26 @@
   overflow: hidden;
   display: grid;
   grid-template-columns: minmax(180px, 248px) 1fr;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--pub-ease);
+  transition: var(--pub-t-card);
 }
 
 .card:hover {
   border-color: var(--pub-moss);
   box-shadow: 0 14px 30px -20px rgba(20, 35, 31, 0.36);
   transform: translateY(-2px);
+}
+
+/* Cars fade up as they join the list, so a filter change reads as the list
+   updating rather than jumping. Cars already shown keep their place. */
+.card {
+  animation: cardIn var(--pub-dur-slow) var(--pub-ease) backwards;
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }
 
 .held {
@@ -129,7 +142,7 @@
   cursor: pointer;
   display: grid;
   place-items: center;
-  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+  transition: var(--pub-t-control);
 }
 
 .save:hover {
@@ -258,7 +271,7 @@
   min-height: 46px;
   display: inline-flex;
   align-items: center;
-  transition: background 0.18s ease, transform 0.12s ease;
+  transition: var(--pub-t-control);
 }
 
 .view:hover {
@@ -293,5 +306,46 @@
   .view {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* ── shared control feel (motion tokens in tokens.css) ─────────── */
+@media (hover: hover) {
+  .view:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
+}
+
+.view:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+
+.save:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) {
+  .card:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* Heart pops when a car is saved. */
+.savePop svg {
+  animation: heartPop var(--pub-dur-slow) var(--pub-ease);
+}
+
+@keyframes heartPop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.35);
+  }
+  65% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
   }
 }

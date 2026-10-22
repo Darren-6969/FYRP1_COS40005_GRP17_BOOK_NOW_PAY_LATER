@@ -232,6 +232,15 @@
   cursor: pointer;
   display: grid;
   place-items: center;
+  transition: var(--pub-t-control);
+}
+
+.save:hover {
+  border-color: var(--pub-accent);
+}
+
+.save:active {
+  transform: scale(0.94);
 }
 
 .saveOn {
@@ -590,6 +599,7 @@
   padding: 14px 16px;
   cursor: pointer;
   color: var(--pub-ink) !important;
+  transition: var(--pub-t-control);
 }
 
 .alt:hover {
@@ -638,6 +648,7 @@
   border-radius: 10px;
   min-height: 44px;
   cursor: pointer;
+  transition: var(--pub-t-control);
 }
 
 .outlineButton:hover {
@@ -874,14 +885,10 @@
 }
 
 .faqIcon {
-  flex-shrink: 0;
   color: var(--pub-moss-text);
-  transition: transform 0.2s var(--pub-ease);
 }
 
-.faqIconOpen {
-  transform: rotate(45deg);
-}
+/* Panel and icon motion: Disclosure.module.css (shared). */
 
 .faqA {
   font-size: 14px;
@@ -1002,5 +1009,66 @@
 
   .termKey {
     grid-row: auto;
+  }
+}
+
+/* ── shared control feel (motion tokens in tokens.css) ─────────── */
+@media (hover: hover) {
+  .outlineButton:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
+}
+
+.outlineButton:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+
+.alt:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ── phase 3 motion ── */
+
+/* Each new photo fades in over the previous one. */
+.photoFade {
+  animation: photoIn var(--pub-dur-slow) ease backwards;
+}
+
+@keyframes photoIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Heart pops when the car is saved. */
+.savePop svg {
+  animation: heartPop var(--pub-dur-slow) var(--pub-ease);
+}
+
+@keyframes heartPop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.35);
+  }
+  65% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* The sign-in prompt by the heart opens like the header's account menu. */
+.signin {
+  transform-origin: top right;
+  animation: popIn var(--pub-dur) var(--pub-ease) backwards;
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
   }
 }

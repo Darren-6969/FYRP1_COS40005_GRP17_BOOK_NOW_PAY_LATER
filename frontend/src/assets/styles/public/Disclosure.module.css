@@ -1,0 +1,44 @@
+/*
+ * Shared accordion motion for the public pages (Home, Car detail, For
+ * operators). The panel animates its height through grid rows, so no height
+ * is measured in JS. A closed panel is hidden from screen readers and Tab
+ * once the collapse has finished.
+ *
+ * Markup: button[aria-expanded] > .icon, then
+ * div.panel(.panelOpen) > div.panelInner > content
+ */
+
+.icon {
+  flex-shrink: 0;
+  transition: transform var(--pub-dur) var(--pub-ease);
+}
+
+.iconOpen {
+  transform: rotate(45deg);
+}
+
+.panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--pub-dur-slow) var(--pub-ease),
+    opacity var(--pub-dur) ease,
+    visibility 0s linear var(--pub-dur-slow);
+}
+
+.panelOpen {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  opacity: 1;
+  transition:
+    grid-template-rows var(--pub-dur-slow) var(--pub-ease),
+    opacity var(--pub-dur) ease,
+    visibility 0s;
+}
+
+.panelInner {
+  overflow: hidden;
+  min-height: 0;
+}

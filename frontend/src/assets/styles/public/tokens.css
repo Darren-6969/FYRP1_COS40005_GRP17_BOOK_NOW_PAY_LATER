@@ -80,6 +80,19 @@
   --pub-focus: #b8501a;
   --pub-ease: cubic-bezier(0.16, 1, 0.3, 1);
 
+  /* motion: every public transition uses these, so the pages feel alike */
+  --pub-dur-fast: 150ms; /* colour, border and background changes */
+  --pub-dur: 240ms; /* hover lift, press, small movements */
+  --pub-dur-slow: 420ms; /* panels, sheets, accordions */
+  --pub-ease-exit: cubic-bezier(0.7, 0, 0.84, 0); /* things leaving the screen */
+  --pub-t-control:
+    background-color var(--pub-dur-fast) ease, border-color var(--pub-dur-fast) ease,
+    color var(--pub-dur-fast) ease, box-shadow var(--pub-dur) var(--pub-ease),
+    transform var(--pub-dur) var(--pub-ease);
+  --pub-t-card:
+    border-color var(--pub-dur) ease, box-shadow var(--pub-dur) var(--pub-ease),
+    transform var(--pub-dur) var(--pub-ease);
+
   --pub-max: 1240px;
   --pub-gutter: clamp(16px, 4vw, 40px);
 

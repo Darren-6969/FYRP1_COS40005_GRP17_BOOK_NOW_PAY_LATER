@@ -45,11 +45,16 @@
   min-height: 36px;
   font-size: 14px;
   color: var(--pub-on-deep-soft) !important;
-  transition: color 0.18s ease;
+  /* Same grow-in underline as the header links. */
+  background: linear-gradient(currentColor, currentColor) left bottom 8px / 0 1px no-repeat;
+  transition:
+    color var(--pub-dur-fast) ease,
+    background-size var(--pub-dur) var(--pub-ease);
 }
 
 .link:hover {
   color: var(--pub-cta) !important;
+  background-size: 100% 1px;
 }
 
 .legal {

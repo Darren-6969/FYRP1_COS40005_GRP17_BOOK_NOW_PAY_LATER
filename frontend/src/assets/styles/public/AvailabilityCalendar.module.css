@@ -241,3 +241,28 @@
     font-size: 11px;
   }
 }
+/* ── motion (tokens in tokens.css) ── */
+.day {
+  transition: var(--pub-t-control);
+}
+
+@media (hover: hover) {
+  .available:hover {
+    transform: translateY(-1px);
+  }
+}
+
+.day:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+/* A picked day settles in, so the choice is easy to see. */
+.selected {
+  animation: dayPick var(--pub-dur) var(--pub-ease);
+}
+
+@keyframes dayPick {
+  from {
+    transform: scale(0.9);
+  }
+}

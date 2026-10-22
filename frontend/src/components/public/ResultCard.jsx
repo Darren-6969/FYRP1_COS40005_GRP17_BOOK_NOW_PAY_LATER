@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { operatorHref } from "../../services/listing_public_service";
 import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
@@ -10,6 +11,8 @@ const TRANSMISSION = { AUTOMATIC: "Automatic", MANUAL: "Manual" };
 // One car in the results list. `href` already carries the trip (dates and times).
 export default function ResultCard({ result, href, linkState, saved, onToggleSave }) {
   const { listing, quote, rateSen, depositPct, depositPerDaySen, remaining } = result;
+  // The heart pops only when the customer saves, not when a saved car loads.
+  const [pop, setPop] = useState(false);
   const primary = listing.images.find((img) => img.isPrimary) || listing.images[0];
   const title = `${listing.vehicleMake} ${listing.vehicleModel}`;
   const meta = [listing.vehicleType, `${listing.seats} seats`, TRANSMISSION[listing.transmission], listing.fuelType]
@@ -46,10 +49,14 @@ export default function ResultCard({ result, href, linkState, saved, onToggleSav
           </div>
           <button
             type="button"
-            className={`${styles.save} ${saved ? styles.saveOn : ""}`}
+            className={`${styles.save} ${saved ? styles.saveOn : ""} ${pop ? styles.savePop : ""}`}
             aria-pressed={saved}
             aria-label={saved ? `Remove ${title} from saved` : `Save ${title} for later`}
-            onClick={onToggleSave}
+            onClick={(e) => {
+              if (!saved) setPop(true);
+              onToggleSave?.(e);
+            }}
+            onAnimationEnd={() => setPop(false)}
           >
             <Heart size={18} aria-hidden="true" fill={saved ? "currentColor" : "none"} />
           </button>

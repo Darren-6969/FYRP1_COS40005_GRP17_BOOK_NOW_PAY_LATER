@@ -67,3 +67,34 @@
     scroll-behavior: smooth;
   }
 }
+
+/* ── shared motion ───────────────────────────────────────────────── */
+
+/* Scroll reveal for the marketing pages (hooks/useReveal.js). The hook only
+   sets data-motion when motion is allowed, so content is never hidden
+   without it. */
+.root [data-motion] [data-reveal] {
+  transition:
+    opacity 0.55s var(--pub-ease),
+    transform 0.55s var(--pub-ease);
+}
+
+.root [data-motion] [data-reveal]:not([data-shown]) {
+  opacity: 0;
+  transform: translateY(18px);
+}
+
+/* One reduced-motion rule for every public page. Animations jump to their
+   end state, so nothing is left hidden or half-drawn. */
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}

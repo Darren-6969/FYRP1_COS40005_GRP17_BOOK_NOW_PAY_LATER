@@ -6,6 +6,22 @@
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--pub-line);
+  transition: box-shadow var(--pub-dur) var(--pub-ease);
+}
+
+/* A shadow once the page scrolls, so the header reads as floating above it. */
+.headerScrolled {
+  box-shadow: 0 12px 28px -22px rgba(20, 35, 31, 0.55);
+}
+
+/* 1px marker at the very top of the page; the header watches it. */
+.sentinel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
 }
 
 .inner {
@@ -28,6 +44,7 @@
 }
 
 .brandTile {
+  transition: transform var(--pub-dur) var(--pub-ease);
   width: 30px;
   height: 30px;
   border-radius: 9px;
@@ -60,15 +77,40 @@
 }
 
 .navLink {
+  position: relative;
   font-size: 14px;
   font-weight: 500;
   color: var(--pub-text) !important;
   padding: 10px 2px;
-  transition: color 0.18s ease;
+  transition: color var(--pub-dur-fast) ease;
+}
+
+/* Underline grows from the left on hover and stays under the current page. */
+.navLink::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--pub-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--pub-dur) var(--pub-ease);
 }
 
 .navLink:hover {
-  color: var(--pub-link-hover) !important;
+  color: var(--pub-ink) !important;
+}
+
+.navLink:hover::after,
+.navLinkCurrent::after {
+  transform: scaleX(1);
+}
+
+.navLinkCurrent {
+  color: var(--pub-ink) !important;
 }
 
 .actions {
@@ -98,15 +140,25 @@
   min-height: 44px;
   display: inline-flex;
   align-items: center;
-  transition: background 0.18s ease, transform 0.12s ease;
+  transition: var(--pub-t-control);
 }
 
 .signup:hover {
   background: var(--pub-brand-hover);
 }
 
+@media (hover: hover) {
+  .signup:hover {
+    transform: translateY(-2px);
+  }
+
+  .brand:hover .brandTile {
+    transform: rotate(-8deg) scale(1.06);
+  }
+}
+
 .signup:active {
-  transform: scale(0.98);
+  transform: translateY(0) scale(0.97);
 }
 
 .navToggle {
@@ -119,6 +171,56 @@
   place-items: center;
   cursor: pointer;
   color: var(--pub-ink);
+  transition: var(--pub-t-control);
+}
+
+.navToggle:active {
+  transform: scale(0.94);
+}
+
+/* Menu icon: three lines that fold into a cross when the menu opens. */
+.burger {
+  position: relative;
+  width: 18px;
+  height: 14px;
+  display: block;
+}
+
+.burger span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transition:
+    transform var(--pub-dur) var(--pub-ease),
+    opacity var(--pub-dur-fast) ease;
+}
+
+.burger span:nth-child(1) {
+  top: 0;
+}
+
+.burger span:nth-child(2) {
+  top: 6px;
+}
+
+.burger span:nth-child(3) {
+  top: 12px;
+}
+
+.burgerOpen span:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.burgerOpen span:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0.4);
+}
+
+.burgerOpen span:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
 }
 
 .themeToggle {
@@ -131,11 +233,33 @@
   color: var(--pub-ink);
   border-radius: 10px;
   cursor: pointer;
-  transition: border-color 0.18s ease, background 0.18s ease;
+  transition: var(--pub-t-control);
 }
 
 .themeToggle:hover {
   border-color: var(--pub-moss);
+}
+
+.themeToggle:active {
+  transform: scale(0.94);
+}
+
+/* The new icon turns in each time the theme switches. */
+.themeIcon {
+  display: grid;
+  place-items: center;
+  animation: themeIn var(--pub-dur-slow) var(--pub-ease);
+}
+
+@keyframes themeIn {
+  from {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* account menu */
@@ -154,6 +278,19 @@
   min-height: 44px;
   cursor: pointer;
   color: var(--pub-ink);
+  transition: var(--pub-t-control);
+}
+
+.avatarButton:hover {
+  border-color: var(--pub-moss);
+}
+
+.chevron {
+  transition: transform var(--pub-dur) var(--pub-ease);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
 }
 
 .avatar {
@@ -180,6 +317,19 @@
   box-shadow: var(--pub-shadow-card);
   padding: 8px;
   z-index: 70;
+  transform-origin: top right;
+  animation: menuIn var(--pub-dur) var(--pub-ease);
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .menuWho {
@@ -207,6 +357,7 @@
   border-radius: 8px;
   font-size: 14px;
   color: var(--pub-ink) !important;
+  transition: background-color var(--pub-dur-fast) ease;
 }
 
 .menuItem:hover {
@@ -250,8 +401,19 @@
     margin-left: auto;
   }
 
+  /* The menu stays in the page and fades and slides in, instead of popping.
+     While closed it is hidden from screen readers and Tab. */
   .nav {
-    display: none;
+    display: flex;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(-8px);
+    pointer-events: none;
+    box-shadow: 0 18px 30px -24px rgba(20, 35, 31, 0.5);
+    transition:
+      opacity var(--pub-dur) ease,
+      transform var(--pub-dur) var(--pub-ease),
+      visibility 0s linear var(--pub-dur);
     position: absolute;
     top: 68px;
     left: 0;
@@ -265,12 +427,28 @@
   }
 
   .navOpen {
-    display: flex;
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    transition:
+      opacity var(--pub-dur) ease,
+      transform var(--pub-dur) var(--pub-ease),
+      visibility 0s;
   }
 
   .navLink {
     padding: 14px 0;
     border-bottom: 1px solid var(--pub-line-soft);
+  }
+
+  /* In the stacked menu the current page is marked by weight, not a line. */
+  .navLink::after {
+    display: none;
+  }
+
+  .navLinkCurrent {
+    font-weight: 600;
   }
 }
 

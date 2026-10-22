@@ -78,11 +78,13 @@
   border-radius: 12px;
   font-weight: 600;
   font-size: 15px;
+  transition: var(--pub-t-control);
 }
 
 .primary {
   background: var(--pub-brand);
   color: var(--pub-on-brand) !important;
+  transition: var(--pub-t-control);
 }
 
 .primary:hover {
@@ -96,4 +98,17 @@
 
 .secondary:hover {
   border-color: var(--pub-moss);
+}
+
+/* ── shared control feel (motion tokens in tokens.css) ─────────── */
+@media (hover: hover) {
+  .primary:hover:not(:disabled),
+  .secondary:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
+}
+
+.primary:active:not(:disabled),
+.secondary:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
 }
