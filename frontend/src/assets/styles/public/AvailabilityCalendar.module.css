@@ -1,11 +1,13 @@
+/* Colours come from the public tokens (tokens.css), so the calendar follows
+   the site palette and the dark theme. */
 .calendar {
   margin-top: 20px;
   padding: 16px;
 
-  border: 1px solid #e2e8f0;
-  border-radius: 18px;
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
 
-  background: #ffffff;
+  background: var(--pub-surface);
 }
 
 .header {
@@ -18,7 +20,7 @@
 .eyebrow {
   margin: 0 0 3px;
 
-  color: #64748b;
+  color: var(--pub-label);
 
   font-size: 11px;
   font-weight: 800;
@@ -30,7 +32,7 @@
 .title {
   margin: 0;
 
-  color: #0f172a;
+  color: var(--pub-ink);
 
   font-size: 18px;
 }
@@ -47,12 +49,12 @@
   display: grid;
   place-items: center;
 
-  border: 1px solid #dbe3ef;
+  border: 1px solid var(--pub-control-line);
   border-radius: 10px;
 
-  background: #ffffff;
+  background: var(--pub-surface);
 
-  color: #334155;
+  color: var(--pub-ink);
 
   cursor: pointer;
 }
@@ -69,7 +71,7 @@
 
   margin-top: 14px;
 
-  color: #64748b;
+  color: var(--pub-label);
 
   font-size: 12px;
   font-weight: 600;
@@ -90,11 +92,11 @@
 }
 
 .availableDot {
-  background: #22c55e;
+  background: var(--pub-moss);
 }
 
 .blockedDot {
-  background: #ef4444;
+  background: var(--pub-error-fg);
 }
 
 .weekdays {
@@ -107,9 +109,9 @@
   margin-top: 16px;
   margin-bottom: 5px;
 
-  color: #94a3b8;
+  color: var(--pub-label);
 
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
 
   text-align: center;
@@ -141,16 +143,16 @@
 
   gap: 4px;
 
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--pub-line);
   border-radius: 10px;
 
-  background: #ffffff;
+  background: var(--pub-surface);
 
   cursor: pointer;
 }
 
 .dayNumber {
-  color: #0f172a;
+  color: var(--pub-ink);
 
   font-size: 13px;
   font-weight: 800;
@@ -161,9 +163,9 @@
 
   overflow: hidden;
 
-  color: #64748b;
+  color: var(--pub-label);
 
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
 
   text-overflow: ellipsis;
@@ -171,29 +173,29 @@
 }
 
 .available {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
+  background: var(--pub-ok-bg);
+  border-color: var(--pub-ok-bg);
 }
 
 .available:hover {
-  border-color: #22c55e;
+  border-color: var(--pub-moss);
 }
 
 .blocked {
-  background: #fef2f2;
-  border-color: #fecaca;
+  background: var(--pub-error-bg);
+  border-color: var(--pub-error-bg);
 }
 
 .blocked .dayNumber,
 .blocked .stock {
-  color: #b91c1c;
+  color: var(--pub-error-fg);
 }
 
 .selected {
-  outline: 2px solid #2563eb;
+  outline: 2px solid var(--pub-moss-text);
   outline-offset: -2px;
 
-  background: #eff6ff;
+  background: var(--pub-surface);
 }
 
 .past {
@@ -210,11 +212,11 @@
 
 .message,
 .help {
-  color: #64748b;
+  color: var(--pub-label);
 }
 
 .error {
-  color: #b91c1c;
+  color: var(--pub-error-fg);
 }
 
 /* Larger screens */

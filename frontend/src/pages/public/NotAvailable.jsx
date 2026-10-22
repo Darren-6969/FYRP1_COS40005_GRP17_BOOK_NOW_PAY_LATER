@@ -2,9 +2,9 @@ import { useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import styles from "../../assets/styles/public/NotAvailable.module.css";
 
-// Catch-all page. Also where links to pages that are not built yet (tours,
-// assistant, operator profiles, info pages) end up.
-const KNOWN_UPCOMING = ["/tours", "/assistant", "/operators", "/info"];
+// Catch-all page. Also where links to pages that are not built yet
+// (assistant, operator profiles, info pages) end up.
+const KNOWN_UPCOMING = ["/assistant", "/operators", "/info"];
 
 export default function NotAvailable() {
   const { pathname } = useLocation();

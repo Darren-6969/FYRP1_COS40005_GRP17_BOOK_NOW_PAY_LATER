@@ -307,7 +307,7 @@
   border: 1px solid var(--pub-line);
   border-radius: var(--pub-radius-lg);
   padding: 22px 24px;
-  scroll-margin-top: 84px;
+  scroll-margin-top: var(--pub-header-offset);
 }
 
 .cardTitle {

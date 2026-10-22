@@ -8,6 +8,7 @@ import { BRAND } from "../../constants/brand";
 import styles from "../../assets/styles/public/ForOperators.module.css";
 import disclosure from "../../assets/styles/public/Disclosure.module.css";
 import useReveal from "../../hooks/useReveal";
+import useHeaderOverlay from "../../hooks/useHeaderOverlay";
 
 // Operator recruitment page, /for-operators (SRS 4.2.8, FR-CUST-010, BNPLB-126).
 // Sells the platform to rental companies; every apply button opens the
@@ -404,6 +405,7 @@ function Faq({ data }) {
 
 export default function ForOperators() {
   const rootRef = useRef(null);
+  useHeaderOverlay();
   const [plans, setPlans] = useState({ status: "loading", data: null });
 
   const fetchPlans = useCallback(() => {

@@ -2,22 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, Moon, Sun } from "lucide-react";
 import { BRAND } from "../../constants/brand";
-import { clearSession, getUser, getToken } from "../../utils/session";
+import { clearSession } from "../../utils/session";
+import useSessionUser from "../../hooks/useSessionUser";
 import { logout } from "../../services/auth_service";
 import styles from "../../assets/styles/public/PublicHeader.module.css";
 
+// Car rental only (15 Oct 2026): just the links with real pages. How it works
+// and FAQ come back only if they get their own pages.
 const NAV = [
   { to: "/cars", label: "Car rental" },
-  { to: "/tours", label: "Tours" },
-  { to: "/", hash: "#how", label: "How it works" },
   { to: "/for-operators", label: "Operators" },
-  { to: "/", hash: "#faq", label: "FAQ" },
 ];
 
-// NavLink treats every "/#…" link as the home page, so on Home both How it
-// works and FAQ would show as current. Hash links match on the hash instead.
-function isCurrent(item, { pathname, hash }) {
-  if (item.hash) return pathname === "/" && hash === item.hash;
+function isCurrent(item, { pathname }) {
   return pathname === item.to || pathname.startsWith(`${item.to}/`);
 }
 
@@ -140,17 +137,27 @@ function ThemeToggle({ theme, onToggle }) {
   );
 }
 
-export default function PublicHeader({ theme, onToggleTheme }) {
+// Fixed header (R3). At the top of the page it is full width and transparent,
+// with white text over a dark hero (`overlay`) and ink text on light pages.
+// After about 80px of scroll it becomes a centred floating pill.
+export default function PublicHeader({ theme, onToggleTheme, overlay = false }) {
   const [navOpen, setNavOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const sentinelRef = useRef(null);
   const toggleRef = useRef(null);
   const location = useLocation();
-  const user = getToken() ? getUser() : null;
+  // Follows the session, so logging out (or in, in another tab) swaps the
+  // avatar for Log in / Sign up straight away.
+  const user = useSessionUser();
   const role = user?.role ? String(user.role).toUpperCase() : null;
+  const accountLink = !user
+    ? { to: "/login", label: "Log in" }
+    : role === "CUSTOMER"
+      ? { to: "/customer/bookings", label: "My bookings" }
+      : null;
 
-  // Scrolled state from a 1px marker at the top of the page, so nothing runs
-  // on every scroll event.
+  // Scrolled state from a 1px marker 80px down the page, so nothing runs on
+  // every scroll event.
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el || typeof IntersectionObserver === "undefined") return undefined;
@@ -174,7 +181,11 @@ export default function PublicHeader({ theme, onToggleTheme }) {
   return (
     <>
     <span ref={sentinelRef} className={styles.sentinel} aria-hidden="true" />
-    <header className={`${styles.header} ${scrolled ? styles.headerScrolled : ""}`}>
+    <header
+      className={`${styles.header} ${scrolled ? styles.headerScrolled : ""} ${
+        overlay && !scrolled ? styles.headerOnDark : ""
+      }`}
+    >
       <div className={styles.inner}>
         <BrandMark />
 
@@ -205,7 +216,7 @@ export default function PublicHeader({ theme, onToggleTheme }) {
             return (
               <Link
                 key={item.label}
-                to={item.hash ? { pathname: item.to, hash: item.hash } : item.to}
+                to={item.to}
                 aria-current={current ? "page" : undefined}
                 className={`${styles.navLink} ${current ? styles.navLinkCurrent : ""}`}
                 onClick={() => setNavOpen(false)}
@@ -214,6 +225,15 @@ export default function PublicHeader({ theme, onToggleTheme }) {
               </Link>
             );
           })}
+          {accountLink && (
+            <Link
+              to={accountLink.to}
+              className={`${styles.navLink} ${styles.navAccount}`}
+              onClick={() => setNavOpen(false)}
+            >
+              {accountLink.label}
+            </Link>
+          )}
         </nav>
 
         <div className={styles.actions}>

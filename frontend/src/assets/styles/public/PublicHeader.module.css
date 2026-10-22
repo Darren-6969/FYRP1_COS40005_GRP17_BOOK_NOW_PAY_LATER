@@ -1,23 +1,39 @@
+/* Fixed header (R3). Its own text and controls read these --hdr-* colours,
+   which switch when it sits on a dark hero or turns into the dark pill. */
 .header {
-  position: sticky;
+  --hdr-ink: var(--pub-ink);
+  --hdr-text: var(--pub-text);
+  --hdr-line: var(--pub-line);
+  --hdr-line-hover: var(--pub-moss);
+  --hdr-control: var(--pub-surface);
+  --hdr-mark: var(--pub-accent);
+  --hdr-suffix: var(--pub-moss-text);
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 60;
-  background: var(--pub-nav-bg);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--pub-line);
-  transition: box-shadow var(--pub-dur) var(--pub-ease);
+  /* Only the bar takes clicks; the clear strip around the pill does not. */
+  pointer-events: none;
 }
 
-/* A shadow once the page scrolls, so the header reads as floating above it. */
+/* White text on a dark hero at the top of the page, and always in the pill. */
+.headerOnDark,
 .headerScrolled {
-  box-shadow: 0 12px 28px -22px rgba(20, 35, 31, 0.55);
+  --hdr-ink: #ffffff;
+  --hdr-text: rgba(255, 255, 255, 0.84);
+  --hdr-line: rgba(255, 255, 255, 0.24);
+  --hdr-line-hover: rgba(255, 255, 255, 0.56);
+  --hdr-control: rgba(255, 255, 255, 0.08);
+  --hdr-mark: var(--pub-cta);
+  --hdr-suffix: #a9d6c6;
 }
 
-/* 1px marker at the very top of the page; the header watches it. */
+/* 1px marker about 80px down the page; once it scrolls out of view the
+   header turns into the pill. */
 .sentinel {
   position: absolute;
-  top: 0;
+  top: 80px;
   left: 0;
   width: 1px;
   height: 1px;
@@ -25,14 +41,43 @@
 }
 
 .inner {
+  pointer-events: auto;
+  position: relative;
+  box-sizing: border-box;
   max-width: var(--pub-max);
   margin: 0 auto;
   padding: 0 var(--pub-gutter);
-  height: 68px;
+  height: var(--pub-header-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  transition:
+    max-width var(--pub-dur-slow) var(--pub-ease),
+    margin var(--pub-dur-slow) var(--pub-ease),
+    height var(--pub-dur-slow) var(--pub-ease),
+    padding var(--pub-dur-slow) var(--pub-ease),
+    border-radius var(--pub-dur-slow) var(--pub-ease),
+    background-color var(--pub-dur-slow) ease,
+    border-color var(--pub-dur-slow) ease,
+    box-shadow var(--pub-dur-slow) var(--pub-ease);
+}
+
+/* The floating pill: centred, 12px from the top, deep green with a blur. */
+.headerScrolled .inner {
+  max-width: 820px;
+  margin-top: 12px;
+  height: 56px;
+  padding: 0 6px 0 18px;
+  border-radius: 999px;
+  background: rgba(20, 35, 31, 0.92);
+  border-color: rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.6);
 }
 
 .brand {
@@ -63,11 +108,18 @@
   font-weight: 700;
   font-size: 17px;
   letter-spacing: -0.02em;
-  color: var(--pub-ink);
+  color: var(--hdr-ink);
+  transition: color var(--pub-dur-fast) ease;
 }
 
 .brandSuffix {
-  color: var(--pub-moss-text);
+  color: var(--hdr-suffix);
+}
+
+/* The green tile keeps an edge against the dark hero and the pill. */
+.headerOnDark .brandTile,
+.headerScrolled .brandTile {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
 
 .nav {
@@ -80,9 +132,13 @@
   position: relative;
   font-size: 14px;
   font-weight: 500;
-  color: var(--pub-text) !important;
+  color: var(--hdr-text) !important;
   padding: 10px 2px;
-  transition: color var(--pub-dur-fast) ease;
+  border-radius: 999px;
+  transition:
+    color var(--pub-dur-fast) ease,
+    background-color var(--pub-dur-fast) ease,
+    padding var(--pub-dur-slow) var(--pub-ease);
 }
 
 /* Underline grows from the left on hover and stays under the current page. */
@@ -94,14 +150,14 @@
   bottom: 4px;
   height: 2px;
   border-radius: 2px;
-  background: var(--pub-accent);
+  background: var(--hdr-mark);
   transform: scaleX(0);
   transform-origin: left;
   transition: transform var(--pub-dur) var(--pub-ease);
 }
 
 .navLink:hover {
-  color: var(--pub-ink) !important;
+  color: var(--hdr-ink) !important;
 }
 
 .navLink:hover::after,
@@ -110,7 +166,27 @@
 }
 
 .navLinkCurrent {
-  color: var(--pub-ink) !important;
+  color: var(--hdr-ink) !important;
+}
+
+/* In the pill the current page is a filled pill instead of the underline. */
+@media (min-width: 901px) {
+  .headerScrolled .navLink {
+    padding: 8px 14px;
+  }
+
+  .headerScrolled .navLink::after {
+    display: none;
+  }
+
+  .headerScrolled .navLink:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .headerScrolled .navLinkCurrent,
+  .headerScrolled .navLinkCurrent:hover {
+    background: rgba(255, 255, 255, 0.16);
+  }
 }
 
 .actions {
@@ -120,10 +196,16 @@
   flex-shrink: 0;
 }
 
+/* The menu's copy of Log in / My bookings, shown only where the bar hides
+   them (see the 480px block). */
+.navAccount {
+  display: none;
+}
+
 .login {
   font-size: 14px;
   font-weight: 500;
-  color: var(--pub-text) !important;
+  color: var(--hdr-text) !important;
   padding: 10px 6px;
   min-height: 44px;
   display: inline-flex;
@@ -147,6 +229,30 @@
   background: var(--pub-brand-hover);
 }
 
+/* On the dark hero and in the pill the action turns orange, so it still
+   stands out against the green. */
+.headerOnDark .signup,
+.headerScrolled .signup {
+  background: var(--pub-cta);
+  color: var(--pub-on-cta) !important;
+}
+
+.headerOnDark .signup:hover,
+.headerScrolled .signup:hover {
+  background: var(--pub-cta-hover);
+}
+
+/* Inside the pill the controls take its rounded shape: Sign up becomes a
+   capsule and the square buttons become circles. */
+.headerScrolled .signup {
+  border-radius: 999px;
+}
+
+.headerScrolled .themeToggle,
+.headerScrolled .navToggle {
+  border-radius: 50%;
+}
+
 @media (hover: hover) {
   .signup:hover {
     transform: translateY(-2px);
@@ -163,14 +269,14 @@
 
 .navToggle {
   display: none;
-  border: 1px solid var(--pub-line);
-  background: var(--pub-surface);
+  border: 1px solid var(--hdr-line);
+  background: var(--hdr-control);
   border-radius: 10px;
   width: 44px;
   height: 44px;
   place-items: center;
   cursor: pointer;
-  color: var(--pub-ink);
+  color: var(--hdr-ink);
   transition: var(--pub-t-control);
 }
 
@@ -228,16 +334,16 @@
   height: 44px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--pub-line);
-  background: var(--pub-surface);
-  color: var(--pub-ink);
+  border: 1px solid var(--hdr-line);
+  background: var(--hdr-control);
+  color: var(--hdr-ink);
   border-radius: 10px;
   cursor: pointer;
   transition: var(--pub-t-control);
 }
 
 .themeToggle:hover {
-  border-color: var(--pub-moss);
+  border-color: var(--hdr-line-hover);
 }
 
 .themeToggle:active {
@@ -271,18 +377,18 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--pub-line);
-  background: var(--pub-surface);
+  border: 1px solid var(--hdr-line);
+  background: var(--hdr-control);
   border-radius: 999px;
   padding: 4px 10px 4px 4px;
   min-height: 44px;
   cursor: pointer;
-  color: var(--pub-ink);
+  color: var(--hdr-ink);
   transition: var(--pub-t-control);
 }
 
 .avatarButton:hover {
-  border-color: var(--pub-moss);
+  border-color: var(--hdr-line-hover);
 }
 
 .chevron {
@@ -401,29 +507,36 @@
     margin-left: auto;
   }
 
-  /* The menu stays in the page and fades and slides in, instead of popping.
-     While closed it is hidden from screen readers and Tab. */
+  /* The menu is a rounded card under the bar or the pill. It stays in the
+     page and fades and slides in; while closed it is hidden from screen
+     readers and Tab. */
   .nav {
     display: flex;
     visibility: hidden;
     opacity: 0;
     transform: translateY(-8px);
     pointer-events: none;
-    box-shadow: 0 18px 30px -24px rgba(20, 35, 31, 0.5);
     transition:
       opacity var(--pub-dur) ease,
       transform var(--pub-dur) var(--pub-ease),
       visibility 0s linear var(--pub-dur);
     position: absolute;
-    top: 68px;
-    left: 0;
-    right: 0;
+    top: calc(100% + 8px);
+    left: var(--pub-gutter);
+    right: var(--pub-gutter);
     flex-direction: column;
     align-items: stretch;
     gap: 0;
     background: var(--pub-surface);
-    border-bottom: 1px solid var(--pub-line);
-    padding: 8px var(--pub-gutter) 16px;
+    border: 1px solid var(--pub-line);
+    border-radius: 18px;
+    box-shadow: var(--pub-shadow-pop);
+    padding: 4px 16px;
+  }
+
+  .headerScrolled .nav {
+    left: 0;
+    right: 0;
   }
 
   .navOpen {
@@ -437,9 +550,28 @@
       visibility 0s;
   }
 
+  /* The card is always light, whatever the bar above it looks like. */
   .navLink {
     padding: 14px 0;
-    border-bottom: 1px solid var(--pub-line-soft);
+    border-radius: 0;
+    border-top: 1px solid var(--pub-line-soft);
+    color: var(--pub-text) !important;
+  }
+
+  .navLink:first-child {
+    border-top: 0;
+  }
+
+  .navLink:hover,
+  .navLinkCurrent {
+    color: var(--pub-ink) !important;
+  }
+
+  /* On a phone the pill runs nearly full width. */
+  .headerScrolled .inner {
+    max-width: none;
+    margin: 8px 8px 0;
+    padding: 0 6px 0 14px;
   }
 
   /* In the stacked menu the current page is marked by weight, not a line. */
@@ -457,8 +589,40 @@
     gap: 10px;
   }
 
+  /* The phone pill is narrower than the bar, so its controls tighten up to
+     keep the menu button inside it. */
+  .headerScrolled .inner {
+    margin: 6px 6px 0;
+    padding: 0 6px 0 10px;
+    gap: 6px;
+  }
+
+  .headerScrolled .actions {
+    gap: 6px;
+  }
+
+  .headerScrolled .themeToggle,
+  .headerScrolled .navToggle {
+    width: 40px;
+    height: 40px;
+  }
+
+  .headerScrolled .signup {
+    min-height: 40px;
+    padding: 9px 12px;
+  }
+
+  .headerScrolled .brandName {
+    font-size: 16px;
+  }
+
+  /* No room for Log in or My bookings in the bar; they move into the menu. */
   .login {
     display: none;
+  }
+
+  .navAccount {
+    display: block;
   }
 
   .signup {

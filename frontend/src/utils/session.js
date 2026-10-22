@@ -104,6 +104,28 @@ function readSlot() {
   return readSlotById(currentSessionId());
 }
 
+// UI that shows who is signed in (the public header) listens for this, so
+// signing in or out shows at once instead of after the next page load.
+const SESSION_EVENT = "bnpl:session-change";
+
+function announceSessionChange() {
+  window.dispatchEvent(new Event(SESSION_EVENT));
+}
+
+// Calls `callback` when this tab signs in or out, the stored user changes,
+// or another tab changes a session. Returns the unsubscribe function.
+export function onSessionChange(callback) {
+  const onStorage = (e) => {
+    if (!e.key || e.key.startsWith(SESSION_PREFIX) || e.key === LAST_ACTIVE_KEY) callback();
+  };
+  window.addEventListener(SESSION_EVENT, callback);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(SESSION_EVENT, callback);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
 // Rewrite this tab's slot, preserving its storage choice.
 function updateCurrentSlot(changes) {
   const sessionId = currentSessionId();
@@ -134,6 +156,7 @@ export function saveSession({ token, refreshToken, user, role, remember = true }
   if (remember) {
     localStorage.setItem(LAST_ACTIVE_KEY, String(sessionId));
   }
+  announceSessionChange();
 }
 
 export function getToken() {
@@ -169,6 +192,7 @@ export function saveUser(user) {
   if (!current) return;
 
   updateCurrentSlot({ user, role: user?.role || current.role });
+  announceSessionChange();
 }
 
 export function clearSession() {
@@ -186,6 +210,7 @@ export function clearSession() {
   }
 
   sessionStorage.removeItem(TAB_BINDING_KEY);
+  announceSessionChange();
 }
 
 // Detach this tab from its session without deleting the session itself.

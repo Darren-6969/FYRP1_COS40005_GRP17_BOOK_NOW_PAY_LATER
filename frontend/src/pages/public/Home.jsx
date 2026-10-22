@@ -3,10 +3,8 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { getRole, getToken } from "../../utils/session";
 import { formatRinggit, formatSen, klToday } from "../../utils/formatPublic";
 import {
-  getAnnouncements,
   getFeaturedCars,
   getFeaturedOperators,
-  getFeaturedTours,
   operatorHref,
 } from "../../services/listing_public_service";
 import { PICKUP_CITIES, PICKUP_SHORTCUTS } from "../../services/mock/listings.mock";
@@ -14,6 +12,7 @@ import { parseCarSearch, toCarSearchParams } from "../../utils/carSearchParams";
 import styles from "../../assets/styles/public/Home.module.css";
 import disclosure from "../../assets/styles/public/Disclosure.module.css";
 import useReveal, { prefersReducedMotion } from "../../hooks/useReveal";
+import useHeaderOverlay from "../../hooks/useHeaderOverlay";
 
 // The hero photo is optional: until src/assets/public/hero-road.png is added,
 // the hero falls back to the design's animated gradient.
@@ -35,14 +34,14 @@ const STEPS = [
 const PROMPTS = ["Automatic, 7 seats, Kuching", "Cheapest deposit this weekend", "Mulu trip, refundable deposit"];
 
 const FAQS = [
-  { q: "How does Book Now Pay Later work here?", a: "Every booking starts as a request. Sending it is free and nothing is charged. Once the operator confirms, usually within 2 hours, you pay a deposit set by the operator, typically 20-30%, to secure the car. The balance is due by a deadline that defaults to 24 hours before your travel starts. You are shown both amounts, the deadline, and what happens if you miss it before you pay anything." },
+  { q: "How does Book Now Pay Later work here?", a: "Every booking starts as a request. Sending it is free and nothing is charged. Once the operator confirms, usually within 2 hours, you pay a deposit to secure the car. Each operator sets its own deposit, and every car shows it before you send a request. The balance is due before pickup, by a deadline the operator sets. You are shown both amounts, the deadline, and what happens if you miss it before you pay anything." },
   { q: "Why does the operator need to confirm?", a: "Operators accept each booking manually. They check that the car is available and ready for your dates before you pay anything." },
   { q: "What happens if my request is declined?", a: "Nothing is charged, and we show you similar cars." },
   { q: "What happens if I miss the balance deadline?", a: "The deposit is forfeited in full. That is the default and it is not negotiable after the cutoff. Individual car rental operators may elect a partial refund rule instead, available only on standard listings outside the platform's peak calendar; where they have, the listing and the payment screen say so before you commit." },
   { q: "When do I submit my driving licence?", a: "After your booking is confirmed, not during checkout. You upload it against that specific order, not once for your account, and it shares the same deadline as the balance. The check is preliminary: rental staff still inspect the original document at handover." },
   { q: "What if I return the car late?", a: "The operator records the time you hand the car back. Late hours are charged by the hour and paid at the counter; they are not part of your booking total." },
   { q: "Is there a minimum driver age?", a: "No. Every driver needs a valid driving licence, uploaded before the balance deadline, with the original brought to pickup." },
-  { q: "Are the operators verified?", a: "Every operator submits their SSM business registration and relevant transport or tourism licences, and the platform team reviews the application before any listing goes live. Each operator has a public page showing verified status, branch count, completed bookings and how long they have been active." },
+  { q: "Are the operators verified?", a: "Every operator submits their SSM business registration and relevant transport licences, and the platform team reviews the application before any listing goes live. Each operator has a public page showing verified status, branch count, completed bookings and how long they have been active." },
   { q: "Is my data protected?", a: "The platform operates under Malaysia's Personal Data Protection Act 2010. Your details are shared with the operator you book with and only to the extent needed to fulfil the booking. You can access, correct, and withdraw consent from your personal centre." },
 ];
 
@@ -143,42 +142,6 @@ function CarCard({ listing, quote }) {
   );
 }
 
-function TourCard({ tour }) {
-  return (
-    <article data-reveal className={`${styles.card} ${styles.cardTour}`}>
-      <div className={`${styles.cardMedia} ${styles.cardMediaTour}`}>
-        <span className={`${styles.slot} ${styles.slotTour}`} aria-hidden="true">
-          tour photo
-          <br />
-          {tour.title.split(" ")[0]}
-        </span>
-        <span className={`${styles.cardTag} ${styles.cardTagTour}`}>{tour.duration}</span>
-      </div>
-      <div className={styles.cardBody}>
-        <div className={styles.cardOperator}>
-          <Link to="/tours" className={styles.operatorLink}>
-            {tour.operator}
-          </Link>
-          <span className={styles.verified}>Verified</span>
-        </div>
-        <h3 className={styles.cardTitle}>
-          <Link to={`/tours/${tour.id}`} className={styles.cardTitleLink}>
-            {tour.title}
-          </Link>
-        </h3>
-        <p className={styles.cardMeta}>{tour.meta}</p>
-        <div className={styles.cardFootPlain}>
-          <div className={styles.monoLabel}>Deposit</div>
-          <div className={styles.deposit}>
-            <CountUp sen={tour.depositSen} />
-          </div>
-          <div className={styles.balance}>then {formatSen(tour.balanceSen)} before travel</div>
-        </div>
-      </div>
-    </article>
-  );
-}
-
 function CardSkeletons() {
   return [0, 1, 2].map((i) => (
     <div key={i} className={`${styles.card} ${styles.skeleton}`} aria-hidden="true">
@@ -195,55 +158,32 @@ function CardSkeletons() {
 function SearchPanel() {
   const navigate = useNavigate();
   const uid = useId();
-  const [tab, setTab] = useState("car");
   const [dep, setDep] = useState(200);
   const [error, setError] = useState("");
   const [car, setCar] = useState(() => ({ city: "", from: klToday(7), to: klToday(10), seats: "" }));
-  const [tour, setTour] = useState(() => ({ destination: "Kuching", from: klToday(7), to: klToday(10), party: "2", group: "Family" }));
-  const isCar = tab === "car";
-  const values = isCar ? car : tour;
-  const setValues = isCar ? setCar : setTour;
 
   const update = (key) => (e) => {
-    setValues((prev) => ({ ...prev, [key]: e.target.value }));
+    setCar((prev) => ({ ...prev, [key]: e.target.value }));
     if (error) setError("");
-  };
-
-  const onTabKey = (e) => {
-    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-      const next = isCar ? "tour" : "car";
-      setTab(next);
-      document.getElementById(`${uid}-tab-${next}`)?.focus();
-    }
   };
 
   const onSubmit = (e) => {
     e.preventDefault();
-    if (values.from && values.to && values.to <= values.from) {
+    if (car.from && car.to && car.to <= car.from) {
       setError("Return date must be after the pick-up date.");
       document.getElementById(`${uid}-to`)?.focus();
       return;
     }
-    if (isCar) {
-      const criteria = parseCarSearch("");
-      const p = toCarSearchParams({
-        ...criteria,
-        city: car.city,
-        from: car.from,
-        to: car.to,
-        sel: { ...criteria.sel, seats: car.seats ? [car.seats] : [] },
-        dmax: dep < DEP_MAX ? dep : null,
-      });
-      navigate(`/cars?${p.toString()}`);
-    } else {
-      const p = new URLSearchParams();
-      p.set("destination", tour.destination);
-      p.set("from", tour.from);
-      p.set("to", tour.to);
-      p.set("party", tour.party);
-      if (dep < DEP_MAX) p.set("dmax", String(dep));
-      navigate(`/tours?${p.toString()}`);
-    }
+    const criteria = parseCarSearch("");
+    const p = toCarSearchParams({
+      ...criteria,
+      city: car.city,
+      from: car.from,
+      to: car.to,
+      sel: { ...criteria.sel, seats: car.seats ? [car.seats] : [] },
+      dmax: dep < DEP_MAX ? dep : null,
+    });
+    navigate(`/cars?${p.toString()}`);
   };
 
   const depLabel = dep >= DEP_MAX ? "RM500+" : formatRinggit(dep);
@@ -251,129 +191,47 @@ function SearchPanel() {
 
   return (
     <div className={styles.searchWrap}>
-      <div role="tablist" aria-label="What are you booking?" className={styles.tabs}>
-        {[
-          { key: "car", label: "Car rental" },
-          { key: "tour", label: "Tour packages" },
-        ].map((t) => (
-          <button
-            key={t.key}
-            id={`${uid}-tab-${t.key}`}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.key}
-            aria-controls={`${uid}-panel`}
-            tabIndex={tab === t.key ? 0 : -1}
-            className={`${styles.tab} ${tab === t.key ? styles.tabActive : ""}`}
-            onClick={() => setTab(t.key)}
-            onKeyDown={onTabKey}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <form
-        id={`${uid}-panel`}
-        role="tabpanel"
-        aria-labelledby={`${uid}-tab-${tab}`}
-        className={styles.searchCard}
-        onSubmit={onSubmit}
-        noValidate
-      >
+      {/* Car rental only (15 Oct 2026): the search card has no tabs. */}
+      <form className={styles.searchCard} onSubmit={onSubmit} noValidate aria-label="Search cars">
         <div className={styles.fields}>
-          {isCar ? (
-            <>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Pick-up location</span>
-                <select className={styles.fieldControl} value={car.city} onChange={update("city")}>
-                  <option value="">All cities</option>
-                  {PICKUP_CITIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Pick-up date</span>
-                <input type="date" className={styles.fieldControl} min={klToday()} value={car.from} onChange={update("from")} />
-              </label>
-              <label className={`${styles.field} ${error ? styles.fieldInvalid : ""}`}>
-                <span className={styles.fieldLabel}>Return date</span>
-                <input
-                  id={`${uid}-to`}
-                  type="date"
-                  className={styles.fieldControl}
-                  min={car.from || klToday()}
-                  value={car.to}
-                  onChange={update("to")}
-                  aria-invalid={Boolean(error)}
-                  aria-describedby={error ? `${uid}-err` : undefined}
-                />
-              </label>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Seats needed</span>
-                <select className={styles.fieldControl} value={car.seats} onChange={update("seats")}>
-                  {SEAT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </>
-          ) : (
-            <>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Destination</span>
-                <select className={styles.fieldControl} value={tour.destination} onChange={update("destination")}>
-                  {["Kuching", "Miri", "Mulu", "Bako"].map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Departure</span>
-                <input type="date" className={styles.fieldControl} min={klToday()} value={tour.from} onChange={update("from")} />
-              </label>
-              <label className={`${styles.field} ${error ? styles.fieldInvalid : ""}`}>
-                <span className={styles.fieldLabel}>Return</span>
-                <input
-                  id={`${uid}-to`}
-                  type="date"
-                  className={styles.fieldControl}
-                  min={tour.from || klToday()}
-                  value={tour.to}
-                  onChange={update("to")}
-                  aria-invalid={Boolean(error)}
-                  aria-describedby={error ? `${uid}-err` : undefined}
-                />
-              </label>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Party size</span>
-                <select className={styles.fieldControl} value={tour.party} onChange={update("party")}>
-                  {["1", "2", "3", "4", "5", "6", "8", "10"].map((n) => (
-                    <option key={n} value={n}>
-                      {n} {n === "1" ? "person" : "people"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Group type</span>
-                <select className={styles.fieldControl} value={tour.group} onChange={update("group")}>
-                  {["Family", "Couple", "Friends", "Solo", "Corporate"].map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </>
-          )}
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Pick-up location</span>
+            <select className={styles.fieldControl} value={car.city} onChange={update("city")}>
+              <option value="">All cities</option>
+              {PICKUP_CITIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Pick-up date</span>
+            <input type="date" className={styles.fieldControl} min={klToday()} value={car.from} onChange={update("from")} />
+          </label>
+          <label className={`${styles.field} ${error ? styles.fieldInvalid : ""}`}>
+            <span className={styles.fieldLabel}>Return date</span>
+            <input
+              id={`${uid}-to`}
+              type="date"
+              className={styles.fieldControl}
+              min={car.from || klToday()}
+              value={car.to}
+              onChange={update("to")}
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? `${uid}-err` : undefined}
+            />
+          </label>
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Seats needed</span>
+            <select className={styles.fieldControl} value={car.seats} onChange={update("seats")}>
+              {SEAT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {error && (
@@ -414,7 +272,7 @@ function SearchPanel() {
               Or just describe the car you want
             </a>
             <button type="submit" className={styles.searchButton}>
-              Search {isCar ? "cars" : "tours"}
+              Search cars
             </button>
           </div>
         </div>
@@ -566,12 +424,11 @@ function useFetch(fn) {
 
 function Landing() {
   const rootRef = useRef(null);
+  useHeaderOverlay();
   const cars = useFetch(getFeaturedCars);
-  const tours = useFetch(getFeaturedTours);
-  const news = useFetch(getAnnouncements);
   const operators = useFetch(loadOperators);
 
-  useReveal(rootRef, [cars.status, tours.status, news.status]);
+  useReveal(rootRef, [cars.status]);
 
   return (
     <div ref={rootRef} className={styles.page}>
@@ -586,9 +443,9 @@ function Landing() {
         <div className={styles.heroShade} aria-hidden="true" />
 
         <div className={styles.heroCopy}>
-          <p className={styles.heroBadge}>Malaysia&apos;s BNPL travel platform, pilot launch 2026</p>
+          <p className={styles.heroBadge}>Sarawak car rental, pilot launch 2026</p>
           <h1 id="hero-title" className={styles.heroTitle}>
-            Book the trip. Pay for it later.
+            Book the car. Pay for it later.
           </h1>
           <p className={styles.heroLead}>Request a car, pay a deposit once it&apos;s confirmed, and the balance later.</p>
         </div>
@@ -691,28 +548,6 @@ function Landing() {
         </section>
       )}
 
-      <section id="tours" className={`${styles.section} ${styles.sectionTours}`} aria-labelledby="tours-title">
-        <div className={styles.container}>
-          <div className={styles.sectionHead}>
-            <h2 id="tours-title" className={styles.h2}>
-              Guided, with a local operator
-            </h2>
-            <Link to="/tours" className={styles.headLink}>
-              Browse all tours
-            </Link>
-          </div>
-          {tours.status === "error" ? (
-            <p className={styles.loadError} role="alert">
-              Tours could not be loaded. Refresh the page to try again.
-            </p>
-          ) : (
-            <div className={styles.cards} role="region" aria-label="Featured tours" tabIndex={0} aria-busy={tours.status === "loading"}>
-              {tours.status === "loading" ? <CardSkeletons /> : tours.data.map((t) => <TourCard key={t.id} tour={t} />)}
-            </div>
-          )}
-        </div>
-      </section>
-
       <section className={styles.pickups} aria-labelledby="pickups-title">
         <div className={styles.pickupsInner}>
           <h2 id="pickups-title" className={styles.pickupsTitle}>
@@ -733,7 +568,7 @@ function Landing() {
       <section id="operators" className={styles.operators} aria-label="For operators">
         <div className={styles.operatorsInner}>
           <p className={styles.operatorsText}>
-            <strong className={styles.operatorsStrong}>Run a rental or tour business?</strong> List only the vehicles you
+            <strong className={styles.operatorsStrong}>Run a car rental business?</strong> List only the vehicles you
             can spare, set your own deposit split, and keep the rest of your yard on your own counter.
           </p>
           <Link to="/for-operators" className={styles.outlineButton}>
@@ -741,27 +576,6 @@ function Landing() {
           </Link>
         </div>
       </section>
-
-      {news.status === "ready" && news.data.length > 0 && (
-        <section className={styles.news} aria-labelledby="news-title">
-          <div className={styles.container}>
-            <h2 id="news-title" className={styles.newsTitle}>
-              Latest from the platform
-            </h2>
-            <ul className={styles.newsRow} role="region" aria-label="Announcements" tabIndex={0}>
-              {news.data.map((n) => (
-                <li key={n.id} data-reveal className={styles.newsItem}>
-                  <Link to={`/info/news-${n.id}`} className={styles.newsCard}>
-                    <span className={styles.newsTag}>{n.tag}</span>
-                    <span className={styles.newsHead}>{n.title}</span>
-                    <span className={styles.newsBody}>{n.body}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-      )}
 
       <Faq />
 

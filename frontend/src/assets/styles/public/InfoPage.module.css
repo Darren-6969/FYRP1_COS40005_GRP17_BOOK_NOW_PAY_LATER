@@ -1,0 +1,201 @@
+/* Terms, privacy, refund rules and contact (/info/:slug). A reading page:
+   one column at a comfortable measure, with the four pages listed beside it. */
+.page {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: clamp(32px, 6vw, 72px) var(--pub-gutter) clamp(64px, 8vw, 104px);
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: clamp(32px, 6vw, 72px);
+  align-items: start;
+}
+
+.side {
+  position: sticky;
+  top: var(--pub-header-offset);
+}
+
+.sideList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sideLink {
+  display: block;
+  padding: 9px 12px;
+  border-radius: var(--pub-radius);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pub-text) !important;
+  transition: var(--pub-t-control);
+}
+
+.sideLink:hover {
+  color: var(--pub-ink) !important;
+  background: var(--pub-surface-sunk);
+}
+
+.sideLinkCurrent,
+.sideLinkCurrent:hover {
+  color: var(--pub-ink) !important;
+  background: var(--pub-surface);
+  box-shadow: inset 0 0 0 1px var(--pub-line);
+  font-weight: 600;
+}
+
+.article {
+  max-width: 68ch;
+}
+
+.title {
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  color: var(--pub-ink);
+  text-wrap: balance;
+  margin-bottom: 16px !important;
+}
+
+.lead {
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--pub-text);
+  margin-bottom: 10px !important;
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--pub-label);
+  margin-bottom: 8px !important;
+}
+
+.section {
+  margin-top: 40px;
+}
+
+.heading {
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+  font-size: 1.3rem;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--pub-ink);
+  margin-bottom: 12px !important;
+}
+
+.text,
+.list {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--pub-text);
+}
+
+.text {
+  margin-bottom: 12px !important;
+}
+
+.list {
+  margin: 0 0 12px;
+  padding-left: 1.2em;
+  display: grid;
+  gap: 8px;
+}
+
+.list li::marker {
+  color: var(--pub-moss-text);
+}
+
+.footnote {
+  margin-top: 48px !important;
+  padding-top: 20px;
+  border-top: 1px solid var(--pub-line);
+  font-size: 15px;
+  color: var(--pub-text);
+}
+
+.article a {
+  color: var(--pub-moss-text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+/* ── contact details ── */
+.contact {
+  margin: 28px 0 0;
+  background: var(--pub-surface);
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
+  padding: 6px 22px;
+}
+
+.contactRow {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--pub-line-soft);
+}
+
+.contactRow:first-child {
+  border-top: 0;
+}
+
+.contactLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pub-label);
+}
+
+.contactValue {
+  margin: 0;
+  font-size: 16px;
+  color: var(--pub-ink);
+  overflow-wrap: anywhere;
+}
+
+.pending {
+  color: var(--pub-label);
+  font-style: italic;
+}
+
+/* Phone and tablet: the four pages become a row above the text. */
+@media (max-width: 760px) {
+  .page {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .side {
+    position: static;
+    margin: 0 calc(var(--pub-gutter) * -1);
+    padding: 0 var(--pub-gutter);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .sideList {
+    flex-direction: row;
+    gap: 8px;
+    width: max-content;
+  }
+
+  .sideLink {
+    padding: 9px 14px;
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px var(--pub-line);
+    white-space: nowrap;
+  }
+
+  .contactRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}

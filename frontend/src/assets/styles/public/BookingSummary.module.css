@@ -2,7 +2,7 @@
   flex: 5 1 340px;
   min-width: 0;
   position: sticky;
-  top: 88px;
+  top: calc(var(--pub-header-h) + 20px);
   align-self: flex-start;
   background: var(--pub-surface);
   border: 1px solid var(--pub-line);

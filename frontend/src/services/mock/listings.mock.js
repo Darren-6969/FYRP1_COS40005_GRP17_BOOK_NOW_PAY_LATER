@@ -162,19 +162,6 @@ export const MOCK_CARS = [
 // Cars on the landing page ("Picked for a small deposit").
 export const FEATURED_CAR_IDS = [1, 3, 4];
 
-// Tour packages are shown on the landing page only. Tour pages are not built yet.
-export const MOCK_TOURS = [
-  { id: "t1", title: "Bako National Park Day Trek", meta: "Proboscis monkeys and sea stacks, Kuching", duration: "1 day", operator: "Borneo Field Co.", depositSen: 8000, balanceSen: 24000 },
-  { id: "t2", title: "Semenggoh and Annah Rais Longhouse", meta: "Orangutan feeding and a Bidayuh longhouse stay", duration: "2 days", operator: "Kenyalang Trails", depositSen: 16000, balanceSen: 48000 },
-  { id: "t3", title: "Mulu Caves and Canopy Walk", meta: "Deer Cave, Clearwater Cave and the canopy skywalk, Miri", duration: "4 days", operator: "Mulu Explorer", depositSen: 30000, balanceSen: 118000 },
-];
-
-export const MOCK_NEWS = [
-  { id: "n1", tag: "New", title: "Deposit filter now covers tour packages", body: "Search tours by deposit amount, recalculated for your dates." },
-  { id: "n2", tag: "Coverage", title: "Sarawak operators live", body: "Five operators added across Kuching, Miri, Sibu and Bintulu." },
-  { id: "n3", tag: "Policy", title: "Partial refund rule opens to more listings", body: "Standard car rentals outside the peak calendar can now elect it." },
-];
-
 export const PICKUP_CITIES = ["Kuching", "Miri", "Sibu", "Bintulu"];
 
 export const PICKUP_SHORTCUTS = [

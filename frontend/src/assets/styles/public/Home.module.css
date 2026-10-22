@@ -2,9 +2,9 @@
   background: var(--pub-ground);
 }
 
-/* Keep #anchor targets clear of the 68px sticky header. */
+/* Keep #anchor targets clear of the fixed header. */
 .page [id] {
-  scroll-margin-top: 84px;
+  scroll-margin-top: var(--pub-header-offset);
 }
 
 .container {
@@ -31,6 +31,8 @@
   position: relative;
   background: var(--pub-deep);
   isolation: isolate;
+  /* Runs up behind the transparent header (useHeaderOverlay). */
+  padding-top: var(--pub-header-h);
 }
 
 .heroMedia {
@@ -111,8 +113,8 @@
 .heroBadge {
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(246, 241, 231, 0.26);
-  background: rgba(246, 241, 231, 0.08);
+  border: 1px solid rgba(247, 247, 244, 0.26);
+  background: rgba(247, 247, 244, 0.08);
   border-radius: 999px;
   padding: 7px 15px;
   margin-bottom: clamp(20px, 3vw, 30px) !important;
@@ -146,39 +148,9 @@
   --s-line: var(--pub-line);
 }
 
-.tabs {
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-}
-
-.tab {
-  border: 0;
-  cursor: pointer;
-  padding: 13px 22px;
-  min-height: 44px;
-  border-radius: 12px 12px 0 0;
-  font-family: var(--pub-font-display);
-  font-weight: 600;
-  font-size: 14px;
-  background: rgba(246, 241, 231, 0.12);
-  color: var(--pub-on-deep-soft);
-  transition: var(--pub-t-control);
-}
-
-.tab:hover {
-  background: rgba(246, 241, 231, 0.2);
-}
-
-.tabActive,
-.tabActive:hover {
-  background: var(--s-surface);
-  color: var(--pub-link);
-}
-
 .searchCard {
   background: var(--s-surface);
-  border-radius: 0 16px 16px 16px;
+  border-radius: 16px;
   box-shadow: var(--pub-shadow-pop);
   overflow: hidden;
 }
@@ -433,11 +405,6 @@
   padding-bottom: clamp(40px, 5vw, 56px);
 }
 
-.sectionTours {
-  padding-top: 0;
-  padding-bottom: clamp(64px, 8vw, 104px);
-}
-
 .eyebrow {
   font-family: var(--pub-font-mono);
   font-size: 11px;
@@ -633,7 +600,7 @@
 }
 
 .assistantInput::placeholder {
-  color: #6e685c;
+  color: var(--pub-label);
 }
 
 .assistantButton {
@@ -668,8 +635,8 @@
 
 .prompt {
   cursor: pointer;
-  border: 1px solid rgba(246, 241, 231, 0.22);
-  background: rgba(246, 241, 231, 0.06);
+  border: 1px solid rgba(247, 247, 244, 0.22);
+  background: rgba(247, 247, 244, 0.06);
   color: var(--pub-on-deep-soft);
   border-radius: 999px;
   padding: 10px 16px;
@@ -679,7 +646,7 @@
 }
 
 .prompt:hover {
-  background: rgba(246, 241, 231, 0.14);
+  background: rgba(247, 247, 244, 0.14);
 }
 
 .prompt:active {
@@ -721,10 +688,6 @@
   box-shadow: var(--pub-shadow-card);
 }
 
-.cardTour:hover {
-  border-color: var(--pub-sky);
-}
-
 .cardMedia {
   position: relative;
   aspect-ratio: 16 / 10;
@@ -732,10 +695,6 @@
   display: grid;
   place-items: center;
   padding: 16px;
-}
-
-.cardMediaTour {
-  background: repeating-linear-gradient(135deg, var(--pub-stripe-tour-a) 0 10px, var(--pub-stripe-tour-b) 10px 20px);
 }
 
 .cardImg {
@@ -754,10 +713,6 @@
   line-height: 1.5;
 }
 
-.slotTour {
-  color: var(--pub-stripe-tour-fg);
-}
-
 .cardTag {
   position: absolute;
   top: 12px;
@@ -772,10 +727,6 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--pub-link);
-}
-
-.cardTagTour {
-  color: var(--pub-info-fg);
 }
 
 .cardBody {
@@ -850,14 +801,10 @@
   color: var(--pub-text);
 }
 
-.cardFoot,
-.cardFootPlain {
+.cardFoot {
   margin-top: auto;
   padding-top: 14px;
   border-top: 1px solid var(--pub-line-soft);
-}
-
-.cardFoot {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -1064,77 +1011,6 @@
   transform: scale(0.98);
 }
 
-/* ── announcements ──────────────────────────────────────────────── */
-.news {
-  padding: 0 var(--pub-gutter) clamp(64px, 8vw, 96px);
-}
-
-.newsTitle {
-  font-family: var(--pub-font-display);
-  font-weight: 700;
-  font-size: clamp(1.4rem, 2.4vw, 1.9rem);
-  letter-spacing: -0.03em;
-  color: var(--pub-ink);
-  margin-bottom: 20px !important;
-}
-
-.newsRow {
-  list-style: none;
-  margin: 0;
-  padding: 0 0 4px;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(260px, 320px);
-  gap: 14px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: thin;
-}
-
-.newsItem {
-  scroll-snap-align: start;
-}
-
-.newsCard {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  height: 100%;
-  background: var(--pub-surface);
-  border: 1px solid var(--pub-line);
-  border-radius: 14px;
-  padding: 20px;
-  transition: var(--pub-t-card);
-}
-
-.newsCard:hover {
-  border-color: var(--pub-moss);
-  transform: translateY(-2px);
-}
-
-.newsTag {
-  font-family: var(--pub-font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--pub-accent);
-}
-
-.newsHead {
-  font-family: var(--pub-font-display);
-  font-weight: 700;
-  font-size: 16px;
-  line-height: 1.3;
-  letter-spacing: -0.02em;
-  color: var(--pub-ink);
-}
-
-.newsBody {
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--pub-text);
-}
-
 /* ── FAQ ────────────────────────────────────────────────────────── */
 .faq {
   background: var(--pub-surface);
@@ -1265,7 +1141,7 @@
 }
 
 .ctaSecondary {
-  border: 1.5px solid rgba(246, 241, 231, 0.55);
+  border: 1.5px solid rgba(247, 247, 244, 0.55);
   color: #ffffff !important;
   font-weight: 600;
   font-size: 15px;
@@ -1287,8 +1163,7 @@
 }
 
 .cta :focus-visible,
-.assistant :focus-visible,
-.hero .tab:focus-visible {
+.assistant :focus-visible {
   outline-color: var(--pub-cta);
 }
 
@@ -1410,13 +1285,11 @@
 }
 
 .prompt:active:not(:disabled),
-.pickupChip:active:not(:disabled),
-.tab:active:not(:disabled) {
+.pickupChip:active:not(:disabled) {
   transform: scale(0.97);
 }
 
 @media (hover: hover) {
-  .newsCard:hover,
   .opCard:hover {
     transform: translateY(-2px);
   }

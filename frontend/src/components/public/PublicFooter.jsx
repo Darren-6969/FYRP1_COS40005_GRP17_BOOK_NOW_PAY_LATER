@@ -8,9 +8,8 @@ const COLUMNS = [
     head: "Book",
     items: [
       { label: "Car rental", to: "/cars" },
-      { label: "Tour packages", to: "/tours" },
       { label: "Pickup locations", to: "/info/pickup-locations" },
-      { label: "Saved listings", to: "/info/saved-listings" },
+      { label: "Saved cars", to: "/customer/saved" },
     ],
   },
   {

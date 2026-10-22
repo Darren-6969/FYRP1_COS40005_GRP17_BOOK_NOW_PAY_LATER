@@ -78,6 +78,7 @@ import CarResults from "./pages/public/CarResults";
 import CarDetail from "./pages/public/CarDetail";
 import CarBookingForm from "./pages/public/CarBookingForm";
 import NotAvailable from "./pages/public/NotAvailable";
+import InfoPage from "./pages/public/InfoPage";
 import ForOperators from "./pages/public/ForOperators";
 
 export default function App() {
@@ -92,6 +93,11 @@ export default function App() {
           {/* Operator recruitment page (FR-CUST-010). /operators/:handle is taken by seller pages. */}
           <Route path="/for-operators" element={<ForOperators />} />
           <Route path="/cars/:listingId" element={<CarDetail />} />
+          {/* Terms, privacy, refund rules and contact; other slugs render NotAvailable. */}
+          <Route path="/info/:slug" element={<InfoPage />} />
+          {/* Tours are out of scope for now (15 Oct 2026); old links land on car search. */}
+          <Route path="/tours" element={<Navigate to="/cars" replace />} />
+          <Route path="/tours/*" element={<Navigate to="/cars" replace />} />
           {/* Signed-out visitors go to /login?redirect=<this URL>, which keeps every selection. */}
           <Route element={<ProtectedRoute allowedRoles={["CUSTOMER"]} />}>
             <Route path="/cars/:listingId/book" element={<CarBookingForm />} />

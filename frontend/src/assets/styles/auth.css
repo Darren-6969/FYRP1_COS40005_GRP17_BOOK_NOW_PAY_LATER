@@ -140,6 +140,13 @@
   cursor: pointer;
 }
 
+.bnpl-auth-consent a {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .bnpl-auth-form .bnpl-auth-consent input {
   width: 16px;
   height: 16px;

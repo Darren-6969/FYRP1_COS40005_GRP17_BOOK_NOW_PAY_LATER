@@ -218,7 +218,17 @@ export default function Register() {
                 onChange={(event) => setConsent(event.target.checked)}
                 disabled={loading}
               />
-              I agree to the Privacy Policy and Terms & Conditions.
+              <span>
+                I agree to the{" "}
+                <a href="/info/privacy" target="_blank" rel="noopener noreferrer">
+                  Privacy notice
+                </a>{" "}
+                and{" "}
+                <a href="/info/terms" target="_blank" rel="noopener noreferrer">
+                  Terms of service
+                </a>
+                .
+              </span>
             </label>
             
             <button className="bnpl-auth-submit" disabled={loading}>

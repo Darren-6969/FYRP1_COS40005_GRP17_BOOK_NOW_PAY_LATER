@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getRole, getToken } from "../utils/session";
+import useSessionUser from "./useSessionUser";
 import { getSavedListingIds, saveListing, unsaveListing } from "../services/customer_service";
 
 // Saved cars before BNPLB-108 lived in this browser key. They are cleared
@@ -16,16 +16,14 @@ function clearLegacySaves() {
   }
 }
 
-// Only a signed-in customer can save. Operators and admins have no saved list.
-export function canUseSavedListings() {
-  return Boolean(getToken()) && getRole() === "CUSTOMER";
-}
-
 // [saved, toggle, canSave]. `saved` is a Set of listing ids. Signed in,
 // toggle updates the heart at once and rolls back if the request fails.
 // Signed out, toggle does nothing: the page shows the sign-in prompt instead.
 export default function useSavedListings() {
-  const canSave = canUseSavedListings();
+  // Only a signed-in customer can save; operators and admins have no saved
+  // list. Follows the session, so logging out clears the hearts at once.
+  const user = useSessionUser();
+  const canSave = Boolean(user) && String(user.role || "").toUpperCase() === "CUSTOMER";
   const [saved, setSaved] = useState(() => new Set());
   const pending = useRef(new Set());
 

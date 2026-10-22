@@ -20,6 +20,7 @@ import useSavedListings from "../../hooks/useSavedListings";
 import { BRAND } from "../../constants/brand";
 import results from "../../assets/styles/public/CarResults.module.css";
 import styles from "../../assets/styles/public/OperatorStorefront.module.css";
+import useHeaderOverlay from "../../hooks/useHeaderOverlay";
 
 // Operator seller page (SRS 4.2.7, FR-CUST-007). Built first as the
 // operator's own shop front: the link they share on WhatsApp and social
@@ -139,6 +140,7 @@ function ShareButton({ name }) {
 }
 
 function Hero({ operator, carCount, cities }) {
+  useHeaderOverlay();
   const stats = [
     operator.completedBookings > 0 && plural(operator.completedBookings, "completed booking"),
     plural(operator.branchCount, "branch").replace("branchs", "branches"),

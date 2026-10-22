@@ -7,21 +7,16 @@
 // truth for every price. Tours and announcements are still mock data.
 
 import api from "./api";
-import { MOCK_TOURS, MOCK_NEWS, PICKUP_CITIES } from "./mock/listings.mock";
+import { PICKUP_CITIES } from "./mock/listings.mock";
 import { klDateTimeToIso, klToday } from "../utils/formatPublic";
 import { FACET_GROUPS, hasDates } from "../utils/carSearchParams";
 import { depositFor, priceDuration, rentalHours } from "../utils/carPricing";
 
-const MOCK_LATENCY_MS = 350;
 const FEATURED_COUNT = 3;
 const FEATURED_QUOTE_HOURS = 3 * 24;
 const RECOMMEND_WINDOW_DAYS = 14;
 const DAY_MS = 86400000;
 const FLEET_TTL_MS = 30000;
-
-function respond(data, latency = MOCK_LATENCY_MS) {
-  return new Promise((resolve) => setTimeout(() => resolve({ data }), latency));
-}
 
 // One fleet request shared by the landing page and search, refreshed every 30 s.
 let fleetCache = { at: 0, promise: null };
@@ -500,14 +495,4 @@ export function quoteCarBooking(listingId, sel) {
   if (typeof sel.returnToRequested === "boolean") body.returnToRequested = sel.returnToRequested;
   body.cdw = Boolean(sel.cdw);
   return api.post(`/public/cars/${encodeURIComponent(listingId)}/quote`, body);
-}
-
-// TODO(api): GET /listings/featured?category=TOUR
-export function getFeaturedTours() {
-  return respond(MOCK_TOURS);
-}
-
-// TODO(api): GET /announcements?audience=public
-export function getAnnouncements() {
-  return respond(MOCK_NEWS);
 }

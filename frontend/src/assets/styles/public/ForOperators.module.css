@@ -10,7 +10,7 @@
 }
 
 .page [id] {
-  scroll-margin-top: 84px;
+  scroll-margin-top: var(--pub-header-offset);
 }
 
 .wrap {
@@ -91,14 +91,14 @@ a.btnCta:hover {
 .btnGhost,
 a.btnGhost {
   background: transparent;
-  border-color: rgba(246, 241, 231, 0.32);
+  border-color: rgba(247, 247, 244, 0.32);
   color: var(--pub-on-deep);
 }
 
 .btnGhost:hover,
 a.btnGhost:hover {
-  background: rgba(246, 241, 231, 0.08);
-  border-color: rgba(246, 241, 231, 0.6);
+  background: rgba(247, 247, 244, 0.08);
+  border-color: rgba(247, 247, 244, 0.6);
   color: var(--pub-on-deep);
 }
 
@@ -109,6 +109,8 @@ a.btnGhost:hover {
   background: var(--pub-deep);
   color: var(--pub-on-deep);
   isolation: isolate;
+  /* Runs up behind the transparent header (useHeaderOverlay). */
+  padding-top: var(--pub-header-h);
 }
 
 .hero::before {
@@ -117,8 +119,8 @@ a.btnGhost:hover {
   inset: 0;
   z-index: -1;
   background-image:
-    linear-gradient(rgba(246, 241, 231, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(246, 241, 231, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(247, 247, 244, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(247, 247, 244, 0.05) 1px, transparent 1px);
   background-size: 56px 56px;
   mask-image: radial-gradient(ellipse 70% 80% at 75% 40%, #000 30%, transparent 75%);
   -webkit-mask-image: radial-gradient(ellipse 70% 80% at 75% 40%, #000 30%, transparent 75%);
@@ -1101,14 +1103,14 @@ a.btnGhost:hover {
 }
 
 .tab:hover {
-  background: rgba(246, 241, 231, 0.05);
+  background: rgba(247, 247, 244, 0.05);
   transform: translateX(4px);
 }
 
 .tabOn,
 .tabOn:hover {
-  background: rgba(246, 241, 231, 0.08);
-  border-color: rgba(246, 241, 231, 0.18);
+  background: rgba(247, 247, 244, 0.08);
+  border-color: rgba(247, 247, 244, 0.18);
   transform: none;
 }
 
@@ -1140,7 +1142,7 @@ a.btnGhost:hover {
 
 .screen {
   position: sticky;
-  top: 96px;
+  top: calc(var(--pub-header-h) + 28px);
   overflow: hidden;
   border-radius: 16px;
   border: 1px solid var(--pub-deep-line);
@@ -1468,7 +1470,7 @@ a.btnGhost:hover {
   width: 360px;
   height: 360px;
   border-radius: 50%;
-  border: 56px solid rgba(246, 241, 231, 0.06);
+  border: 56px solid rgba(247, 247, 244, 0.06);
   pointer-events: none;
 }
 

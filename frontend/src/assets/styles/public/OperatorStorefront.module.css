@@ -26,6 +26,8 @@
   background: var(--pub-deep-2);
   color: var(--pub-on-deep);
   isolation: isolate;
+  /* Runs up behind the transparent header (useHeaderOverlay). */
+  padding-top: var(--pub-header-h);
 }
 
 .cover {
@@ -159,7 +161,7 @@
   padding: 0 18px;
   border-radius: 10px;
   border: 1px solid var(--pub-deep-line);
-  background: rgba(246, 241, 231, 0.08);
+  background: rgba(247, 247, 244, 0.08);
   color: var(--pub-on-deep);
   font: 600 15px var(--pub-font-body);
   cursor: pointer;
@@ -167,7 +169,7 @@
 }
 
 .shareButton:hover {
-  background: rgba(246, 241, 231, 0.16);
+  background: rgba(247, 247, 244, 0.16);
 }
 
 .shareButton:focus-visible {
@@ -196,7 +198,7 @@
 
 .sectionNav {
   position: sticky;
-  top: 68px; /* under the public header */
+  top: var(--pub-header-h); /* under the public header */
   z-index: 20;
   background: var(--pub-nav-bg);
   backdrop-filter: blur(8px);
@@ -262,7 +264,7 @@
 /* ── sections ─────────────────────────────────────────────────────── */
 
 .section {
-  scroll-margin-top: 124px; /* header + section nav */
+  scroll-margin-top: calc(var(--pub-header-h) + 56px); /* header + section nav */
   padding-top: clamp(28px, 4vw, 44px);
 }
 

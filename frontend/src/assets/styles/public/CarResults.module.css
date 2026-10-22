@@ -251,7 +251,7 @@
 .rail {
   min-width: 0;
   position: sticky;
-  top: 84px;
+  top: var(--pub-header-offset);
   background: var(--pub-surface);
   border: 1px solid var(--pub-line);
   border-radius: var(--pub-radius-lg);

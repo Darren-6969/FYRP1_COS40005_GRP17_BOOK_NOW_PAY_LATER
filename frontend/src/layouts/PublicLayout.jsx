@@ -1,9 +1,10 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import "../assets/styles/public/tokens.css";
 import PublicHeader from "../components/public/PublicHeader";
 import PublicFooter from "../components/public/PublicFooter";
 import usePublicTheme from "../hooks/usePublicTheme";
+import { HeaderOverlayContext } from "../hooks/useHeaderOverlay";
 import styles from "../assets/styles/public/PublicLayout.module.css";
 
 // Shell for the public pages. `data-public-root` scopes the design tokens so
@@ -11,6 +12,13 @@ import styles from "../assets/styles/public/PublicLayout.module.css";
 export default function PublicLayout() {
   const { pathname, hash } = useLocation();
   const { theme, toggleTheme } = usePublicTheme();
+  // How many mounted heroes asked for the overlay header (see useHeaderOverlay).
+  const [overlays, setOverlays] = useState(0);
+  const registerOverlay = useCallback(() => {
+    setOverlays((n) => n + 1);
+    return () => setOverlays((n) => n - 1);
+  }, []);
+  const overlay = overlays > 0;
 
   // React Router does not scroll on navigation. Jump to #anchors when present,
   // otherwise start each new page at the top.
@@ -30,9 +38,13 @@ export default function PublicLayout() {
       <a href="#main" className={styles.skip}>
         Skip to content
       </a>
-      <PublicHeader theme={theme} onToggleTheme={toggleTheme} />
+      <PublicHeader theme={theme} onToggleTheme={toggleTheme} overlay={overlay} />
+      {/* The header is fixed; pages without a dark hero start below it. */}
+      {!overlay && <div className={styles.headerSpacer} aria-hidden="true" />}
       <main id="main" tabIndex={-1} className={styles.main}>
-        <Outlet />
+        <HeaderOverlayContext.Provider value={registerOverlay}>
+          <Outlet />
+        </HeaderOverlayContext.Provider>
       </main>
       <PublicFooter />
     </div>

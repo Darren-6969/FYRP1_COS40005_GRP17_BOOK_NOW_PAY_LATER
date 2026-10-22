@@ -42,6 +42,11 @@
   display: block;
 }
 
+/* Room for the fixed header on pages without a dark hero. */
+.headerSpacer {
+  height: var(--pub-header-h);
+}
+
 .main:focus {
   outline: none;
 }
