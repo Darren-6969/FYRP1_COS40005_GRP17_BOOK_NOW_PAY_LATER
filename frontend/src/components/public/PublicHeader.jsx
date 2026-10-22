@@ -24,6 +24,7 @@ function isCurrent(item, { pathname, hash }) {
 const ACCOUNT_LINKS = [
   { to: "/customer/bookings", label: "My bookings" },
   { to: "/customer/payments", label: "Payments" },
+  { to: "/customer/saved", label: "Saved cars" },
   { to: "/customer/invoices", label: "Invoices" },
   { to: "/customer/notifications", label: "Notifications" },
   { to: "/customer/licence", label: "Driving licence" },

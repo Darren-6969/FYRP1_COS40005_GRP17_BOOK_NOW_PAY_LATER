@@ -1,0 +1,94 @@
+/* Sign-in prompt for the save heart (BNPLB-108). Fixed to the viewport and
+   placed by SaveSigninPrompt.jsx under or above the heart. */
+.prompt {
+  position: fixed;
+  z-index: 60;
+  box-sizing: border-box;
+  background: var(--pub-surface);
+  border: 1px solid var(--pub-line);
+  border-radius: 12px;
+  box-shadow: var(--pub-shadow-card);
+  padding: 14px 14px 14px;
+  text-align: left;
+}
+
+.close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pub-label);
+  cursor: pointer;
+}
+
+.close:hover {
+  color: var(--pub-ink);
+  background: var(--pub-surface-sunk);
+}
+
+.title {
+  margin: 0 28px 4px 0 !important;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pub-ink);
+}
+
+.text {
+  margin: 0 0 12px !important;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--pub-text);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.primary,
+.secondary {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.primary {
+  background: var(--pub-brand);
+  color: var(--pub-on-brand) !important;
+}
+
+.secondary {
+  border: 1px solid var(--pub-line);
+  color: var(--pub-ink) !important;
+}
+
+.secondary:hover {
+  border-color: var(--pub-brand);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .prompt {
+    animation: promptIn var(--pub-dur) var(--pub-ease) backwards;
+  }
+}
+
+@keyframes promptIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}

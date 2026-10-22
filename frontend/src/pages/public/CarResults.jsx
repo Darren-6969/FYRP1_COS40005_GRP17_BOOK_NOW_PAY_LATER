@@ -53,7 +53,7 @@ export default function CarResults() {
   const [editing, setEditing] = useState(false);
   const [whyOpen, setWhyOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [saved, toggleSaved] = useSavedListings();
+  const [saved, toggleSaved, canSave] = useSavedListings();
   const fromRef = useRef(null);
   const filtersButtonRef = useRef(null);
   const requestKey = `${key}#${retry}`;
@@ -399,6 +399,7 @@ export default function CarResults() {
                         linkState={{ backTo: `/cars${key ? `?${key}` : ""}` }}
                         saved={saved.has(r.listing.id)}
                         onToggleSave={() => toggleSaved(r.listing.id)}
+                        canSave={canSave}
                       />
                     ))}
                   </div>

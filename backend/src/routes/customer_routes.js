@@ -24,6 +24,12 @@ import { carBookingSchema } from "../validators/car_booking_validator.js";
 import { createCarBooking } from "../controllers/car_booking_controller.js";
 import { requireIdempotencyKey } from "../services/idempotency_service.js";
 import { getBookingCancellationQuote } from "../controllers/refund_controller.js";
+import {
+  deleteSavedListing,
+  getSavedListingIds,
+  getSavedListings,
+  putSavedListing,
+} from "../controllers/saved_listing_controller.js";
 
 const router = express.Router();
 
@@ -48,6 +54,12 @@ router.post("/bookings/:id/receipt", requireIdempotencyKey, uploadCustomerReceip
 router.get("/payments", getCustomerPayments);
 router.get("/invoices", getCustomerInvoices);
 router.get("/invoices/:id", getCustomerInvoiceById);
+
+// BNPLB-108: saved cars, held on the account (no dates).
+router.get("/saved", getSavedListings);
+router.get("/saved/ids", getSavedListingIds);
+router.put("/saved/:listingId", putSavedListing);
+router.delete("/saved/:listingId", deleteSavedListing);
 
 router.get("/notifications", getCustomerNotifications);
 router.patch("/notifications/read-all", markAllCustomerNotificationsRead);

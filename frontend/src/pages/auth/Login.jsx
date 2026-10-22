@@ -82,6 +82,8 @@ export default function Login() {
   const hostToken = searchParams.get("hostToken");
   const redirectParam = searchParams.get("redirect");
   const emailParam = searchParams.get("email");
+  // Sent from a save heart while signed out (BNPLB-108).
+  const savingCar = searchParams.get("reason") === "save";
 
   const [form, setForm] = useState({
     email: emailParam || "",
@@ -119,6 +121,7 @@ export default function Login() {
     if (hostToken) params.set("hostToken", hostToken);
     if (form.email.trim()) params.set("email", form.email.trim());
     if (redirectParam) params.set("redirect", redirectParam);
+    if (savingCar) params.set("reason", "save");
 
     navigate(`/register?${params.toString()}`);
   };
@@ -275,7 +278,9 @@ export default function Login() {
 
             {redirectParam && !hostToken && (
               <p className="bnpl-auth-subtitle">
-                Please login to continue your BNPL booking.
+                {savingCar
+                  ? "Sign in to save cars to your account. You go straight back to the car you were looking at."
+                  : "Please login to continue your BNPL booking."}
               </p>
             )}
 

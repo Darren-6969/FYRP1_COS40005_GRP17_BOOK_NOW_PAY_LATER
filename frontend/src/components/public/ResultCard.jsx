@@ -1,18 +1,27 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { operatorHref } from "../../services/listing_public_service";
 import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
 import { formatResponseTime, formatSen } from "../../utils/formatPublic";
 import { durationText } from "../../utils/carPricing";
+import SaveSigninPrompt from "./SaveSigninPrompt";
 import styles from "../../assets/styles/public/ResultCard.module.css";
 
 const TRANSMISSION = { AUTOMATIC: "Automatic", MANUAL: "Manual" };
 
 // One car in the results list. `href` already carries the trip (dates and times).
-export default function ResultCard({ result, href, linkState, saved, onToggleSave }) {
+// `canSave` is false for signed-out visitors: the heart then opens the
+// sign-in prompt instead of saving.
+export default function ResultCard({ result, href, linkState, saved, onToggleSave, canSave = true }) {
   const { listing, quote, rateSen, depositPct, depositPerDaySen, remaining } = result;
   // The heart pops only when the customer saves, not when a saved car loads.
   const [pop, setPop] = useState(false);
+  const [signinOpen, setSigninOpen] = useState(false);
+  const saveRef = useRef(null);
+  const closeSignin = useCallback(({ refocus } = {}) => {
+    setSigninOpen(false);
+    if (refocus) saveRef.current?.focus();
+  }, []);
   const primary = listing.images.find((img) => img.isPrimary) || listing.images[0];
   const title = `${listing.vehicleMake} ${listing.vehicleModel}`;
   const meta = [listing.vehicleType, `${listing.seats} seats`, TRANSMISSION[listing.transmission], listing.fuelType]
@@ -48,11 +57,17 @@ export default function ResultCard({ result, href, linkState, saved, onToggleSav
             </div>
           </div>
           <button
+            ref={saveRef}
             type="button"
             className={`${styles.save} ${saved ? styles.saveOn : ""} ${pop ? styles.savePop : ""}`}
-            aria-pressed={saved}
+            aria-pressed={canSave ? saved : undefined}
+            aria-expanded={canSave ? undefined : signinOpen}
             aria-label={saved ? `Remove ${title} from saved` : `Save ${title} for later`}
             onClick={(e) => {
+              if (!canSave) {
+                setSigninOpen((v) => !v);
+                return;
+              }
               if (!saved) setPop(true);
               onToggleSave?.(e);
             }}
@@ -60,6 +75,7 @@ export default function ResultCard({ result, href, linkState, saved, onToggleSav
           >
             <Heart size={18} aria-hidden="true" fill={saved ? "currentColor" : "none"} />
           </button>
+          <SaveSigninPrompt open={signinOpen} anchorRef={saveRef} onClose={closeSignin} />
         </div>
 
         <div className={styles.operatorRow}>

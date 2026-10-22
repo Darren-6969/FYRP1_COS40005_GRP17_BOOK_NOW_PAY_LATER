@@ -247,56 +247,6 @@
   color: var(--pub-accent);
 }
 
-.signin {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  width: 250px;
-  background: var(--pub-surface);
-  border: 1px solid var(--pub-line);
-  border-radius: 12px;
-  box-shadow: var(--pub-shadow-card);
-  padding: 14px;
-  z-index: 5;
-}
-
-.signinText {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--pub-ink);
-  margin-bottom: 10px !important;
-}
-
-.signinActions {
-  display: flex;
-  gap: 8px;
-}
-
-.signinLink {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  border-radius: 10px;
-  background: var(--pub-brand);
-  color: var(--pub-on-brand) !important;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.signinClose {
-  flex: 1;
-  min-height: 40px;
-  border-radius: 10px;
-  border: 1px solid var(--pub-line);
-  background: transparent;
-  color: var(--pub-ink);
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-}
-
 /* ── header ─────────────────────────────────────────────────────── */
 .header {
   display: flex;
@@ -1060,15 +1010,3 @@
   }
 }
 
-/* The sign-in prompt by the heart opens like the header's account menu. */
-.signin {
-  transform-origin: top right;
-  animation: popIn var(--pub-dur) var(--pub-ease) backwards;
-}
-
-@keyframes popIn {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.96);
-  }
-}

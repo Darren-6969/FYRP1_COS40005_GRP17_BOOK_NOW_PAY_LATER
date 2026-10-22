@@ -373,7 +373,7 @@ export default function OperatorStorefront() {
   const branchFilter = params.get("branch") || "";
   const dates = hasDates(criteria);
   const narrow = useMediaQuery(NARROW_QUERY);
-  const [saved, toggleSaved] = useSavedListings();
+  const [saved, toggleSaved, canSave] = useSavedListings();
 
   const [state, setState] = useState({ key: null, data: null, error: null });
   const [retry, setRetry] = useState(0);
@@ -567,6 +567,7 @@ export default function OperatorStorefront() {
       linkState={{ backTo }}
       saved={saved.has(r.listing.id)}
       onToggleSave={() => toggleSaved(r.listing.id)}
+      canSave={canSave}
     />
   );
 

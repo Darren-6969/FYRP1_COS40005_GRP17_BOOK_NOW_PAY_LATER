@@ -54,7 +54,7 @@ const STANDARD_FAQS = [
   { q: "What if I pick up late?", a: "Call the branch as soon as you know you will be late. The operator decides how long the car is held." },
 ];
 
-const VEHICLE_TYPE_LABEL = { SEDAN: "Sedan", HATCHBACK: "Hatchback", COMPACT: "Compact", SUV: "SUV", MPV: "MPV", PICKUP: "Pickup", VAN: "Van" };
+export const VEHICLE_TYPE_LABEL = { SEDAN: "Sedan", HATCHBACK: "Hatchback", COMPACT: "Compact", SUV: "SUV", MPV: "MPV", PICKUP: "Pickup", VAN: "Van" };
 const POWERTRAIN_LABEL = { PETROL: "Petrol", DIESEL: "Diesel", HYBRID: "Hybrid", EV: "Electric" };
 const DRIVETRAIN_LABEL = { TWO_WD: "2WD", FOUR_WD: "4WD", AWD: "4WD" };
 

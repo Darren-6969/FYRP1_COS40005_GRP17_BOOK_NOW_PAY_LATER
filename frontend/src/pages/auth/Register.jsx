@@ -32,6 +32,8 @@ export default function Register() {
   const [searchParams] = useSearchParams();
 
   const redirectParam = searchParams.get("redirect");
+  // Sent from a save heart while signed out (BNPLB-108).
+  const savingCar = searchParams.get("reason") === "save";
   const hostToken = searchParams.get("hostToken");
   const emailParam = searchParams.get("email");
   const nameParam = searchParams.get("name");
@@ -56,6 +58,7 @@ export default function Register() {
 
     if (hostToken) params.set("hostToken", hostToken);
     if (redirectParam) params.set("redirect", redirectParam);
+    if (savingCar) params.set("reason", "save");
     if (form.email.trim()) params.set("email", form.email.trim());
 
     navigate(`/login?${params.toString()}`);
@@ -127,6 +130,7 @@ export default function Register() {
 
       if (hostToken) params.set("hostToken", hostToken);
       if (redirectParam) params.set("redirect", redirectParam);
+      if (savingCar) params.set("reason", "save");
       params.set("email", email);
 
       navigate(`/login?${params.toString()}`, {
@@ -169,7 +173,9 @@ export default function Register() {
 
             {redirectParam && !hostToken && (
               <p className="bnpl-auth-subtitle">
-                After you register, you go straight back to your booking. Your trip and details are kept.
+                {savingCar
+                  ? "Create an account to save cars. After you register, you go straight back to the car you were looking at."
+                  : "After you register, you go straight back to your booking. Your trip and details are kept."}
               </p>
             )}
 

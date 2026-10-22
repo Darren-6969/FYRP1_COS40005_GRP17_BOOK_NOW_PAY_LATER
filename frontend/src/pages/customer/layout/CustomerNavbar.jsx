@@ -3,6 +3,7 @@ import logo from "../../../assets/logo.png";
 import {
   CalendarCheck,
   CreditCard,
+  Heart,
   FileText,
   Bell,
   UserCircle,
@@ -14,6 +15,7 @@ import {
 const sidebarLinks = [
   { to: "/customer/bookings", label: "My Bookings", icon: <CalendarCheck size={20} /> },
   { to: "/customer/payments", label: "Payments", icon: <CreditCard size={20} /> },
+  { to: "/customer/saved", label: "Saved cars", icon: <Heart size={20} /> },
   { to: "/customer/invoices", label: "Invoices", icon: <FileText size={20} /> },
   { to: "/customer/notifications", label: "Notifications", icon: <Bell size={20} /> },
   { to: "/customer/profile", label: "Profile", icon: <UserCircle size={20} /> },

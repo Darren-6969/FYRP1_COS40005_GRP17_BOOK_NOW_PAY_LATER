@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Check, ChevronLeft, ChevronRight, Heart, Minus, Plus } from "lucide-react";
 import { getCarListing, quoteCarBooking } from "../../services/listing_public_service";
@@ -12,7 +12,6 @@ import {
   klDateTimeToIso,
   klToday,
 } from "../../utils/formatPublic";
-import { getToken } from "../../utils/session";
 import { durationText, rateLinesText } from "../../utils/carPricing";
 import useSavedListings from "../../hooks/useSavedListings";
 import PaymentSchedule from "../../components/public/PaymentSchedule";
@@ -20,6 +19,7 @@ import RefundBox from "../../components/public/RefundBox";
 import OperatorStrip from "../../components/public/OperatorStrip";
 import BookingBar from "../../components/public/BookingBar";
 import OfferModeBanner, { OfferAddonStatus } from "../../components/public/OfferModeBanner";
+import SaveSigninPrompt from "../../components/public/SaveSigninPrompt";
 import styles from "../../assets/styles/public/CarDetail.module.css";
 import disclosure from "../../assets/styles/public/Disclosure.module.css";
 import AvailabilityCalendar from "../../components/public/AvailabilityCalendar";
@@ -55,7 +55,7 @@ function tripErrors(sel) {
 
 // ── Gallery ──────────────────────────────────────────────────────────
 
-function Gallery({ listing, saved, onSave, signedIn }) {
+function Gallery({ listing, saved, onSave, canSave }) {
   const captions = photoCaptions(listing);
   const photos = listing.images.length
     ? listing.images.map((img, i) => ({ src: img.imageUrl, caption: captions[i] || `Photo ${i + 1}` }))
@@ -65,29 +65,20 @@ function Gallery({ listing, saved, onSave, signedIn }) {
   // The heart pops only when the customer saves, not when a saved car loads.
   const [pop, setPop] = useState(false);
   const mainRef = useRef(null);
-  const signinRef = useRef(null);
   const saveRef = useRef(null);
-  const location = useLocation();
   const n = photos.length;
   const current = photos[index];
   const tiles = [1, 2, 3, 4].filter((i) => i < n);
   const title = `${listing.vehicleMake} ${listing.vehicleModel}`;
 
-  useEffect(() => {
-    if (!signinOpen) return undefined;
-    signinRef.current?.querySelector("a")?.focus();
-    const onKey = (e) => {
-      if (e.key === "Escape") {
-        setSigninOpen(false);
-        saveRef.current?.focus();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [signinOpen]);
+  const closeSignin = useCallback(({ refocus } = {}) => {
+    setSigninOpen(false);
+    if (refocus) saveRef.current?.focus();
+  }, []);
 
+  // Saving is for signed-in customers only; anyone else gets the sign-in prompt.
   const onSaveClick = () => {
-    if (signedIn) {
+    if (canSave) {
       if (!saved) setPop(true);
       onSave();
     } else setSigninOpen((v) => !v);
@@ -158,36 +149,14 @@ function Gallery({ listing, saved, onSave, signedIn }) {
           type="button"
           className={`${styles.save} ${saved ? styles.saveOn : ""} ${pop ? styles.savePop : ""}`}
           aria-label="Save to favourites"
-          aria-pressed={signedIn ? saved : undefined}
-          aria-expanded={signedIn ? undefined : signinOpen}
+          aria-pressed={canSave ? saved : undefined}
+          aria-expanded={canSave ? undefined : signinOpen}
           onClick={onSaveClick}
           onAnimationEnd={() => setPop(false)}
         >
           <Heart size={18} aria-hidden="true" fill={saved ? "currentColor" : "none"} />
         </button>
-        {signinOpen && (
-          <div ref={signinRef} role="dialog" aria-label="Sign in to save" className={styles.signin}>
-            <p className={styles.signinText}>Sign in to save this car to your favourites.</p>
-            <div className={styles.signinActions}>
-              <Link
-                to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`}
-                className={styles.signinLink}
-              >
-                Sign in
-              </Link>
-              <button
-                type="button"
-                className={styles.signinClose}
-                onClick={() => {
-                  setSigninOpen(false);
-                  saveRef.current?.focus();
-                }}
-              >
-                Not now
-              </button>
-            </div>
-          </div>
-        )}
+        <SaveSigninPrompt open={signinOpen} anchorRef={saveRef} onClose={closeSignin} />
       </div>
     </section>
   );
@@ -257,8 +226,7 @@ export default function CarDetail() {
   const offerParam = params.get("offer") || "";
   const offerId = /^\d+$/.test(offerParam) ? offerParam : null;
   const sel = useMemo(() => parseBookingSelection(new URLSearchParams(key)), [key]);
-  const [saved, toggleSaved] = useSavedListings();
-  const signedIn = Boolean(getToken());
+  const [saved, toggleSaved, canSave] = useSavedListings();
   const tripRef = useRef(null);
   const fromRef = useRef(null);
   const [openFaq, setOpenFaq] = useState(-1);
@@ -520,7 +488,7 @@ export default function CarDetail() {
 
       {offerId && <OfferModeBanner bookingId={offerId} operatorName={listing.operator.companyName} />}
 
-      <Gallery listing={listing} saved={saved.has(listing.id)} onSave={() => toggleSaved(listing.id)} signedIn={signedIn} />
+      <Gallery listing={listing} saved={saved.has(listing.id)} onSave={() => toggleSaved(listing.id)} canSave={canSave} />
 
       <header className={styles.header}>
         <div className={styles.titleRow}>

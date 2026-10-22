@@ -125,3 +125,9 @@ export const submitLicenceDocument = (file) => {
     headers: { "Content-Type": "multipart/form-data" },
   });
 };
+
+// BNPLB-108: saved cars live on the customer's account (no dates).
+export const getSavedListings = () => api.get("/customer/saved");
+export const getSavedListingIds = () => api.get("/customer/saved/ids");
+export const saveListing = (listingId) => api.put(`/customer/saved/${listingId}`);
+export const unsaveListing = (listingId) => api.delete(`/customer/saved/${listingId}`);

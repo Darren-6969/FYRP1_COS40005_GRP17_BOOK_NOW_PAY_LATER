@@ -289,6 +289,7 @@ model User {
   creditAppeals            CreditAppeal[]              @relation("CreditAppealCustomer")
   reviewedCreditAppeals    CreditAppeal[]              @relation("CreditAppealReviewer")
   bookingStatusChanges     BookingStatusHistory[]      @relation("BookingStatusActor")
+  savedListings            SavedListing[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1263,6 +1264,7 @@ model Listing {
   bookings    Booking[] @relation("BookingListing")
 
   alternativeBookings Booking[] @relation("BookingAlternativeListing")
+  savedBy             SavedListing[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1275,6 +1277,23 @@ model Listing {
   @@index([vehicleModel])
   @@index([transmission])
   @@index([vehicleType])
+}
+
+// BNPLB-108 (SRS 4.2.6): a customer's saved car. Holds the listing only, no
+// dates; the customer picks dates when they come back to it.
+model SavedListing {
+  id Int @id @default(autoincrement())
+
+  customerId Int
+  customer   User    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  listingId  Int
+  listing    Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([customerId, listingId])
+  @@index([customerId, createdAt])
+  @@index([listingId])
 }
 
 model ListingImage {
