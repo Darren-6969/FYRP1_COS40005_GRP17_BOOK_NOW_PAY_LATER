@@ -1,265 +1,67 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, Outlet, useNavigate } from "react-router-dom";
-import CustomerNavbar from "./CustomerNavbar";
-import { useCustomerNotifications } from "../../../hooks/useNotifications";
-import { Menu } from "lucide-react";
-import { clearSession, getUser as getStoredUser } from "../../../utils/session";
-import { logout } from "../../../services/auth_service";
+import { useEffect } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
+import "../../../assets/styles/public/tokens.css";
+import "../../../assets/styles/customer-theme.css";
+import PublicHeader from "../../../components/public/PublicHeader";
+import PublicFooter from "../../../components/public/PublicFooter";
+import usePublicTheme from "../../../hooks/usePublicTheme";
+import shell from "../../../assets/styles/public/PublicLayout.module.css";
+import styles from "../../../assets/styles/public/CustomerLayout.module.css";
+
+// R5 (car rental refresh): the customer area is part of the public site.
+// Same header (with the notification bell), same tokens, theme and footer;
+// the account pages sit behind a pill sub-nav. `customer-theme` scopes the
+// colour overrides in customer-theme.css, so customer.css keeps styling the
+// operator and admin pages that share it exactly as before.
+const LINKS = [
+  { to: "/customer/bookings", label: "My bookings" },
+  { to: "/customer/payments", label: "Payments" },
+  { to: "/customer/saved", label: "Saved cars" },
+  { to: "/customer/licence", label: "Driving licence" },
+  { to: "/customer/invoices", label: "Invoices" },
+  { to: "/customer/notifications", label: "Notifications" },
+  { to: "/customer/profile", label: "Profile" },
+  { to: "/customer/help", label: "Help and support" },
+];
+// Credit (/customer/credit) stays out of the sub-nav while the credit tier
+// policy is off: the page would show a tier that changes nothing yet.
 
 export default function CustomerLayout() {
-  const navigate = useNavigate();
-  const dropdownRef = useRef(null);
+  const { pathname } = useLocation();
+  const { theme, toggleTheme } = usePublicTheme();
 
-  const [openNotifications, setOpenNotifications] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [showTopbar, setShowTopbar] = useState(true);
-  const [hasScrolled, setHasScrolled] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
-  
-  const closeTimerRef = useRef(null);
-
-  const openNotificationMenu = () => {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-    }
-
-    setOpenNotifications(true);
-  };
-
-  const closeNotificationMenu = () => {
-    closeTimerRef.current = setTimeout(() => {
-      setOpenNotifications(false);
-    }, 180);
-  };
-
-  const user = getStoredUser();
-  const displayName = user?.name || user?.fullName || "Customer";
-  const avatarInitial = displayName?.[0]?.toUpperCase() || "C";
-
-  const {
-    notifications,
-    loading,
-    error,
-    socketConnected,
-    markRead,
-    markAllRead,
-  } = useCustomerNotifications();
-
-  const unreadCount = notifications.filter((item) => !item.isRead).length;
-  const recentNotifications = useMemo(() => notifications.slice(0, 5), [notifications]);
-
+  // Each account page starts at the top, as on the public pages.
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setOpenNotifications(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-  let lastScrollY = window.scrollY;
-
-  const handleScroll = () => {
-    const currentScrollY = window.scrollY;
-
-    if (currentScrollY <= 20) {
-      setShowTopbar(true);
-      setHasScrolled(false);
-    } else if (currentScrollY < lastScrollY) {
-      // scrolling up
-      setShowTopbar(true);
-      setHasScrolled(true);
-    } else {
-      // scrolling down
-      setShowTopbar(false);
-      setHasScrolled(true);
-    }
-
-    lastScrollY = currentScrollY;
-  };
-
-  window.addEventListener("scroll", handleScroll, { passive: true });
-  handleScroll();
-
-  return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const handleLogout = async () => {
-    await logout().catch(() => {});
-    clearSession();
-    navigate("/login", { replace: true });
-  };
-  
-  /*Function the Notification Bell*/
-function getCustomerNotificationLink(item) {
-  const text = `${item.title || ""} ${item.message || ""}`.toLowerCase();
-  const type = `${item.type || ""}`.toLowerCase();
-
-  if (type.includes("receipt") || text.includes("receipt") || text.includes("e-receipt")) {
-    return "/customer/payments";
-  }
-
-  if (type.includes("payment") || text.includes("payment")) {
-    return "/customer/payments";
-  }
-
-  if (type.includes("invoice") || text.includes("invoice")) {
-    return "/customer/invoices";
-  }
-
-  if (type.includes("booking") || text.includes("booking") || text.match(/bnpl-\d+/i)) {
-    return "/customer/bookings";
-  }
-
-  return "/customer/notifications";
-}
+    window.scrollTo(0, 0);
+  }, [pathname]);
 
   return (
-  <div className={`customer-shell ${mobileMenuOpen ? "customer-menu-open" : ""}`}>
-    <CustomerNavbar
-      onLogout={handleLogout}
-      mobileMenuOpen={mobileMenuOpen}
-      onCloseMenu={() => setMobileMenuOpen(false)}
-    />
+    <div data-public-root data-theme={theme} className={`customer-theme ${styles.root}`}>
+      <a href="#customer-main" className={shell.skip}>
+        Skip to content
+      </a>
+      <PublicHeader theme={theme} onToggleTheme={toggleTheme} />
+      <div className={shell.headerSpacer} aria-hidden="true" />
 
-    {mobileMenuOpen && (
-      <div
-        className="customer-sidebar-overlay"
-        onClick={() => setMobileMenuOpen(false)}
-      />
-    )}
-
-    <main className="customer-main">
-        <header
-          className={`customer-topbar-glass ${
-            hasScrolled ? "topbar-scroll-mode" : ""
-          } ${showTopbar ? "topbar-show" : "topbar-hide"}`}
-        >
-  <div className="customer-topbar-left">
-    <button
-      type="button"
-      className="customer-mobile-menu-btn"
-      onClick={() => setMobileMenuOpen(true)}
-      aria-label="Open customer menu"
-    >
-      <Menu size={30} />
-    </button>
-
-    <div>
-      <p className="customer-eyebrow">Book Now Pay Later</p>
-      <h2>Customer Portal</h2>
-    </div>
-  </div>
-
-          <div className="customer-topbar-actions">
-    <div
-      className="customer-notification-wrapper"
-      ref={dropdownRef}
-      onMouseEnter={openNotificationMenu}
-      onMouseLeave={closeNotificationMenu}
-    >
-    <button
-        type="button"
-        className={`customer-notification-trigger ${
-        unreadCount > 0 ? "has-unread" : ""
-      }`}
-        onClick={() => navigate("/customer/notifications")}
-        aria-label="Open notifications"
-      >
-        <span className="customer-bell-icon">🔔</span>
-
-        {unreadCount > 0 && (
-          <span className="portal-notification-badge">{unreadCount}</span>
-        )}
-      </button>
-
-    {openNotifications && (
-      <div className="portal-notification-dropdown customer-notification-dropdown">
-        <div className="portal-dropdown-head">
-          <div>
-            <strong>Notifications</strong>
-            <p>
-              {unreadCount} unread update{unreadCount === 1 ? "" : "s"}
-              {" · "}
-              {socketConnected ? "Live" : "Syncing"}
-            </p>
-          </div>
-
-          <button type="button" onClick={markAllRead} disabled={!unreadCount}>
-            Mark all read
-          </button>
+      <nav aria-label="Your account" className={styles.subnav}>
+        <div className={styles.subnavTrack}>
+          {LINKS.map((link) => (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              className={({ isActive }) => `${styles.subnavLink} ${isActive ? styles.subnavLinkCurrent : ""}`}
+            >
+              {link.label}
+            </NavLink>
+          ))}
         </div>
+      </nav>
 
-        {loading && (
-          <div className="portal-dropdown-empty">Loading notifications...</div>
-        )}
-
-        {error && (
-          <div className="portal-dropdown-empty portal-dropdown-error">
-            {error}
-          </div>
-        )}
-
-        {!loading && !error && recentNotifications.length > 0 && (
-          <div className="portal-dropdown-list">
-            {recentNotifications.map((item) => (
-              <Link
-                key={item.id}
-                className={`portal-dropdown-item ${!item.isRead ? "unread" : ""}`}
-                to={getCustomerNotificationLink(item)}
-                onClick={() => {
-                  markRead(item.id);
-                  setOpenNotifications(false);
-                }}
-              >
-                <span className="portal-dropdown-dot" />
-
-                <span>
-                  <strong>{item.title || item.type || "Notification"}</strong>
-                  <small>
-                    {item.message ||
-                      item.description ||
-                      "Booking update received."}
-                  </small>
-                </span>
-              </Link>
-            ))}
-          </div>
-        )}
-
-        {!loading && !error && !recentNotifications.length && (
-          <div className="portal-dropdown-empty">No notifications yet.</div>
-        )}
-
-        <Link className="portal-dropdown-footer" to="/customer/notifications">
-          View all notifications
-        </Link>
-      </div>
-    )}
-  </div>
-
-            <Link className="customer-profile-chip" to="/customer/profile">
-            {user?.profileImageUrl ? (
-              <img
-                src={user.profileImageUrl}
-                alt="Profile"
-                className="customer-avatar-img"
-              />
-            ) : (
-              <span className="customer-avatar">{avatarInitial}</span>
-            )}
-              <span className="customer-profile-chip-text">
-                <strong>{displayName}</strong>
-                <small>Customer</small>
-              </span>
-            </Link>
-          </div>
-        </header>
-        <Outlet />  
+      <main id="customer-main" tabIndex={-1} className={styles.main}>
+        <Outlet />
       </main>
+
+      <PublicFooter />
     </div>
   );
 }

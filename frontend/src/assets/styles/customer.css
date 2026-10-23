@@ -1,170 +1,14 @@
 /*Customer Logo*/
-.customer-brand {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.customer-brand-logo {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-  border-radius: 18px;
-  background: white;
-  padding: 6px;
-  flex-shrink: 0;
-}
-
-.customer-brand strong {
-  display: block;
-  font-size: 1.7rem;
-  line-height: 1.1;
-  color: #0f172a;
-}
-
-.customer-brand span {
-  display: block;
-  margin-top: 4px;
-  color: #64748b;
-  font-size: 0.95rem;
-}
 
 /*Customer Right Corner Avatar*/
-.customer-avatar-img {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
 
-.customer-notification-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.customer-notification-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-}
-
-.customer-shell {
-  min-height: 100vh;
-  display: flex;
-  background:
-    radial-gradient(circle at top left, rgba(191, 219, 254, 0.8), transparent 34%),
-    radial-gradient(circle at bottom right, rgba(224, 231, 255, 0.8), transparent 36%),
-    linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
-  color: #0f172a;
-}
-
-.customer-sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  width: 260px;
-  padding: 20px;
-  border-right: 1px solid rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.58);
-  backdrop-filter: blur(26px);
-  box-shadow: 18px 0 55px rgba(15, 23, 42, 0.06);
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.customer-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 28px;
-}
-
-.customer-brand-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 18px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(180deg, #3b82f6, #2563eb);
-  color: #fff;
-  font-weight: 800;
-  box-shadow: 0 14px 35px rgba(37, 99, 235, 0.26);
-}
-
-.customer-brand strong,
-.customer-brand span {
-  display: block;
-}
-
-.customer-brand span {
-  margin-top: 2px;
-  font-size: 12px;
-  color: #64748b;
-}
-
-.customer-nav-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.customer-nav-link,
 .customer-bottom-link {
   text-decoration: none;
 }
 
-
-.customer-nav-link {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 15px;
-  border-radius: 18px;
-  color: #475569;
-  font-weight: 700;
-  font-size: 14px;
-  text-decoration: none;
-  transition: all 0.25s ease;
-}
-
-.customer-nav-icon {
-  display: inline-grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 12px;
-  background: rgba(37, 99, 235, 0.1);
-  flex-shrink: 0;
-  transition: all 0.25s ease;
-}
-
 /* Hover effect (MOVE + ICON ANIMATION) */
-.customer-nav-link:hover {
-  transform: translateX(6px);
-  background: #2563eb;
-  color: #fff;
-}
-
-.customer-nav-link:hover .customer-nav-icon {
-  transform: scale(1.15) rotate(8deg);
-  background: rgba(255, 255, 255, 0.2);
-}
 
 /* Active (selected page) */
-.customer-nav-link.active {
-  background: #2563eb;
-  color: #fff;
-  box-shadow: 0 14px 35px rgba(37, 99, 235, 0.22);
-}
-
-.customer-nav-link.active .customer-nav-icon {
-  transform: scale(1.08);
-  background: rgba(255, 255, 255, 0.25);
-}
 
 .customer-sidebar-logout {
   width: 100%;
@@ -197,13 +41,6 @@
 }
 
 /* icon box */
-.customer-sidebar-logout .customer-nav-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background: #f1d5d8;
-  color: #be123c;
-}
 
 /* hover */
 .customer-sidebar-logout:hover {
@@ -219,7 +56,6 @@
   position: relative;
 }
 
-.customer-topbar-glass,
 .customer-glass-card,
 .customer-hero-card,
 .customer-next-action,
@@ -233,30 +69,11 @@
   box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
 }
 
-.customer-topbar-glass {
-  border-radius: 28px;
-  padding: 16px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 22px;
-  position: relative;
-  z-index: 200;
-  overflow: visible;
-}
-
-.customer-topbar-glass h2,
 .customer-hero-card h1,
 .customer-glass-card h1,
 .customer-glass-card h2,
 .customer-booking-card h3 {
   margin: 0;
-}
-
-.customer-topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
 }
 
 .customer-eyebrow {
@@ -275,17 +92,6 @@
 .customer-list-stack p,
 .notification-card small {
   color: #64748b;
-}
-
-.customer-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: #fff;
-  color: #2563eb;
-  font-weight: 800;
 }
 
 .customer-page {
@@ -534,10 +340,6 @@
   font-weight: 900;
 }
 
-.customer-bottom-nav {
-  display: none;
-}
-
 .customer-profile-shell {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
@@ -599,34 +401,9 @@
 }
 
 @media (max-width: 980px) {
-  .customer-shell {
-    display: block;
-    padding-bottom: 92px;
-  }
-
-  .customer-sidebar {
-    display: none;
-  }
 
   .customer-main {
     padding: 14px;
-  }
-
-  .customer-bottom-nav {
-    position: fixed;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
-    border-radius: 26px;
-    padding: 8px;
-    background: rgba(255, 255, 255, 0.84);
-    border: 1px solid rgba(255, 255, 255, 0.72);
-    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.15);
-    backdrop-filter: blur(24px);
-    z-index: 50;
   }
 
   .customer-bottom-link {
@@ -680,19 +457,6 @@
    Customer Topbar Notification Dropdown
    ========================= */
 
-.customer-notification-trigger {
-  position: relative;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #2563eb;
-  font-weight: 900;
-  display: grid;
-  place-items: center;
-}
-
 .customer-dropdown-footer {
   display: block;
   padding: 14px 18px 18px;
@@ -702,73 +466,6 @@
   color: #2563eb;
   font-weight: 900;
   font-size: 13px;
-}
-
-.customer-profile-chip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 5px 12px 5px 5px;
-  border-radius: 999px;
-  background: transparent;
-  text-decoration: none !important;
-  color: inherit !important;
-  cursor: pointer;
-  transition: all 0.25s ease;
-}
-
-.customer-profile-chip:hover {
-  transform: translateY(-2px);
-  background: rgba(239, 246, 255, 0.9);
-  text-decoration: none !important;
-}
-
-.customer-avatar-img,
-.customer-avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.customer-avatar-img {
-  object-fit: cover;
-}
-
-.customer-avatar {
-  display: grid;
-  place-items: center;
-  background: #2563eb;
-  color: #ffffff;
-  font-weight: 900;
-}
-
-.customer-profile-chip-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.customer-profile-chip-text strong,
-.customer-profile-chip-text small {
-  display: block;
-  text-decoration: none !important;
-  white-space: nowrap;
-}
-
-.customer-profile-chip-text strong {
-  color: #0f172a;
-  font-size: 13px;
-  font-weight: 900;
-  line-height: 1.15;
-}
-
-.customer-profile-chip-text small {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.15;
 }
 
 /* =========================
@@ -941,14 +638,6 @@
 }
 
 @media (max-width: 980px) {
-  .customer-notification-dropdown {
-    right: 14px;
-    top: 70px;
-  }
-
-  .customer-profile-chip-text {
-    display: none;
-  }
 
   .notification-card {
     flex-direction: column;
@@ -2108,28 +1797,6 @@
 
 /* ---------- Desktop Layout ---------- */
 @media (min-width: 769px) {
-  .customer-shell {
-    display: block !important;
-    min-height: 100vh !important;
-  }
-
-  .customer-sidebar {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 280px !important;
-    height: 100vh !important;
-    padding: 20px 20px !important;
-    background: rgba(248, 251, 255, 0.82) !important;
-    border-right: 1px solid rgba(226, 232, 240, 0.72) !important;
-    backdrop-filter: blur(22px) !important;
-    z-index: 3000 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
-    overflow-y: auto !important;
-    box-shadow: 18px 0 55px rgba(15, 23, 42, 0.08) !important;
-  }
 
   .customer-main {
     margin-left: 280px !important;
@@ -2137,107 +1804,11 @@
     min-height: 100vh !important;
     padding: 28px !important;
   }
-
-  .customer-sidebar-close,
-  .customer-sidebar-overlay,
-  .customer-mobile-menu-btn,
-  .customer-bottom-nav {
-    display: none !important;
-  }
-
-  .customer-topbar-glass {
-    padding: 18px 24px !important;
-    margin-bottom: 28px !important;
-    border-radius: 28px !important;
-  }
-
-  .customer-topbar-glass h2 {
-    font-size: 32px !important;
-  }
 }
 
 /* ---------- Sidebar Brand ---------- */
-.customer-brand {
-  display: flex !important;
-  align-items: center !important;
-  gap: 14px !important;
-  margin-bottom: 36px !important;
-}
-
-.customer-brand-logo {
-  width: 72px !important;
-  height: 72px !important;
-  object-fit: contain !important;
-  background: white !important;
-  border-radius: 20px !important;
-  padding: 12px !important;
-  flex-shrink: 0 !important;
-}
-
-.customer-brand-text {
-  display: flex !important;
-  flex-direction: column !important;
-}
-
-.customer-brand-text strong {
-  font-size: 31px !important;
-  font-weight: 650 !important;
-  color: #111827 !important;
-  line-height: 1 !important;
-}
-
-.customer-brand-text span {
-  margin-top: 6px !important;
-  color: #64748b !important;
-  font-size: 14px !important;
-}
 
 /* ---------- Sidebar Menu ---------- */
-.customer-nav-list {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 16px !important;
-  margin-top: 20px !important;
-}
-
-.customer-nav-link {
-  text-decoration: none !important;
-  color: #475569 !important;
-  font-size: 16px !important;
-  font-weight: 650 !important;
-  padding: 13px 15px !important;
-  border-radius: 20px !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 16px !important;
-}
-
-.customer-nav-icon {
-  width: 42px !important;
-  height: 42px !important;
-  border-radius: 14px !important;
-  background: rgba(37, 99, 235, 0.1) !important;
-  color: #475569 !important;
-  display: grid !important;
-  place-items: center !important;
-  flex-shrink: 0 !important;
-}
-
-.customer-nav-link:hover {
-  background: rgba(37, 99, 235, 0.08) !important;
-  transform: translateX(4px) !important;
-}
-
-.customer-nav-link.active {
-  background: #2563eb !important;
-  color: white !important;
-  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.3) !important;
-}
-
-.customer-nav-link.active .customer-nav-icon {
-  background: rgba(255, 255, 255, 0.18) !important;
-  color: white !important;
-}
 
 /* ---------- Logout Button ---------- */
 .customer-sidebar-logout {
@@ -2310,101 +1881,11 @@
 
 /* ---------- Mobile Layout ---------- */
 @media (max-width: 860px) {
-  .customer-shell {
-    display: block !important;
-    min-height: 100vh !important;
-    padding-bottom: 0 !important;
-  }
 
   .customer-main {
     margin-left: 0 !important;
     width: 100% !important;
     padding: 8px !important;
-  }
-
-  .customer-sidebar {
-    position: fixed !important;
-    top: 0 !important;
-    left: -100% !important;
-    width: 365px !important;
-    max-width: 86vw !important;
-    height: 100vh !important;
-    padding: 20px 16px !important;
-    background: rgba(248, 251, 255, 0.82) !important;
-    border-right: 1px solid rgba(226, 232, 240, 0.72) !important;
-    backdrop-filter: blur(22px) !important;
-    z-index: 3000 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
-    overflow-y: auto !important;
-    transition: left 0.28s ease !important;
-    box-shadow: 12px 0 40px rgba(15, 23, 42, 0.18) !important;
-  }
-
-  .customer-sidebar.show {
-    left: 0 !important;
-  }
-
-  .customer-sidebar-close {
-    display: grid !important;
-    place-items: center !important;
-    margin-left: auto !important;
-    width: 48px !important;
-    height: 48px !important;
-    border: 1px solid #cbd8ea !important;
-    background: white !important;
-    border-radius: 16px !important;
-    color: #111827 !important;
-    cursor: pointer !important;
-  }
-
-  .customer-sidebar-overlay {
-    display: block !important;
-    position: fixed !important;
-    inset: 0 !important;
-    background: rgba(15, 23, 42, 0.38) !important;
-    backdrop-filter: blur(8px) !important;
-    z-index: 2500 !important;
-  }
-
-  .customer-mobile-menu-btn {
-    width: 54px !important;
-    height: 54px !important;
-    border: 1px solid #d7e2f3 !important;
-    border-radius: 18px !important;
-    background: #f8fbff !important;
-    color: #1f3763 !important;
-    display: grid !important;
-    place-items: center !important;
-    cursor: pointer !important;
-    flex-shrink: 0 !important;
-  }
-
-  .customer-bottom-nav {
-    display: none !important;
-  }
-
-  .customer-topbar-left {
-    display: flex !important;
-    align-items: center !important;
-    gap: 14px !important;
-  }
-
-  .customer-topbar-glass {
-    min-height: 174px !important;
-    align-items: flex-start !important;
-    position: relative !important;
-  }
-
-  .customer-topbar-actions {
-    position: absolute !important;
-    left: 28px !important;
-    bottom: 28px !important;
-  }
-
-  .customer-profile-chip-text {
-    display: none !important;
   }
 
   /* Fix customer profile right side overflow */
@@ -2452,26 +1933,6 @@
 
 /*Notification on Mobile View*/
 @media (max-width: 860px) {
-  .customer-notification-wrapper {
-    position: static !important;
-  }
-
-  .customer-notification-dropdown,
-  .portal-notification-dropdown.customer-notification-dropdown {
-    position: fixed !important;
-    top: 220px !important;
-    left: 14px !important;
-    right: 14px !important;
-    width: auto !important;
-    max-width: none !important;
-    min-width: 0 !important;
-    max-height: 62vh !important;
-    overflow-y: auto !important;
-    z-index: 5000 !important;
-    border-radius: 26px !important;
-    background: rgba(255, 255, 255, 0.96) !important;
-    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22) !important;
-  }
 
   .portal-dropdown-head {
     padding: 20px !important;
@@ -2504,14 +1965,6 @@
 }
 
 /*Animated Customer Dashboard Top Right Notification Bell*/
-.customer-notification-trigger .customer-bell-icon {
-  display: inline-block !important;
-  transform-origin: 50% 0%;
-}
-
-.customer-notification-trigger.has-unread .customer-bell-icon {
-  animation: customerBellRing 0.9s ease-in-out infinite !important;
-}
 
 @keyframes customerBellRing {
   0% { transform: rotate(0deg); }
@@ -2521,13 +1974,6 @@
   60% { transform: rotate(-10deg); }
   75% { transform: rotate(6deg); }
   100% { transform: rotate(0deg); }
-}
-
-.customer-bell-icon {
-  font-size: 17px !important;
-  line-height: 1 !important;
-  display: inline-block !important;
-  transform-origin: top center;
 }
 
 /*Refresh Payment Status Button*/
@@ -3062,46 +2508,6 @@
 }
 
 /* ===== Customer mobile topbar: hide when scroll down, show when scroll up ===== */
-@media (max-width: 860px) {
-  .customer-topbar-glass {
-    transition:
-      transform 0.28s ease,
-      opacity 0.28s ease,
-      box-shadow 0.28s ease,
-      background 0.28s ease !important;
-  }
-
-  .customer-topbar-glass.topbar-scroll-mode {
-    position: fixed !important;
-    top: 10px !important;
-    left: 10px !important;
-    right: 10px !important;
-    z-index: 4500 !important;
-
-    width: auto !important;
-    margin-bottom: 0 !important;
-
-    background: rgba(255, 255, 255, 0.9) !important;
-    backdrop-filter: blur(18px) !important;
-    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.14) !important;
-  }
-
-  .customer-topbar-glass.topbar-scroll-mode.topbar-show {
-    transform: translateY(0) !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-  }
-
-  .customer-topbar-glass.topbar-scroll-mode.topbar-hide {
-    transform: translateY(-130%) !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-  }
-
-  .customer-mobile-menu-btn {
-    display: inline-grid !important;
-  }
-}
 
 /* ===== Customer My Bookings Mobile Alignment Fix ===== */
 @media (max-width: 768px) {

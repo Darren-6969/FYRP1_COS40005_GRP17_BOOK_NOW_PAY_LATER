@@ -1,0 +1,112 @@
+/* Customer area shell (R5): the public tokens, a pill sub-nav under the
+   public header, and room for the account pages. Page styles stay in
+   customer.css, recoloured by customer-theme.css. */
+.root {
+  min-height: 100vh;
+  background: var(--pub-ground);
+  color: var(--pub-ink);
+  font-family: var(--pub-font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+/* The header and footer links are styled by their own modules; keep the
+   global link underline away from them, as PublicLayout does. */
+.root :where(header, footer) a {
+  text-decoration: none;
+}
+
+.root :where(h1, h2, h3) {
+  font-family: var(--pub-font-display);
+}
+
+.root :where(*:focus-visible) {
+  outline: 2px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+/* The generic .card from master.css (global) is white with a grey line;
+   inside the customer area it follows the tokens so dark mode works. */
+.root :global(.card) {
+  background: var(--pub-surface);
+  border-color: var(--pub-line);
+  color: var(--pub-ink);
+  box-shadow: 0 6px 18px rgba(20, 35, 31, 0.04);
+}
+
+/* ── sub-nav ─────────────────────────────────────────────────────── */
+.subnav {
+  max-width: var(--pub-max);
+  margin: 0 auto;
+  padding: 12px var(--pub-gutter) 4px;
+}
+
+/* One row of pills; on a phone it scrolls sideways instead of wrapping. */
+.subnavTrack {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px;
+  scroll-padding-inline: 2px;
+}
+
+.subnavTrack::-webkit-scrollbar {
+  display: none;
+}
+
+.subnavLink {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--pub-line);
+  background: var(--pub-surface);
+  color: var(--pub-text) !important;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: var(--pub-t-control);
+}
+
+.subnavLink:hover {
+  border-color: var(--pub-moss);
+  color: var(--pub-ink) !important;
+}
+
+.subnavLinkCurrent,
+.subnavLinkCurrent:hover {
+  background: var(--pub-brand);
+  border-color: var(--pub-brand);
+  color: var(--pub-on-brand) !important;
+}
+
+.subnavLink:active {
+  transform: scale(0.97);
+}
+
+/* ── page area ───────────────────────────────────────────────────── */
+.main {
+  box-sizing: border-box;
+  display: block;
+  max-width: var(--pub-max);
+  margin: 0 auto;
+  padding: 16px var(--pub-gutter) 64px;
+}
+
+.main:focus {
+  outline: none;
+}
+
+@media (max-width: 860px) {
+  .main {
+    padding: 12px 12px 48px;
+  }
+
+  .subnav {
+    padding: 10px 12px 2px;
+  }
+}

@@ -1,0 +1,174 @@
+/* Customer notification bell in the public header (R5). The button reads
+   the header's --hdr-* colours, so it follows the transparent bar, the dark
+   hero and the floating pill like the theme toggle beside it. */
+.wrap {
+  position: relative;
+}
+
+.bell {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hdr-line);
+  background: var(--hdr-control);
+  color: var(--hdr-ink);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: var(--pub-t-control);
+}
+
+.bell:hover {
+  border-color: var(--hdr-line-hover);
+}
+
+.bell:active {
+  transform: scale(0.94);
+}
+
+.badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--pub-cta);
+  color: var(--pub-on-cta);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: min(340px, calc(100vw - 24px));
+  background: var(--pub-surface);
+  border: 1px solid var(--pub-line);
+  border-radius: 14px;
+  box-shadow: var(--pub-shadow-card);
+  z-index: 70;
+  overflow: hidden;
+  transform-origin: top right;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .menu {
+    animation: menuIn var(--pub-dur) var(--pub-ease);
+  }
+}
+
+@keyframes menuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--pub-line-soft);
+}
+
+.title {
+  display: block;
+  font-size: 15px;
+  color: var(--pub-ink);
+}
+
+.meta {
+  margin: 2px 0 0 !important;
+  font-size: 13px;
+  color: var(--pub-label);
+}
+
+.markAll {
+  border: 0;
+  background: transparent;
+  color: var(--pub-link);
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.markAll:disabled {
+  color: var(--pub-label);
+  cursor: default;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+}
+
+.item {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--pub-ink) !important;
+  transition: background-color var(--pub-dur-fast) ease;
+}
+
+.item:hover {
+  background: var(--pub-surface-sunk);
+}
+
+.item strong {
+  display: block;
+  font-size: 14px;
+}
+
+.item small {
+  display: block;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--pub-text);
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.unread .dot {
+  background: var(--pub-cta);
+}
+
+.empty {
+  margin: 0 !important;
+  padding: 16px 14px;
+  font-size: 14px;
+  color: var(--pub-label);
+}
+
+.error {
+  color: var(--pub-error-fg);
+}
+
+.footer {
+  display: block;
+  padding: 12px 14px;
+  border-top: 1px solid var(--pub-line-soft);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pub-link) !important;
+  text-decoration: none;
+}

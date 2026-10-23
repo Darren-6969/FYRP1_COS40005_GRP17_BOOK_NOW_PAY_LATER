@@ -43,6 +43,7 @@ import CustomerProfile from "./pages/customer/CustomerProfile";
 import CustomerInvoiceDetail from "./pages/customer/CustomerInvoiceDetail";
 import CustomerHelp from "./pages/customer/CustomerHelp";
 import CustomerCredit from "./pages/customer/CustomerCredit";
+import CustomerLicence from "./pages/customer/CustomerLicence";
 import SavedListings from "./pages/customer/SavedListings";
 
 
@@ -251,6 +252,8 @@ export default function App() {
               <Route path="payments" element={<CustomerPayments />} />
               <Route path="credit" element={<CustomerCredit />} />
               <Route path="saved" element={<SavedListings />} />
+              {/* Restored in R5: the booking panel, the header menu and the sub-nav link here. */}
+              <Route path="licence" element={<CustomerLicence />} />
               <Route path="invoices" element={<CustomerInvoices />} />
               <Route path="invoices/:id" element={<CustomerInvoiceDetail />} />
               <Route path="notifications" element={<CustomerNotifications />} />

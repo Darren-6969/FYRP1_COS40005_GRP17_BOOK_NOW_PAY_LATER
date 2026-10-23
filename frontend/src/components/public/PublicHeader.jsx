@@ -5,6 +5,7 @@ import { BRAND } from "../../constants/brand";
 import { clearSession } from "../../utils/session";
 import useSessionUser from "../../hooks/useSessionUser";
 import { logout } from "../../services/auth_service";
+import NotificationBell from "./NotificationBell";
 import styles from "../../assets/styles/public/PublicHeader.module.css";
 
 // Car rental only (15 Oct 2026): just the links with real pages. How it works
@@ -150,6 +151,7 @@ export default function PublicHeader({ theme, onToggleTheme, overlay = false }) 
   // avatar for Log in / Sign up straight away.
   const user = useSessionUser();
   const role = user?.role ? String(user.role).toUpperCase() : null;
+  const isCustomer = Boolean(user) && role === "CUSTOMER";
   const accountLink = !user
     ? { to: "/login", label: "Log in" }
     : role === "CUSTOMER"
@@ -184,7 +186,7 @@ export default function PublicHeader({ theme, onToggleTheme, overlay = false }) 
     <header
       className={`${styles.header} ${scrolled ? styles.headerScrolled : ""} ${
         overlay && !scrolled ? styles.headerOnDark : ""
-      }`}
+      } ${isCustomer ? styles.headerCustomer : ""}`}
     >
       <div className={styles.inner}>
         <BrandMark />
@@ -234,6 +236,18 @@ export default function PublicHeader({ theme, onToggleTheme, overlay = false }) 
               {accountLink.label}
             </Link>
           )}
+          {/* A signed-in customer's bar has no room for the theme toggle on
+              small phones (bell and avatar join it), so it moves in here. */}
+          <button
+            type="button"
+            className={`${styles.navLink} ${styles.navTheme}`}
+            onClick={() => {
+              onToggleTheme();
+              setNavOpen(false);
+            }}
+          >
+            {theme === "dark" ? "Light mode" : "Dark mode"}
+          </button>
         </nav>
 
         <div className={styles.actions}>
@@ -253,6 +267,8 @@ export default function PublicHeader({ theme, onToggleTheme, overlay = false }) 
               <Link to="/customer/bookings" className={styles.login}>
                 My bookings
               </Link>
+              {/* On every page once a customer is signed in (R5). */}
+              <NotificationBell buttonClassName={styles.roundControl} />
               <AccountMenu user={user} />
             </>
           )}

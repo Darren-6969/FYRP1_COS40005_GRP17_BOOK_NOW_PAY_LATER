@@ -202,6 +202,18 @@
   display: none;
 }
 
+/* The menu's theme row, shown only where the bar hides the toggle (see the
+   400px block). */
+.navTheme {
+  display: none;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .login {
   font-size: 14px;
   font-weight: 500;
@@ -249,7 +261,8 @@
 }
 
 .headerScrolled .themeToggle,
-.headerScrolled .navToggle {
+.headerScrolled .navToggle,
+.headerScrolled .roundControl {
   border-radius: 50%;
 }
 
@@ -602,7 +615,8 @@
   }
 
   .headerScrolled .themeToggle,
-  .headerScrolled .navToggle {
+  .headerScrolled .navToggle,
+  .headerScrolled .roundControl {
     width: 40px;
     height: 40px;
   }
@@ -627,5 +641,28 @@
 
   .signup {
     padding: 11px 14px;
+  }
+}
+
+/* Signed-in customers carry the bell and avatar as well (R5): on small phones
+   the avatar drops its chevron, and below 400px the theme toggle moves into
+   the menu so the menu button stays inside the bar and the pill. */
+@media (max-width: 480px) {
+  .headerCustomer .avatarButton {
+    padding: 3px;
+  }
+
+  .headerCustomer .chevron {
+    display: none;
+  }
+}
+
+@media (max-width: 400px) {
+  .headerCustomer .actions .themeToggle {
+    display: none;
+  }
+
+  .headerCustomer .navTheme {
+    display: block;
   }
 }
