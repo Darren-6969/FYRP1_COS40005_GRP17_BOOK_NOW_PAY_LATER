@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Clock,
   Gauge,
+  Image as ImageIcon,
   Layers,
   Percent,
   RefreshCw,
@@ -35,6 +36,8 @@ import {
   SettingsSection,
   ToggleField,
 } from "../../components/system/SettingsParts";
+import SignInPanelSettings from "../../components/system/SignInPanelSettings";
+import { signInPanelFromForm, signInPanelSummary, signInPanelToForm } from "../../components/system/signInPanelForm";
 
 // creditTierPolicy is the E17 switch. Credit tier thresholds, the down payment
 // floor and the exposure limits have no effect while it is off.
@@ -109,6 +112,12 @@ const SETTINGS_MENU = [
     title: "Feature Flags",
     description: "Global switches and per-operator overrides.",
     icon: ToggleRight,
+  },
+  {
+    id: "sign-in-panel",
+    title: "Sign-in Panel",
+    description: "The animated panel beside sign-in, or an image for a promotion.",
+    icon: ImageIcon,
   },
   {
     id: "peak-calendar",
@@ -196,6 +205,7 @@ function settingsToForm(settings, flagRows) {
     reminderTiming: { ...DEFAULT_REMINDER_TIMING, ...(settings.reminderTiming || {}) },
     subscriptionTiers: tiersToForm(settings.subscriptionTiers),
     featureFlags: effectiveGlobalFlags(settings, flagRows),
+    signInPanel: signInPanelToForm(settings.signInPanel),
   };
 }
 
@@ -429,6 +439,22 @@ export default function SystemSettings() {
     }
   };
 
+  // Sends only the panel, so a half-edited field in another section is never saved with it.
+  const saveSignInPanel = async () => {
+    setSaving(true);
+    try {
+      await updatePlatformSettings({ signInPanel: signInPanelFromForm(platformForm.signInPanel) });
+      notify("success", "Sign-in panel saved.");
+      await load({ silent: true });
+      return true;
+    } catch (err) {
+      notify("danger", err.response?.data?.message || "Failed to save the sign-in panel.");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveDeadlinePolicy = async () => {
     const publishedTiers = [...new Set(tierInput.split(",").map((value) => Number(value.trim())).filter((value) => Number.isInteger(value) && value > 0))].sort((a, b) => a - b);
     const mostLenientDays = Number(deadlinePolicy.mostLenientDays);
@@ -514,6 +540,7 @@ export default function SystemSettings() {
     "credit-policy": savePlatformSettings,
     "subscription-tiers": savePlatformSettings,
     "feature-flags": savePlatformSettings,
+    "sign-in-panel": saveSignInPanel,
     "operator-bnpl": saveOperatorConfig,
   };
 
@@ -557,6 +584,7 @@ export default function SystemSettings() {
         : { text: "Policy off · values saved, not applied", tone: "off" },
       "subscription-tiers": { text: SUBSCRIPTION_PLANS.map((plan) => `${tiers[plan].label} ${tiers[plan].listingLimit}`).join(" · ") },
       "feature-flags": { text: `${globalOn} of ${Object.keys(flags).length} on · ${operatorOverrides.length} override${operatorOverrides.length === 1 ? "" : "s"}` },
+      "sign-in-panel": signInPanelSummary(settings.signInPanel),
       "peak-calendar": { text: `${peakDates.length} peak date${peakDates.length === 1 ? "" : "s"}` },
       "operator-bnpl": { text: `${configs.length} operator${configs.length === 1 ? "" : "s"}` },
     };
@@ -935,6 +963,15 @@ export default function SystemSettings() {
               </div>
             </SettingsSection>
           </div>
+        );
+
+      case "sign-in-panel":
+        return (
+          <SignInPanelSettings
+            value={platformForm.signInPanel}
+            onChange={(signInPanel) => setPlatformForm((prev) => ({ ...prev, signInPanel }))}
+            notify={notify}
+          />
         );
 
       default:

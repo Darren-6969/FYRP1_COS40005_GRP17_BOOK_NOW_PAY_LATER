@@ -51,6 +51,14 @@ export const uploadOperatorLogo = (file) => {
     },
   });
 };
+// Sign-in panel image (R6), admin only. Returns { url } to save in signInPanel.
+export const uploadSignInPanelImage = (file) => {
+  const formData = new FormData();
+  formData.append("image", file);
+  return api.post("/uploads/sign-in-panel", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
 export const createOperator = (payload) => api.post("/operators", payload);
 export const createOperatorUser = (operatorId, payload) => api.post(`/operators/${operatorId}/users`, payload);
 export const updateOperatorStatus = (id, status, reason) => api.patch(`/operators/${id}/status`, { status, reason });
