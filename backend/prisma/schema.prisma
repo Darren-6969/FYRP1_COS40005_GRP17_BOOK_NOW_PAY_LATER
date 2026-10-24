@@ -631,6 +631,9 @@ model PlatformSettings {
   reminderTiming             Json     @default("{\"paymentFirstHours\":24,\"paymentFinalHours\":6,\"licenceReminderHours\":24,\"subscriptionTermReminderDays\":7,\"subscriptionPaymentReminderDays\":3}") @db.JsonB
   downPaymentFloorPercent    Int      @default(0)
   subscriptionTiers          Json     @default("{\"FREE\":{\"label\":\"Starter\",\"listingLimit\":5,\"monthlyPriceRm\":0,\"termDays\":90},\"BASIC\":{\"label\":\"Standard\",\"listingLimit\":10,\"monthlyPriceRm\":20,\"termDays\":null},\"PREMIUM\":{\"label\":\"Premium\",\"listingLimit\":20,\"monthlyPriceRm\":null,\"termDays\":null}}") @db.JsonB
+  // Sign-in panel (R6): the default animated panel, or an admin image for a
+  // promotion or an advert. Shape and rules: services/sign_in_panel_service.js.
+  signInPanel                Json     @default("{}") @db.JsonB
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }

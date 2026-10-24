@@ -2,6 +2,7 @@ import prisma from "../config/db.js";
 import { parseId } from "../utils/parseId.js";
 import { getPlatformDeadlinePolicy, isPlatformPeakDate, validatePublishedDeadline } from "../services/platform_policy_service.js";
 import { createAuditLog } from "../services/log_service.js";
+import { normalizeSignInPanel } from "../services/sign_in_panel_service.js";
 import {
   DEFAULT_PLATFORM_FEATURE_FLAGS,
   getPlatformSettings as loadPlatformSettings,
@@ -340,9 +341,11 @@ export async function updatePlatformSettings(req, res, next) {
 
     let reminderTiming;
     let subscriptionTiers;
+    let signInPanel;
     try {
       reminderTiming = normalizeReminderTiming(req.body.reminderTiming, existing.reminderTiming);
       subscriptionTiers = normalizeSubscriptionTiers(req.body.subscriptionTiers, existing.subscriptionTiers);
+      signInPanel = normalizeSignInPanel(req.body.signInPanel, existing.signInPanel);
     } catch (validationError) {
       return res.status(400).json({ message: validationError.message });
     }
@@ -372,6 +375,7 @@ export async function updatePlatformSettings(req, res, next) {
       reminderTiming,
       downPaymentFloorPercent,
       subscriptionTiers,
+      signInPanel,
     };
     const before = {
       ...existing,

@@ -150,4 +150,60 @@ router.post(
   }
 );
 
+// Sign-in panel image (R6), set by an admin in System settings. Same checks as
+// car photos: real file type, re-encoded, at most 1920 px on the long side.
+const signInPanelUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.mimetype)) {
+      cb(new Error("Panel image must be PNG, JPG, JPEG, or WebP."));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+// A wrong type or a file over the limit is the admin's to fix, so it is a 400
+// with a code to branch on, not a 500.
+function signInPanelImage(req, res, next) {
+  signInPanelUpload.single("image")(req, res, (err) => {
+    if (!err) return next();
+    err.statusCode = 400;
+    if (err.code === "LIMIT_FILE_SIZE") {
+      err.appCode = "FILE_TOO_LARGE";
+      err.message = "Panel image must be 5 MB or smaller.";
+    } else {
+      err.appCode = "INVALID_FILE_TYPE";
+    }
+    next(err);
+  });
+}
+
+router.post(
+  "/sign-in-panel",
+  verifyToken,
+  allowRoles("MASTER_SELLER"),
+  signInPanelImage,
+  async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "Panel image is required" });
+      }
+
+      const processed = await processSecureImage(req.file.buffer);
+      const safeName = `panel-${Date.now()}-${crypto.randomBytes(12).toString("hex")}${processed.extension}`;
+      const blob = await savePublicFile(`sign-in-panel/${safeName}`, processed.buffer, processed.mime);
+
+      res.status(201).json({
+        message: "Panel image uploaded successfully",
+        url: blob.url,
+        pathname: blob.pathname,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 export default router;

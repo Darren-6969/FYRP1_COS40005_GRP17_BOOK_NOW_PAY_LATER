@@ -23,7 +23,7 @@ import {
 } from "../controllers/storefront_controller.js";
 
 import { reportClientEvent } from "../controllers/public_events_controller.js";
-import { getSubscriptionPlans } from "../controllers/public_platform_controller.js";
+import { getSignInPanel, getSubscriptionPlans } from "../controllers/public_platform_controller.js";
 import { attachUserIdIfPresent } from "../middlewares/auth_middleware.js";
 
 const router = express.Router();
@@ -110,6 +110,13 @@ router.get(
 router.get(
   "/subscription-tiers",
   getSubscriptionPlans
+);
+
+// Sign-in pages (R6): the default panel or the
+// admin image set in System settings.
+router.get(
+  "/sign-in-panel",
+  getSignInPanel
 );
 
 export default router;
