@@ -1,0 +1,1191 @@
+/*
+ * Sign-in pages (R6): Login, Register, Forgot / Reset / Setup password and
+ * Operator register. No header or footer; the panel on the left and the form
+ * card overlapping it on the right. Every colour comes from tokens.css.
+ */
+
+.root {
+  /* Field borders need 3:1 against the card, which --pub-control-line is not. */
+  --auth-control: #8a928c;
+  --auth-accent: #f0a063;
+  --auth-radius: 28px;
+  --auth-card-shadow: 0 30px 60px -28px rgba(20, 35, 31, 0.45);
+
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  background: var(--pub-surface-sunk);
+  color: var(--pub-ink);
+  font-family: var(--pub-font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-wrap: pretty;
+  overflow-x: clip;
+}
+
+.root[data-theme="dark"] {
+  --auth-control: #5d6e67;
+  /* In dark theme the card needs an edge to stand apart from the panel. */
+  --auth-card-shadow: 0 0 0 1px var(--pub-line), 0 30px 60px -28px rgba(0, 0, 0, 0.7);
+  background: #0b1411;
+}
+
+.root[data-theme="dark"] .panel:not(.panelOperator) {
+  background: #0f1a17;
+}
+
+/* Neutralise the element rules global.css applies everywhere. */
+.root :where(a) {
+  color: var(--pub-link);
+  text-underline-offset: 3px;
+}
+
+.root :where(a:hover) {
+  color: var(--pub-link-hover);
+}
+
+.root :where(input, button, textarea) {
+  font: inherit;
+  color: inherit;
+}
+
+.root :where(button:disabled) {
+  opacity: 1;
+}
+
+/* Edge to edge: the panel fills the left of the screen and the card the rest. */
+.frame {
+  display: flex;
+  align-items: stretch;
+  min-height: 100dvh;
+}
+
+/* ── panel ─────────────────────────────────────────────────────────── */
+
+/* Pinned to the screen height, so a form taller than the screen scrolls past
+   it while the panel stays whole. */
+.panel {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  flex: 0 0 clamp(420px, 42%, 760px);
+  height: 100vh;
+  height: 100dvh;
+  min-height: 560px;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--pub-deep);
+  color: var(--pub-on-deep);
+}
+
+.panelOperator {
+  /* The plain accent is 4.4:1 on this green; this tint keeps text at 4.9:1. */
+  --auth-accent: #f3ad78;
+  background: var(--pub-deep-2);
+}
+
+.panelInner {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 32px;
+  /* The card overlaps the panel's right edge by 56px. */
+  padding: 40px calc(48px + 56px) 44px 48px;
+}
+
+.panelTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brandTile {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--pub-moss);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  font-family: var(--pub-font-display);
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.brandName {
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: var(--pub-on-deep);
+}
+
+.brandSuffix {
+  color: var(--auth-accent);
+}
+
+.tagline {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pub-on-deep-soft);
+  text-align: right;
+}
+
+.panelHeadline {
+  margin: 0;
+  font-family: var(--pub-font-display);
+  font-weight: 800;
+  font-size: clamp(36px, 3.8vw, 56px);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  color: var(--pub-on-deep);
+}
+
+.panelBottom {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.steps {
+  margin: 0;
+  padding: 22px 0 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  border-top: 1px solid var(--pub-deep-line);
+}
+
+.steps li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--pub-on-deep-soft);
+}
+
+.stepName {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--auth-accent);
+}
+
+/* The road illustration scales with the panel; the car rides the same path. */
+.road {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.roadBed {
+  stroke: var(--pub-deep-2);
+}
+
+.roadDash {
+  stroke: var(--auth-accent);
+  opacity: 0.6;
+}
+
+/* The pin pulses as the car arrives, three times, then rests. */
+.ping {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: authPing 1.6s ease-out 1.4s 3 both;
+}
+
+.rise {
+  animation: authRise 0.9s var(--pub-ease) both;
+}
+
+.riseLate {
+  animation-delay: 0.35s;
+}
+
+/* Admin image */
+.panelImage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.panelScrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(to top, rgba(15, 26, 23, 0.92) 0%, rgba(15, 26, 23, 0.55) 38%, rgba(15, 26, 23, 0) 62%),
+    linear-gradient(to bottom, rgba(15, 26, 23, 0.6) 0%, rgba(15, 26, 23, 0) 22%);
+}
+
+.imageBottom {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.imageHeadline {
+  margin: 0;
+  font-family: var(--pub-font-display);
+  font-weight: 800;
+  font-size: clamp(32px, 3.4vw, 44px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+}
+
+.root .learnMore {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition: var(--pub-t-control);
+}
+
+.root .learnMore:hover {
+  background: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+/* Operator register panel */
+.ring {
+  position: absolute;
+  z-index: 0;
+  right: -120px;
+  bottom: -120px;
+  width: 420px;
+  height: 420px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 72px solid var(--pub-deep);
+  opacity: 0.55;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pub-on-deep-soft);
+}
+
+.timeline {
+  position: relative;
+}
+
+.track {
+  position: absolute;
+  left: 19px;
+  top: 20px;
+  bottom: 20px;
+  width: 2px;
+  background: var(--pub-deep-line);
+}
+
+/* Filled down to the step the visitor is on; it grows once, then holds. */
+.trackFill {
+  width: 2px;
+  height: 100%;
+  background: var(--auth-accent);
+  transform-origin: top;
+  transform: scaleY(var(--reach, 0));
+}
+
+.trackFillPlay {
+  animation: authFill 1.4s var(--pub-ease) 0.4s both;
+}
+
+/* Operator register: the track fills and each step lights in turn, on a loop. */
+.trackFillCycle {
+  transform: scaleY(1);
+  animation: authFillCycle 8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.stepDotCycle {
+  animation: authStepOn 8s linear infinite;
+}
+
+.joinSteps {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.joinSteps li {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.stepDot {
+  position: relative;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 1px solid var(--pub-deep-line);
+  background: var(--pub-deep-2);
+  color: var(--pub-on-deep-soft);
+  display: grid;
+  place-items: center;
+  font-family: var(--pub-font-mono);
+  font-size: 13px;
+  transition: var(--pub-t-control);
+}
+
+.join_done .stepDot {
+  background: var(--auth-accent);
+  border-color: var(--auth-accent);
+  color: var(--pub-deep);
+}
+
+.join_current .stepDot {
+  border-color: var(--auth-accent);
+  color: var(--auth-accent);
+  box-shadow: 0 0 0 4px rgba(243, 173, 120, 0.18);
+}
+
+.join_next .joinText strong {
+  color: var(--pub-on-deep-soft);
+}
+
+.joinText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+}
+
+.joinText strong {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--pub-on-deep);
+}
+
+.joinText span {
+  font-size: 14px;
+  color: var(--pub-on-deep-soft);
+}
+
+.panelNote {
+  margin: 0;
+  font-size: 14px;
+  color: var(--pub-on-deep-soft);
+}
+
+.root .panelNote a {
+  color: var(--pub-on-deep);
+  font-weight: 600;
+}
+
+/* ── card ──────────────────────────────────────────────────────────── */
+
+.card {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: -56px;
+  border-radius: var(--auth-radius) 0 0 var(--auth-radius);
+  background: var(--pub-surface);
+  box-shadow: var(--auth-card-shadow);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 32px clamp(24px, 5vw, 56px) 28px;
+}
+
+.cardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.root .back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pub-text);
+  text-decoration: none;
+}
+
+.root .back:hover {
+  color: var(--pub-ink);
+}
+
+.topRight {
+  margin: 0;
+  font-size: 14px;
+  color: var(--pub-text);
+}
+
+.body {
+  width: 100%;
+  max-width: 400px;
+  align-self: center;
+}
+
+.bodyWide {
+  max-width: 520px;
+}
+
+/* Operator register on a wide screen: details on the left, documents and
+   submit on the right, so the whole form fits without scrolling. */
+.bodySplit {
+  max-width: 1000px;
+}
+
+.form.formColumns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+
+.formColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+@media (min-width: 1240px) {
+  .form.formColumns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 44px;
+    align-items: start;
+  }
+}
+
+.title {
+  margin: 0 0 10px;
+  font-family: var(--pub-font-display);
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  color: var(--pub-ink);
+}
+
+.lede {
+  margin: 0 0 30px;
+  font-size: 16px;
+  color: var(--pub-text);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.labelRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pub-ink);
+}
+
+.labelRow a {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  height: 50px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  padding: 0 20px;
+  border: 1px solid var(--auth-control);
+  background: var(--pub-surface);
+  font-size: 16px;
+  transition: var(--pub-t-control);
+}
+
+.textarea {
+  height: auto;
+  min-height: 96px;
+  border-radius: 22px;
+  padding: 12px 20px;
+  resize: vertical;
+}
+
+.input:hover {
+  border-color: var(--pub-label);
+}
+
+/* One solid ring: the border and the outline share a colour and touch, so
+   they read as a single thicker edge rather than two lines. */
+.input:focus {
+  outline: 2px solid var(--pub-focus);
+  outline-offset: 0;
+  border-color: var(--pub-focus);
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--pub-error-fg);
+}
+
+.input[aria-invalid="true"]:focus {
+  outline-color: var(--pub-error-fg);
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--pub-label);
+}
+
+.fieldError {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--pub-error-fg);
+}
+
+.fieldError svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.rules {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 14px;
+  font-size: 13px;
+  color: var(--pub-label);
+}
+
+.rules li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rules .ruleMet {
+  color: var(--pub-moss-text);
+  font-weight: 600;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.input:disabled {
+  opacity: 0.6;
+}
+
+.passwordWrap {
+  position: relative;
+}
+
+.passwordWrap .input {
+  padding-right: 80px;
+}
+
+.root .reveal {
+  position: absolute;
+  right: 4px;
+  top: 3px;
+  height: 44px;
+  min-width: 68px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--pub-link);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.root .reveal:hover {
+  color: var(--pub-link-hover);
+}
+
+.helper {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pub-label);
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding-top: 10px;
+  box-sizing: border-box;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--pub-text);
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  margin: 3px 0 0;
+  flex-shrink: 0;
+  accent-color: var(--pub-brand);
+}
+
+.root .cta {
+  height: 52px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pub-cta);
+  color: var(--pub-on-cta);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--pub-t-control);
+}
+
+.root .cta:hover:not(:disabled) {
+  background: var(--pub-cta-hover);
+}
+
+.root .cta:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.root .cta:disabled {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+/* A link that leads on, drawn as the main button. */
+.root .ctaLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  color: var(--pub-on-cta);
+  text-decoration: none;
+}
+
+.root .ctaLink:hover {
+  color: var(--pub-on-cta);
+}
+
+.bodyText {
+  margin: 0 0 26px;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--pub-text);
+}
+
+/* Phones only: the panel's three steps, in one line under the title. */
+.payLater {
+  display: none;
+}
+
+/* Phones only: the switch to the other form, right under the form. */
+.switchInline {
+  display: none;
+}
+
+.root :is(.cta, .reveal, .back, .learnMore, .pick, a):focus-visible {
+  outline: 3px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+.after {
+  margin: 26px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--pub-line);
+  font-size: 15px;
+  color: var(--pub-text);
+}
+
+.after a,
+.topRight a {
+  font-weight: 600;
+}
+
+.notice,
+.error,
+.success {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.notice svg,
+.error svg,
+.success svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.notice {
+  background: var(--pub-notice-bg);
+  border: 1px solid var(--pub-notice-line);
+  color: var(--pub-notice-fg);
+}
+
+.error {
+  background: var(--pub-error-bg);
+  color: var(--pub-error-fg);
+  scroll-margin: 24px;
+}
+
+.error:focus {
+  outline: 3px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+.error:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.success {
+  background: var(--pub-ok-bg);
+  color: var(--pub-ok-fg);
+}
+
+/* Operator register */
+.section {
+  margin: 10px 0 0;
+  font-family: var(--pub-font-display);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--pub-ink);
+}
+
+.sectionNote {
+  margin: -10px 0 0;
+  font-size: 14px;
+  color: var(--pub-text);
+}
+
+.upload {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 12px 12px 14px;
+  border: 1px dashed var(--auth-control);
+  border-radius: 18px;
+}
+
+.uploadChosen {
+  border-style: solid;
+  border-color: var(--pub-moss-text);
+}
+
+.uploadInvalid {
+  border-style: solid;
+  border-color: var(--pub-error-fg);
+}
+
+.uploadIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--pub-ok-bg);
+  color: var(--pub-ok-fg);
+}
+
+.uploadText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.uploadName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pub-ink);
+}
+
+.uploadMeta {
+  font-size: 13px;
+  color: var(--pub-label);
+  overflow-wrap: anywhere;
+}
+
+.root .pick {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--auth-control);
+  background: var(--pub-surface);
+  color: var(--pub-link);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--pub-t-control);
+}
+
+.root .pick:hover {
+  border-color: var(--pub-ink);
+}
+
+.root .pick:focus-within {
+  outline: 3px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+.pick input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.doneIcon {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 20px;
+  background: var(--pub-ok-bg);
+  color: var(--pub-ok-fg);
+}
+
+.foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--pub-label);
+}
+
+.footLinks {
+  display: flex;
+  gap: 16px;
+}
+
+/* The panel's own back link only shows when the panel is the phone band. */
+.panelBack {
+  display: none;
+}
+
+/* ── narrower desktops ─────────────────────────────────────────────── */
+
+@media (max-width: 1100px) {
+  .panelHeadline {
+    font-size: clamp(32px, 3.6vw, 44px);
+  }
+
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .tagline {
+    display: none;
+  }
+}
+
+/* ── phones and small tablets: the panel becomes a band on top ─────── */
+
+@media (max-width: 860px) {
+  .root {
+    padding: 0;
+  }
+
+  .frame {
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+
+  /* A slim band: the way back and the brand. The form starts above the fold. */
+  .panel {
+    position: relative;
+    align-self: stretch;
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 0;
+  }
+
+  .panelInner {
+    min-height: 0;
+    padding: 12px 20px 40px;
+    gap: 0;
+  }
+
+  .brandTile {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .brandName {
+    font-size: 16px;
+  }
+
+  .root .panelBack {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--pub-on-deep);
+    text-decoration: none;
+  }
+
+  .panelTop .brand {
+    order: 2;
+  }
+
+  .panelBottom,
+  .imageBottom,
+  .panelNote,
+  .eyebrow,
+  .tagline,
+  .ring {
+    display: none;
+  }
+
+  .payLater {
+    display: block;
+    margin: -8px 0 22px;
+    font-size: 15px;
+    color: var(--pub-text);
+  }
+
+  .switchInline {
+    display: block;
+    margin: 20px 0 0;
+    font-size: 15px;
+    color: var(--pub-text);
+  }
+
+  .card {
+    flex: 1 1 auto;
+    margin: -28px 0 0;
+    border-radius: var(--auth-radius) var(--auth-radius) 0 0;
+    box-shadow: none;
+    justify-content: flex-start;
+    padding: 26px 20px 20px;
+  }
+
+  /* Its back link is in the band and its switch is under the form. */
+  .cardTop {
+    display: none;
+  }
+
+  .body {
+    max-width: none;
+  }
+
+  .title {
+    font-size: 32px;
+    letter-spacing: -0.03em;
+  }
+
+  .lede {
+    margin-bottom: 20px;
+  }
+
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rules {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .foot {
+    order: 3;
+    margin-top: auto;
+  }
+}
+
+/* ── small phones: the file button gets its own row ────────────────── */
+
+@media (max-width: 480px) {
+  .upload {
+    grid-template-columns: 40px minmax(0, 1fr);
+    row-gap: 12px;
+  }
+
+  .upload .pick {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+}
+
+/* ── motion ────────────────────────────────────────────────────────── */
+
+@keyframes authPing {
+  from {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+@keyframes authRise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes authFill {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(var(--reach, 0));
+  }
+}
+
+@keyframes authFillCycle {
+  0% {
+    transform: scaleY(0);
+  }
+  90%,
+  100% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes authStepOn {
+  0%,
+  22% {
+    background: var(--auth-accent);
+    border-color: var(--auth-accent);
+    color: var(--pub-deep);
+  }
+  27%,
+  100% {
+    background: var(--pub-deep-2);
+    border-color: var(--pub-deep-line);
+    color: var(--pub-on-deep-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ping,
+  .rise,
+  .trackFillPlay,
+  .trackFillCycle,
+  .stepDotCycle {
+    animation: none;
+  }
+
+  .ping {
+    opacity: 0;
+  }
+}
+
+/* A button that reads as a link, for links that carry state (Register keeps
+   the email, redirect and reason the visitor arrived with). */
+.root .inlineLink {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--pub-link);
+  font-size: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.root .inlineLink:hover {
+  color: var(--pub-link-hover);
+}
+
+.root .inlineLink:focus-visible {
+  outline: 3px solid var(--pub-focus);
+  outline-offset: 2px;
+}

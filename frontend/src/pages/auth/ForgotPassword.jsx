@@ -1,37 +1,61 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { forgotPassword } from "../../services/auth_service";
-import "../../assets/styles/global.css";
+import AuthShell, { AuthField, AuthMessage, AuthTitle, SubmitButton } from "../../components/auth/AuthShell";
+import { emailProblem, requestError, useFormErrors } from "../../components/auth/authForm";
+import styles from "../../assets/styles/public/Auth.module.css";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const errors = useFormErrors();
+
   const submit = async (event) => {
     event.preventDefault();
+    if (!errors.check({ email: emailProblem(email) })) return;
     setLoading(true);
-    setError("");
+    errors.clear();
     try {
-      const response = await forgotPassword({ email });
-      setMessage(response.data.message);
+      const response = await forgotPassword({ email: email.trim() });
+      setMessage(
+        response.data?.message ||
+          "If that email has an account, a reset link is on its way. Check your inbox and spam folder."
+      );
     } catch (err) {
-      setError(err.response?.data?.message || "Unable to request a password reset.");
+      errors.fail(requestError(err, "We couldn't send the reset link. Please try again."));
     } finally {
       setLoading(false);
     }
   };
+
   return (
-    <div className="bnpl-auth-page"><section className="bnpl-auth-shell"><div className="bnpl-auth-panel">
-      <form onSubmit={submit} className="bnpl-auth-form">
-        <h1>Forgot<br />password?</h1>
-        <p className="bnpl-auth-subtitle">Enter your email and we will send reset instructions.</p>
-        {message && <p className="bnpl-auth-success">{message}</p>}
-        {error && <p className="bnpl-auth-error">{error}</p>}
-        <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email address" required autoComplete="email" disabled={loading} />
-        <button className="bnpl-auth-submit" disabled={loading}>{loading ? "Sending..." : "Send reset link"}</button>
-        <p className="bnpl-auth-switch"><Link to="/login">Back to sign in</Link></p>
+    <AuthShell back={{ to: "/login", label: "Back to sign in" }}>
+      <AuthTitle title="Forgot your password?" lede="We will email you a link to set a new one." />
+      {message && <AuthMessage tone="success">{message}</AuthMessage>}
+      {errors.message && (
+        <AuthMessage tone="error" attempt={errors.attempt}>
+          {errors.message}
+        </AuthMessage>
+      )}
+      <form onSubmit={submit} className={styles.form} noValidate>
+        <AuthField
+          label="Email address"
+          name="email"
+          type="email"
+          value={email}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            errors.clearField("email");
+          }}
+          autoComplete="email"
+          required
+          disabled={loading}
+          error={errors.fields.email}
+        />
+        <SubmitButton busy={loading} busyLabel="Sending...">
+          {message ? "Send the link again" : "Send reset link"}
+        </SubmitButton>
       </form>
-    </div></section></div>
+    </AuthShell>
   );
 }

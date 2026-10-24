@@ -1,7 +1,18 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { login, register } from "../../services/auth_service";
 import { saveSession, unbindTab } from "../../utils/session";
+import AuthShell, {
+  AuthField,
+  AuthMessage,
+  AuthTitle,
+  Checkbox,
+  PasswordField,
+  SubmitButton,
+} from "../../components/auth/AuthShell";
+import styles from "../../assets/styles/public/Auth.module.css";
+import { backLinkFor } from "../../components/auth/backLink";
+import { emailProblem, passwordProblem, requestError, useFormErrors } from "../../components/auth/authForm";
 
 // Only same-site paths, never "//host" or a full URL.
 function isSafeRedirectPath(path) {
@@ -25,7 +36,6 @@ async function signInAfterRegister(email, password) {
   });
   return role === "CUSTOMER";
 }
-import "../../assets/styles/global.css";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -46,11 +56,11 @@ export default function Register() {
 
   const [loading, setLoading] = useState(false);
   const [consent, setConsent] = useState(false);
-  const [error, setError] = useState("");
+  const errors = useFormErrors();
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
-    if (error) setError("");
+    errors.clearField(e.target.name);
   };
 
   const goToLogin = () => {
@@ -71,33 +81,17 @@ export default function Register() {
     const email = form.email.trim().toLowerCase();
     const password = form.password;
 
-    if (!name || !email || !password || !consent) {
-      setError("Please complete all fields.");
-      return;
-    }
-
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters long.");
-      return;
-    }
-
-    if (!/[A-Z]/.test(password)) {
-      setError("Password must contain at least one uppercase letter.");
-      return;
-    }
-
-    if (!/[a-z]/.test(password)) {
-      setError("Password must contain at least one lowercase letter.");
-      return;
-    }
-
-    if (!/[0-9]/.test(password)) {
-      setError("Password must contain at least one number.");
-      return;
-    }
+    // Every problem at once, so the visitor fixes them in one go.
+    const valid = errors.check({
+      name: name.length >= 2 ? "" : "Enter your full name.",
+      email: emailProblem(email),
+      password: passwordProblem(password),
+      consent: consent ? "" : "Agree to the Terms of service and the Privacy notice to continue.",
+    });
+    if (!valid) return;
 
     setLoading(true);
-    setError("");
+    errors.clear();
 
     try {
       await register({
@@ -137,119 +131,112 @@ export default function Register() {
         replace: true,
       });
     } catch (err) {
-      const fieldError = err.response?.data?.errors?.[0]?.message;
-      setError(
-        fieldError ||
-          err.response?.data?.message ||
-          err.response?.data?.error ||
-          "Register failed. Please try again."
-      );
+      errors.fail(requestError(err, "We couldn't create your account. Please try again."));
     } finally {
       setLoading(false);
     }
   };
 
+  const back = backLinkFor(redirectParam);
+
+  let lede = "Book cars, save favourites and pay later.";
+  if (savingCar) lede = "Create an account to save cars.";
+  else if (redirectParam && !hostToken) lede = "Your trip and details are kept.";
+
   return (
-    <div className="bnpl-auth-page">
-      <section className="bnpl-auth-shell">
-        <div className="bnpl-auth-panel">
-          <form onSubmit={handleSubmit} className="bnpl-auth-form">
-            <h1>
-              Create
-              <br />
-              Account
-            </h1>
+    <AuthShell
+      back={back}
+      promo
+      after={
+        <>
+          Rent out cars? <Link to="/operator-register">Apply to list them</Link>
+        </>
+      }
+      topRight={
+        <>
+          Have an account?{" "}
+          <button type="button" className={styles.inlineLink} onClick={goToLogin}>
+            Sign in
+          </button>
+        </>
+      }
+    >
+      <AuthTitle title="Create your account" lede={lede} payLater />
 
-            <p className="bnpl-auth-subtitle">
-              Register to use Book Now Pay Later.
-            </p>
+      {hostToken && (
+        <AuthMessage>
+          Use the same email as your GoCar booking. After you register, sign in to claim the booking.
+        </AuthMessage>
+      )}
+      {savingCar && !hostToken && (
+        <AuthMessage>After you register you come straight back. Tap the heart again to save the car.</AuthMessage>
+      )}
+      {errors.message && (
+        <AuthMessage tone="error" attempt={errors.attempt}>
+          {errors.message}
+        </AuthMessage>
+      )}
 
-            {hostToken && (
-              <p className="bnpl-auth-subtitle">
-                This account must use the same email from your GoCar booking.
-                After registration, please login to claim your booking.
-              </p>
-            )}
+      <form onSubmit={handleSubmit} className={styles.form} noValidate>
+        <AuthField
+          label="Full name"
+          name="name"
+          type="text"
+          value={form.name}
+          onChange={handleChange}
+          autoComplete="name"
+          disabled={loading}
+          required
+          error={errors.fields.name}
+        />
 
-            {redirectParam && !hostToken && (
-              <p className="bnpl-auth-subtitle">
-                {savingCar
-                  ? "Create an account to save cars. After you register, you go straight back to the car you were looking at."
-                  : "After you register, you go straight back to your booking. Your trip and details are kept."}
-              </p>
-            )}
+        <AuthField
+          label="Email address"
+          name="email"
+          type="email"
+          value={form.email}
+          onChange={handleChange}
+          autoComplete="email"
+          disabled={loading}
+          required
+          error={errors.fields.email}
+        />
 
-            {error && <p className="bnpl-auth-error">{error}</p>}
+        <PasswordField
+          name="password"
+          value={form.password}
+          onChange={handleChange}
+          autoComplete="new-password"
+          disabled={loading}
+          required
+          rules
+          error={errors.fields.password}
+        />
 
-            <input
-              name="name"
-              type="text"
-              placeholder="Full name"
-              value={form.name}
-              onChange={handleChange}
-              autoComplete="name"
-              disabled={loading}
-            />
+        <Checkbox
+          checked={consent}
+          onChange={(event) => {
+            setConsent(event.target.checked);
+            errors.clearField("consent");
+          }}
+          disabled={loading}
+          error={errors.fields.consent}
+        >
+          I agree to the{" "}
+          <a href="/info/terms" target="_blank" rel="noopener noreferrer">
+            Terms of service
+          </a>{" "}
+          and the{" "}
+          <a href="/info/privacy" target="_blank" rel="noopener noreferrer">
+            Privacy notice
+          </a>
+          .
+        </Checkbox>
 
-            <input
-              name="email"
-              type="email"
-              placeholder="Email address"
-              value={form.email}
-              onChange={handleChange}
-              autoComplete="email"
-              disabled={loading}
-            />
-
-            <input
-              name="password"
-              type="password"
-              placeholder="Password"
-              value={form.password}
-              onChange={handleChange}
-              autoComplete="new-password"
-              disabled={loading}
-            />
-
-            <label className="bnpl-auth-consent">
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(event) => setConsent(event.target.checked)}
-                disabled={loading}
-              />
-              <span>
-                I agree to the{" "}
-                <a href="/info/privacy" target="_blank" rel="noopener noreferrer">
-                  Privacy notice
-                </a>{" "}
-                and{" "}
-                <a href="/info/terms" target="_blank" rel="noopener noreferrer">
-                  Terms of service
-                </a>
-                .
-              </span>
-            </label>
-            
-            <button className="bnpl-auth-submit" disabled={loading}>
-              {loading ? "Creating account..." : "Register"}
-            </button>
-
-            <p className="bnpl-auth-switch">
-              Already have an account?{" "}
-              <button type="button" onClick={goToLogin}>
-                Sign In
-              </button>
-            </p>
-          </form>
-        </div>
-
-        <div className="bnpl-auth-art" aria-hidden="true">
-          <div className="bnpl-liquid-shape shape-one" />
-          <div className="bnpl-liquid-shape shape-two" />
-          <div className="bnpl-logo-tile">BNPL</div>
-        </div>
-      </section>
-    </div>
+        <SubmitButton busy={loading} busyLabel="Creating account...">
+          Create account
+        </SubmitButton>
+      </form>
+    </AuthShell>
   );
 }

@@ -1,8 +1,18 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { claimHostBookingIntent } from "../../services/host_service";
 import { login } from "../../services/auth_service";
-import "../../assets/styles/global.css";
+import AuthShell, {
+  AuthField,
+  AuthMessage,
+  AuthTitle,
+  Checkbox,
+  PasswordField,
+  SubmitButton,
+} from "../../components/auth/AuthShell";
+import styles from "../../assets/styles/public/Auth.module.css";
+import { backLinkFor } from "../../components/auth/backLink";
+import { emailProblem, requestError, useFormErrors } from "../../components/auth/authForm";
 import { saveSession, unbindTab } from "../../utils/session";
 
 function normalizeRole(role) {
@@ -91,18 +101,9 @@ export default function Login() {
   });
 
   const [rememberMe, setRememberMe] = useState(true);
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (emailParam) {
-      setForm((prev) => ({
-        ...prev,
-        email: emailParam,
-      }));
-    }
-  }, [emailParam]);
+  const errors = useFormErrors();
+  const setError = errors.fail;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -112,7 +113,7 @@ export default function Login() {
       [name]: value,
     }));
 
-    if (error) setError("");
+    errors.clearField(name);
   };
 
   const handleGoRegister = () => {
@@ -131,7 +132,7 @@ export default function Login() {
     const bookingId = claimData?.bookingId;
 
     if (bookingDetailUrl) {
-      window.location.href = bookingDetailUrl;
+      window.location.assign(bookingDetailUrl);
       return true;
     }
 
@@ -152,13 +153,14 @@ export default function Login() {
     const email = form.email.trim();
     const password = form.password;
 
-    if (!email || !password) {
-      setError("Please enter both email and password.");
-      return;
-    }
+    const valid = errors.check({
+      email: emailProblem(email),
+      password: password ? "" : "Enter your password.",
+    });
+    if (!valid) return;
 
     setLoading(true);
-    setError("");
+    errors.clear();
     unbindTab();
 
     try {
@@ -245,123 +247,75 @@ export default function Login() {
     } catch (err) {
       console.error("Login error:", err);
 
-      setError(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          "Login failed. Please check your email and password."
-      );
+      setError(requestError(err, "That email and password don't match an account. Check them, or reset your password."));
     } finally {
       setLoading(false);
     }
   };
 
+  const back = backLinkFor(redirectParam);
+
+  let lede = "Sign in to manage your bookings and payments.";
+  if (savingCar) lede = "Sign in to save cars to your account.";
+  else if (redirectParam && !hostToken) lede = "Sign in to carry on with your booking.";
+
   return (
-    <div className="bnpl-auth-page">
-      <section className="bnpl-auth-shell">
-        <div className="bnpl-auth-panel">
-          <form onSubmit={handleSubmit} className="bnpl-auth-form">
-            <h1>
-              Book Now
-              <br />
-              Pay Later
-            </h1>
+    <AuthShell
+      back={back}
+      promo
+      topRight={
+        <>
+          New here?{" "}
+          <button type="button" className={styles.inlineLink} onClick={handleGoRegister}>
+            Create an account
+          </button>
+        </>
+      }
+    >
+      <AuthTitle title="Welcome back" lede={lede} payLater />
 
-            <p className="bnpl-auth-subtitle">
-              Welcome back! Please sign in to continue.
-            </p>
+      {hostToken && <AuthMessage>Use the same email as your GoCar booking.</AuthMessage>}
+      {savingCar && !hostToken && (
+        <AuthMessage>You come straight back to where you were. Tap the heart again to save the car.</AuthMessage>
+      )}
+      {errors.message && (
+        <AuthMessage tone="error" attempt={errors.attempt}>
+          {errors.message}
+        </AuthMessage>
+      )}
 
-            {hostToken && (
-              <p className="bnpl-auth-subtitle">
-                Please login with the same email used in your GoCar booking.
-              </p>
-            )}
+      <form onSubmit={handleSubmit} className={styles.form} noValidate>
+        <AuthField
+          label="Email address"
+          name="email"
+          type="email"
+          value={form.email}
+          onChange={handleChange}
+          autoComplete="email"
+          disabled={loading}
+          required
+          error={errors.fields.email}
+        />
 
-            {redirectParam && !hostToken && (
-              <p className="bnpl-auth-subtitle">
-                {savingCar
-                  ? "Sign in to save cars to your account. You go straight back to the car you were looking at."
-                  : "Please login to continue your BNPL booking."}
-              </p>
-            )}
+        <PasswordField
+          name="password"
+          value={form.password}
+          onChange={handleChange}
+          autoComplete="current-password"
+          disabled={loading}
+          required
+          error={errors.fields.password}
+          aside={<Link to="/forgot-password">Forgot password?</Link>}
+        />
 
-            {error && <p className="bnpl-auth-error">{error}</p>}
+        <Checkbox checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} disabled={loading}>
+          Keep me signed in on this device
+        </Checkbox>
 
-            <input
-              name="email"
-              type="email"
-              placeholder="Email address"
-              value={form.email}
-              onChange={handleChange}
-              autoComplete="email"
-              disabled={loading}
-            />
-
-            <div className="bnpl-password-field">
-              <input
-                name="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="Password"
-                value={form.password}
-                onChange={handleChange}
-                autoComplete="current-password"
-                disabled={loading}
-              />
-
-              <button
-                type="button"
-                className="bnpl-password-toggle"
-                onClick={() => setShowPassword((prev) => !prev)}
-                disabled={loading}
-              >
-                {showPassword ? "Hide" : "Show"}
-              </button>
-            </div>
-
-            <div className="bnpl-auth-row">
-              <label className="bnpl-remember">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  disabled={loading}
-                />
-                Remember me
-              </label>
-
-              <button
-                type="button"
-                className="bnpl-auth-link"
-                onClick={() => navigate("/forgot-password")}
-              >
-                Forgot password?
-              </button>
-            </div>
-
-            <button className="bnpl-auth-submit" disabled={loading}>
-              {loading ? "Signing in..." : "Sign In"}
-            </button>
-
-            <p className="bnpl-auth-switch">
-              Don&apos;t have an account?{" "}
-              <button type="button" onClick={handleGoRegister}>
-                Register
-              </button>
-            </p>
-            <p className="bnpl-auth-switch">
-              Are you a business?{" "}
-              <button type="button" onClick={() => navigate("/operator-register")}>
-                Apply to sell
-              </button>
-            </p>
-          </form>
-        </div>
-
-        <div className="bnpl-auth-art" aria-hidden="true">
-          <div className="bnpl-liquid-shape shape-one" />
-          <div className="bnpl-liquid-shape shape-two" />
-          <div className="bnpl-logo-tile">BNPL</div>
-        </div>
-      </section>
-    </div>
+        <SubmitButton busy={loading} busyLabel="Signing in...">
+          Sign in
+        </SubmitButton>
+      </form>
+    </AuthShell>
   );
 }

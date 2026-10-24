@@ -73,6 +73,7 @@ import EmbedEntry from "./pages/embed/EmbedEntry";
 
 // Public Pages
 import PublicLayout from "./layouts/PublicLayout";
+import AuthLayout from "./layouts/AuthLayout";
 import OperatorStorefront from "./pages/public/OperatorStorefront";
 import Home from "./pages/public/Home";
 import CarResults from "./pages/public/CarResults";
@@ -105,12 +106,15 @@ export default function App() {
           </Route>
           <Route path="*" element={<NotAvailable />} />
         </Route>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/operator-register" element={<OperatorRegister />} />
-        <Route path="/setup-password" element={<SetupPassword />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+        {/* Sign-in pages (R6): no header; each page has its own way back. */}
+        <Route element={<AuthLayout />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/operator-register" element={<OperatorRegister />} />
+          <Route path="/setup-password" element={<SetupPassword />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+        </Route>
         <Route path="/embed" element={<EmbedEntry />} />
         {/* Protected Routes */}
           {/* Master Routes */}

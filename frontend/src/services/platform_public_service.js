@@ -6,3 +6,9 @@ import api from "./api";
 export function getRecruitPlans() {
   return api.get("/public/subscription-tiers").then((r) => r.data);
 }
+
+// GET /api/public/sign-in-panel (R6): per surface ("customer", "operator"),
+// either { mode: "default" } or the admin image to show beside the form.
+export function getSignInPanel() {
+  return api.get("/public/sign-in-panel").then((r) => r.data);
+}

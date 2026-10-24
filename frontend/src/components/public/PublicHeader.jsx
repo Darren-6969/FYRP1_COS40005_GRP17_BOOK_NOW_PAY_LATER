@@ -153,7 +153,7 @@ export default function PublicHeader({ theme, onToggleTheme, overlay = false }) 
   const role = user?.role ? String(user.role).toUpperCase() : null;
   const isCustomer = Boolean(user) && role === "CUSTOMER";
   const accountLink = !user
-    ? { to: "/login", label: "Log in" }
+    ? { to: "/login", label: "Sign in" }
     : role === "CUSTOMER"
       ? { to: "/customer/bookings", label: "My bookings" }
       : null;
@@ -255,7 +255,7 @@ export default function PublicHeader({ theme, onToggleTheme, overlay = false }) 
           {!user && (
             <>
               <Link to="/login" className={styles.login}>
-                Log in
+                Sign in
               </Link>
               <Link to="/register" className={styles.signup}>
                 Sign up
