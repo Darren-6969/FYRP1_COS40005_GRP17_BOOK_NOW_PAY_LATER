@@ -172,3 +172,17 @@
   color: var(--pub-link) !important;
   text-decoration: none;
 }
+
+/* On narrow screens the avatar and menu button sit right of the bell, so
+   lining the menu up with the bell pushes it off the left edge. Let it line
+   up with the header bar (.inner is position: relative) instead. */
+@media (max-width: 900px) {
+  .wrap {
+    position: static;
+  }
+
+  .menu {
+    right: var(--pub-gutter, 12px);
+    width: min(340px, calc(100vw - 2 * var(--pub-gutter, 12px)));
+  }
+}

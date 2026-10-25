@@ -16,9 +16,14 @@ function notificationLink(item) {
   return "/customer/notifications";
 }
 
+// Phones and tablets can't hover, so a tap opens the dropdown there instead
+// of going to the notifications page.
+const canHover = () => typeof window !== "undefined" && window.matchMedia("(hover: hover)").matches;
+
 // The customer's notification bell in the public header, on every page once
 // a customer is signed in (R5). Hovering shows the latest five; a click opens
-// the notifications page, as the old customer top bar did.
+// the notifications page, as the old customer top bar did. On touch screens a
+// tap toggles the dropdown instead.
 export default function NotificationBell({ buttonClassName = "" }) {
   const navigate = useNavigate();
   const wrapRef = useRef(null);
@@ -29,12 +34,25 @@ export default function NotificationBell({ buttonClassName = "" }) {
   const unread = notifications.filter((n) => !n.isRead).length;
   const recent = useMemo(() => notifications.slice(0, 5), [notifications]);
 
+  const hoverable = canHover();
+
   const show = () => {
+    if (!hoverable) return;
     clearTimeout(closeTimer.current);
     setOpen(true);
   };
   const hide = () => {
+    if (!hoverable) return;
     closeTimer.current = setTimeout(() => setOpen(false), 180);
+  };
+
+  const onBellClick = () => {
+    if (hoverable) {
+      navigate("/customer/notifications");
+      return;
+    }
+    clearTimeout(closeTimer.current);
+    setOpen((v) => !v);
   };
 
   useEffect(() => () => clearTimeout(closeTimer.current), []);
@@ -63,8 +81,9 @@ export default function NotificationBell({ buttonClassName = "" }) {
         type="button"
         className={`${styles.bell} ${buttonClassName}`}
         aria-label={label}
+        aria-expanded={open}
         title="Notifications"
-        onClick={() => navigate("/customer/notifications")}
+        onClick={onBellClick}
       >
         <Bell size={18} aria-hidden="true" />
         {unread > 0 && (
