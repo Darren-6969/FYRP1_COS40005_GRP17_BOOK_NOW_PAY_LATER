@@ -23,6 +23,46 @@ function money(value) {
   return Number(value || 0);
 }
 
+// Reverses the commission ledger in proportion to a refund that has been paid
+// back to the customer. The reversal id is unique per refund, so running it
+// twice (a retry, a redelivered webhook) records it once.
+export async function reverseRefundInLedger(tx, refund) {
+  const reversalId = `refund:${refund.id}`;
+  const alreadyReversed = await tx.commissionLedgerEntry.findUnique({
+    where: { transactionId: reversalId },
+  });
+  if (alreadyReversed) return null;
+
+  const sourceLedger = await tx.commissionLedgerEntry.findFirst({
+    where: { paymentId: refund.paymentId, paymentType: { not: "REFUND" } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!sourceLedger) return null;
+
+  const sourceAmount = Math.max(1, Number(sourceLedger.netAmountSen));
+  const refundSen = Math.round(money(refund.amount) * 100);
+  const ratio = Math.min(1, refundSen / sourceAmount);
+  const proportion = (value) => -Math.round(Number(value || 0) * ratio);
+  return tx.commissionLedgerEntry.create({
+    data: {
+      bookingId: refund.bookingId,
+      paymentId: refund.paymentId,
+      transactionId: reversalId,
+      paymentType: "REFUND",
+      grossAmountSen: proportion(sourceLedger.grossAmountSen),
+      netAmountSen: proportion(sourceLedger.netAmountSen),
+      discountAmountSen: proportion(sourceLedger.discountAmountSen),
+      feeRateBps: sourceLedger.feeRateBps,
+      fundedBy: sourceLedger.fundedBy,
+      feeAmountSen: proportion(sourceLedger.feeAmountSen),
+      stripeFeeAmountSen: proportion(sourceLedger.stripeFeeAmountSen),
+      operatorPayoutAmountSen: proportion(sourceLedger.operatorPayoutAmountSen),
+      platformMarginSen: proportion(sourceLedger.platformMarginSen),
+      currency: sourceLedger.currency,
+    },
+  });
+}
+
 export async function createOperatorFullRefundForBooking({
   bookingId,
   operatorId = null,
@@ -400,33 +440,7 @@ export async function completeManualRefund({
           },
         });
 
-      const sourceLedger = await tx.commissionLedgerEntry.findFirst({
-        where: { paymentId: refund.paymentId },
-        orderBy: { createdAt: "desc" },
-      });
-      if (sourceLedger) {
-        const sourceAmount = Math.max(1, Number(sourceLedger.netAmountSen));
-        const ratio = Math.min(1, Number(refund.amount) * 100 / sourceAmount);
-        const proportion = (value) => -Math.round(Number(value || 0) * ratio);
-        await tx.commissionLedgerEntry.create({
-          data: {
-            bookingId: refund.bookingId,
-            paymentId: refund.paymentId,
-            transactionId: `refund:${refund.id}`,
-            paymentType: "REFUND",
-            grossAmountSen: proportion(sourceLedger.grossAmountSen),
-            netAmountSen: proportion(sourceLedger.netAmountSen),
-            discountAmountSen: proportion(sourceLedger.discountAmountSen),
-            feeRateBps: sourceLedger.feeRateBps,
-            fundedBy: sourceLedger.fundedBy,
-            feeAmountSen: proportion(sourceLedger.feeAmountSen),
-            stripeFeeAmountSen: proportion(sourceLedger.stripeFeeAmountSen),
-            operatorPayoutAmountSen: proportion(sourceLedger.operatorPayoutAmountSen),
-            platformMarginSen: proportion(sourceLedger.platformMarginSen),
-            currency: sourceLedger.currency,
-          },
-        });
-      }
+      await reverseRefundInLedger(tx, refund);
 
       return {
         refund: updated,
@@ -514,42 +528,8 @@ export async function completeProviderRefund({
           },
         });
 
-    // Reverse the commission ledger in proportion, as completeManualRefund
-    // does. transactionId is unique, so skip if the reversal already exists.
-    const reversalId = `refund:${refund.id}`;
-    const alreadyReversed = await tx.commissionLedgerEntry.findUnique({
-      where: { transactionId: reversalId },
-    });
-    const sourceLedger = alreadyReversed
-      ? null
-      : await tx.commissionLedgerEntry.findFirst({
-          where: { paymentId: refund.paymentId, paymentType: { not: "REFUND" } },
-          orderBy: { createdAt: "desc" },
-        });
-    if (sourceLedger) {
-      const sourceAmount = Math.max(1, Number(sourceLedger.netAmountSen));
-      const refundSen = Math.round(money(refund.amount) * 100);
-      const ratio = Math.min(1, refundSen / sourceAmount);
-      const proportion = (value) => -Math.round(Number(value || 0) * ratio);
-      await tx.commissionLedgerEntry.create({
-        data: {
-          bookingId: refund.bookingId,
-          paymentId: refund.paymentId,
-          transactionId: reversalId,
-          paymentType: "REFUND",
-          grossAmountSen: proportion(sourceLedger.grossAmountSen),
-          netAmountSen: proportion(sourceLedger.netAmountSen),
-          discountAmountSen: proportion(sourceLedger.discountAmountSen),
-          feeRateBps: sourceLedger.feeRateBps,
-          fundedBy: sourceLedger.fundedBy,
-          feeAmountSen: proportion(sourceLedger.feeAmountSen),
-          stripeFeeAmountSen: proportion(sourceLedger.stripeFeeAmountSen),
-          operatorPayoutAmountSen: proportion(sourceLedger.operatorPayoutAmountSen),
-          platformMarginSen: proportion(sourceLedger.platformMarginSen),
-          currency: sourceLedger.currency,
-        },
-      });
-    }
+    // Reverse the commission ledger in proportion, as completeManualRefund does.
+    await reverseRefundInLedger(tx, refund);
 
     return { refund, created: !pending };
   });

@@ -76,6 +76,7 @@ import {
   createBookingRefund,
   getBookingRefunds,
   completeBookingRefund,
+  processBookingStripeRefund,
 } from "../controllers/refund_controller.js";
 
 const router = express.Router();
@@ -148,6 +149,7 @@ router.delete("/:id", ...masterOnly, deleteOperator);
 router.get("/bookings/:id/refunds",...ownerOrStaffAccess,getBookingRefunds);
 router.post("/bookings/:id/refunds",...ownerOnlyAccess,createBookingRefund);
 router.patch("/bookings/:id/refunds/:refundId/complete",...ownerOnlyAccess,completeBookingRefund);
+router.post("/bookings/:id/refunds/:refundId/process",...ownerOnlyAccess,processBookingStripeRefund);
 
 
 /**

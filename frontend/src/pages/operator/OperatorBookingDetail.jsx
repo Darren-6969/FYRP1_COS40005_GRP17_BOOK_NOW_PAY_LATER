@@ -1449,6 +1449,60 @@ export default function OperatorBookingDetail() {
               </button>
             )}
 
+          {latestRefund.method === "STRIPE" &&
+            ["PENDING", "PROCESSING", "FAILED"].includes(
+              String(latestRefund.status || "").toUpperCase()
+            ) && (
+              <>
+                <p className="operator-muted-text">
+                  This customer paid by card. Sending the refund here returns{" "}
+                  {formatOperatorMoney(latestRefund.amount)} to their card
+                  through Stripe. You do not need the Stripe dashboard.
+                </p>
+                <button
+                  type="button"
+                  className="operator-primary-btn"
+                  disabled={!!actionLoading}
+                  onClick={async () => {
+                    const confirmed = window.confirm(
+                      `Send ${formatOperatorMoney(
+                        latestRefund.amount
+                      )} back to the customer's card now? This cannot be undone.`
+                    );
+
+                    if (!confirmed) {
+                      return;
+                    }
+
+                    try {
+                      setActionLoading("stripe-refund");
+
+                      await operatorService.processBookingRefund(
+                        booking.id,
+                        latestRefund.id
+                      );
+
+                      await loadBooking();
+                    } catch (err) {
+                      alert(
+                        err.response?.data?.message ||
+                          "Failed to send the refund through Stripe"
+                      );
+                      await loadBooking();
+                    } finally {
+                      setActionLoading("");
+                    }
+                  }}
+                >
+                  {actionLoading === "stripe-refund"
+                    ? "Sending Refund..."
+                    : String(latestRefund.status || "").toUpperCase() === "FAILED"
+                      ? "Retry Card Refund"
+                      : "Refund to Customer's Card"}
+                </button>
+              </>
+            )}
+
         </div>
       ) : (
         <>

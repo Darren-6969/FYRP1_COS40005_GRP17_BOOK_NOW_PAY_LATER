@@ -66,6 +66,13 @@ export const operatorService = {
     );
   },
 
+  // Sends a card refund back to the customer through Stripe.
+  processBookingRefund(bookingId, refundId) {
+    return api.post(
+      `/operators/bookings/${bookingId}/refunds/${refundId}/process`
+    );
+  },
+
   /**New Listings function */
   getListings(params = {}) {
     return api.get("/operators/listings", {

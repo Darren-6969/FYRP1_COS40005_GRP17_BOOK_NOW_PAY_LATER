@@ -35,6 +35,7 @@ import {
 } from "../services/stripe_connect_service.js";
 import { trackPaymentSuccess } from "../services/analytics_service.js";
 import { completeProviderRefund } from "../services/refund_service.js";
+import { unrecordedStripeRefundCents } from "../services/stripe_refund_service.js";
 
 const router = express.Router();
 
@@ -579,14 +580,36 @@ export async function processStripeWebhookEvent(event, requestIp = null, databas
             break;
           }
 
+          // The intent id is kept on the payment part that it paid for.
           const refundedPayment = await prisma.payment.findFirst({
-            where: { transactionId: refundedPiId },
+            where: {
+              OR: [
+                { transactionId: refundedPiId },
+                { downPaymentTransactionId: refundedPiId },
+                { finalPaymentTransactionId: refundedPiId },
+              ],
+            },
           });
 
           if (!refundedPayment) {
             console.log(`[Stripe] charge.refunded: no payment record for PI ${refundedPiId}`);
             break;
           }
+
+          // A refund sent from the operator portal is recorded as it is made.
+          // Only money Stripe returned outside the platform (the Stripe
+          // dashboard) is new here.
+          const recordedRefunds = await prisma.refund.findMany({
+            where: { paymentId: refundedPayment.id },
+            select: { method: true, status: true, amount: true },
+          });
+          const unrecordedCents = unrecordedStripeRefundCents(charge.amount_refunded, recordedRefunds);
+          if (unrecordedCents <= 0) {
+            console.log(`[Stripe] charge.refunded: PI ${refundedPiId} is already recorded as refunded`);
+            break;
+          }
+          // A partial refund leaves the booking as it is; a full one ends it.
+          const fullyRefunded = Boolean(charge.refunded);
 
           const [bookingBefore, invoiceBefore] = await Promise.all([
             prisma.booking.findUnique({
@@ -599,30 +622,34 @@ export async function processStripeWebhookEvent(event, requestIp = null, databas
             }),
           ]);
 
-          await prisma.payment.update({
-            where: { id: refundedPayment.id },
-            data: { status: "FAILED" },
-          });
+          if (fullyRefunded) {
+            await prisma.payment.update({
+              where: { id: refundedPayment.id },
+              data: { status: "FAILED" },
+            });
 
-          if (isValidBookingTransition(bookingBefore?.status, "CANCELLED")) {
-            await transitionBookingStatus({
-              bookingId: refundedPayment.bookingId,
-              newStatus: "CANCELLED",
-              actorId: null,
-              remark: "Booking cancelled after payment refund.",
+            if (isValidBookingTransition(bookingBefore?.status, "CANCELLED")) {
+              await transitionBookingStatus({
+                bookingId: refundedPayment.bookingId,
+                newStatus: "CANCELLED",
+                actorId: null,
+                remark: "Booking cancelled after payment refund.",
+              });
+            }
+
+            await prisma.invoice.updateMany({
+              where: { bookingId: refundedPayment.bookingId },
+              data: { status: "CANCELLED" },
             });
           }
 
-          await prisma.invoice.updateMany({
-            where: { bookingId: refundedPayment.bookingId },
-            data: { status: "CANCELLED" },
-          });
-
-          const refundAmount = charge.amount_refunded / 100;
+          const refundAmount = unrecordedCents / 100;
           await completeProviderRefund({
             paymentId: refundedPayment.id,
             amount: refundAmount,
-            providerRefundId: charge.id,
+            // Unique per cumulative total, so a second refund on the same
+            // charge is recorded and a redelivered event is not.
+            providerRefundId: `${charge.id}:${charge.amount_refunded}`,
           });
 
           await createAuditLog({
@@ -637,11 +664,11 @@ export async function processStripeWebhookEvent(event, requestIp = null, databas
               invoiceStatus: invoiceBefore?.status ?? null,
             },
             after: {
-              paymentStatus: "FAILED",
+              paymentStatus: fullyRefunded ? "FAILED" : refundedPayment.status,
               amountRefunded: refundAmount,
               currency: charge.currency,
-              bookingStatus: "CANCELLED",
-              invoiceStatus: invoiceBefore ? "CANCELLED" : null,
+              bookingStatus: fullyRefunded ? "CANCELLED" : bookingBefore?.status ?? null,
+              invoiceStatus: fullyRefunded && invoiceBefore ? "CANCELLED" : invoiceBefore?.status ?? null,
             },
             details: {
                 chargeId: charge.id,
