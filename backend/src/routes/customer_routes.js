@@ -8,6 +8,7 @@ import {
   getCustomerBookings,
   getCustomerInvoiceById,
   getCustomerInvoices,
+  getCustomerManualPaymentOptions,
   getCustomerNotifications,
   getCustomerPayments,
   markAllCustomerNotificationsRead,
@@ -43,6 +44,7 @@ router.post("/bookings", requireIdempotencyKey, validate(createBookingSchema), c
 router.post("/car-bookings", requireVerifiedCustomer, requireIdempotencyKey, validate(carBookingSchema), createCarBooking);
 router.get("/bookings/:id", getCustomerBookingById);
 router.get("/bookings/:id/cancellation-quote", getBookingCancellationQuote);
+router.get("/bookings/:id/manual-payment", getCustomerManualPaymentOptions);
 router.patch("/bookings/:id/accept-alternative", acceptAlternativeBooking);
 router.patch("/bookings/:id/reject-alternative", rejectAlternativeBooking);
 router.patch("/bookings/:id/cancel", cancelCustomerBooking);

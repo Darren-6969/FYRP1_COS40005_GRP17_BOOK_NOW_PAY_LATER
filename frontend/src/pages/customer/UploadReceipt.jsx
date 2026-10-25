@@ -4,6 +4,8 @@ import { submitCustomerReceipt } from "../../hooks/useReceipts";
 import { refreshNotifications } from "../../utils/notifyRefresh";
 import { useCustomerBooking } from "../../hooks/useBookings";
 import { useFeatureFlag } from "../../hooks/useFeatureFlag";
+import { getCustomerManualPaymentOptions } from "../../services/customer_service";
+import { formatCustomerDate, formatMoney } from "../../utils/customerUtils";
 
 function compressImageToDataUrl(file, maxWidth = 900, quality = 0.72) {
   return new Promise((resolve, reject) => {
@@ -47,7 +49,8 @@ export default function UploadReceipt() {
 
   const [form, setForm] = useState({
     method: "DUITNOW",
-    paymentType: searchParams.get("paymentType") || "FULL_PAYMENT",
+    // Filled in from the payment schedule once it has loaded.
+    paymentType: searchParams.get("paymentType") || "",
     imageUrl: "",
     remarks: "",
   });
@@ -63,7 +66,38 @@ export default function UploadReceipt() {
     }
   }, [bookingLoading, flagLoading, receiptUploadEnabled, navigate, id]);
 
+  const [due, setDue] = useState(null);
+
+  // The amount, reference and due date come from the payment schedule, so the
+  // customer pays the exact figure the operator will check the receipt against.
+  useEffect(() => {
+    let cancelled = false;
+    getCustomerManualPaymentOptions(id)
+      .then((res) => {
+        if (cancelled) return;
+        setDue(res.data);
+        setForm((prev) => {
+          const wanted = res.data.options.find(
+            (item) => item.paymentType === prev.paymentType && item.available
+          );
+          return {
+            ...prev,
+            paymentType: wanted ? wanted.paymentType : res.data.defaultPaymentType || "",
+          };
+        });
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.response?.data?.message || "Could not load the amount to pay.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
   if (bookingLoading || flagLoading || !receiptUploadEnabled) return null;
+
+  const availableOptions = due ? due.options.filter((item) => item.available) : [];
+  const selected = availableOptions.find((item) => item.paymentType === form.paymentType);
 
 const handleFileChange = async (event) => {
   const file = event.target.files?.[0];
@@ -110,6 +144,11 @@ const handleFileChange = async (event) => {
     setError("");
 
     try {
+      if (!form.paymentType) {
+        setError("There is nothing to pay by receipt for this booking right now.");
+        return;
+      }
+
       if (!form.imageUrl) {
         setError("Please upload a receipt image before submitting.");
         return;
@@ -136,6 +175,62 @@ const handleFileChange = async (event) => {
           </p>
 
           {error && <div className="customer-alert customer-alert-danger">{error}</div>}
+
+          {due && selected && (
+            <div className="customer-manual-payment-panel">
+              {availableOptions.length > 1 && (
+                <label className="customer-field">
+                  <span>What are you paying?</span>
+                  <select
+                    value={form.paymentType}
+                    onChange={(event) =>
+                      setForm({ ...form, paymentType: event.target.value })
+                    }
+                  >
+                    {availableOptions.map((item) => (
+                      <option key={item.paymentType} value={item.paymentType}>
+                        {item.label} - {formatMoney(item.amount)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <div className="customer-info-list compact">
+                <div>
+                  <span>Amount to pay</span>
+                  <strong>{formatMoney(selected.amount)}</strong>
+                </div>
+                <div>
+                  <span>Payment reference</span>
+                  <strong>{due.reference}</strong>
+                </div>
+                <div>
+                  <span>Pay by</span>
+                  <strong>{formatCustomerDate(selected.dueDate)}</strong>
+                </div>
+              </div>
+
+              <p className="customer-payment-note">
+                Pay exactly this amount and put the reference in your payment
+                remarks, so the operator can match your receipt.
+                {due.note ? ` ${due.note}` : ""}
+              </p>
+
+              {selected.replacesPendingReceipt && (
+                <p className="customer-payment-note">
+                  A receipt for this payment is already waiting to be verified.
+                  Uploading again replaces it.
+                </p>
+              )}
+            </div>
+          )}
+
+          {due && !selected && (
+            <div className="customer-alert customer-alert-danger">
+              There is nothing to pay by receipt for this booking right now.
+            </div>
+          )}
 
           <label className="customer-field">
             <span>Payment Method</span>
@@ -193,7 +288,7 @@ const handleFileChange = async (event) => {
             />
           </label>
 
-          <button className="customer-primary-btn full" disabled={loading}>
+          <button className="customer-primary-btn full" disabled={loading || !selected}>
             {loading ? "Submitting..." : "Submit Receipt"}
           </button>
         </form>

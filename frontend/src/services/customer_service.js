@@ -86,6 +86,10 @@ export const createStripeCheckoutSession = (bookingId, paymentType) =>
 export const confirmStripeCheckoutSession = (sessionId) =>
   postIdempotent("stripe-confirm", "/stripe/confirm-session", { sessionId });
 
+// The DuitNow amount, reference and due date for each part still to pay.
+export const getCustomerManualPaymentOptions = (id) =>
+  api.get(`/customer/bookings/${id}/manual-payment`);
+
 export const uploadCustomerReceipt = (id, payload) =>
   postIdempotent(`customer-receipt-${id}`, `/customer/bookings/${id}/receipt`, payload);
 

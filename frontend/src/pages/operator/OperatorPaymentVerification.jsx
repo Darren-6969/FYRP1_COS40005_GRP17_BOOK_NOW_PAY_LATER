@@ -8,6 +8,12 @@ import {
 } from "../../services/operator_service";
 import { refreshNotifications } from "../../utils/notifyRefresh";
 
+const RECEIPT_PART_LABELS = {
+  DOWN_PAYMENT: "Down payment",
+  FINAL_PAYMENT: "Balance",
+  FULL_PAYMENT: "Full payment",
+};
+
 const STATUS_TABS = [
   { key: "PENDING_VERIFICATION", label: "Pending Review" },
   { key: "PAID", label: "Approved / Paid" },
@@ -112,6 +118,10 @@ export default function OperatorPaymentVerification() {
       customerName: payment.booking?.customer?.name || "-",
       method: payment.method || "-",
       amount: payment.amount,
+      // The part and amount the customer was asked to pay when they uploaded
+      // this receipt, which is the figure to check it against.
+      expectedAmount: receipt.expectedAmount ?? null,
+      paymentType: receipt.paymentType ?? null,
     });
   };
 
@@ -461,7 +471,7 @@ export default function OperatorPaymentVerification() {
                 <h2>{selectedReceipt.bookingCode}</h2>
                 <p>
                   {selectedReceipt.customerName} · {selectedReceipt.method} ·{" "}
-                  {formatOperatorMoney(selectedReceipt.amount)}
+                  {formatOperatorMoney(selectedReceipt.expectedAmount ?? selectedReceipt.amount)}
                 </p>
               </div>
 
@@ -489,6 +499,23 @@ export default function OperatorPaymentVerification() {
                 <strong>
                   {formatOperatorDateTime(selectedReceipt.uploadedAt)}
                 </strong>
+              </div>
+
+              {selectedReceipt.expectedAmount != null && (
+                <div>
+                  <span>Amount to match</span>
+                  <strong>
+                    {formatOperatorMoney(selectedReceipt.expectedAmount)}
+                    {RECEIPT_PART_LABELS[selectedReceipt.paymentType]
+                      ? ` (${RECEIPT_PART_LABELS[selectedReceipt.paymentType]})`
+                      : ""}
+                  </strong>
+                </div>
+              )}
+
+              <div>
+                <span>Reference</span>
+                <strong>{selectedReceipt.bookingCode || "-"}</strong>
               </div>
 
               <div>

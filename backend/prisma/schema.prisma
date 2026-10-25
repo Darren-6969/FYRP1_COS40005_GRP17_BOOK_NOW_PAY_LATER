@@ -940,6 +940,11 @@ model Receipt {
   status   ReceiptStatus @default(PENDING)
   remarks  String?
 
+  // The part being paid and the amount the schedule asked for when the receipt
+  // was uploaded, so the operator verifies it against the same figure.
+  paymentType    String?
+  expectedAmount Decimal? @db.Decimal(10, 2)
+
   uploadedAt DateTime  @default(now())
   verifiedAt DateTime?
 

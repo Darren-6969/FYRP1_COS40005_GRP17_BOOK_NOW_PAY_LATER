@@ -15,6 +15,7 @@ import { tempBookingCode, formatBookingCode } from "../utils/bookingCode.js";
 import { parseId } from "../utils/parseId.js";
 import { operatorPaymentsUrl } from "../utils/frontendUrls.js";
 import {
+  getManualPaymentOptions,
   getPaymentPendingData,
   PAYMENT_TYPES,
 } from "../services/payment_schedule_service.js";
@@ -472,6 +473,32 @@ export async function cancelCustomerBooking(req, res, next) {
   }
 }
 
+// What the customer can pay by DuitNow now, with the amount of each part
+// filled in from the payment schedule (FR-CUST-006, 4.2.5).
+export async function getCustomerManualPaymentOptions(req, res, next) {
+  try {
+    const booking = await assertCustomerBooking(req.params.id, req.user.id);
+    if (!booking.payment) {
+      return res.status(400).json({ message: "Payment schedule has not been created yet" });
+    }
+    const config = await prisma.bNPLConfig.findFirst({
+      where: { operatorId: booking.operatorId },
+      select: { manualPaymentNote: true },
+    });
+    const { options, defaultPaymentType } = getManualPaymentOptions(booking.payment);
+    res.json({
+      bookingId: booking.id,
+      reference: booking.bookingCode || `BNPL-${booking.id}`,
+      currency: "MYR",
+      options,
+      defaultPaymentType,
+      note: config?.manualPaymentNote || null,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function payCustomerBooking(_req, res) {
   // This endpoint cannot verify a payment without a gateway confirmation.
   // Card payments -> /api/stripe/checkout (confirmed by Stripe webhook).
@@ -517,6 +544,20 @@ export async function uploadCustomerReceipt(req, res, next) {
       return { status: 400, body: { message: "Payment schedule has not been created yet" } };
     }
 
+    // The amount comes from the payment schedule, never from the request.
+    const chosen = getManualPaymentOptions(booking.payment).options.find(
+      (item) => item.paymentType === paymentType
+    );
+    if (!chosen?.available) {
+      return {
+        status: 409,
+        body: {
+          code: "PAYMENT_PART_UNAVAILABLE",
+          message: chosen?.reason || "This part of the booking cannot be paid right now.",
+        },
+      };
+    }
+
     const pendingPayment = getPaymentPendingData(booking.payment, paymentType);
     await prisma.payment.update({
       where: { bookingId: booking.id },
@@ -524,8 +565,22 @@ export async function uploadCustomerReceipt(req, res, next) {
     });
     await prisma.receipt.upsert({
       where: { bookingId: booking.id },
-      create: { bookingId: booking.id, imageUrl, remarks: remarks || null, status: "PENDING" },
-      update: { imageUrl, remarks: remarks || null, status: "PENDING", verifiedAt: null },
+      create: {
+        bookingId: booking.id,
+        imageUrl,
+        remarks: remarks || null,
+        status: "PENDING",
+        paymentType,
+        expectedAmount: chosen.amount.toFixed(2),
+      },
+      update: {
+        imageUrl,
+        remarks: remarks || null,
+        status: "PENDING",
+        verifiedAt: null,
+        paymentType,
+        expectedAmount: chosen.amount.toFixed(2),
+      },
     });
     await prisma.auditLog.create({
       data: {
