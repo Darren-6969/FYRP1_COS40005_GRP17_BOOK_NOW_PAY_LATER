@@ -5,6 +5,7 @@ import {
   getListingById,
   createListing,
   updateListing,
+  deleteListingImage,
   quickEditListing,
   publishListing,
   withdrawListing,
@@ -63,6 +64,11 @@ router.get(
   "/",
   ...ownerOrStaffAccess,
   getListings
+);
+
+router.delete(
+  "/listings/:id/images/:imageId",
+  deleteListingImage
 );
 
 router.post(

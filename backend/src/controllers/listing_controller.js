@@ -1130,6 +1130,101 @@ export async function createListing(
   }
 }
 
+ // =====================================================
+ // Delete image controller
+ // =====================================================
+  export async function deleteListingImage(req, res, next) {
+  try {
+    const listingId = parseId(
+      req.params.id,
+      "listing id"
+    );
+
+    const imageId = parseId(
+      req.params.imageId,
+      "image id"
+    );
+
+    const listing = await prisma.listing.findFirst({
+      where: {
+        id: listingId,
+        ...listingWhere(req),
+      },
+      include: {
+        images: true,
+      },
+    });
+
+    if (!listing) {
+      return res.status(404).json({
+        message: "Listing not found.",
+      });
+    }
+
+    const image = listing.images.find(
+      (item) => item.id === imageId
+    );
+
+    if (!image) {
+      return res.status(404).json({
+        message: "Listing image not found.",
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.listingImage.delete({
+        where: {
+          id: imageId,
+        },
+      });
+
+      // If deleted image was primary,
+      // make the next available image primary.
+      if (image.isPrimary) {
+        const nextImage =
+          await tx.listingImage.findFirst({
+            where: {
+              listingId,
+            },
+            orderBy: {
+              sortOrder: "asc",
+            },
+          });
+
+        if (nextImage) {
+          await tx.listingImage.update({
+            where: {
+              id: nextImage.id,
+            },
+            data: {
+              isPrimary: true,
+            },
+          });
+        }
+      }
+    });
+
+    const updatedListing =
+      await prisma.listing.findFirst({
+        where: {
+          id: listingId,
+          ...listingWhere(req),
+        },
+        include:
+          includeListingRelations(),
+      });
+
+    res.json({
+      message:
+        "Listing image removed successfully.",
+      listing:
+        mapListing(updatedListing),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ==========================================================
 // UPDATE LISTING
 // ==========================================================

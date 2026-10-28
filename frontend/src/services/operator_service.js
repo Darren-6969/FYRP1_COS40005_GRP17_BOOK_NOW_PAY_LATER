@@ -129,6 +129,15 @@ export const operatorService = {
         return api.post("/operators/listings", payload);
       },
 
+      deleteListingImage(
+        listingId,
+        imageId
+      ) {
+        return api.delete(
+          `/operators/listings/${listingId}/images/${imageId}`
+        );
+      },
+
       // payload: { price, hourlyRate, weeklyRate, monthlyRate } in RM.
       // Returns { samples: [{ key, label, hours, total, totalSen, lines }], warnings: [{ code, field, message }] }.
       // A 400 response carries { errors: { field: message } }.
@@ -488,6 +497,8 @@ updateBranchPoint(
       }
     );
   },
+
+  
 
   previewEmailTemplate(
     template,

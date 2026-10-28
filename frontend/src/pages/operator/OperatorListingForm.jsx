@@ -92,6 +92,12 @@ export default function OperatorListingForm() {
     setUploadedVehicleImage,
   ] = useState(null);
 
+  const [listingImages, setListingImages] =
+  useState([]);
+
+  const [deletingImageId, setDeletingImageId] =
+  useState(null);
+
   const [
     uploadingVehicleImage,
     setUploadingVehicleImage,
@@ -149,6 +155,10 @@ export default function OperatorListingForm() {
         setError("Listing not found");
         return;
       }
+
+      setListingImages(
+        listing.images || []
+      );
 
       const loadedForm = {
         category:
@@ -716,6 +726,41 @@ export default function OperatorListingForm() {
       setUploadingVehicleImage(
         false
       );
+    }
+  };
+
+  const handleDeleteListingImage =
+  async (imageId) => {
+    const confirmed =
+      window.confirm(
+        "Remove this photo from the listing?"
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingImageId(imageId);
+      setError("");
+
+      const res =
+        await operatorService
+          .deleteListingImage(
+            id,
+            imageId
+          );
+
+      setListingImages(
+        res.data?.listing?.images || []
+      );
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to remove listing photo."
+      );
+    } finally {
+      setDeletingImageId(null);
     }
   };
 
@@ -1712,6 +1757,45 @@ export default function OperatorListingForm() {
               </div>
             </div>
           )}
+
+          {isEdit && listingImages.length > 0 && (
+          <div className="operator-listing-image-grid">
+            {listingImages.map((image) => (
+              <div
+                key={image.id}
+                className="operator-listing-image-item"
+              >
+                <img
+                  src={image.imageUrl}
+                  alt="Listing vehicle"
+                />
+
+                {image.isPrimary && (
+                  <span className="operator-image-primary-badge">
+                    Primary
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  className="operator-danger-btn"
+                  disabled={
+                    deletingImageId === image.id
+                  }
+                  onClick={() =>
+                    handleDeleteListingImage(
+                      image.id
+                    )
+                  }
+                >
+                  {deletingImageId === image.id
+                    ? "Removing..."
+                    : "Remove"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
           <div
             style={{
