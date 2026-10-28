@@ -46,10 +46,12 @@ function isPaymentRequired(booking) {
 
   const paymentStatus = normalize(booking.payment.status);
 
+  // Fully paid already
   if (paymentStatus === "PAID") {
     return false;
   }
 
+  // Waiting for operator verification
   if (
     paymentStatus === "PENDING_VERIFICATION" ||
     paymentStatus === "DOWN_PAYMENT_PENDING_VERIFICATION" ||
@@ -60,6 +62,7 @@ function isPaymentRequired(booking) {
 
   const totalAmount = Number(booking.totalAmount || 0);
   const paidAmount = Number(booking.payment.paidAmount || 0);
+
   const remainingAmount = totalAmount - paidAmount;
 
   return remainingAmount > 0;
@@ -168,6 +171,8 @@ function getPaymentActionLabel(booking) {
 }
 
 function BookingCard({ booking }) {
+
+  console.log("MY BOOKINGS COMPONENT IS RUNNING", booking.bookingCode);
   const action = getPrimaryAction(booking);
 
   return (
@@ -177,7 +182,7 @@ function BookingCard({ booking }) {
       </div>
 
       <div className="customer-booking-main">
-        <h3>{booking.serviceName || "BNPL Booking"}</h3>
+        <h3>TEST - {booking.serviceName || "BNPL Booking"}</h3>
         <p>
           Booking Ref:{" "}
           <strong>{booking.bookingCode || `BNPL-${booking.id}`}</strong>
@@ -415,4 +420,4 @@ export default function MyBookings() {
       </section>
     </div>
   );
-}
+} 
