@@ -166,12 +166,20 @@ setBookings(res.data.bookings || []);
       return status === "OVERDUE";
     }
 
-    // Only confirmed / active bookings
-    const activeStatuses = [
-        "PAID",
+    // Upcoming / in-progress bookings must be fully paid
+    const paymentStatus = String(
+      booking.payment?.status || ""
+    ).toUpperCase();
+
+    const activeBookingStatuses = [
+      "PAID",
+      "READY_FOR_PICKUP",
     ];
 
-    if (!activeStatuses.includes(status)) {
+    if (
+      paymentStatus !== "PAID" ||
+      !activeBookingStatuses.includes(status)
+    ) {
       return false;
     }
 
