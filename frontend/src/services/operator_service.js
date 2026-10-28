@@ -96,6 +96,27 @@ export const operatorService = {
       );
     },
 
+    setPrimaryListingImage(
+      listingId,
+      imageId
+    ) {
+      return api.patch(
+        `/operators/listings/${listingId}/images/${imageId}/primary`
+      );
+    },
+
+    reorderListingImages(
+      listingId,
+      images
+    ) {
+      return api.patch(
+        `/operators/listings/${listingId}/images/reorder`,
+        {
+          images,
+        }
+      );
+    },
+
     blockListingForServicing(
       id,
       payload

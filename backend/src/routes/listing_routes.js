@@ -6,7 +6,9 @@ import {
   createListing,
   updateListing,
   deleteListingImage,
+  setPrimaryListingImage,
   quickEditListing,
+  reorderListingImages,
   publishListing,
   withdrawListing,
   suspendListing,
@@ -58,6 +60,18 @@ router.patch(
   "/:id/servicing-unblock",
   ...ownerOrStaffAccess,
   unblockListingServicing
+);
+
+router.patch(
+  "/:id/images/reorder",
+  ...ownerOrStaffAccess,
+  reorderListingImages
+);
+
+router.patch(
+  "/:id/images/:imageId/primary",
+  ...ownerOrStaffAccess,
+  setPrimaryListingImage
 );
 
 router.get(

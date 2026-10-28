@@ -764,6 +764,92 @@ export default function OperatorListingForm() {
     }
   };
 
+  const handleSetPrimaryImage =
+  async (imageId) => {
+    try {
+      setError("");
+
+      const res =
+        await operatorService
+          .setPrimaryListingImage(
+            id,
+            imageId
+          );
+
+      setListingImages(
+        res.data?.listing?.images || []
+      );
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to set primary photo."
+      );
+    }
+  };
+
+  const handleImagePositionChange =
+  async (imageId, newPosition) => {
+    const newIndex =
+      Number(newPosition) - 1;
+
+    const currentIndex =
+      listingImages.findIndex(
+        (image) =>
+          image.id === imageId
+      );
+
+    if (
+      currentIndex === -1 ||
+      currentIndex === newIndex
+    ) {
+      return;
+    }
+
+    const reordered =
+      [...listingImages];
+
+    const [movedImage] =
+      reordered.splice(
+        currentIndex,
+        1
+      );
+
+    reordered.splice(
+      newIndex,
+      0,
+      movedImage
+    );
+
+    try {
+      setError("");
+
+      const payload =
+        reordered.map(
+          (image, index) => ({
+            id: image.id,
+            sortOrder: index,
+          })
+        );
+
+      const res =
+        await operatorService
+          .reorderListingImages(
+            id,
+            payload
+          );
+
+      setListingImages(
+        res.data?.listing?.images ||
+          reordered
+      );
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "Failed to reorder photos."
+      );
+    }
+  };
+
   //Implement Photo From CARSXE
   const findVehicleImages = async () => {
   if (!form.vehicleMake.trim()) {
@@ -1760,25 +1846,66 @@ export default function OperatorListingForm() {
 
           {isEdit && listingImages.length > 0 && (
           <div className="operator-listing-image-grid">
-            {listingImages.map((image) => (
+            {listingImages.map((image, index) => (
               <div
                 key={image.id}
-                className="operator-listing-image-item"
+                className="operator-listing-image-card"
               >
                 <img
                   src={image.imageUrl}
-                  alt="Listing vehicle"
+                  alt={`Listing Photo ${index + 1}`}
+                  className="operator-listing-image-preview"
                 />
 
-                {image.isPrimary && (
-                  <span className="operator-image-primary-badge">
-                    Primary
-                  </span>
-                )}
+                <div className="operator-listing-image-info">
+                  <div>
+                    <span className="operator-image-label">
+                      Photo Position
+                    </span>
+
+                    <select
+                      value={index + 1}
+                      onChange={(event) =>
+                        handleImagePositionChange(
+                          image.id,
+                          event.target.value
+                        )
+                      }
+                      className="operator-image-position-select"
+                    >
+                      {listingImages.map(
+                        (_, positionIndex) => (
+                          <option
+                            key={positionIndex}
+                            value={positionIndex + 1}
+                          >
+                            Position {positionIndex + 1}
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </div>
+
+                  <div className="operator-image-status">
+                    <span className="operator-image-label">
+                      Status
+                    </span>
+
+                    {image.isPrimary ? (
+                      <span className="operator-primary-badge">
+                        Primary
+                      </span>
+                    ) : (
+                      <span className="operator-secondary-badge">
+                        Secondary
+                      </span>
+                    )}
+                  </div>
+                </div>
 
                 <button
                   type="button"
-                  className="operator-danger-btn"
+                  className="operator-image-remove-btn"
                   disabled={
                     deletingImageId === image.id
                   }
@@ -1790,7 +1917,7 @@ export default function OperatorListingForm() {
                 >
                   {deletingImageId === image.id
                     ? "Removing..."
-                    : "Remove"}
+                    : "Remove Photo"}
                 </button>
               </div>
             ))}

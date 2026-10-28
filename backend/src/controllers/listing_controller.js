@@ -1225,6 +1225,189 @@ export async function createListing(
   }
 }
 
+// =====================================================
+// Arrange image controller
+// =====================================================
+export async function setPrimaryListingImage(
+  req,
+  res,
+  next
+) {
+  try {
+    const listingId = parseId(
+      req.params.id,
+      "listing id"
+    );
+
+    const imageId = parseId(
+      req.params.imageId,
+      "image id"
+    );
+
+    const listing =
+      await prisma.listing.findFirst({
+        where: {
+          id: listingId,
+          ...listingWhere(req),
+        },
+        include: {
+          images: true,
+        },
+      });
+
+    if (!listing) {
+      return res.status(404).json({
+        message: "Listing not found.",
+      });
+    }
+
+    const selectedImage =
+      listing.images.find(
+        (image) => image.id === imageId
+      );
+
+    if (!selectedImage) {
+      return res.status(404).json({
+        message:
+          "Listing image not found.",
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.listingImage.updateMany({
+        where: {
+          listingId,
+        },
+        data: {
+          isPrimary: false,
+        },
+      }),
+
+      prisma.listingImage.update({
+        where: {
+          id: imageId,
+        },
+        data: {
+          isPrimary: true,
+          sortOrder: 0,
+        },
+      }),
+    ]);
+
+    const updatedListing =
+      await prisma.listing.findFirst({
+        where: {
+          id: listingId,
+          ...listingWhere(req),
+        },
+        include:
+          includeListingRelations(),
+      });
+
+    return res.json({
+      message:
+        "Primary listing photo updated.",
+      listing:
+        mapListing(updatedListing),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// =====================================================
+// Reorder image controller
+// =====================================================
+export async function reorderListingImages(
+  req,
+  res,
+  next
+) {
+  try {
+    const listingId = parseId(
+      req.params.id,
+      "listing id"
+    );
+
+    const { images } = req.body;
+
+    if (!Array.isArray(images)) {
+      return res.status(400).json({
+        message:
+          "Image order is required.",
+      });
+    }
+
+    const listing =
+      await prisma.listing.findFirst({
+        where: {
+          id: listingId,
+          ...listingWhere(req),
+        },
+        include: {
+          images: true,
+        },
+      });
+
+    if (!listing) {
+      return res.status(404).json({
+        message:
+          "Listing not found.",
+      });
+    }
+
+    const existingIds =
+      new Set(
+        listing.images.map(
+          (image) => image.id
+        )
+      );
+
+    for (const item of images) {
+      if (!existingIds.has(Number(item.id))) {
+        return res.status(400).json({
+          message:
+            "Invalid listing image.",
+        });
+      }
+    }
+
+    await prisma.$transaction(
+      images.map((item, index) =>
+        prisma.listingImage.update({
+          where: {
+            id: Number(item.id),
+          },
+          data: {
+            sortOrder: index,
+            isPrimary:
+              index === 0,
+          },
+        })
+      )
+    );
+
+    const updatedListing =
+      await prisma.listing.findFirst({
+        where: {
+          id: listingId,
+          ...listingWhere(req),
+        },
+        include:
+          includeListingRelations(),
+      });
+
+    return res.json({
+      message:
+        "Photo order updated successfully.",
+      listing:
+        mapListing(updatedListing),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ==========================================================
 // UPDATE LISTING
 // ==========================================================
