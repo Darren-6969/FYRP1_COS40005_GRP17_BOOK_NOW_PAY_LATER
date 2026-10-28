@@ -186,18 +186,31 @@ setBookings(res.data.bookings || []);
     // =========================
     // UPCOMING
     // =========================
-    if (activeStatus === "UPCOMING") {
+   if (activeStatus === "UPCOMING") {
       const pickupDay = new Date(
         pickupDate.getFullYear(),
         pickupDate.getMonth(),
         pickupDate.getDate()
       );
 
+      const twoDaysLater = new Date(today);
+      twoDaysLater.setDate(
+        twoDaysLater.getDate() + 2
+      );
+
       /*
-       * Show bookings whose pickup date
-       * is today or in the future.
-       */
-      return pickupDay >= today;
+      * Show paid bookings that need
+      * handover within the next 2 days.
+      *
+      * Includes:
+      * today
+      * tomorrow
+      * day after tomorrow
+      */
+      return (
+        pickupDay >= today &&
+        pickupDay <= twoDaysLater
+      );
     }
 
     // =========================
