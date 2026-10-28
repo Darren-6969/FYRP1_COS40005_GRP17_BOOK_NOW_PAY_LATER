@@ -67,7 +67,8 @@ router.get(
 );
 
 router.delete(
-  "/listings/:id/images/:imageId",
+  "/:id/images/:imageId",
+  ...ownerOrStaffAccess,
   deleteListingImage
 );
 
