@@ -44,36 +44,28 @@ function isPaymentRequired(booking) {
     return false;
   }
 
-  const downPaymentStatus = normalize(
-    booking.payment.downPaymentStatus
-  );
+  const paymentStatus = normalize(booking.payment.status);
 
-  const finalPaymentStatus = normalize(
-    booking.payment.finalPaymentStatus
-  );
+  // Fully paid already
+  if (paymentStatus === "PAID") {
+    return false;
+  }
 
-  const downPaymentAmount = Number(
-    booking.payment.downPaymentAmount || 0
-  );
+  // Waiting for operator verification
+  if (
+    paymentStatus === "PENDING_VERIFICATION" ||
+    paymentStatus === "DOWN_PAYMENT_PENDING_VERIFICATION" ||
+    paymentStatus === "FINAL_PAYMENT_PENDING_VERIFICATION"
+  ) {
+    return false;
+  }
 
-  const finalPaymentAmount = Number(
-    booking.payment.finalPaymentAmount || 0
-  );
+  const totalAmount = Number(booking.totalAmount || 0);
+  const paidAmount = Number(booking.payment.paidAmount || 0);
 
-  const downPaymentRequired =
-    downPaymentAmount > 0 &&
-    !["PAID", "PENDING_VERIFICATION"].includes(
-      downPaymentStatus
-    );
+  const remainingAmount = totalAmount - paidAmount;
 
-  const finalPaymentRequired =
-    finalPaymentAmount > 0 &&
-    downPaymentStatus === "PAID" &&
-    !["PAID", "PENDING_VERIFICATION"].includes(
-      finalPaymentStatus
-    );
-
-  return downPaymentRequired || finalPaymentRequired;
+  return remainingAmount > 0;
 }
 
 function isPendingVerification(booking) {
@@ -160,14 +152,19 @@ function getDeadlineText(booking) {
 }
 
 function getPaymentActionLabel(booking) {
+  const totalAmount = Number(booking.totalAmount || 0);
+  const paidAmount = Number(booking.payment?.paidAmount || 0);
+
+  const remainingAmount = Math.max(
+    0,
+    totalAmount - paidAmount
+  );
+
   const downPaymentPaid =
     normalize(booking.payment?.downPaymentStatus) === "PAID";
 
-  const finalPaymentPaid =
-    normalize(booking.payment?.finalPaymentStatus) === "PAID";
-
-  if (downPaymentPaid && !finalPaymentPaid) {
-    return "Pay Remaining";
+  if (downPaymentPaid && remainingAmount > 0) {
+    return `Pay ${formatMoney(remainingAmount)}`;
   }
 
   return "Pay";
@@ -175,6 +172,19 @@ function getPaymentActionLabel(booking) {
 
 function BookingCard({ booking }) {
   const action = getPrimaryAction(booking);
+
+  console.log("BOOKING PAYMENT DEBUG", {
+    bookingCode: booking.bookingCode,
+    bookingStatus: booking.status,
+    totalAmount: booking.totalAmount,
+    payment: booking.payment,
+    paidAmount: booking.payment?.paidAmount,
+    downPaymentAmount: booking.payment?.downPaymentAmount,
+    downPaymentStatus: booking.payment?.downPaymentStatus,
+    finalPaymentAmount: booking.payment?.finalPaymentAmount,
+    finalPaymentStatus: booking.payment?.finalPaymentStatus,
+    overallPaymentStatus: booking.payment?.status,
+  });
 
   return (
     <article className="customer-booking-row-card customer-booking-history-card">
