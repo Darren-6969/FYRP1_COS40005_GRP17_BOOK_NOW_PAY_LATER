@@ -27,26 +27,53 @@ function normalize(value) {
 
 function isPaymentRequired(booking) {
   const status = normalize(booking.status);
-  const paymentStatus = normalize(booking.payment?.status);
 
-  const closedStatuses = [
+  const terminalStatuses = [
     "CANCELLED",
     "REJECTED",
-    "PAID",
     "COMPLETED",
-    "CONFIRMED",
     "OVERDUE",
     "EXPIRED",
   ];
 
-  if (closedStatuses.includes(status)) {
+  if (terminalStatuses.includes(status)) {
     return false;
   }
 
-  return (
-    status === "PENDING_PAYMENT" &&
-    ["", "UNPAID", "PENDING"].includes(paymentStatus)
+  if (!booking.payment) {
+    return false;
+  }
+
+  const downPaymentStatus = normalize(
+    booking.payment.downPaymentStatus
   );
+
+  const finalPaymentStatus = normalize(
+    booking.payment.finalPaymentStatus
+  );
+
+  const downPaymentAmount = Number(
+    booking.payment.downPaymentAmount || 0
+  );
+
+  const finalPaymentAmount = Number(
+    booking.payment.finalPaymentAmount || 0
+  );
+
+  const downPaymentRequired =
+    downPaymentAmount > 0 &&
+    !["PAID", "PENDING_VERIFICATION"].includes(
+      downPaymentStatus
+    );
+
+  const finalPaymentRequired =
+    finalPaymentAmount > 0 &&
+    downPaymentStatus === "PAID" &&
+    !["PAID", "PENDING_VERIFICATION"].includes(
+      finalPaymentStatus
+    );
+
+  return downPaymentRequired || finalPaymentRequired;
 }
 
 function isPendingVerification(booking) {
@@ -132,6 +159,20 @@ function getDeadlineText(booking) {
   return formatCustomerDate(booking.paymentDeadline);
 }
 
+function getPaymentActionLabel(booking) {
+  const downPaymentPaid =
+    normalize(booking.payment?.downPaymentStatus) === "PAID";
+
+  const finalPaymentPaid =
+    normalize(booking.payment?.finalPaymentStatus) === "PAID";
+
+  if (downPaymentPaid && !finalPaymentPaid) {
+    return "Pay Remaining";
+  }
+
+  return "Pay";
+}
+
 function BookingCard({ booking }) {
   const action = getPrimaryAction(booking);
 
@@ -186,7 +227,7 @@ function BookingCard({ booking }) {
             className="customer-primary-btn small"
             to={`/customer/checkout/${booking.id}`}
           >
-            Pay
+            {getPaymentActionLabel(booking)}
           </Link>
         )}
       </div>
