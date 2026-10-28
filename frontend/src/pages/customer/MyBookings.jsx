@@ -171,6 +171,8 @@ function getPaymentActionLabel(booking) {
 }
 
 function BookingCard({ booking }) {
+
+  console.log("MY BOOKINGS COMPONENT IS RUNNING", booking.bookingCode);
   const action = getPrimaryAction(booking);
 
   console.log("BOOKING PAYMENT DEBUG", {
@@ -193,7 +195,7 @@ function BookingCard({ booking }) {
       </div>
 
       <div className="customer-booking-main">
-        <h3>{booking.serviceName || "BNPL Booking"}</h3>
+        <h3>TEST - {booking.serviceName || "BNPL Booking"}</h3>
         <p>
           Booking Ref:{" "}
           <strong>{booking.bookingCode || `BNPL-${booking.id}`}</strong>
