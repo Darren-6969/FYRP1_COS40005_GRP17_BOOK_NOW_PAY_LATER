@@ -1,29 +1,60 @@
-# Card refunds and DuitNow amounts
+# Cancellation and refunds
 
-## Card (Stripe) refunds from the operator portal
+Built from `BNPL_Cancellation_Policy_and_Flow.pdf` and `BNPL_Refund_Policy_and_Flow.pdf` (28 Oct 2026).
 
-Card payments are taken on the platform's Stripe account, so refunds are sent with the platform's key. An operator no longer needs the Stripe dashboard or an administrator.
+## The money
 
-1. A refund record is created when a paid booking is cancelled (by the customer or the operator) or when the operator picks "Process Partial Refund".
-2. Operator portal, Booking detail, Refund card: **Refund to Customer's Card** (or **Retry Card Refund** after a failure).
-3. `POST /operators/bookings/:id/refunds/:refundId/process` (operator owner only) calls Stripe, marks the refund REFUNDED, reverses the commission ledger, writes an audit entry and notifies the customer.
-4. DuitNow refunds keep **Mark as Refunded**: the money is sent outside the platform.
+One calculation, `src/services/refund_policy.js`, decides every refund. The quote a customer sees, the refund a cancellation creates and the amount the sweep refunds can never disagree.
 
-Safeguards: one request at a time per refund, a refund Stripe already made for the same record is reused, two-part payments are refunded from both Stripe payments, and a refund is refused once the operator's payout has been transferred (an administrator must reverse the payout first).
+1. Nothing is charged before the operator accepts, so nothing is refunded (rows A, B).
+2. The **deposit** follows the shop's rule: kept by default, or the operator's elected percentage back. The election counts only for a car rental whose pickup date is not on the platform peak calendar.
+3. The **balance** is refunded in full whenever it was paid.
+4. Everything paid comes back when the operator cancels a paid booking that is not overdue (row H), when the platform is at fault (row I), or when an administrator records an operator or platform fault.
 
-Refunds come out of the platform's Stripe balance, and Stripe does not return its processing fee.
+| Row | Case | Result (RM 500, 30% deposit, 60% election) |
+| --- | --- | --- |
+| C | Deposit paid, customer cancels | RM 0, or RM 90 where elected |
+| D | Paid in full, customer cancels | RM 350, or RM 440 where elected |
+| E | Deposit paid, balance missed (sweep, or operator on an overdue booking) | RM 0, or RM 90 |
+| E2 | Paid in full, licence missed (sweep) | RM 350, or RM 440 |
+| H | Operator cancels a paid booking | Everything paid |
 
-The `charge.refunded` webhook now finds the payment by any of its Stripe payment ids and only records money refunded outside the platform (for example in the Stripe dashboard).
+## Cancelling
 
-## DuitNow amounts
+`src/services/booking_cancellation_service.js` runs the same steps for every canceller:
 
-`GET /customer/bookings/:id/manual-payment` returns the amount, due date and reference for each part still to pay, taken from the payment schedule. The upload page shows them read-only. The receipt stores the part and the expected amount, and the operator sees "Amount to match" when verifying.
+1. The booking moves to Cancelled; the history records who, why and when (`cancelledBy`, `cancellationReasonCode`, `cancellationNote`, `cancellationFault`, `cancelledAt`).
+2. Unpaid schedule entries are voided, which releases the car.
+3. One Pending refund per part owed (deposit, balance).
+4. The customer (in-app and email) and the operator are told, with the reason and the refund.
+5. It is recorded against whoever caused it: a customer cancellation after acceptance adds a `CUSTOMER_CANCELLATION` credit event (record only, never lowers the tier); an operator cancellation is the `OPERATOR_BOOKING_CANCELLED` audit entry the pilot metrics count; an administrator's records the fault.
 
-## How to test (Stripe test mode)
+| Who | When | Reason |
+| --- | --- | --- |
+| Customer | From request to pickup time | Optional list |
+| Operator | From acceptance to pickup time (Overdue too) | List plus a note |
+| Administrator | Before the rental starts | Reason plus who was at fault |
+| System | Sweep: missed balance or licence | Automatic |
 
-1. Pay a deposit with card `4242 4242 4242 4242`, then cancel the booking as the customer or operator.
-2. As the operator owner, open the booking, Refund card, press **Refund to Customer's Card**. The refund should become Refunded and appear in the Stripe test dashboard.
-3. Press it twice quickly: only one Stripe refund is made.
-4. Upload a DuitNow receipt: the amount and reference are pre-filled, and the operator's receipt window shows the same amount.
+After pickup time a customer and an operator can no longer cancel (the operator marks a no-show).
 
-Run `npm test` in `backend`. The new tests are `stripe_refund_service.test.js` and `manual_payment_options.test.js`.
+## Paying it back
+
+- **Card:** sent to Stripe the moment the booking is cancelled, split over both payments of a two-part booking, never twice. If Stripe refuses it the refund is Failed and the operator or an administrator presses **Retry Card Refund**. Refused outright once the operator's payout has been transferred.
+- **DuitNow:** the operator sends the money and presses **Mark as Refunded** with the transfer reference, by a deadline (`refundDeadlineBusinessDays`, set in System Settings). `refundDeadline_job` reminds daily at 09:00 Malaysia time, escalates to the administrator once the deadline passes, and an overdue refund counts in the operator metrics (4.4.9).
+- The commission ledger is reversed in proportion; Stripe's fee is absorbed by the platform.
+
+## Where
+
+- Customer: booking page, cancel dialog with the refund quote and an optional reason, refund summary.
+- Operator: booking page (cancel dialog, refund card), "Refunds to send" on the bookings list.
+- Administrator: Bookings, **Cancel booking** (fault and reason, refund shown before confirming); **Refunds** page; the refund deadline in System Settings.
+- API: `GET /customer/bookings/:id/cancellation-quote`, `GET /bookings/:id/cancellation-quote`, `POST /bookings/:id/admin-cancel`, `GET /refunds`, `POST /refunds/:id/retry`.
+
+## Not done
+
+Public-site wording (Darren's screens), recording a no-show as a no-show on the customer's credit, a "past cancellations" figure in the operator's customer panel (it is in the cancel dialogs), and public holidays in the business-day count.
+
+## Testing
+
+`npm test` in `backend`. New: `refund_policy`, `booking_cancellation_service`, `refund_deadline_service` (plus the overdue-refund cases in the pilot metrics tests). Stripe test mode: pay a deposit with card `4242 4242 4242 4242`, cancel as customer, operator and administrator, and watch the refunds in the Stripe test dashboard.

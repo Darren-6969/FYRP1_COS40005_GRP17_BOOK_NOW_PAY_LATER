@@ -1,10 +1,9 @@
 import prisma from "../config/db.js";
 import {
-  createPartialRefundForBooking,
   getRefundsForBooking,
   completeManualRefund,
-  getCancellationQuote,
 } from "../services/refund_service.js";
+import { CANCELLERS, quoteCancellation } from "../services/booking_cancellation_service.js";
 import { processStripeRefund } from "../services/stripe_refund_service.js";
 import { createAuditLog } from "../services/log_service.js";
 import { notifyCustomerByBooking } from "../services/notification_email_service.js";
@@ -33,54 +32,6 @@ function mapRefund(refund) {
 }
 
 
-export async function createBookingRefund(
-  req,
-  res,
-  next
-) {
-  try {
-    const result =
-      await createPartialRefundForBooking({
-        bookingId:
-          req.params.id,
-
-        operatorId:
-          operatorScope(req),
-
-        reason:
-          req.body?.reason,
-      });
-
-    res.status(201).json({
-      message:
-        "Refund request created successfully.",
-
-      booking:
-        result.booking,
-
-      refund:
-        mapRefund(
-          result.refund
-        ),
-    });
-  } catch (err) {
-    next(err);
-  }
-
-}
-
-export async function getBookingCancellationQuote(req, res, next) {
-  try {
-    const quote = await getCancellationQuote({
-      bookingId: req.params.id,
-      customerId: req.user?.role === "CUSTOMER" ? req.user.id : undefined,
-    });
-    res.json(quote);
-  } catch (err) {
-    next(err);
-  }
-}
-
 export async function getBookingRefunds(
   req,
   res,
@@ -104,6 +55,30 @@ export async function getBookingRefunds(
   }
 }
 
+// What cancelling would refund. Customers quote their own booking; an
+// operator quotes the cancellation they are about to make; an administrator
+// also says who was at fault.
+export async function getCancellationQuoteHandler(req, res, next) {
+  try {
+    const role = req.user?.role;
+    const canceller =
+      role === "CUSTOMER" ? CANCELLERS.CUSTOMER
+        : role === "MASTER_SELLER" ? CANCELLERS.ADMIN
+          : CANCELLERS.OPERATOR;
+    res.json(
+      await quoteCancellation({
+        bookingId: req.params.id,
+        canceller,
+        fault: String(req.query?.fault || "").toUpperCase() || (canceller === CANCELLERS.ADMIN ? "CUSTOMER" : null),
+        customerId: role === "CUSTOMER" ? req.user.id : null,
+        operatorId: role === "NORMAL_SELLER" ? req.user.operatorId : null,
+      })
+    );
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function completeBookingRefund(
   req,
   res,
@@ -121,6 +96,32 @@ export async function completeBookingRefund(
         manualReference:
           req.body?.manualReference,
       });
+
+    // The refund policy's last step: the action is audited and the customer
+    // is told that their money has been sent.
+    await createAuditLog({
+      req,
+      action: "MANUAL_REFUND_COMPLETED",
+      entityType: "Booking",
+      entityId: result.refund.bookingId,
+      details: {
+        refundId: result.refund.id,
+        amount: Number(result.refund.amount),
+        reference: result.refund.providerRefundId,
+      },
+    }).catch((error) => console.error("[refund] audit log failed:", error.message));
+    const booking = await prisma.booking.findUnique({
+      where: { id: result.refund.bookingId },
+      include: { customer: { select: { id: true, name: true, email: true } } },
+    });
+    if (booking) {
+      await notifyCustomerByBooking({
+        booking,
+        title: "Refund sent",
+        message: `The operator has sent your refund of MYR ${Number(result.refund.amount).toFixed(2)} for booking ${booking.bookingCode || booking.id} (reference ${result.refund.providerRefundId}).`,
+        type: "PAYMENT_REFUNDED",
+      }).catch((error) => console.error("[refund] customer notification failed:", error.message));
+    }
 
     res.json({
       message:

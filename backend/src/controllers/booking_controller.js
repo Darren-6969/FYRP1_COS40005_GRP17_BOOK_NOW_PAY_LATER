@@ -2,6 +2,7 @@ import prisma from "../config/db.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 import { createAuditLog } from "../services/log_service.js";
 import { getBookingStatusHistory, transitionBookingStatus } from "../services/booking_status_service.js";
+import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_service.js";
 
 // Shared include spec for full booking relations
 const bookingInclude = {
@@ -68,6 +69,35 @@ export async function getBookingHistory(req, res, next) {
   }
 }
 
+// An administrator forces a cancellation (any time before the rental starts),
+// recording the reason and who was at fault. The refund follows that choice:
+// a customer fault follows the policy, an operator or platform fault refunds
+// everything.
+export async function adminCancelBooking(req, res, next) {
+  try {
+    const result = await cancelBooking({
+      bookingId: req.params.id,
+      canceller: CANCELLERS.ADMIN,
+      actorId: req.user.id,
+      fault: String(req.body?.fault || "").toUpperCase(),
+      note: req.body?.reason,
+    });
+    const booking = await prisma.booking.findUnique({
+      where: { id: Number(req.params.id) },
+      include: bookingInclude,
+    });
+    res.json({
+      booking,
+      refunds: result.refunds,
+      refundTotal: result.quote.totalRefund,
+      refundVia: result.refundVia,
+      refundDeadline: result.refundDeadline,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function overrideBookingStatus(req, res, next) {
   try {
     const id = Number(req.params.id);
@@ -84,6 +114,14 @@ export async function overrideBookingStatus(req, res, next) {
 
     if (reason.length < 5) {
       return res.status(400).json({ message: "A reason of at least 5 characters is required" });
+    }
+
+    // A cancellation settles the customer's money, so it has its own action
+    // that asks who was at fault and shows the refund before confirming.
+    if (status === "CANCELLED") {
+      return res.status(400).json({
+        message: "Use the Cancel booking action: it asks who was at fault and refunds under the refund policy.",
+      });
     }
 
     const result = await prisma.$transaction(async (tx) => {

@@ -574,7 +574,7 @@ const WIRED = {
   seller_page_viewed: ["controllers/storefront_controller.js"],
   booking_created: ["controllers/car_booking_controller.js", "controllers/customer_controller.js", "controllers/host_controller.js"],
   booking_completed: ["services/booking_status_service.js", "services/cron_service.js"],
-  booking_cancelled: ["services/booking_status_service.js", "services/refund_service.js"],
+  booking_cancelled: ["services/booking_status_service.js"], // every cancellation moves through it
   down_payment_succeeded: ["services/analytics_service.js"],
   balance_succeeded: ["services/analytics_service.js"],
   payment_expired: ["jobs/paymentExpiry_job.js"],

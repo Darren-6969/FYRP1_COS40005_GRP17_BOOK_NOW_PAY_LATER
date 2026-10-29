@@ -68,8 +68,12 @@ export const acceptCustomerAlternative = (id) =>
 export const rejectCustomerAlternative = (id) =>
   api.patch(`/customer/bookings/${id}/reject-alternative`);
 
-export const cancelCustomerBooking = (id) =>
-  api.patch(`/customer/bookings/${id}/cancel`);
+// What a cancellation would refund under the refund policy, before the customer confirms.
+export const getCancellationQuote = (id) =>
+  api.get(`/customer/bookings/${id}/cancellation-quote`);
+
+export const cancelCustomerBooking = (id, payload = {}) =>
+  api.patch(`/customer/bookings/${id}/cancel`, payload);
 
 export const getCustomerBookingActivity = (id) =>
   api.get(`/customer/bookings/${id}/activity`);

@@ -627,6 +627,8 @@ model PlatformSettings {
   creditTierThresholds       Json     @default("{}") @db.JsonB
   exposureLimits             Json     @default("{}") @db.JsonB
   licenceReuploadWindowHours Int      @default(24)
+  // Business days an operator has to send a DuitNow refund.
+  refundDeadlineBusinessDays Int      @default(3)
   featureFlags               Json     @default("{\"allowReceiptUpload\":true,\"automaticOverdueHandling\":true}") @db.JsonB
   reminderTiming             Json     @default("{\"paymentFirstHours\":24,\"paymentFinalHours\":6,\"licenceReminderHours\":24,\"subscriptionTermReminderDays\":7,\"subscriptionPaymentReminderDays\":3}") @db.JsonB
   downPaymentFloorPercent    Int      @default(0)
@@ -675,6 +677,14 @@ model Booking {
   totalAmount Decimal       @db.Decimal(10, 2)
   status      BookingStatus @default(PENDING)
   creditTier  String?
+
+  // Who ended the booking and why (cancellation policy). cancelledBy is
+  // CUSTOMER, OPERATOR, ADMIN or SYSTEM; the fault is set by an administrator.
+  cancelledBy            String?
+  cancellationReasonCode String?
+  cancellationNote       String?   @db.Text
+  cancellationFault      String?
+  cancelledAt            DateTime?
 
   paymentDeadline DateTime?
 
@@ -850,6 +860,11 @@ model Refund {
   // Used when Stripe/manual processing fails.
   lastError String? @db.Text
 
+  // DuitNow refunds are sent by the operator by this deadline (refund policy).
+  dueAt          DateTime?
+  lastReminderAt DateTime?
+  escalatedAt    DateTime?
+
   processedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -858,6 +873,7 @@ model Refund {
   @@index([bookingId, status])
   @@index([paymentId])
   @@index([status])
+  @@index([status, dueAt])
   @@index([createdAt])
 }
 

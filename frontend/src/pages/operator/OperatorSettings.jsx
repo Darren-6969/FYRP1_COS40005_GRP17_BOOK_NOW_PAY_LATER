@@ -950,12 +950,12 @@ const activeMenu = SETTINGS_MENU.find(
             id="refund-settings"
             icon={<ShieldCheck size={20} />}
             title="Refund Settings"
-            description="Configure the refund rule applied when the remaining balance is not completed."
+            description="The deposit rule applies whenever a customer cancels or misses the balance or licence deadline. It applies only to car rentals on dates outside the platform peak calendar."
           >
             <div className="operator-settings-form-grid">
               <ToggleField
                 label="Allow partial refund"
-                helper="Allow part of the paid amount to be refunded instead of forfeiting the full amount."
+                helper="By default you keep the deposit to cover holding the car. Turn this on to refund part of the deposit instead. A paid balance is always refunded in full."
                 checked={form.partialRefundElected}
                 onChange={(checked) =>
                   updateField("partialRefundElected", checked)
@@ -965,7 +965,7 @@ const activeMenu = SETTINGS_MENU.find(
               {form.partialRefundElected && (
                 <FormField
                   label="Partial refund percentage"
-                  helper="Percentage returned to the customer. Must be between 1% and 99%."
+                  helper={`Percentage of the deposit returned to the customer. Must be between 1% and 99%. For every RM 100 of deposit, the customer gets back RM ${Number(form.partialRefundPercent) || 0}.`}
                 >
                   <input
                     type="number"

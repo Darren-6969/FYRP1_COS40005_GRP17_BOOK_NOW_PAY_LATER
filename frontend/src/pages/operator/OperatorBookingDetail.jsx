@@ -10,6 +10,9 @@ import {
 } from "../../services/operator_service";
 
 import OfferModal from "../../components/operator/OfferModal";
+import OperatorCancelDialog from "../../components/operator/OperatorCancelDialog";
+import OperatorRefundCard from "../../components/operator/OperatorRefundCard";
+import { pickupHasPassed } from "../../utils/customerUtils";
 
 import {
   carTitle,
@@ -38,9 +41,6 @@ export default function OperatorBookingDetail() {
 
   const [showCancel, setShowCancel] =
     useState(false);
-
-  const [showRefund, setShowRefund] =
-  useState(false);
 
   const [loading, setLoading] =
     useState(true);
@@ -341,19 +341,19 @@ export default function OperatorBookingDetail() {
   // Operator may withdraw a confirmed booking.
   // Cancellation reason will be mandatory.
   // =========================================================
-  const hasAnyPayment =
-  paymentStatus === "PAID" ||
-  paymentStatus === "PARTIALLY_PAID" ||
-  booking.payment?.downPaymentStatus === "PAID" ||
-  booking.payment?.finalPaymentStatus === "PAID";
-
+  // The operator can cancel from acceptance until pickup time, with a reason.
+  // An overdue booking can be cancelled too; its refund follows the deposit
+  // rule rather than refunding everything. Before acceptance they Reject.
   const canCancel =
     [
       "ACCEPTED",
       "PENDING_PAYMENT",
+      "CONFIRMED",
+      "PAID",
+      "READY_FOR_PICKUP",
+      "OVERDUE",
     ].includes(bookingStatus) &&
-    !hasAnyPayment &&
-    !isClosed;
+    !pickupHasPassed(booking);
 
   const shouldShowPaymentVerificationLink =
     [
@@ -419,57 +419,6 @@ export default function OperatorBookingDetail() {
       : 0
   );
 
-  const refunds =
-    Array.isArray(booking.refunds)
-      ? booking.refunds
-      : [];
-
-  const latestRefund =
-    refunds.length > 0
-      ? refunds[0]
-      : null;
-
-  const activeRefund =
-    refunds.find((refund) =>
-      [
-        "PENDING",
-        "PROCESSING",
-        "REFUNDED",
-      ].includes(
-        String(
-          refund.status || ""
-        ).toUpperCase()
-      )
-    );
-
-  const downPaymentPaid =
-    booking.payment?.downPaymentStatus ===
-    "PAID";
-
-  const finalPaymentPaid =
-    booking.payment?.finalPaymentStatus ===
-    "PAID";
-
-  const downPaymentAmount =
-    Number(
-      booking.payment?.downPaymentAmount ||
-        0
-    );
-
-  const refundableBookingStatus = [
-    "PENDING_PAYMENT",
-    "CANCELLED",
-    "OVERDUE",
-    "NO_SHOW_UNPAID",
-  ].includes(bookingStatus);
-
-  const canCreateRefund =
-    refundableBookingStatus &&
-    downPaymentPaid &&
-    !finalPaymentPaid &&
-    downPaymentAmount > 0 &&
-    !activeRefund;  
-
   const hasAnyAction =
     canAcceptReject ||
     canSuggestAlternative ||
@@ -477,7 +426,6 @@ export default function OperatorBookingDetail() {
     canReturn ||
     canEditDeadline ||
     canCancel ||
-    canCreateRefund ||
     shouldShowPaymentVerificationLink;
 
   return (
@@ -1312,245 +1260,7 @@ export default function OperatorBookingDetail() {
 
     </section>
 
-    {/* Refund */}
-    <section className="operator-card booking-clean-side-card">
-
-      <div className="booking-clean-side-head">
-        <div>
-          <span>Payment</span>
-          <h2>Refund</h2>
-        </div>
-
-        {latestRefund && (
-          <span
-            className={`operator-status ${operatorStatusClass(
-              latestRefund.status
-            )}`}
-          >
-            {operatorStatusLabel(
-              latestRefund.status
-            )}
-          </span>
-        )}
-      </div>
-
-      {latestRefund ? (
-        <div className="booking-clean-payment-lines">
-
-          <InfoRow
-            label="Paid Deposit"
-            value={formatOperatorMoney(
-              latestRefund.paidAmount
-            )}
-          />
-
-          <InfoRow
-            label="Refund Percentage"
-            value={
-              latestRefund.refundPercent != null
-                ? `${latestRefund.refundPercent}%`
-                : "-"
-            }
-          />
-
-          <InfoRow
-            label="Refund Amount"
-            value={formatOperatorMoney(
-              latestRefund.amount
-            )}
-            strong
-          />
-
-          <InfoRow
-            label="Method"
-            value={
-              latestRefund.method || "-"
-            }
-          />
-
-          <InfoRow
-            label="Reason"
-            value={
-              latestRefund.reason || "-"
-            }
-          />
-
-          {latestRefund.processedAt && (
-            <InfoRow
-              label="Processed"
-              value={formatOperatorDateTime(
-                latestRefund.processedAt
-              )}
-            />
-          )}
-
-          {latestRefund.providerRefundId && (
-            <InfoRow
-              label="Refund Reference"
-              value={
-                latestRefund.providerRefundId
-              }
-            />
-          )}
-
-          {latestRefund.lastError && (
-            <div className="operator-alert danger">
-              {latestRefund.lastError}
-            </div>
-          )}
-
-          {["PENDING", "PROCESSING"].includes(
-            String(
-              latestRefund.status || ""
-            ).toUpperCase()
-          ) &&
-            latestRefund.method !== "STRIPE" && (
-              <button
-                type="button"
-                className="operator-primary-btn"
-                disabled={!!actionLoading}
-                onClick={async () => {
-                  const confirmed =
-                    window.confirm(
-                      `Confirm that ${formatOperatorMoney(
-                        latestRefund.amount
-                      )} has already been refunded to the customer?`
-                    );
-
-                  if (!confirmed) {
-                    return;
-                  }
-
-                  try {
-                    setActionLoading(
-                      "complete-refund"
-                    );
-
-                    await operatorService.completeBookingRefund(
-                      booking.id,
-                      latestRefund.id
-                    );
-
-                    await loadBooking();
-                  } catch (err) {
-                    alert(
-                      err.response?.data?.message ||
-                        "Failed to complete refund"
-                    );
-                  } finally {
-                    setActionLoading("");
-                  }
-                }}
-              >
-                {actionLoading ===
-                "complete-refund"
-                  ? "Completing Refund..."
-                  : "Mark as Refunded"}
-              </button>
-            )}
-
-          {latestRefund.method === "STRIPE" &&
-            ["PENDING", "PROCESSING", "FAILED"].includes(
-              String(latestRefund.status || "").toUpperCase()
-            ) && (
-              <>
-                <p className="operator-muted-text">
-                  This customer paid by card. Sending the refund here returns{" "}
-                  {formatOperatorMoney(latestRefund.amount)} to their card
-                  through Stripe. You do not need the Stripe dashboard.
-                </p>
-                <button
-                  type="button"
-                  className="operator-primary-btn"
-                  disabled={!!actionLoading}
-                  onClick={async () => {
-                    const confirmed = window.confirm(
-                      `Send ${formatOperatorMoney(
-                        latestRefund.amount
-                      )} back to the customer's card now? This cannot be undone.`
-                    );
-
-                    if (!confirmed) {
-                      return;
-                    }
-
-                    try {
-                      setActionLoading("stripe-refund");
-
-                      await operatorService.processBookingRefund(
-                        booking.id,
-                        latestRefund.id
-                      );
-
-                      await loadBooking();
-                    } catch (err) {
-                      alert(
-                        err.response?.data?.message ||
-                          "Failed to send the refund through Stripe"
-                      );
-                      await loadBooking();
-                    } finally {
-                      setActionLoading("");
-                    }
-                  }}
-                >
-                  {actionLoading === "stripe-refund"
-                    ? "Sending Refund..."
-                    : String(latestRefund.status || "").toUpperCase() === "FAILED"
-                      ? "Retry Card Refund"
-                      : "Refund to Customer's Card"}
-                </button>
-              </>
-            )}
-
-        </div>
-      ) : (
-        <>
-          <div className="booking-clean-payment-lines">
-
-            <InfoRow
-              label="Down-payment"
-              value={`${operatorStatusLabel(
-                booking.payment
-                  ?.downPaymentStatus ||
-                  "UNPAID"
-              )} · ${formatOperatorMoney(
-                downPaymentAmount
-              )}`}
-            />
-
-            <InfoRow
-              label="Final Payment"
-              value={operatorStatusLabel(
-                booking.payment
-                  ?.finalPaymentStatus ||
-                  "UNPAID"
-              )}
-            />
-
-          </div>
-
-          {canCreateRefund ? (
-            <button
-              type="button"
-              className="operator-danger-btn"
-              disabled={!!actionLoading}
-              onClick={() =>
-                setShowRefund(true)
-              }
-            >
-              Process Partial Refund
-            </button>
-          ) : (
-            <div className="operator-empty-state compact">
-              This booking is not currently
-              eligible for a partial refund.
-            </div>
-          )}
-        </>
-      )}
-
-    </section>
+    <OperatorRefundCard booking={booking} onChanged={loadBooking} />
 
     {/* Actions */}
     <section className="operator-card booking-clean-side-card">
@@ -1752,7 +1462,7 @@ export default function OperatorBookingDetail() {
           Cancellation Modal
       ====================================================== */}
       {showCancel && (
-        <CancelBookingModal
+        <OperatorCancelDialog
           booking={booking}
           onClose={() =>
             setShowCancel(false)
@@ -1771,15 +1481,6 @@ export default function OperatorBookingDetail() {
         />
       )}
 
-      {showRefund && (
-        <RefundModal
-          booking={booking}
-          onClose={() =>
-            setShowRefund(false)
-          }
-          onDone={loadBooking}
-        />
-      )}
     </div>
   );
 }
@@ -2130,159 +1831,6 @@ const hourlyRate =
   );
 }
 
-function RefundModal({
-  booking,
-  onClose,
-  onDone,
-}) {
-  const [reason, setReason] =
-    useState(
-      "Customer cancellation"
-    );
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const handleRefund = async () => {
-    const cleanReason =
-      reason.trim();
-
-    if (cleanReason.length < 5) {
-      alert(
-        "Please provide a refund reason of at least 5 characters."
-      );
-      return;
-    }
-
-    const confirmed =
-      window.confirm(
-        "Create this partial refund request? This action will cancel the booking if it is still awaiting final payment."
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      await operatorService.createBookingRefund(
-        booking.id,
-        {
-          reason: cleanReason,
-        }
-      );
-
-      await onDone();
-
-      onClose();
-    } catch (err) {
-      alert(
-        err.response?.data?.message ||
-          "Failed to create refund"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="operator-modal-backdrop">
-      <div className="operator-modal">
-
-        <div className="operator-card-head">
-          <div>
-            <h2>
-              Process Partial Refund
-            </h2>
-
-            <p>
-              Create a partial refund for{" "}
-              {booking.bookingCode}.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="booking-clean-payment-lines">
-
-          <InfoRow
-            label="Paid Deposit"
-            value={formatOperatorMoney(
-              booking.payment
-                ?.downPaymentAmount
-            )}
-          />
-
-          <InfoRow
-            label="Payment Method"
-            value={
-              booking.payment?.method ||
-              "-"
-            }
-          />
-
-        </div>
-
-        <label className="operator-field">
-          Refund Reason *
-
-          <textarea
-            value={reason}
-            placeholder="Example: Customer cancelled before final payment."
-            onChange={(e) =>
-              setReason(
-                e.target.value
-              )
-            }
-          />
-        </label>
-
-        <p className="booking-clean-muted">
-          The refund amount will be
-          calculated automatically using
-          the operator's Partial Refund
-          setting.
-        </p>
-
-        <div className="operator-modal-actions">
-
-          <button
-            type="button"
-            className="operator-secondary-btn"
-            onClick={onClose}
-            disabled={loading}
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            className="operator-danger-btn"
-            onClick={handleRefund}
-            disabled={loading}
-          >
-            {loading
-              ? "Creating Refund..."
-              : "Process Partial Refund"}
-          </button>
-
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ===========================================================
-// Info Row
-// ===========================================================
 function InfoRow({
   label,
   value,
@@ -2938,149 +2486,3 @@ function PaymentDeadlineModal({
   );
 }
 
-// ===========================================================
-// Cancel Booking Modal
-// ===========================================================
-function CancelBookingModal({
-  booking,
-  onClose,
-  onDone,
-}) {
-  const [reason, setReason] =
-    useState("");
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const trimmedReason =
-    reason.trim();
-
-  const handleCancelBooking =
-    async () => {
-      // Mandatory cancellation reason
-      if (!trimmedReason) {
-        alert(
-          "Cancellation reason is required."
-        );
-
-        return;
-      }
-
-      if (
-        trimmedReason.length < 5
-      ) {
-        alert(
-          "Please provide a clear cancellation reason."
-        );
-
-        return;
-      }
-
-      const confirmed =
-        window.confirm(
-          "Cancel this confirmed booking? The customer will be notified."
-        );
-
-      if (!confirmed) return;
-
-      try {
-        setLoading(true);
-
-        await operatorService.cancelBooking(
-          booking.id,
-          {
-            reason: trimmedReason,
-          }
-        );
-
-        await onDone();
-
-        onClose();
-      } catch (err) {
-        alert(
-          err.response?.data?.message ||
-            "Failed to cancel booking"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-  return (
-    <div className="operator-modal-backdrop">
-      <div className="operator-modal">
-        <div className="operator-card-head">
-          <div>
-            <h2>
-              Cancel This Booking
-            </h2>
-
-            <p>
-              This is the operator safety
-              valve for withdrawing a
-              confirmed booking. A reason
-              is required and the customer
-              will be notified.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </div>
-
-        <label className="operator-field">
-          Cancellation Reason *
-
-          <textarea
-            placeholder="Explain why this booking must be cancelled..."
-            value={reason}
-            onChange={(e) =>
-              setReason(
-                e.target.value
-              )
-            }
-            required
-          />
-        </label>
-
-        {!trimmedReason && (
-          <p className="operator-field-error">
-            Cancellation reason is
-            required.
-          </p>
-        )}
-
-        <div className="operator-modal-actions">
-          <button
-            type="button"
-            className="operator-secondary-btn"
-            onClick={onClose}
-            disabled={loading}
-          >
-            Keep Booking
-          </button>
-
-          <button
-            type="button"
-            className="operator-danger-btn"
-            onClick={
-              handleCancelBooking
-            }
-            disabled={
-              loading ||
-              !trimmedReason
-            }
-          >
-            {loading
-              ? "Cancelling..."
-              : "Cancel This Booking"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}

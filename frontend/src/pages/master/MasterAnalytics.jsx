@@ -95,7 +95,7 @@ function downloadPilotCSV(report) {
           [
             "Operator", "Code", "Requests submitted", "Accepted", "Rejected by operator", "Rejected automatically",
             "Acceptance rate (%)", "Median response (minutes)", "Average response (minutes)",
-            "Operator cancellations", "Allocation exhausted (events)", "Allocation exhausted (dates)",
+            "Operator cancellations", "Allocation exhausted (events)", "Allocation exhausted (dates)", "Overdue DuitNow refunds",
           ],
           ...(report.operators || []).map((operator) => [
             operator.companyName,
@@ -110,6 +110,7 @@ function downloadPilotCSV(report) {
             operator.operatorCancellations,
             operator.allocationExhaustedEvents,
             operator.allocationExhaustedDates,
+            operator.overdueRefunds ?? 0,
           ]),
         ]
       : []),
@@ -437,7 +438,7 @@ export default function MasterAnalytics() {
                         <tr>
                           <th>Operator</th><th>Requests</th><th>Accepted</th><th>Rejected</th><th>Rejected automatically</th>
                           <th>Acceptance rate</th><th>Median response</th><th>Average response</th>
-                          <th>Operator cancellations</th><th>Allocation exhausted</th>
+                          <th>Operator cancellations</th><th>Allocation exhausted</th><th>Overdue refunds</th>
                         </tr>
                       </thead>
                       <tbody>{pilotMetrics.operators.map((operator) => (
@@ -452,6 +453,7 @@ export default function MasterAnalytics() {
                           <td>{formatMinutes(operator.averageResponseMinutes)}</td>
                           <td>{operator.operatorCancellations.toLocaleString()}</td>
                           <td>{operator.allocationExhaustedEvents.toLocaleString()}{operator.allocationExhaustedDates ? ` (${operator.allocationExhaustedDates.toLocaleString()} dates)` : ""}</td>
+                          <td>{(operator.overdueRefunds ?? 0).toLocaleString()}</td>
                         </tr>
                       ))}</tbody>
                     </table>

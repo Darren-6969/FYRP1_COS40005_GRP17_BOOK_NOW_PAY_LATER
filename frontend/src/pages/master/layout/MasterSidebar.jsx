@@ -19,12 +19,14 @@ import {
   ClipboardCheck,
   Store,
   Gavel,
+  Undo2,
 } from "lucide-react";
 
 const links = [
   { to: "/master/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/master/bookings", label: "Booking Log", icon: ListOrdered },
   { to: "/master/payments", label: "Payments", icon: CreditCard },
+  { to: "/master/refunds", label: "Refunds", icon: Undo2 },
   { to: "/master/receipts", label: "Receipts", icon: Receipt },
   { to: "/master/invoices", label: "Invoices", icon: FileText },
   { to: "/master/operators", label: "Operators", icon: Users },

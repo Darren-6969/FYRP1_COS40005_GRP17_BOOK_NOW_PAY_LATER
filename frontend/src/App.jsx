@@ -13,6 +13,7 @@ import Dashboard from "./pages/master/Dashboard";
 import MasterProfile from "./pages/master/MasterProfile";
 import Bookings from "./pages/master/Bookings";
 import Payments from "./pages/master/Payments";
+import Refunds from "./pages/master/Refunds";
 import Receipts from "./pages/master/Receipts";
 import Invoices from "./pages/master/Invoices";
 import Operators from "./pages/master/Operators";
@@ -125,6 +126,7 @@ export default function App() {
               <Route path="profile" element={<MasterProfile />} />
               <Route path="bookings" element={<Bookings />} />
               <Route path="payments" element={<Payments />} />
+              <Route path="refunds" element={<Refunds />} />
               <Route path="receipts" element={<Receipts />} />
               <Route path="invoices" element={<Invoices />} />
               <Route path="operators" element={<Operators />} />

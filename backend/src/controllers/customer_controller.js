@@ -25,12 +25,11 @@ import { assignCreditTier } from "../services/credit_tier_service.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 import { enforceConcurrentExposureCap } from "../services/concurrent_exposure_service.js";
 import { assertOperatorTakingBookings } from "../services/subscription_admin_service.js";
-import { transitionBookingStatus } from "../services/booking_status_service.js";
 import { carListingSelect, mapCarBooking } from "../services/car_booking_view.js";
 import { quoteAlternative } from "../services/car_requote_service.js";
 import { fromSen } from "../services/car_pricing_service.js";
 import { trackBookingEvent } from "../services/analytics_service.js";
-import { createPartialRefundForBooking } from "../services/refund_service.js";
+import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_service.js";
 
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
@@ -61,6 +60,13 @@ function mapBooking(booking) {
     creditTier: booking.creditTier || "Normal",
     status: booking.status,
     paymentDeadline: booking.paymentDeadline,
+
+    // Who ended the booking and why (cancellation policy).
+    cancelledBy: booking.cancelledBy,
+    cancellationReasonCode: booking.cancellationReasonCode,
+    cancellationNote: booking.cancellationNote,
+    cancellationFault: booking.cancellationFault,
+    cancelledAt: booking.cancelledAt,
 
     // Alternative suggestion fields
     alternativeServiceName: booking.alternativeServiceName,
@@ -384,90 +390,23 @@ export async function getCustomerBookingById(req, res, next) {
 
 export async function cancelCustomerBooking(req, res, next) {
   try {
-    const booking = await assertCustomerBooking(req.params.id, req.user.id);
-
-    if (
-      [
-        "COMPLETED",
-        "CANCELLED",
-        "REJECTED",
-        "EXPIRED",
-      ].includes(booking.status)
-    ) {
-      return res.status(400).json({
-        message: `Booking cannot be cancelled when status is ${booking.status}`,
-      });
-    }
-
-    const hasPaidAmount = booking.payment?.status === "PAID"
-      || booking.payment?.downPaymentStatus === "PAID";
-    if (hasPaidAmount) {
-      const result = await createPartialRefundForBooking({
-        bookingId: booking.id,
-        reason: req.body?.reason || "Customer cancellation",
-      });
-      const updated = await assertCustomerBooking(req.params.id, req.user.id);
-      return res.json({
-        ...mapBooking(updated),
-        cancellation: result.refund,
-      });
-    }
-
-    const updated = await prisma.$transaction(async (tx) => {
-      await transitionBookingStatus({
-        bookingId: booking.id,
-        newStatus: "CANCELLED",
-        actorId: req.user.id,
-        remark: "Cancelled by customer.",
-        database: tx,
-      });
-      const cancelled = await tx.booking.findUnique({
-        where: { id: booking.id },
-        include: {
-          customer: {
-            select: {
-              id: true,
-              userCode: true,
-              name: true,
-              email: true,
-            },
-          },
-          operator: true,
-          payment: true,
-          receipt: true,
-          invoice: true,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: req.user.id,
-          action: "CUSTOMER_BOOKING_CANCELLED",
-          entityType: "Booking",
-          entityId: String(booking.id),
-        },
-      });
-
-      return cancelled;
+    const result = await cancelBooking({
+      bookingId: req.params.id,
+      canceller: CANCELLERS.CUSTOMER,
+      customerId: req.user.id,
+      actorId: req.user.id,
+      reasonCode: req.body?.reasonCode || null,
+      note: req.body?.note || "",
     });
-
-    await notifyCustomerByBooking({
-      booking: updated,
-      title: "Booking cancelled",
-      message: `Your booking ${updated.bookingCode || updated.id} has been cancelled.`,
-      type: "BOOKING_CANCELLED",
+    const updated = await assertCustomerBooking(req.params.id, req.user.id);
+    res.json({
+      ...mapBooking(updated),
+      cancellation: {
+        refundTotal: result.quote.totalRefund,
+        refundVia: result.refundVia,
+        refundDeadline: result.refundDeadline,
+      },
     });
-
-    await notifyOperatorUsersByBooking({
-      booking: updated,
-      title: "Booking cancelled by customer",
-      message: `${updated.customer?.name || "Customer"} cancelled booking ${
-        updated.bookingCode || updated.id
-      }.`,
-      type: "CUSTOMER_BOOKING_CANCELLED",
-    });
-
-    res.json(mapBooking(updated));
   } catch (err) {
     next(err);
   }

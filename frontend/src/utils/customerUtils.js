@@ -82,9 +82,28 @@ export function canCustomerPay(booking) {
   );
 }
 
+const CUSTOMER_CANCELLABLE = [
+  "PENDING",
+  "ALTERNATIVE_SUGGESTED",
+  "ACCEPTED",
+  "PENDING_PAYMENT",
+  "CONFIRMED",
+  "PAID",
+  "READY_FOR_PICKUP",
+];
+
+// Pickup time has passed: the booking can no longer be cancelled (an operator
+// marks a no-show instead).
+export function pickupHasPassed(booking, now = Date.now()) {
+  return Boolean(booking?.pickupDate) && new Date(booking.pickupDate).getTime() <= now;
+}
+
+// A customer can cancel from request to pickup time (cancellation policy).
 export function canCustomerCancel(booking) {
-  return [
-    "PENDING",
-    "PENDING_PAYMENT",
-  ].includes(booking?.status);
+  return CUSTOMER_CANCELLABLE.includes(booking?.status) && !pickupHasPassed(booking);
+}
+
+// The booking would still be open, but pickup time has gone.
+export function cancellationClosedByPickup(booking) {
+  return CUSTOMER_CANCELLABLE.includes(booking?.status) && pickupHasPassed(booking);
 }

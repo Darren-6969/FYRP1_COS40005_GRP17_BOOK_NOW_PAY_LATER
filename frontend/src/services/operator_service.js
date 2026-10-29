@@ -325,6 +325,16 @@ updateBranchPoint(
     );
   },
 
+  // What cancelling would refund, worked out by the refund policy.
+  getCancellationQuote(id) {
+    return api.get(`/bookings/${id}/cancellation-quote`);
+  },
+
+  // The refunds still to send, with how many are overdue.
+  getRefundQueue() {
+    return api.get("/refunds");
+  },
+
   /**
    * Payment request / deadline
    */

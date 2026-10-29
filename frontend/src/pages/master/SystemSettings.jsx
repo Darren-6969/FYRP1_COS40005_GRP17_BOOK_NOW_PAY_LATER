@@ -199,6 +199,7 @@ function settingsToForm(settings, flagRows) {
     commissionRate: String(settings.commissionRate ?? 10),
     defaultPaymentDeadlineDays: String(settings.defaultPaymentDeadlineDays ?? 3),
     licenceReuploadWindowHours: String(settings.licenceReuploadWindowHours ?? 24),
+    refundDeadlineBusinessDays: String(settings.refundDeadlineBusinessDays ?? 3),
     creditTierThresholds: JSON.stringify(settings.creditTierThresholds || {}, null, 2),
     exposureLimits: JSON.stringify(settings.exposureLimits || {}, null, 2),
     downPaymentFloorPercent: String(settings.downPaymentFloorPercent ?? 0),
@@ -419,6 +420,7 @@ export default function SystemSettings() {
         commissionRate: Number(platformForm.commissionRate),
         defaultPaymentDeadlineDays: Number(platformForm.defaultPaymentDeadlineDays),
         licenceReuploadWindowHours: Number(platformForm.licenceReuploadWindowHours),
+        refundDeadlineBusinessDays: Number(platformForm.refundDeadlineBusinessDays),
         creditTierThresholds,
         exposureLimits,
         downPaymentFloorPercent: Number(platformForm.downPaymentFloorPercent),
@@ -658,6 +660,10 @@ export default function SystemSettings() {
 
               <FormField label="Licence re-upload window (hours)" helper="Counted from a rejected licence review. Default 24 hours.">
                 <input name="licenceReuploadWindowHours" type="number" min="1" max="720" value={platformForm.licenceReuploadWindowHours} onChange={handlePlatformChange} required />
+              </FormField>
+
+              <FormField label="Refund deadline for DuitNow refunds (business days)" helper="How long an operator has to send a DuitNow refund. Used for their deadline, the daily reminders and the escalation to you. Card refunds are sent automatically.">
+                <input name="refundDeadlineBusinessDays" type="number" min="1" max="30" value={platformForm.refundDeadlineBusinessDays} onChange={handlePlatformChange} required />
               </FormField>
 
               <FormField label="Licence reminder (hours before it is due)">

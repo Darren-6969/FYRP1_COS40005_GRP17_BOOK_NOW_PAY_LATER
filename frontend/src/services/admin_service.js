@@ -10,6 +10,18 @@ export const rejectBooking = (id) => api.patch(`/bookings/${id}/reject`);
 export const overrideBookingStatus = (id, payload) =>
   api.patch(`/bookings/${id}/admin-override`, payload);
 
+// Cancelling a booking asks who was at fault and refunds under the refund policy.
+export const getCancellationQuote = (id, fault) =>
+  api.get(`/bookings/${id}/cancellation-quote`, { params: { fault } });
+export const adminCancelBooking = (id, payload) =>
+  api.post(`/bookings/${id}/admin-cancel`, payload);
+
+// Refunds across every operator.
+export const getRefundQueue = (params = {}) => api.get("/refunds", { params });
+export const retryCardRefund = (id) => api.post(`/refunds/${id}/retry`);
+export const completeRefund = (id, manualReference) =>
+  api.patch(`/refunds/${id}/complete`, { manualReference });
+
 export const getPayments = (params = {}) => api.get("/payments", { params });
 export const getOverduePayments = () => api.get("/payments/overdue");
 

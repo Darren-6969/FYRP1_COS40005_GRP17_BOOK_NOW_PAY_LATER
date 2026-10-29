@@ -5,6 +5,7 @@ import {
 } from "react";
 
 import {
+  Link,
   useNavigate,
   useParams,
 } from "react-router-dom";
@@ -1726,20 +1727,16 @@ export default function OperatorListingForm() {
 
           <div className="operator-form-grid">
 
-            <label className="operator-field operator-field-full">
-              Refund Policy
+            <div className="operator-field operator-field-full">
+              Refund rule
 
-              <textarea
-                name="refundPolicy"
-                rows="3"
-                value={
-                  form.refundPolicy
-                }
-                onChange={
-                  handleChange
-                }
-              />
-            </label>
+              <p className="operator-muted-text">
+                Refunds follow your shop's rule and the platform refund policy, so there is
+                nothing to write here. By default you keep the deposit and a paid balance is
+                refunded in full. Change the deposit rule in{" "}
+                <Link to="/operator/settings">Shop Settings</Link>.
+              </p>
+            </div>
 
             <label className="operator-field operator-field-full">
               Terms & Conditions

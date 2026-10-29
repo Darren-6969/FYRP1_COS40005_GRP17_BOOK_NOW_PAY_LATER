@@ -331,7 +331,23 @@ export async function buildPilotMetrics({
     exhaustedEvents,
     bookings: new Map(decidedBookings.map((booking) => [booking.id, booking])),
   });
-  const operatorIds = [...responses.rows.keys()];
+  // DuitNow refunds the operator has not sent by their deadline count against
+  // them in the pilot metrics (refund policy, step 3).
+  const overdueRefunds = await database.refund.findMany({
+    where: { method: { not: "STRIPE" }, status: "PENDING", dueAt: { lt: toExclusive } },
+    select: { amount: true, booking: { select: { operatorId: true } } },
+  });
+  const overdueByOperator = new Map();
+  for (const refund of overdueRefunds) {
+    const operatorId = refund.booking?.operatorId;
+    if (!operatorId) continue;
+    const entry = overdueByOperator.get(operatorId) || { count: 0, amount: 0 };
+    entry.count += 1;
+    entry.amount += Number(refund.amount);
+    overdueByOperator.set(operatorId, entry);
+  }
+
+  const operatorIds = [...new Set([...responses.rows.keys(), ...overdueByOperator.keys()])];
   const operatorNames = operatorIds.length
     ? await database.operator.findMany({
         where: { id: { in: operatorIds } },
@@ -386,12 +402,25 @@ export async function buildPilotMetrics({
       stillPending: cohort.filter((booking) => booking.status === "PENDING").length,
     },
     allocationExhausted: responses.allocationExhausted,
+    refunds: {
+      overdue: overdueRefunds.length,
+      overdueAmount: Number(overdueRefunds.reduce((sum, item) => sum + Number(item.amount), 0).toFixed(2)),
+    },
     // Per operator: acceptance rate, median and average response time in
     // minutes, automatic rejections, operator-initiated cancellations and the
     // number of times an allocation ran out.
     operators: operatorIds
       .map((operatorId) => {
-        const value = responses.rows.get(operatorId);
+        const value = responses.rows.get(operatorId) || {
+          submitted: 0,
+          accepted: 0,
+          rejectedByOperator: 0,
+          rejectedAutomatically: 0,
+          operatorCancellations: 0,
+          allocationExhaustedEvents: 0,
+          allocationExhaustedDates: 0,
+          responseMinutes: [],
+        };
         const operator = operatorById.get(operatorId);
         return {
           operatorId,
@@ -407,6 +436,7 @@ export async function buildPilotMetrics({
           operatorCancellations: value.operatorCancellations,
           allocationExhaustedEvents: value.allocationExhaustedEvents,
           allocationExhaustedDates: value.allocationExhaustedDates,
+          overdueRefunds: overdueByOperator.get(operatorId)?.count || 0,
         };
       })
       .sort((a, b) => a.companyName.localeCompare(b.companyName)),

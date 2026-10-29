@@ -39,7 +39,7 @@ import {
 } from "../services/platform_policy_service.js";
 import { createAuditLog as writeAuditLog } from "../services/log_service.js";
 import { transitionBookingStatus } from "../services/booking_status_service.js";
-import { createOperatorFullRefundForBooking } from "../services/refund_service.js";
+import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_service.js";
 import {
   carListingSelect,
   mapCarBooking,
@@ -2050,81 +2050,29 @@ export async function rejectBooking(req, res, next) {
 
 export async function cancelOperatorBooking(req, res, next) {
   try {
-    const booking = await findOperatorBooking(
-      req,
-      req.params.id
-    );
-
+    const booking = await findOperatorBooking(req, req.params.id);
     if (!booking) {
-      return res.status(404).json({
-        message: "Booking not found",
-      });
+      return res.status(404).json({ message: "Booking not found" });
     }
 
-    if (!["CONFIRMED", "PAID", "READY_FOR_PICKUP"].includes(booking.status)) {
-      return res.status(400).json({
-        message: "Only confirmed bookings can be cancelled by the operator.",
-      });
-    }
-
-    const reason = String(
-      req.body?.reason || ""
-    ).trim();
-
-    if (reason.length < 5) {
-      return res.status(400).json({
-        message:
-          "A cancellation reason of at least 5 characters is required.",
-      });
-    }
-
-    const result = await createOperatorFullRefundForBooking({
+    // The refund policy decides the money, so the operator gives only a reason:
+    // a customer is refunded everything on a booking that is not overdue.
+    const result = await cancelBooking({
       bookingId: booking.id,
+      canceller: CANCELLERS.OPERATOR,
       operatorId: booking.operatorId,
       actorId: req.user.id,
-      reason,
+      reasonCode: req.body?.reasonCode,
+      note: req.body?.note,
     });
     const updatedBooking = await findOperatorBooking(req, booking.id);
 
-    await createAuditLog({
-      req,
-      action: "OPERATOR_BOOKING_CANCELLED",
-      entityType: "Booking",
-      entityId: booking.id,
-      details: {
-        previousStatus: booking.status,
-        reason,
-      },
-    });
-
-    const customerUrl = `${
-      process.env.FRONTEND_URL || "http://localhost:5173"
-    }/customer/bookings/${booking.id}`;
-
-    const config = await getOperatorEmailConfig(updatedBooking.operatorId);
-
-    await createCustomerNotification({
-      booking: updatedBooking,
-      title: "Booking cancelled by merchant",
-      message: `Your booking ${
-        booking.bookingCode || booking.id
-      } has been cancelled by the merchant.${
-        ` Reason: ${reason}`
-      }`,
-      type: "OPERATOR_BOOKING_CANCELLED",
-      emailSubject: `Booking Cancelled - ${booking.bookingCode || booking.id}`,
-      emailHtml: bookingStatusTemplate({
-        booking: updatedBooking,
-        status: "CANCELLED",
-        customerUrl,
-        bookingCancelledEmailText: config?.bookingCancelledEmailText,
-        emailFooterText: config?.emailFooterText,
-      }),
-    });
-
     res.json({
       booking: mapBooking(updatedBooking),
-      refund: result.refund,
+      refunds: result.refunds,
+      refundTotal: result.quote.totalRefund,
+      refundVia: result.refundVia,
+      refundDeadline: result.refundDeadline,
     });
   } catch (err) {
     next(err);

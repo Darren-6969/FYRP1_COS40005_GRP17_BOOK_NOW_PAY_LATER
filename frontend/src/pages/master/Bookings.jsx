@@ -5,6 +5,19 @@ import {
   overrideBookingStatus,
   rejectBooking,
 } from "../../services/admin_service";
+import AdminCancelDialog from "../../components/system/AdminCancelDialog";
+
+// Statuses an administrator can still cancel: any time before the rental starts.
+const CANCELLABLE = [
+  "PENDING",
+  "ACCEPTED",
+  "ALTERNATIVE_SUGGESTED",
+  "PENDING_PAYMENT",
+  "CONFIRMED",
+  "PAID",
+  "READY_FOR_PICKUP",
+  "OVERDUE",
+];
 
 function money(value) {
   return new Intl.NumberFormat("en-MY", {
@@ -50,7 +63,9 @@ export default function Bookings() {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 
-  const [query, setQuery] = useState("");
+  // The Refunds page links here with the booking code to look at.
+  const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get("q") || "");
+  const [cancelTarget, setCancelTarget] = useState(null);
   const [status, setStatus] = useState("ALL");
   const [paymentStatus, setPaymentStatus] = useState("ALL");
   const [operator, setOperator] = useState("ALL");
@@ -343,6 +358,11 @@ function getPageNumbers() {
                       <button className="btn danger" onClick={() => openIntervention(booking)}>
                         Intervene
                       </button>
+                      {CANCELLABLE.includes(booking.status) && (
+                        <button className="btn danger" onClick={() => setCancelTarget(booking)}>
+                          Cancel booking
+                        </button>
+                      )}
 
                       {booking.status === "PENDING" && (
                         <>
@@ -455,6 +475,17 @@ function getPageNumbers() {
         </div>
       )}
 
+      {cancelTarget && (
+        <AdminCancelDialog
+          booking={cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onDone={async () => {
+            setMessage("Booking cancelled. The cancellation, who was at fault and any refund are in the audit log.");
+            await loadBookings();
+          }}
+        />
+      )}
+
       {interventionBooking && (
         <div className="admin-modal-backdrop" onClick={() => !savingIntervention && setInterventionBooking(null)}>
           <div className="admin-document-modal" onClick={(event) => event.stopPropagation()}>
@@ -486,7 +517,6 @@ function getPageNumbers() {
                   <option value="PAID">Paid</option>
                   <option value="IN_PROGRESS">In progress</option>
                   <option value="OVERDUE">Overdue</option>
-                  <option value="CANCELLED">Force cancellation</option>
                   <option value="COMPLETED">Completed</option>
                   <option value="NO_SHOW">No show</option>
                 </select>

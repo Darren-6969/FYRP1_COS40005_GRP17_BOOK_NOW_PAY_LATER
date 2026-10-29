@@ -288,6 +288,9 @@ export async function updatePlatformSettings(req, res, next) {
     const licenceReuploadWindowHours = Number(
       req.body.licenceReuploadWindowHours ?? existing.licenceReuploadWindowHours
     );
+    const refundDeadlineBusinessDays = Number(
+      req.body.refundDeadlineBusinessDays ?? existing.refundDeadlineBusinessDays ?? 3
+    );
     const deadlinePolicy = await getPlatformDeadlinePolicy();
 
     if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) {
@@ -300,6 +303,9 @@ export async function updatePlatformSettings(req, res, next) {
     }
     if (!Number.isInteger(licenceReuploadWindowHours) || licenceReuploadWindowHours < 1 || licenceReuploadWindowHours > 720) {
       return res.status(400).json({ message: "Licence re-upload window must be between 1 and 720 hours." });
+    }
+    if (!Number.isInteger(refundDeadlineBusinessDays) || refundDeadlineBusinessDays < 1 || refundDeadlineBusinessDays > 30) {
+      return res.status(400).json({ message: "The refund deadline must be between 1 and 30 business days." });
     }
 
     const normalizeNumericMap = (value, current, fieldName) => {
@@ -371,6 +377,7 @@ export async function updatePlatformSettings(req, res, next) {
       creditTierThresholds,
       exposureLimits,
       licenceReuploadWindowHours,
+      refundDeadlineBusinessDays,
       featureFlags,
       reminderTiming,
       downPaymentFloorPercent,

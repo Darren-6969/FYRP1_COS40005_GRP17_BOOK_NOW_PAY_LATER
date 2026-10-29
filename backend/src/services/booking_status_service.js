@@ -19,6 +19,8 @@ const TRANSITIONS = {
   PAID: ["READY_FOR_PICKUP", "IN_PROGRESS", "COMPLETED", "CANCELLED", "EXPIRED", "NO_SHOW", "NO_SHOW_UNPAID"],
   READY_FOR_PICKUP: ["IN_PROGRESS", "CANCELLED", "NO_SHOW", "NO_SHOW_UNPAID"],
   IN_PROGRESS: ["COMPLETED", "NO_SHOW", "NO_SHOW_UNPAID"],
+  // Overdue waits for the operator when automatic cancellation is off.
+  OVERDUE: ["CANCELLED", "EXPIRED"],
   EXPIRED: [],
   COMPLETED: [],
   CANCELLED: [],

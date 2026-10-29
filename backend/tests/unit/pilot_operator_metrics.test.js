@@ -112,7 +112,7 @@ test("allocation-exhausted events are counted per operator, with the dates each 
 
 // ── The pilot report ────────────────────────────────────────────────────────
 
-function pilotDatabase() {
+function pilotDatabase({ overdueRefunds = [] } = {}) {
   const request = (id, operatorId, day, status = "PENDING_PAYMENT") => ({
     id,
     operatorId,
@@ -174,6 +174,7 @@ function pilotDatabase() {
       },
     },
     bookingStatusHistory: { findMany: async () => acceptances },
+    refund: { findMany: async () => overdueRefunds },
     auditLog: {
       findMany: async ({ where }) => {
         const actions = where.action?.in || [where.action];
@@ -284,4 +285,28 @@ test("an operator whose record has gone missing is still reported under a placeh
 
   const metrics = await buildPilotMetrics({ from: at(1), toExclusive: at(8), database });
   assert.deepEqual(metrics.operators.map((operator) => operator.companyName).sort(), ["Operator 1", "Operator 2"]);
+});
+
+test("DuitNow refunds past their deadline count against the operator that owes them", async () => {
+  const overdue = (operatorId, amount) => ({ amount, booking: { operatorId } });
+  const database = pilotDatabase({
+    overdueRefunds: [overdue(1, "350.00"), overdue(1, "90.00"), overdue(2, "150.00")],
+  });
+  const metrics = await buildPilotMetrics({ from: at(1), toExclusive: at(8), database });
+
+  const byName = Object.fromEntries(metrics.operators.map((operator) => [operator.companyName, operator]));
+  assert.equal(byName["Golden Car Rental"].overdueRefunds, 2);
+  assert.equal(byName["Borneo Wheels"].overdueRefunds, 1);
+  assert.deepEqual(metrics.refunds, { overdue: 3, overdueAmount: 590 });
+});
+
+test("an operator with an overdue refund but no booking activity in the period is still listed", async () => {
+  const database = pilotDatabase({ overdueRefunds: [{ amount: "200.00", booking: { operatorId: 3 } }] });
+  database.operator.findMany = async ({ where }) =>
+    [{ id: 3, companyName: "Late Rentals", operatorCode: "OP-003" }].concat([]).filter((operator) => where.id.in.includes(operator.id));
+  const metrics = await buildPilotMetrics({ from: at(1), toExclusive: at(8), database });
+
+  const late = metrics.operators.find((operator) => operator.operatorId === 3);
+  assert.equal(late.overdueRefunds, 1);
+  assert.equal(late.submitted, 0);
 });

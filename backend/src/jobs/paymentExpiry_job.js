@@ -1,6 +1,12 @@
 import cron from "node-cron";
 import prisma from "../config/db.js";
-import { notifyCustomerByBooking } from "../services/notification_email_service.js";
+import { notifyCustomerByBooking, notifyOperatorUsersByBooking } from "../services/notification_email_service.js";
+import {
+  createRefundsForClosure,
+  refundSentence,
+  resolveSweepCause,
+  sendCardRefunds,
+} from "../services/booking_cancellation_service.js";
 import { bookingStatusTemplate } from "../services/email_templates.js";
 import { runLoggedCronJob } from "../services/cron_job_service.js";
 import { recordCreditEvent } from "../services/customer_credit_service.js";
@@ -178,9 +184,20 @@ export function runPaymentExpiryJob() {
           database: tx,
         });
         await voidOutstandingScheduleEntries(booking.id, tx);
-        return true;
+
+        // Refund policy rows E and E2: the deposit follows the shop's rule and a
+        // balance that was paid is refunded in full.
+        return createRefundsForClosure({
+          tx,
+          booking,
+          cause: resolveSweepCause(booking.payment),
+          reason: `Booking expired because ${reason}`,
+          now,
+        });
       }, { maxWait: 10_000, timeout: 30_000 });
       if (!cancelled) continue;
+
+      const cardOutcomes = await sendCardRefunds({ refunds: cancelled.refunds, bookingId: booking.id });
 
       trackExpiryEvents(booking, owed, now);
 
@@ -189,7 +206,12 @@ export function runPaymentExpiryJob() {
       await notifyCustomerByBooking({
         booking,
         title: "Booking cancelled",
-        message: `Booking ${booking.bookingCode || booking.id} was cancelled because ${reason}.`,
+        message: `Booking ${booking.bookingCode || booking.id} was cancelled because ${reason}.${refundSentence({
+          quote: cancelled.quote,
+          refundVia: cancelled.refundVia,
+          refundDeadline: cancelled.refundDeadline,
+          audience: "customer",
+        })}`,
         type: "BOOKING_CANCELLED",
         emailSubject: `Booking Cancelled - ${booking.bookingCode || booking.id}`,
         emailHtml: bookingStatusTemplate({
@@ -197,6 +219,19 @@ export function runPaymentExpiryJob() {
           status: "CANCELLED",
           customerUrl,
         }),
+      });
+
+      // The operator is told too, with the refund they have to send, if any.
+      await notifyOperatorUsersByBooking({
+        booking,
+        title: cancelled.refundVia === "OPERATOR_TRANSFER" ? "Booking expired: refund to send" : "Booking expired",
+        message: `Booking ${booking.bookingCode || booking.id} was cancelled because ${reason}.${refundSentence({
+          quote: cancelled.quote,
+          refundVia: cancelled.refundVia,
+          refundDeadline: cancelled.refundDeadline,
+          audience: "operator",
+        })}${cardOutcomes.some((item) => !item.ok) ? " The card refund failed; press Retry Card Refund on the booking." : ""}`,
+        type: "BOOKING_EXPIRED",
       });
 
       processedCount += 1;

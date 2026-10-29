@@ -11,6 +11,7 @@ import {
   operatorStatusClass,
   operatorStatusLabel,
 } from "../../services/operator_service";
+import RefundsToSend from "../../components/operator/RefundsToSend";
 
 const tabs = [
   { label: "Pending", value: "PENDING" },
@@ -328,6 +329,8 @@ setBookings(res.data.bookings || []);
           </button>
         </form>
       </section>
+
+      <RefundsToSend />
 
       {error && (
         <div className="operator-alert danger">

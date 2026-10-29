@@ -52,6 +52,17 @@ export async function recordCreditEvent({
 
   const profile = await recomputeCreditProfile(customerId, database);
   const beforeTier = profile.tier;
+
+  // A customer cancellation is kept for the credit history and the pilot
+  // review, but never lowers the tier: it records an event and changes nothing.
+  if (eventType === "CUSTOMER_CANCELLATION") {
+    await database.creditProfileEvent.createMany({
+      data: [{ customerId, bookingId, eventKey, eventType, actorUserId, reason, beforeTier, afterTier: beforeTier }],
+      skipDuplicates: true,
+    });
+    return profile;
+  }
+
   const increment = eventType === "SUCCESSFUL_ON_TIME_PAYMENT"
     ? { successfulOnTimePayments: { increment: 1 } }
     : eventType === "EXPIRED_BOOKING"
