@@ -268,7 +268,7 @@ export default function OperatorLayout() {
                           markRead(item.id);
                           setOpenNotifications(false);
 
-                          navigate(target);
+                          window.location.assign(target);
                         }}
                       >
                           <span className="portal-dropdown-dot" />
