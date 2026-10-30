@@ -12,3 +12,20 @@ export async function loginUser(
     }),
   });
 }
+
+export async function registerUser(
+  name: string,
+  email: string,
+  password: string
+) {
+  return apiRequest("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      email,
+      password,
+      privacyPolicyAccepted: true,
+      termsAccepted: true,
+    }),
+  });
+}

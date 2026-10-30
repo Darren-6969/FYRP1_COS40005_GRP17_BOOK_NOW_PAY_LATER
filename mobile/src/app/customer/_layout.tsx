@@ -17,6 +17,20 @@ export default function CustomerLayout() {
       />
 
       <Stack.Screen
+        name="booking/[id]"
+        options={{
+          animation: "slide_from_right",
+        }}
+      />
+
+      <Stack.Screen
+        name="notifications"
+        options={{
+          animation: "slide_from_right",
+        }}
+      />
+
+      <Stack.Screen
         name="checkout"
         options={{
           animation: "slide_from_right",

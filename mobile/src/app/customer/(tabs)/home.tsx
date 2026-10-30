@@ -1,5 +1,26 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  getPublicCars,
+} from "../../../services/carApi";
+
+import {
+  getCustomerBookings,
+} from "../../../services/customerApi";
+
+import CarFilterModal, {
+  CarFilters,
+  DEFAULT_CAR_FILTERS,
+} from "../../../components/CarFilterModal";
+
 import {
   Image,
   Pressable,
@@ -11,29 +32,319 @@ import {
   View,
 } from "react-native";
 
-const cars = [
-  {
-    id: 1,
-    name: "Toyota Corolla",
-    type: "Sedan",
-    transmission: "Automatic",
-    price: 220,
-    image:
-      "https://images.unsplash.com/photo-1626072778346-0ab6604d659f?auto=format&fit=crop&w=800&q=80",
-  },
-  {
-    id: 2,
-    name: "Honda CR-V",
-    type: "SUV",
-    transmission: "Automatic",
-    price: 280,
-    image:
-      "https://images.unsplash.com/photo-1553440569-bcc63803a83d?auto=format&fit=crop&w=800&q=80",
-  },
-];
-
 export default function CustomerHome() {
   const router = useRouter();
+
+  const [cars, setCars] = useState<any[]>([]);
+  const [loadingCars, setLoadingCars] =
+    useState(true);
+
+  const [filters, setFilters] =
+    useState<CarFilters>(
+      DEFAULT_CAR_FILTERS
+    );
+
+  const [filterVisible, setFilterVisible] =
+    useState(false);
+
+  const [searchText, setSearchText] =
+    useState("");
+
+  const [latestBooking, setLatestBooking] =
+    useState<any | null>(null);
+
+  const [loadingBooking, setLoadingBooking] =
+    useState(true);
+
+    useEffect(() => {
+    const loadCars = async () => {
+      try {
+        setLoadingCars(true);
+
+        const data = await getPublicCars();
+
+        setCars(
+          Array.isArray(data?.items)
+            ? data.items
+            : []
+        );
+      } catch (error) {
+        console.log(
+          "Failed to load cars:",
+          error
+        );
+
+        setCars([]);
+      } finally {
+        setLoadingCars(false);
+      }
+    };
+
+    loadCars();
+  }, []);
+
+  useEffect(() => {
+    const loadLatestBooking = async () => {
+      try {
+        setLoadingBooking(true);
+
+        const data =
+          await getCustomerBookings();
+
+        if (
+          Array.isArray(data) &&
+          data.length > 0
+        ) {
+          setLatestBooking(data[0]);
+        } else {
+          setLatestBooking(null);
+        }
+      } catch (error) {
+        console.log(
+          "Failed to load latest booking:",
+          error
+        );
+
+        setLatestBooking(null);
+      } finally {
+        setLoadingBooking(false);
+      }
+    };
+
+    loadLatestBooking();
+  }, []);
+
+  function formatBookingDate(
+    value?: string
+  ) {
+    if (!value) return "-";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "-";
+    }
+
+    return date.toLocaleDateString(
+      "en-MY",
+      {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }
+    );
+  }
+
+  const VEHICLE_TYPES = [
+  "All",
+  "Compact",
+  "Sedan",
+  "SUV",
+  "MPV",
+  "Pickup",
+];
+
+  const filteredCars = useMemo(() => {
+    const search =
+      searchText.trim().toLowerCase();
+
+    let result = cars.filter((car) => {
+      const carName =
+        car.name ||
+        `${car.vehicleMake || ""} ${
+          car.vehicleModel || ""
+        }`;
+
+      const searchMatch =
+        !search ||
+        carName
+          .toLowerCase()
+          .includes(search) ||
+        car.vehicleMake
+          ?.toLowerCase()
+          .includes(search) ||
+        car.vehicleModel
+          ?.toLowerCase()
+          .includes(search);
+
+      if (!searchMatch) return false;
+
+      if (
+        filters.vehicleTypes.length &&
+        !filters.vehicleTypes.includes(
+          car.vehicleType
+        )
+      ) {
+        return false;
+      }
+
+      if (filters.seats.length) {
+        const minimumSeats = Math.min(
+          ...filters.seats.map(Number)
+        );
+
+        if (
+          Number(car.seats || 0) <
+          minimumSeats
+        ) {
+          return false;
+        }
+      }
+
+      if (
+        filters.transmissions.length &&
+        !filters.transmissions.includes(
+          car.transmission
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        filters.fuels.length &&
+        !filters.fuels.includes(
+          car.fuelType
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        filters.drives.length &&
+        !filters.drives.includes(
+          car.driveType
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        filters.brands.length &&
+        !filters.brands.includes(
+          car.vehicleMake
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        filters.operators.length &&
+        !filters.operators.includes(
+          String(car.operator?.id)
+        )
+      ) {
+        return false;
+      }
+
+      if (filters.refunds.length) {
+        const refundType =
+          car.booking?.refundRule
+            ?.type === "PARTIAL"
+            ? "partial"
+            : "none";
+
+        if (
+          !filters.refunds.includes(
+            refundType
+          )
+        ) {
+          return false;
+        }
+      }
+
+      const dailyRate =
+        Number(
+          car.booking?.dailyRateSen || 0
+        ) / 100;
+
+      if (
+        filters.priceMin &&
+        dailyRate <
+          Number(filters.priceMin)
+      ) {
+        return false;
+      }
+
+      if (
+        filters.priceMax &&
+        dailyRate >
+          Number(filters.priceMax)
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    result = [...result];
+
+    switch (filters.sort) {
+      case "daily":
+        result.sort(
+          (a, b) =>
+            Number(
+              a.booking?.dailyRateSen || 0
+            ) -
+            Number(
+              b.booking?.dailyRateSen || 0
+            )
+        );
+        break;
+
+      case "payable":
+        result.sort((a, b) => {
+          const aDeposit =
+            Number(
+              a.booking?.dailyRateSen || 0
+            ) *
+            Number(
+              a.booking
+                ?.downPaymentPct || 0
+            );
+
+          const bDeposit =
+            Number(
+              b.booking?.dailyRateSen || 0
+            ) *
+            Number(
+              b.booking
+                ?.downPaymentPct || 0
+            );
+
+          return aDeposit - bDeposit;
+        });
+        break;
+
+      case "seats":
+        result.sort(
+          (a, b) =>
+            Number(a.seats || 0) -
+            Number(b.seats || 0)
+        );
+        break;
+
+      case "recent":
+        result.sort(
+          (a, b) =>
+            new Date(
+              b.createdAt
+            ).getTime() -
+            new Date(
+              a.createdAt
+            ).getTime()
+        );
+        break;
+
+      default:
+        break;
+    }
+
+    return result;
+  }, [
+    cars,
+    searchText,
+    filters,
+  ]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -53,10 +364,30 @@ export default function CustomerHome() {
             </Text>
           </View>
 
-          <Pressable style={styles.notificationButton}>
-            <Text style={styles.notificationIcon}>♢</Text>
-            <View style={styles.notificationDot} />
-          </Pressable>
+          <Pressable
+          style={({ pressed }) => [
+            styles.notificationButton,
+            pressed && {
+              opacity: 0.75,
+              transform: [
+                {
+                  scale: 0.95,
+                },
+              ],
+            },
+          ]}
+          onPress={() =>
+            router.push("/customer/notifications")
+          }
+        >
+          <Ionicons
+            name="notifications-outline"
+            size={23}
+            color="#17313C"
+          />
+
+          <View style={styles.notificationDot} />
+        </Pressable>
         </View>
 
         {/* Search */}
@@ -65,14 +396,40 @@ export default function CustomerHome() {
             <Text style={styles.searchIcon}>⌕</Text>
 
             <TextInput
-              placeholder="Search cars, location or type..."
-              placeholderTextColor="#90A0A8"
-              style={styles.searchInput}
-            />
+            placeholder="Search cars or brands..."
+            placeholderTextColor="#90A0A8"
+            style={styles.searchInput}
+            value={searchText}
+            onChangeText={setSearchText}
+          />
           </View>
 
-          <Pressable style={styles.filterButton}>
-            <Text style={styles.filterText}>☷</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.filterButton,
+              pressed && {
+                opacity: 0.75,
+              },
+            ]}
+            onPress={() =>
+              setFilterVisible(true)
+            }
+          >
+            <Ionicons
+              name="options-outline"
+              size={23}
+              color="#17313C"
+            />
+
+            {Object.values(filters).some(
+              (value) =>
+                Array.isArray(value)
+                  ? value.length > 0
+                  : Boolean(value) &&
+                    value !== "recommended"
+            ) && (
+              <View style={styles.filterDot} />
+            )}
           </Pressable>
         </View>
 
@@ -107,102 +464,357 @@ export default function CustomerHome() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categories}
         >
-          {["SUV", "Sedan", "Hatchback", "MPV", "Luxury"].map((category) => (
-            <Pressable key={category} style={styles.category}>
-              <View style={styles.categoryIcon}>
-                <Text style={styles.carEmoji}>🚗</Text>
-              </View>
+          {VEHICLE_TYPES.map((category) => {
+            const selected =
+              category === "All"
+                ? filters.vehicleTypes.length === 0
+                : filters.vehicleTypes.includes(category);
 
-              <Text style={styles.categoryText}>{category}</Text>
-            </Pressable>
-          ))}
+            return (
+              <Pressable
+                key={category}
+                style={[
+                  styles.category,
+                  selected && styles.categorySelected,
+                ]}
+                onPress={() => {
+                  setFilters((current) => ({
+                    ...current,
+                    vehicleTypes:
+                      category === "All"
+                        ? []
+                        : [category],
+                  }));
+                }}
+              >
+                <View
+                  style={[
+                    styles.categoryIcon,
+                    selected &&
+                      styles.categoryIconSelected,
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      category === "All"
+                        ? "apps-outline"
+                        : "car-sport-outline"
+                    }
+                    size={23}
+                    color={
+                      selected
+                        ? "#FFFFFF"
+                        : "#07869B"
+                    }
+                  />
+                </View>
+
+                <Text
+                  style={[
+                    styles.categoryText,
+                    selected &&
+                      styles.categoryTextSelected,
+                  ]}
+                >
+                  {category}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
+        
 
         {/* Featured Cars Header */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Featured Cars</Text>
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>
+        Featured Cars
+      </Text>
 
-          <Pressable>
-            <Text style={styles.seeAll}>See All</Text>
-          </Pressable>
-        </View>
+      <Pressable>
+        <Text style={styles.seeAll}>
+          See All
+        </Text>
+      </Pressable>
+    </View>
 
-        {/* Featured Cars */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carList}
-        >
-          {cars.map((car) => (
+    {/* Loading Cars */}
+    {loadingCars ? (
+      <View style={styles.loadingCars}>
+        <Text style={styles.loadingCarsText}>
+          Loading cars...
+        </Text>
+      </View>
+    ) : filteredCars.length === 0 ? (
+      <View style={styles.noCarsCard}>
+        <Ionicons
+          name="car-outline"
+          size={30}
+          color="#81939C"
+        />
+
+        <Text style={styles.noCarsTitle}>
+          No cars found
+        </Text>
+
+        <Text style={styles.noCarsText}>
+          Try changing your search or vehicle type.
+        </Text>
+      </View>
+    ) : (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.carList}
+      >
+        {filteredCars.map((car) => {
+          const imageUrl =
+            car.images?.[0]?.imageUrl;
+
+          const dailyRate =
+            Number(
+              car.booking?.dailyRateSen || 0
+            ) / 100;
+
+          return (
             <Pressable
               key={car.id}
               style={styles.carCard}
-              onPress={() => router.push("/customer/car-details")}
+              onPress={() =>
+                router.push({
+                  pathname:
+                    "/customer/car-details",
+                  params: {
+                    id: String(car.id),
+                  },
+                })
+              }
             >
-              <View style={styles.carImageWrapper}>
-                <Image
-                  source={{ uri: car.image }}
-                  style={styles.carImage}
-                />
+              <View
+                style={
+                  styles.carImageWrapper
+                }
+              >
+                {imageUrl ? (
+                  <Image
+                    source={{
+                      uri: imageUrl,
+                    }}
+                    style={styles.carImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View
+                    style={
+                      styles.carImagePlaceholder
+                    }
+                  >
+                    <Ionicons
+                      name="car-sport-outline"
+                      size={45}
+                      color="#91A5AD"
+                    />
+                  </View>
+                )}
 
-                <View style={styles.heartButton}>
-                  <Text style={styles.heart}>♡</Text>
-                </View>
+                <Pressable
+                  style={styles.heartButton}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                  }}
+                >
+                  <Ionicons
+                    name="heart-outline"
+                    size={20}
+                    color="#17313C"
+                  />
+                </Pressable>
               </View>
 
               <View style={styles.carInfo}>
-                <Text style={styles.carName}>{car.name}</Text>
+                <Text
+                  style={styles.carName}
+                  numberOfLines={1}
+                >
+                  {car.name ||
+                    `${car.vehicleMake || ""} ${
+                      car.vehicleModel || ""
+                    }`.trim()}
+                </Text>
 
-                <Text style={styles.carDetails}>
-                  {car.type} · {car.transmission}
+                <Text
+                  style={styles.carDetails}
+                >
+                  {car.vehicleType || "Car"}
+                  {" · "}
+                  {car.transmission ||
+                    "Transmission N/A"}
                 </Text>
 
                 <View style={styles.priceRow}>
-                  <Text style={styles.price}>RM {car.price}</Text>
-                  <Text style={styles.perDay}> / day</Text>
+                  <Text style={styles.price}>
+                    RM {dailyRate.toFixed(2)}
+                  </Text>
+
+                  <Text style={styles.perDay}>
+                    {" "}
+                    / day
+                  </Text>
                 </View>
               </View>
             </Pressable>
-          ))}
-        </ScrollView>
+          );
+        })}
+      </ScrollView>
+    )}
 
-        {/* My Booking Header */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>My Booking</Text>
+    {/* My Booking Header */}
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>
+        My Booking
+      </Text>
 
-          <Pressable>
-            <Text style={styles.seeAll}>View All</Text>
-          </Pressable>
+      <Pressable
+        onPress={() =>
+          router.push("/customer/bookings")
+        }
+      >
+        <Text style={styles.seeAll}>
+          View All
+        </Text>
+      </Pressable>
+    </View>
+
+    {loadingBooking ? (
+      <View style={styles.bookingLoadingCard}>
+        <Text style={styles.bookingLoadingText}>
+          Loading booking...
+        </Text>
+      </View>
+    ) : latestBooking ? (
+      <Pressable
+        style={({ pressed }) => [
+          styles.bookingCard,
+          pressed && {
+            opacity: 0.82,
+          },
+        ]}
+        onPress={() =>
+          router.push(
+            `/customer/booking/${latestBooking.id}`
+          )
+        }
+      >
+        <View style={styles.bookingImagePlaceholder}>
+          <Ionicons
+            name="car-sport-outline"
+            size={30}
+            color="#07869B"
+          />
         </View>
 
-        {/* Booking Card */}
-        <Pressable style={styles.bookingCard}>
-          <Image
-            source={{
-              uri: "https://images.unsplash.com/photo-1626072778346-0ab6604d659f?auto=format&fit=crop&w=600&q=80",
-            }}
-            style={styles.bookingImage}
-          />
+        <View style={styles.bookingInfo}>
+          <View style={styles.bookingTopRow}>
+            <View
+              style={[
+                styles.statusBadge,
 
-          <View style={styles.bookingInfo}>
-            <View style={styles.bookingTopRow}>
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusText}>Upcoming</Text>
-              </View>
+                latestBooking.status ===
+                  "PENDING" && {
+                  backgroundColor: "#FFF1CC",
+                },
 
-              <Text style={styles.bookingCode}>BNPL-1048</Text>
+                latestBooking.status ===
+                  "REJECTED" && {
+                  backgroundColor: "#FDE3E3",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+
+                  latestBooking.status ===
+                    "PENDING" && {
+                    color: "#A46A00",
+                  },
+
+                  latestBooking.status ===
+                    "REJECTED" && {
+                    color: "#C83E3E",
+                  },
+                ]}
+              >
+                {latestBooking.status
+                  ?.replaceAll("_", " ") ||
+                  "UNKNOWN"}
+              </Text>
             </View>
 
-            <Text style={styles.bookingCar}>Toyota Corolla</Text>
-
-            <Text style={styles.bookingDate}>
-              12 Mar 2026 – 15 Mar 2026
+            <Text style={styles.bookingCode}>
+              {latestBooking.bookingCode ||
+                `BNPL-${latestBooking.id}`}
             </Text>
           </View>
 
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
+          <Text
+            style={styles.bookingCar}
+            numberOfLines={1}
+          >
+            {latestBooking.serviceName ||
+              "Car Rental"}
+          </Text>
+
+          <Text style={styles.bookingDate}>
+            {formatBookingDate(
+              latestBooking.pickupDate
+            )}
+            {" – "}
+            {formatBookingDate(
+              latestBooking.returnDate
+            )}
+          </Text>
+        </View>
+
+        <Ionicons
+          name="chevron-forward"
+          size={22}
+          color="#7D919A"
+        />
+      </Pressable>
+    ) : (
+      <View style={styles.noBookingCard}>
+        <View style={styles.noBookingIcon}>
+          <Ionicons
+            name="calendar-outline"
+            size={28}
+            color="#07869B"
+          />
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <Text style={styles.noBookingTitle}>
+            No bookings yet
+          </Text>
+
+          <Text style={styles.noBookingText}>
+            Choose a car to start your first
+            booking.
+          </Text>
+        </View>
+      </View>
+    )}
       </ScrollView>
+      <CarFilterModal
+        visible={filterVisible}
+        cars={cars}
+        filters={filters}
+        onClose={() =>
+          setFilterVisible(false)
+        }
+        onApply={(nextFilters) =>
+          setFilters(nextFilters)
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -216,7 +828,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 18,
-    paddingBottom: 35,
+    paddingBottom: 130,
     width: "100%",
     maxWidth: 700,
     alignSelf: "center",
@@ -300,14 +912,15 @@ const styles = StyleSheet.create({
   },
 
   filterButton: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2EAED",
-    alignItems: "center",
-    justifyContent: "center",
+  width: 54,
+  height: 54,
+  borderRadius: 16,
+  backgroundColor: "#FFFFFF",
+  borderWidth: 1,
+  borderColor: "#E2EAED",
+  alignItems: "center",
+  justifyContent: "center",
+  position: "relative",
   },
 
   filterText: {
@@ -427,6 +1040,57 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingBottom: 25,
   },
+
+  loadingCars: {
+  minHeight: 150,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#FFFFFF",
+  borderRadius: 20,
+  marginBottom: 25,
+  borderWidth: 1,
+  borderColor: "#E8EEF0",
+},
+
+loadingCarsText: {
+  color: "#81939C",
+  fontSize: 12,
+  fontWeight: "700",
+},
+
+noCarsCard: {
+  minHeight: 150,
+  backgroundColor: "#FFFFFF",
+  borderRadius: 20,
+  borderWidth: 1,
+  borderColor: "#E8EEF0",
+  marginBottom: 25,
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 20,
+},
+
+noCarsTitle: {
+  color: "#17313C",
+  fontSize: 15,
+  fontWeight: "900",
+  marginTop: 9,
+},
+
+noCarsText: {
+  color: "#8798A1",
+  fontSize: 11,
+  marginTop: 5,
+  textAlign: "center",
+},
+
+carImagePlaceholder: {
+  width: "100%",
+  height: "100%",
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#EDF3F4",
+},
 
   carCard: {
     width: 210,
@@ -563,4 +1227,86 @@ const styles = StyleSheet.create({
     color: "#7D919A",
     fontSize: 28,
   },
+
+  categorySelected: {
+  opacity: 1,
+},
+
+categoryIconSelected: {
+  backgroundColor: "#07869B",
+},
+
+categoryTextSelected: {
+  color: "#07869B",
+  fontWeight: "900",
+},
+
+bookingLoadingCard: {
+  height: 90,
+  backgroundColor: "#FFFFFF",
+  borderRadius: 20,
+  borderWidth: 1,
+  borderColor: "#E4EBEE",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+bookingLoadingText: {
+  color: "#84969E",
+  fontSize: 12,
+  fontWeight: "700",
+},
+
+bookingImagePlaceholder: {
+  width: 82,
+  height: 68,
+  borderRadius: 14,
+  backgroundColor: "#E5F7F9",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+noBookingCard: {
+  backgroundColor: "#FFFFFF",
+  borderWidth: 1,
+  borderColor: "#E4EBEE",
+  borderRadius: 20,
+  padding: 16,
+
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 13,
+},
+
+noBookingIcon: {
+  width: 52,
+  height: 52,
+  borderRadius: 16,
+  backgroundColor: "#E6F7F9",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+noBookingTitle: {
+  color: "#17313C",
+  fontSize: 14,
+  fontWeight: "900",
+},
+
+noBookingText: {
+  color: "#8798A1",
+  fontSize: 11,
+  marginTop: 4,
+},
+
+filterDot: {
+  width: 8,
+  height: 8,
+  borderRadius: 8,
+  backgroundColor: "#07869B",
+  position: "absolute",
+  right: 9,
+  top: 8,
+},
+
 });
