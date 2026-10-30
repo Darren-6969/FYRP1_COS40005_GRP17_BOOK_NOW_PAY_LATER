@@ -5,6 +5,7 @@
 
 import { Prisma } from "@prisma/client";
 import prisma from "../config/db.js";
+import { deletePublicFile } from "./media_storage.js";
 import { BALANCE_DUE_HOURS_BEFORE_PICKUP, DEPOSIT_WINDOW_HOURS, klPlainDate } from "./car_pricing_service.js";
 import { horizonAvailability } from "./car_availability_service.js";
 import { LISTING_INCLUDE, PUBLIC_LISTING_WHERE, loadOperatorFacts, refundRuleFor, toCarDto } from "./public_car_service.js";
@@ -280,6 +281,11 @@ export async function listFeaturedOperators({ city, limit = 6 } = {}) {
 
 // ── Operator-side editing ────────────────────────────────────────────
 
+// Storage key prefix of covers uploaded through POST /uploads/operator-cover.
+export function coverKeyPrefix(operatorId) {
+  return `operator-covers/op-${operatorId}-`;
+}
+
 export async function getOwnStorefront(operatorId) {
   const operator = await prisma.operator.findUnique({
     where: { id: operatorId },
@@ -288,12 +294,13 @@ export async function getOwnStorefront(operatorId) {
       slug: true,
       companyName: true,
       about: true,
+      logoUrl: true,
       coverImageUrl: true,
       establishedYear: true,
       languages: true,
       branches: {
         orderBy: { id: "asc" },
-        select: { id: true, name: true, phone: true, openTime: true, closeTime: true, weeklyHours: true, isActive: true },
+        select: { id: true, name: true, city: true, phone: true, openTime: true, closeTime: true, weeklyHours: true, isActive: true },
       },
     },
   });
@@ -326,9 +333,14 @@ export async function updateOwnStorefront(operatorId, body) {
     if (about && about.length > 2000) throw fail(400, "ABOUT_TOO_LONG", "Keep the description under 2,000 characters");
     data.about = about;
   }
+  let replacedCoverUrl = null;
   if (body.coverImageUrl !== undefined) {
     const url = body.coverImageUrl ? String(body.coverImageUrl).trim() : null;
-    if (url && !/^https:\/\//i.test(url)) throw fail(400, "COVER_INVALID", "The cover image must be an https link");
+    // Local development serves media over http, so only production insists on https.
+    const linkRule = process.env.NODE_ENV === "production" ? /^https:\/\//i : /^https?:\/\//i;
+    if (url && !linkRule.test(url)) throw fail(400, "COVER_INVALID", "The cover image must be an https link");
+    const current = await prisma.operator.findUnique({ where: { id: operatorId }, select: { coverImageUrl: true } });
+    if (current?.coverImageUrl && current.coverImageUrl !== url) replacedCoverUrl = current.coverImageUrl;
     data.coverImageUrl = url;
   }
   if (body.establishedYear !== undefined) {
@@ -357,5 +369,8 @@ export async function updateOwnStorefront(operatorId, body) {
   });
 
   await prisma.$transaction([prisma.operator.update({ where: { id: operatorId }, data }), ...branchWrites]);
+  // The old cover goes only after the new one is saved; a failed delete leaves
+  // an orphan file, never a page pointing at a missing photo.
+  if (replacedCoverUrl) await deletePublicFile(replacedCoverUrl, { onlyUnder: coverKeyPrefix(operatorId) });
   return getOwnStorefront(operatorId);
 }
