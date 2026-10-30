@@ -6043,3 +6043,42 @@
   gap: 20px;
   margin-top: 16px;
 }
+/* =========================
+   Operator sidebar groups
+   The links sit in labelled groups (Rentals, Your business, Money,
+   Insights, Account). Each group keeps .operator-nav-list, so the
+   existing tablet and phone column rules still apply inside a group.
+========================= */
+
+.operator-nav-groups {
+  display: grid;
+  gap: 16px;
+}
+
+.operator-nav-group {
+  display: grid;
+  gap: 6px;
+}
+
+.operator-nav-group-label {
+  padding: 0 15px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.operator-nav-group .operator-nav-list {
+  gap: 4px;
+}
+
+.operator-nav-group .operator-nav-link {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.operator-nav-group .operator-nav-icon {
+  width: 30px;
+  height: 30px;
+}
