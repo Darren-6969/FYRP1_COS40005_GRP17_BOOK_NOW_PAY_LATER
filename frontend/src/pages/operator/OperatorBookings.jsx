@@ -14,6 +14,7 @@ import {
 
 const tabs = [
   { label: "Pending", value: "PENDING" },
+  { label: "Awaiting Payment", value: "AWAITING_PAYMENT" },
   { label: "Upcoming", value: "UPCOMING" },
   { label: "In Progress", value: "IN_PROGRESS" },
   { label: "Completed", value: "COMPLETED" },
@@ -24,6 +25,12 @@ const tabs = [
 const CONFIRMED_STATUSES = new Set([
   "PAID",
 ]);
+
+// Deposit (or the whole amount) is in.
+const DEPOSIT_IN = new Set(["PARTIALLY_PAID", "FINAL_PAYMENT_PENDING_VERIFICATION", "PAID"]);
+
+// Accepted but not handed over yet.
+const BEFORE_HANDOVER = new Set(["PENDING_PAYMENT", "CONFIRMED", "PAID", "READY_FOR_PICKUP"]);
 
 export default function OperatorBookings() {
   const [searchParams] = useSearchParams();
@@ -133,14 +140,6 @@ setBookings(res.data.bookings || []);
     };
 
   const filteredBookings = useMemo(() => {
-  const now = new Date();
-
-  const today = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate()
-  );
-
   return bookings
     .filter((booking) => {
       const status = String(
@@ -179,48 +178,26 @@ setBookings(res.data.bookings || []);
         return status === "OVERDUE";
       }
 
-      const paymentStatus = String(
-        booking.payment?.status || ""
-      ).toUpperCase();
+      const paymentStatus = String(booking.payment?.status || "").toUpperCase();
 
-      if (paymentStatus !== "PAID") {
-        return false;
+      // Accepted, deposit not in yet (unpaid, or a receipt waiting for verification).
+      if (activeStatus === "AWAITING_PAYMENT") {
+        return status === "PENDING_PAYMENT" && !DEPOSIT_IN.has(paymentStatus);
       }
 
-      // =========================
-      // IN PROGRESS
-      // =========================
+      // Car handed over and not yet returned.
       if (activeStatus === "IN_PROGRESS") {
         return status === "IN_PROGRESS";
       }
 
-      // =========================
-      // UPCOMING
-      // =========================
+      // Deposit or full payment in, car not handed over yet.
       if (activeStatus === "UPCOMING") {
-        const upcomingStatuses = [
-          "PAID",
-          "READY_FOR_PICKUP",
-        ];
-
-        if (!upcomingStatuses.includes(status)) {
-          return false;
-        }
-
-        if (
-          !pickupDate ||
-          Number.isNaN(pickupDate.getTime())
-        ) {
-          return false;
-        }
-
-        const pickupDay = new Date(
-          pickupDate.getFullYear(),
-          pickupDate.getMonth(),
-          pickupDate.getDate()
+        return (
+          BEFORE_HANDOVER.has(status) &&
+          DEPOSIT_IN.has(paymentStatus) &&
+          Boolean(pickupDate) &&
+          !Number.isNaN(pickupDate.getTime())
         );
-
-        return pickupDay >= today;
       }
 
       return false;
@@ -292,11 +269,8 @@ setBookings(res.data.bookings || []);
               (1000 * 60 * 60 * 24)
           );
 
-        // Today - 2 days
-        if (
-          daysUntilPickup >= 0 &&
-          daysUntilPickup <= 2
-        ) {
+        // Missed pickups, today, tomorrow, the day after
+        if (daysUntilPickup <= 2) {
           groups.handoverSoon.push(
             booking
           );
@@ -389,6 +363,10 @@ setBookings(res.data.bookings || []);
         (1000 * 60 * 60 * 24)
     );
 
+  if (daysUntilPickup < 0) {
+    return "Pickup missed";
+  }
+
   if (daysUntilPickup === 0) {
     return "Today";
   }
@@ -404,6 +382,22 @@ setBookings(res.data.bookings || []);
   return formatOperatorDateTime(
     booking.pickupDate
   );
+};
+
+const getPaymentBadge = (booking) => {
+  const payment = booking.payment || {};
+  const status = String(payment.status || "").toUpperCase();
+
+  if (status === "PAID") {
+    return { tone: "success", text: "✓ Fully Paid" };
+  }
+  if (status === "FINAL_PAYMENT_PENDING_VERIFICATION") {
+    return { tone: "info", text: "Balance receipt to verify" };
+  }
+  return {
+    tone: "warning",
+    text: `Deposit paid, ${formatOperatorMoney(payment.finalPaymentAmount)} due`,
+  };
 };
 
 
@@ -505,8 +499,8 @@ const renderUpcomingTable = (
                 </td>
 
                 <td>
-                  <span className="operator-status success">
-                    ✓ Fully Paid
+                  <span className={`operator-status ${getPaymentBadge(booking).tone}`}>
+                    {getPaymentBadge(booking).text}
                   </span>
                 </td>
 
@@ -703,8 +697,8 @@ const renderUpcomingTable = (
             <h3>Handover Soon</h3>
 
             <p>
-              Fully paid bookings requiring
-              handover within the next 2 days.
+              Paid or deposit-paid bookings due for
+              handover within 2 days, and missed pickups.
             </p>
           </div>
         </div>
@@ -805,7 +799,7 @@ const renderUpcomingTable = (
             <h3>Later Upcoming</h3>
 
             <p>
-              Fully paid bookings more
+              Paid or deposit-paid bookings more
               than 7 days away.
             </p>
           </div>
