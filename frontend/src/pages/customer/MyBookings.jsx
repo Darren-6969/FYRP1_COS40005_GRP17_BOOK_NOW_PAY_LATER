@@ -171,8 +171,6 @@ function getPaymentActionLabel(booking) {
 }
 
 function BookingCard({ booking }) {
-
-  console.log("MY BOOKINGS COMPONENT IS RUNNING", booking.bookingCode);
   const action = getPrimaryAction(booking);
 
   return (
