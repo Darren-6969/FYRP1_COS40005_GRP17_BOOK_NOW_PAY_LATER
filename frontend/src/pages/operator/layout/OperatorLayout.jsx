@@ -281,7 +281,7 @@ export default function OperatorLayout() {
                               {item.message || "Booking update received."}
                             </small>
                           </span>
-                        </Link>
+                        </button>
                       ))}
                     </div>
                   )}
