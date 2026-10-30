@@ -6381,3 +6381,14 @@
 
   color: #0f172a;
 }
+
+.operator-table .operator-primary-btn {
+  color: #ffffff !important;
+  text-decoration: none;
+}
+
+.operator-table .operator-primary-btn:visited,
+.operator-table .operator-primary-btn:hover,
+.operator-table .operator-primary-btn:active {
+  color: #ffffff !important;
+}

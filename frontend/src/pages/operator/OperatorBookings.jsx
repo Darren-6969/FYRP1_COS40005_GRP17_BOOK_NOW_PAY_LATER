@@ -191,6 +191,7 @@ setBookings(res.data.bookings || []);
     const activeBookingStatuses = [
       "PAID",
       "READY_FOR_PICKUP",
+      "IN_PROGRESS",
     ];
 
     if (
