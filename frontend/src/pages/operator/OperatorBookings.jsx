@@ -350,6 +350,186 @@ setBookings(res.data.bookings || []);
     setCurrentPage(page);
   };
 
+  const getHandoverLabel = (booking) => {
+  if (!booking.pickupDate) {
+    return "-";
+  }
+
+  const pickupDate =
+    new Date(booking.pickupDate);
+
+  if (
+    Number.isNaN(
+      pickupDate.getTime()
+    )
+  ) {
+    return "-";
+  }
+
+  const now = new Date();
+
+  const today = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+
+  const pickupDay = new Date(
+    pickupDate.getFullYear(),
+    pickupDate.getMonth(),
+    pickupDate.getDate()
+  );
+
+  const differenceInMs =
+    pickupDay.getTime() -
+    today.getTime();
+
+  const daysUntilPickup =
+    Math.round(
+      differenceInMs /
+        (1000 * 60 * 60 * 24)
+    );
+
+  if (daysUntilPickup === 0) {
+    return "Today";
+  }
+
+  if (daysUntilPickup === 1) {
+    return "Tomorrow";
+  }
+
+  if (daysUntilPickup === 2) {
+    return "In 2 Days";
+  }
+
+  return formatOperatorDateTime(
+    booking.pickupDate
+  );
+};
+
+
+const renderUpcomingTable = (
+  bookingList
+) => {
+  if (!bookingList.length) {
+    return (
+      <div className="operator-empty-state">
+        No bookings in this section.
+      </div>
+    );
+  }
+
+  return (
+    <div className="operator-table-wrap operator-booking-table-wrap">
+      <table className="operator-table operator-booking-table">
+        <thead>
+          <tr>
+            <th>Booking ID</th>
+            <th>Customer</th>
+            <th>Vehicle</th>
+            <th>Handover</th>
+            <th>Return</th>
+            <th>Amount</th>
+            <th>Payment</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {bookingList.map(
+            (booking) => (
+              <tr key={booking.id}>
+                <td>
+                  <Link
+                    to={`/operator/bookings/${booking.id}`}
+                  >
+                    {booking.bookingCode ||
+                      `BNPL-${String(
+                        booking.id
+                      ).padStart(
+                        4,
+                        "0"
+                      )}`}
+                  </Link>
+                </td>
+
+                <td>
+                  <strong>
+                    {booking.customer?.name ||
+                      "-"}
+                  </strong>
+
+                  <small>
+                    {booking.customer?.email ||
+                      "-"}
+                  </small>
+                </td>
+
+                <td>
+                  <strong>
+                    {booking.serviceName ||
+                      "-"}
+                  </strong>
+
+                  <small>
+                    {booking.serviceType ||
+                      "-"}
+                  </small>
+                </td>
+
+                <td>
+                  <div className="operator-handover-cell">
+                    <strong>
+                      {getHandoverLabel(
+                        booking
+                      )}
+                    </strong>
+
+                    <small>
+                      {formatOperatorDateTime(
+                        booking.pickupDate
+                      )}
+                    </small>
+                  </div>
+                </td>
+
+                <td>
+                  {formatOperatorDateTime(
+                    booking.returnDate
+                  )}
+                </td>
+
+                <td>
+                  {formatOperatorMoney(
+                    booking.totalAmount
+                  )}
+                </td>
+
+                <td>
+                  <span className="operator-status success">
+                    ✓ Fully Paid
+                  </span>
+                </td>
+
+                <td>
+                  <div className="operator-table-actions">
+                    <Link
+                      to={`/operator/bookings/${booking.id}`}
+                      title="View Booking"
+                    >
+                      👁
+                    </Link>
+                  </div>
+                </td>
+              </tr>
+            )
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
   const getPageNumbers = () => {
     const pages = [];
 
@@ -458,6 +638,154 @@ setBookings(res.data.bookings || []);
           </div>
         ) : (
           <>
+          
+          <>
+  {activeStatus === "UPCOMING" ? (
+    <div className="operator-upcoming-dashboard">
+
+      <div className="operator-upcoming-summary">
+
+        <div className="operator-upcoming-stat">
+          <span>Total Upcoming</span>
+          <strong>
+            {filteredBookings.length}
+          </strong>
+        </div>
+
+        <div className="operator-upcoming-stat">
+          <span>Handover Soon</span>
+          <strong>
+            {upcomingGroups.handoverSoon.length}
+          </strong>
+          <small>
+            Within 2 days
+          </small>
+        </div>
+
+        <div className="operator-upcoming-stat">
+          <span>This Week</span>
+          <strong>
+            {upcomingGroups.thisWeek.length}
+          </strong>
+          <small>
+            Within 3–7 days
+          </small>
+        </div>
+
+        <div className="operator-upcoming-stat">
+          <span>Later</span>
+          <strong>
+            {upcomingGroups.later.length}
+          </strong>
+          <small>
+            More than 7 days
+          </small>
+        </div>
+
+      </div>
+
+
+      <section className="operator-upcoming-section urgent">
+
+        <div className="operator-upcoming-section-head">
+          <div>
+            <h3>
+              Handover Soon
+            </h3>
+
+            <p>
+              Fully paid bookings requiring handover
+              within the next 2 days.
+            </p>
+          </div>
+
+          <span className="operator-upcoming-count">
+            {upcomingGroups.handoverSoon.length}
+          </span>
+        </div>
+
+        {renderUpcomingTable(
+          upcomingGroups.handoverSoon
+        )}
+
+      </section>
+
+
+      <section className="operator-upcoming-section">
+
+        <div className="operator-upcoming-section-head">
+          <div>
+            <h3>
+              This Week
+            </h3>
+
+            <p>
+              Upcoming handovers within
+              the next 3–7 days.
+            </p>
+          </div>
+
+          <span className="operator-upcoming-count">
+            {upcomingGroups.thisWeek.length}
+          </span>
+        </div>
+
+        {renderUpcomingTable(
+          upcomingGroups.thisWeek
+        )}
+
+      </section>
+
+
+      <section className="operator-upcoming-section">
+
+        <button
+          type="button"
+          className="operator-later-toggle"
+          onClick={() =>
+            setShowLaterUpcoming(
+              (current) => !current
+            )
+          }
+        >
+          <div>
+            <strong>
+              Later Upcoming
+            </strong>
+
+            <span>
+              Fully paid bookings more than
+              7 days away.
+            </span>
+          </div>
+
+          <div className="operator-later-toggle-right">
+
+            <span className="operator-upcoming-count">
+              {upcomingGroups.later.length}
+            </span>
+
+            <span>
+              {showLaterUpcoming
+                ? "▲"
+                : "▼"}
+            </span>
+
+          </div>
+        </button>
+
+        {showLaterUpcoming &&
+          renderUpcomingTable(
+            upcomingGroups.later
+          )}
+
+      </section>
+
+    </div>
+  ) : (
+    <>
+          
+
             <div className="operator-table-wrap operator-booking-table-wrap">
               <table className="operator-table operator-booking-table">
                 <thead>
@@ -614,6 +942,8 @@ setBookings(res.data.bookings || []);
                 </tbody>
               </table>
             </div>
+            </>
+            )}
 
             {filteredBookings.length > 0 && (
               <div className="operator-pagination">
