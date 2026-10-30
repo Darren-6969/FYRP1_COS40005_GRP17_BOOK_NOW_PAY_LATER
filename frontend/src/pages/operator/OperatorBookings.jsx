@@ -42,21 +42,35 @@ export default function OperatorBookings() {
   const [currentPage, setCurrentPage] = useState(1);
 
   const [
+  showHandoverSoon,
+  setShowHandoverSoon,
+  ] = useState(true);
+
+  const [
+    showThisWeek,
+    setShowThisWeek,
+  ] = useState(true);
+
+  const [
     showLaterUpcoming,
     setShowLaterUpcoming,
   ] = useState(false);
   
   useEffect(() => {
-  if (
-    statusParam &&
-    tabs.some(
-      (tab) =>
-        tab.value === statusParam
-    )
-  ) {
-    setActiveStatus(statusParam);
-    setCurrentPage(1);
-  }
+    if (
+      statusParam &&
+      tabs.some(
+        (tab) =>
+          tab.value === statusParam
+      )
+    ) {
+      setActiveStatus(statusParam);
+      setCurrentPage(1);
+
+      if (statusParam !== "UPCOMING") {
+        setShowLaterUpcoming(false);
+      }
+    }
   }, [statusParam]);
 
   const rowsPerPage = 10;
@@ -686,99 +700,155 @@ const renderUpcomingTable = (
 
       <section className="operator-upcoming-section urgent">
 
-        <div className="operator-upcoming-section-head">
-          <div>
-            <h3>
-              Handover Soon
-            </h3>
-
-            <p>
-              Fully paid bookings requiring handover
-              within the next 2 days.
-            </p>
+      <button
+        type="button"
+        className="operator-upcoming-section-toggle"
+        onClick={() =>
+          setShowHandoverSoon(
+            (current) => !current
+          )
+        }
+      >
+        <div className="operator-upcoming-section-title">
+          <div className="operator-upcoming-section-icon">
+            !
           </div>
 
-          <span className="operator-upcoming-count">
-            {upcomingGroups.handoverSoon.length}
-          </span>
+          <div>
+            <h3>Handover Soon</h3>
+
+            <p>
+              Fully paid bookings requiring
+              handover within the next 2 days.
+            </p>
+          </div>
         </div>
 
-        {renderUpcomingTable(
+        <div className="operator-upcoming-section-actions">
+          <span className="operator-upcoming-count">
+            {
+              upcomingGroups
+                .handoverSoon
+                .length
+            }
+          </span>
+
+          <span className="operator-upcoming-chevron">
+            {showHandoverSoon
+              ? "▲"
+              : "▼"}
+          </span>
+        </div>
+      </button>
+
+      {showHandoverSoon &&
+        renderUpcomingTable(
           upcomingGroups.handoverSoon
         )}
 
-      </section>
+    </section>
 
 
       <section className="operator-upcoming-section">
 
-        <div className="operator-upcoming-section-head">
+      <button
+        type="button"
+        className="operator-upcoming-section-toggle"
+        onClick={() =>
+          setShowThisWeek(
+            (current) => !current
+          )
+        }
+      >
+        <div className="operator-upcoming-section-title">
+          <div className="operator-upcoming-section-icon">
+            7
+          </div>
+
           <div>
-            <h3>
-              This Week
-            </h3>
+            <h3>This Week</h3>
 
             <p>
               Upcoming handovers within
               the next 3–7 days.
             </p>
           </div>
-
-          <span className="operator-upcoming-count">
-            {upcomingGroups.thisWeek.length}
-          </span>
         </div>
 
-        {renderUpcomingTable(
+        <div className="operator-upcoming-section-actions">
+          <span className="operator-upcoming-count">
+            {
+              upcomingGroups
+                .thisWeek
+                .length
+            }
+          </span>
+
+          <span className="operator-upcoming-chevron">
+            {showThisWeek
+              ? "▲"
+              : "▼"}
+          </span>
+        </div>
+      </button>
+
+      {showThisWeek &&
+        renderUpcomingTable(
           upcomingGroups.thisWeek
         )}
 
-      </section>
+    </section>
 
 
       <section className="operator-upcoming-section">
 
-        <button
-          type="button"
-          className="operator-later-toggle"
-          onClick={() =>
-            setShowLaterUpcoming(
-              (current) => !current
-            )
-          }
-        >
+      <button
+        type="button"
+        className="operator-upcoming-section-toggle"
+        onClick={() =>
+          setShowLaterUpcoming(
+            (current) => !current
+          )
+        }
+      >
+        <div className="operator-upcoming-section-title">
+          <div className="operator-upcoming-section-icon">
+            +
+          </div>
+
           <div>
-            <strong>
-              Later Upcoming
-            </strong>
+            <h3>Later Upcoming</h3>
 
-            <span>
-              Fully paid bookings more than
-              7 days away.
-            </span>
+            <p>
+              Fully paid bookings more
+              than 7 days away.
+            </p>
           </div>
+        </div>
 
-          <div className="operator-later-toggle-right">
+        <div className="operator-upcoming-section-actions">
+          <span className="operator-upcoming-count">
+            {
+              upcomingGroups
+                .later
+                .length
+            }
+          </span>
 
-            <span className="operator-upcoming-count">
-              {upcomingGroups.later.length}
-            </span>
+          <span className="operator-upcoming-chevron">
+            {showLaterUpcoming
+              ? "▲"
+              : "▼"}
+          </span>
+        </div>
+      </button>
 
-            <span>
-              {showLaterUpcoming
-                ? "▲"
-                : "▼"}
-            </span>
+      {showLaterUpcoming &&
+        renderUpcomingTable(
+          upcomingGroups.later
+        )}
 
-          </div>
-        </button>
-
-        {showLaterUpcoming &&
-          renderUpcomingTable(
-            upcomingGroups.later
-          )}
-
-      </section>
+    </section>
 
     </div>
   ) : (
