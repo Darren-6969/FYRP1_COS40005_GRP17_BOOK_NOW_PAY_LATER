@@ -40,6 +40,11 @@ export default function OperatorBookings() {
   const [actionLoading, setActionLoading] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
+
+  const [
+    showLaterUpcoming,
+    setShowLaterUpcoming,
+  ] = useState(false);
   
   useEffect(() => {
   if (
@@ -64,8 +69,6 @@ export default function OperatorBookings() {
       const res = await operatorService.getBookings({
   q: search || undefined,
 });
-
-console.log("BOOKINGS FROM BACKEND:", res.data.bookings);
 
 setBookings(res.data.bookings || []);
       setCurrentPage(1);
@@ -194,31 +197,19 @@ setBookings(res.data.bookings || []);
     // =========================
     // UPCOMING
     // =========================
-   if (activeStatus === "UPCOMING") {
+      if (activeStatus === "UPCOMING") {
       const pickupDay = new Date(
         pickupDate.getFullYear(),
         pickupDate.getMonth(),
         pickupDate.getDate()
       );
 
-      const twoDaysLater = new Date(today);
-      twoDaysLater.setDate(
-        twoDaysLater.getDate() + 2
-      );
-
       /*
-      * Show paid bookings that need
-      * handover within the next 2 days.
-      *
-      * Includes:
-      * today
-      * tomorrow
-      * day after tomorrow
+      * All fully-paid bookings with
+      * pickup today or in the future
+      * belong to Upcoming.
       */
-      return (
-        pickupDay >= today &&
-        pickupDay <= twoDaysLater
-      );
+      return pickupDay >= today;
     }
 
     // =========================
@@ -236,8 +227,107 @@ setBookings(res.data.bookings || []);
     }
 
     return false;
-  });
-}, [bookings, activeStatus]);
+    }).sort((a, b) => {
+        if (activeStatus !== "UPCOMING") {
+          return 0;
+        }
+
+        const dateA =
+          new Date(a.pickupDate).getTime();
+
+        const dateB =
+          new Date(b.pickupDate).getTime();
+
+        return dateA - dateB;
+      });
+    }, [bookings, activeStatus]);
+
+    const upcomingGroups = useMemo(() => {
+    const groups = {
+      handoverSoon: [],
+      thisWeek: [],
+      later: [],
+    };
+
+    if (activeStatus !== "UPCOMING") {
+      return groups;
+    }
+
+    const now = new Date();
+
+    const today = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
+    filteredBookings.forEach((booking) => {
+      if (!booking.pickupDate) {
+        return;
+      }
+
+      const pickupDate =
+        new Date(booking.pickupDate);
+
+      if (
+        Number.isNaN(
+          pickupDate.getTime()
+        )
+      ) {
+        return;
+      }
+
+      const pickupDay = new Date(
+        pickupDate.getFullYear(),
+        pickupDate.getMonth(),
+        pickupDate.getDate()
+      );
+
+      const differenceInMs =
+        pickupDay.getTime() -
+        today.getTime();
+
+      const daysUntilPickup =
+        Math.floor(
+          differenceInMs /
+            (1000 * 60 * 60 * 24)
+        );
+
+      // Today, tomorrow, day after tomorrow
+      if (
+        daysUntilPickup >= 0 &&
+        daysUntilPickup <= 2
+      ) {
+        groups.handoverSoon.push(
+          booking
+        );
+        return;
+      }
+
+      // 3 - 7 days
+      if (
+        daysUntilPickup >= 3 &&
+        daysUntilPickup <= 7
+      ) {
+        groups.thisWeek.push(
+          booking
+        );
+        return;
+      }
+
+      // More than 7 days
+      if (daysUntilPickup > 7) {
+        groups.later.push(
+          booking
+        );
+      }
+    });
+
+    return groups;
+  }, [
+    filteredBookings,
+    activeStatus,
+  ]);
 
   const totalPages = Math.max(
     1,
