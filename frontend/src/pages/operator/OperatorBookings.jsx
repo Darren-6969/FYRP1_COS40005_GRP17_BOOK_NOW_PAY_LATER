@@ -637,7 +637,6 @@ const renderUpcomingTable = (
             Loading bookings...
           </div>
         ) : (
-          <>
           
           <>
   {activeStatus === "UPCOMING" ? (
