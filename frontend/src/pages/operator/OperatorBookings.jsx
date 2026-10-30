@@ -184,24 +184,14 @@ setBookings(res.data.bookings || []);
     }
 
     // Upcoming / in-progress bookings must be fully paid
-    const paymentStatus = String(
-      booking.payment?.status || ""
+   const paymentStatus = String(
+    booking.payment?.status || ""
     ).toUpperCase();
 
-    const activeBookingStatuses = [
-      "PAID",
-      "READY_FOR_PICKUP",
-      "IN_PROGRESS",
-    ];
-
-    if (
-      paymentStatus !== "PAID" ||
-      !activeBookingStatuses.includes(status)
-    ) {
+    if (paymentStatus !== "PAID") {
       return false;
     }
 
-    // Invalid pickup date
     if (
       !pickupDate ||
       Number.isNaN(pickupDate.getTime())
@@ -209,104 +199,30 @@ setBookings(res.data.bookings || []);
       return false;
     }
 
-    // =========================
-    // UPCOMING
-    // =========================
-      if (activeStatus === "UPCOMING") {
+    if (activeStatus === "UPCOMING") {
+      const upcomingStatuses = [
+        "PAID",
+        "READY_FOR_PICKUP",
+      ];
+
+      if (!upcomingStatuses.includes(status)) {
+        return false;
+      }
+
       const pickupDay = new Date(
         pickupDate.getFullYear(),
         pickupDate.getMonth(),
         pickupDate.getDate()
       );
 
-      /*
-      * All fully-paid bookings with
-      * pickup today or in the future
-      * belong to Upcoming.
-      */
       return pickupDay >= today;
     }
 
-    // =========================
-    // IN PROGRESS
-    // =========================
     if (activeStatus === "IN_PROGRESS") {
-      const hasStarted = pickupDate <= now;
-
-      const hasNotEnded =
-        !returnDate ||
-        Number.isNaN(returnDate.getTime()) ||
-        returnDate >= now;
-
-      return hasStarted && hasNotEnded;
+      return status === "IN_PROGRESS";
     }
 
     return false;
-    }).sort((a, b) => {
-        if (activeStatus !== "UPCOMING") {
-          return 0;
-        }
-
-        const dateA =
-          new Date(a.pickupDate).getTime();
-
-        const dateB =
-          new Date(b.pickupDate).getTime();
-
-        return dateA - dateB;
-      });
-    }, [bookings, activeStatus]);
-
-    const upcomingGroups = useMemo(() => {
-    const groups = {
-      handoverSoon: [],
-      thisWeek: [],
-      later: [],
-    };
-
-    if (activeStatus !== "UPCOMING") {
-      return groups;
-    }
-
-    const now = new Date();
-
-    const today = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    );
-
-    filteredBookings.forEach((booking) => {
-      if (!booking.pickupDate) {
-        return;
-      }
-
-      const pickupDate =
-        new Date(booking.pickupDate);
-
-      if (
-        Number.isNaN(
-          pickupDate.getTime()
-        )
-      ) {
-        return;
-      }
-
-      const pickupDay = new Date(
-        pickupDate.getFullYear(),
-        pickupDate.getMonth(),
-        pickupDate.getDate()
-      );
-
-      const differenceInMs =
-        pickupDay.getTime() -
-        today.getTime();
-
-      const daysUntilPickup =
-        Math.floor(
-          differenceInMs /
-            (1000 * 60 * 60 * 24)
-        );
 
       // Today, tomorrow, day after tomorrow
       if (
