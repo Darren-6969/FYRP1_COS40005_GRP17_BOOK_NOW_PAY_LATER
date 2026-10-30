@@ -135,130 +135,198 @@ setBookings(res.data.bookings || []);
   const filteredBookings = useMemo(() => {
   const now = new Date();
 
-  // Today's date at 00:00
   const today = new Date(
     now.getFullYear(),
     now.getMonth(),
     now.getDate()
   );
 
-  return bookings.filter((booking) => {
-    const status = String(
-      booking.status || ""
-    ).toUpperCase();
+  return bookings
+    .filter((booking) => {
+      const status = String(
+        booking.status || ""
+      ).toUpperCase();
 
-    const pickupDate = booking.pickupDate
-      ? new Date(booking.pickupDate)
-      : null;
+      const pickupDate = booking.pickupDate
+        ? new Date(booking.pickupDate)
+        : null;
 
-    const returnDate = booking.returnDate
-      ? new Date(booking.returnDate)
-      : null;
+      // =========================
+      // PENDING
+      // =========================
+      if (activeStatus === "PENDING") {
+        return status === "PENDING";
+      }
 
-    // =========================
-    // PENDING
-    // =========================
-    if (activeStatus === "PENDING") {
-      return status === "PENDING";
-    }
+      // =========================
+      // COMPLETED
+      // =========================
+      if (activeStatus === "COMPLETED") {
+        return status === "COMPLETED";
+      }
 
-    // =========================
-    // COMPLETED
-    // =========================
-    if (activeStatus === "COMPLETED") {
-      return status === "COMPLETED";
-    }
+      // =========================
+      // CANCELLED
+      // =========================
+      if (activeStatus === "CANCELLED") {
+        return status === "CANCELLED";
+      }
 
-    // =========================
-    // CANCELLED
-    // =========================
-    if (activeStatus === "CANCELLED") {
-      return status === "CANCELLED";
-    }
+      // =========================
+      // OVERDUE
+      // =========================
+      if (activeStatus === "OVERDUE") {
+        return status === "OVERDUE";
+      }
 
-    // =========================
-    // OVERDUE
-    // =========================
-    if (activeStatus === "OVERDUE") {
-      return status === "OVERDUE";
-    }
+      const paymentStatus = String(
+        booking.payment?.status || ""
+      ).toUpperCase();
 
-    // Upcoming / in-progress bookings must be fully paid
-   const paymentStatus = String(
-    booking.payment?.status || ""
-    ).toUpperCase();
-
-    if (paymentStatus !== "PAID") {
-      return false;
-    }
-
-    if (
-      !pickupDate ||
-      Number.isNaN(pickupDate.getTime())
-    ) {
-      return false;
-    }
-
-    if (activeStatus === "UPCOMING") {
-      const upcomingStatuses = [
-        "PAID",
-        "READY_FOR_PICKUP",
-      ];
-
-      if (!upcomingStatuses.includes(status)) {
+      if (paymentStatus !== "PAID") {
         return false;
       }
 
-      const pickupDay = new Date(
-        pickupDate.getFullYear(),
-        pickupDate.getMonth(),
-        pickupDate.getDate()
+      // =========================
+      // IN PROGRESS
+      // =========================
+      if (activeStatus === "IN_PROGRESS") {
+        return status === "IN_PROGRESS";
+      }
+
+      // =========================
+      // UPCOMING
+      // =========================
+      if (activeStatus === "UPCOMING") {
+        const upcomingStatuses = [
+          "PAID",
+          "READY_FOR_PICKUP",
+        ];
+
+        if (!upcomingStatuses.includes(status)) {
+          return false;
+        }
+
+        if (
+          !pickupDate ||
+          Number.isNaN(pickupDate.getTime())
+        ) {
+          return false;
+        }
+
+        const pickupDay = new Date(
+          pickupDate.getFullYear(),
+          pickupDate.getMonth(),
+          pickupDate.getDate()
+        );
+
+        return pickupDay >= today;
+      }
+
+      return false;
+    })
+    .sort((a, b) => {
+      if (activeStatus !== "UPCOMING") {
+        return 0;
+      }
+
+      const dateA =
+        new Date(a.pickupDate).getTime();
+
+      const dateB =
+        new Date(b.pickupDate).getTime();
+
+      return dateA - dateB;
+    });
+    }, [bookings, activeStatus]);
+
+
+    const upcomingGroups = useMemo(() => {
+      const groups = {
+        handoverSoon: [],
+        thisWeek: [],
+        later: [],
+      };
+
+      if (activeStatus !== "UPCOMING") {
+        return groups;
+      }
+
+      const now = new Date();
+
+      const today = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
       );
 
-      return pickupDay >= today;
-    }
+      filteredBookings.forEach((booking) => {
+        if (!booking.pickupDate) {
+          return;
+        }
 
-    if (activeStatus === "IN_PROGRESS") {
-      return status === "IN_PROGRESS";
-    }
+        const pickupDate =
+          new Date(booking.pickupDate);
 
-    return false;
+        if (
+          Number.isNaN(
+            pickupDate.getTime()
+          )
+        ) {
+          return;
+        }
 
-      // Today, tomorrow, day after tomorrow
-      if (
-        daysUntilPickup >= 0 &&
-        daysUntilPickup <= 2
-      ) {
-        groups.handoverSoon.push(
-          booking
+        const pickupDay = new Date(
+          pickupDate.getFullYear(),
+          pickupDate.getMonth(),
+          pickupDate.getDate()
         );
-        return;
-      }
 
-      // 3 - 7 days
-      if (
-        daysUntilPickup >= 3 &&
-        daysUntilPickup <= 7
-      ) {
-        groups.thisWeek.push(
-          booking
-        );
-        return;
-      }
+        const differenceInMs =
+          pickupDay.getTime() -
+          today.getTime();
 
-      // More than 7 days
-      if (daysUntilPickup > 7) {
-        groups.later.push(
-          booking
-        );
-      }
-    });
+        const daysUntilPickup =
+          Math.floor(
+            differenceInMs /
+              (1000 * 60 * 60 * 24)
+          );
 
-    return groups;
-  }, [
-    filteredBookings,
-    activeStatus,
-  ]);
+        // Today - 2 days
+        if (
+          daysUntilPickup >= 0 &&
+          daysUntilPickup <= 2
+        ) {
+          groups.handoverSoon.push(
+            booking
+          );
+          return;
+        }
+
+        // 3 - 7 days
+        if (
+          daysUntilPickup >= 3 &&
+          daysUntilPickup <= 7
+        ) {
+          groups.thisWeek.push(
+            booking
+          );
+          return;
+        }
+
+        // More than 7 days
+        if (daysUntilPickup > 7) {
+          groups.later.push(
+            booking
+          );
+        }
+      });
+
+      return groups;
+    }, [
+      filteredBookings,
+      activeStatus,
+    ]);
 
   const totalPages = Math.max(
     1,
