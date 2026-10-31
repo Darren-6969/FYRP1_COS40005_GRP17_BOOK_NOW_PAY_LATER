@@ -257,15 +257,20 @@ export default function OperatorLayout() {
                   {!loading && !error && recentNotifications.length > 0 && (
                     <div className="portal-dropdown-list">
                       {recentNotifications.map((item) => (
-                        <Link
-                          key={item.id}
-                          className={`portal-dropdown-item ${!item.isRead ? "unread" : ""}`}
-                          to={getNotificationLink(item)}
-                          onClick={() => {
-                            markRead(item.id);
-                            setOpenNotifications(false);
-                          }}
-                        >
+                        <button
+                        key={item.id}
+                        type="button"
+                        className={`portal-dropdown-item ${!item.isRead ? "unread" : ""}`}
+                        onClick={() => {
+                          const target =
+                            getNotificationLink(item);
+
+                          markRead(item.id);
+                          setOpenNotifications(false);
+
+                          window.location.assign(target);
+                        }}
+                      >
                           <span className="portal-dropdown-dot" />
 
                           <span>
@@ -276,7 +281,7 @@ export default function OperatorLayout() {
                               {item.message || "Booking update received."}
                             </small>
                           </span>
-                        </Link>
+                        </button>
                       ))}
                     </div>
                   )}

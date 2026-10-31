@@ -1,4 +1,5 @@
 import prisma from "../config/db.js";
+import { deletePublicFile } from "../services/media_storage.js";
 import { parseId } from "../utils/parseId.js";
 
 import {
@@ -1133,6 +1134,31 @@ export async function createListing(
  // =====================================================
  // Delete image controller
  // =====================================================
+
+// Car photos and operator logos (admin Operators page, and the invoice logo in
+// Operator Settings) are all stored under listing-images/.
+const LISTING_IMAGE_KEY_PREFIX = "listing-images/";
+
+// Remove a deleted photo's file once nothing points at it any more. The URL
+// came from the operator when the photo was added, so it may be another
+// operator's photo or a logo: while any listing photo, operator logo or
+// invoice logo still uses it, the file stays. Runs after the delete has committed, so a failure
+// here leaves an orphan file, never a photo row pointing at a missing file.
+async function removeImageFileIfUnused(imageUrl) {
+  if (!imageUrl) return;
+  try {
+    const uses = await Promise.all([
+      prisma.listingImage.count({ where: { imageUrl } }),
+      prisma.operator.count({ where: { logoUrl: imageUrl } }),
+      prisma.bNPLConfig.count({ where: { invoiceLogoUrl: imageUrl } }),
+    ]);
+    if (uses.some((count) => count > 0)) return;
+    await deletePublicFile(imageUrl, { onlyUnder: LISTING_IMAGE_KEY_PREFIX });
+  } catch (err) {
+    console.warn(JSON.stringify({ event: "listing_image_file_cleanup_failed", imageUrl, message: err?.message }));
+  }
+}
+
   export async function deleteListingImage(req, res, next) {
   try {
     const listingId = parseId(
@@ -1203,6 +1229,8 @@ export async function createListing(
         }
       }
     });
+
+    await removeImageFileIfUnused(image.imageUrl);
 
     const updatedListing =
       await prisma.listing.findFirst({

@@ -508,6 +508,27 @@ updateBranchPoint(
     );
   },
 
+  // Seller page (Module 6). Owner only.
+  getStorefront() {
+    return api.get("/operators/storefront");
+  },
+
+  // Send only the fields that changed: { slug, about, coverImageUrl,
+  // establishedYear, languages, branches: [{ id, phone, weeklyHours }] }.
+  updateStorefront(payload) {
+    return api.patch("/operators/storefront", payload);
+  },
+
+  uploadCoverImage(file, onUploadProgress) {
+    const formData = new FormData();
+    formData.append("image", file);
+
+    return api.post("/uploads/operator-cover", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress,
+    });
+  },
+
   uploadListingImage(file) {
     const formData =
       new FormData();

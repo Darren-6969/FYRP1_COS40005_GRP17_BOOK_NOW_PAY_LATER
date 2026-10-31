@@ -67,6 +67,7 @@ import OperatorAnalytics from "./pages/operator/OperatorAnalytics";
 import OperatorNotifications from "./pages/operator/OperatorNotifications";
 import OperatorSettlements from "./pages/operator/OperatorSettlements"; /* Operator Settlements for Stripe*/
 import OperatorSettings from "./pages/operator/OperatorSettings";
+import OperatorSellerPage from "./pages/operator/OperatorSellerPage";
 import OperatorHelp from "./pages/operator/OperatorHelp";
 import OperatorAccessRoute from "./components/OperatorAccessRoute";
 
@@ -239,6 +240,7 @@ export default function App() {
                 <Route path="analytics" element={<OperatorAnalytics />} />
                 <Route path="settlements" element={<OperatorSettlements />} />
                 <Route path="settings" element={<OperatorSettings />} />
+                <Route path="seller-page" element={<OperatorSellerPage />} />
               </Route>
 
               {/* An old or mistyped link lands on the dashboard, not a blank page */}

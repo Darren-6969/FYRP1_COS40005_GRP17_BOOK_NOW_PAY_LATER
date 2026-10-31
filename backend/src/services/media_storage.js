@@ -57,3 +57,46 @@ export async function savePublicFile(key, buffer, contentType) {
   });
   return { url: blob.url, pathname: blob.pathname };
 }
+
+/**
+ * Delete a public file by the URL savePublicFile returned. Best effort: a
+ * missing file, or a URL this storage did not issue (an old Blob link, an
+ * outside https image), is left alone and reported as false. Callers delete
+ * after their database write has committed, so a failure here leaves an
+ * orphan file, never a row pointing at a missing one.
+ * Pass onlyUnder (a key prefix such as "operator-covers/op-12-") whenever the
+ * URL came from a user, so a stored link to someone else's file can never be
+ * used to delete it.
+ * @param {string|null|undefined} url
+ * @param {{ onlyUnder?: string }} [options]
+ * @returns {Promise<boolean>} true when a file was removed
+ */
+export async function deletePublicFile(url, { onlyUnder } = {}) {
+  if (!url || typeof url !== "string") return false;
+
+  try {
+    if (mediaDriver() === "local") {
+      const prefix = `${MEDIA_PUBLIC_URL}/`;
+      if (!MEDIA_PUBLIC_URL || !url.startsWith(prefix)) return false;
+      const key = decodeURIComponent(url.slice(prefix.length).split(/[?#]/)[0]);
+      const fullPath = resolveMediaPath(key);
+      // Compare the normalised path, so "op-12-/../../other" cannot slip past.
+      const relative = path.relative(path.resolve(MEDIA_ROOT), fullPath).split(path.sep).join("/");
+      if (onlyUnder && !relative.startsWith(onlyUnder)) return false;
+      await fs.unlink(fullPath);
+      return true;
+    }
+
+    const blobMatch = url.match(/^https:\/\/[^/]+\.public\.blob\.vercel-storage\.com\/([^?#]+)/i);
+    if (!blobMatch) return false;
+    const blobKey = decodeURIComponent(blobMatch[1]);
+    if (onlyUnder && (blobKey.includes("..") || !blobKey.startsWith(onlyUnder))) return false;
+    const { del } = await import("@vercel/blob");
+    await del(url);
+    return true;
+  } catch (err) {
+    if (err?.code === "ENOENT") return false;
+    console.warn(JSON.stringify({ event: "media_delete_failed", url, message: err?.message }));
+    return false;
+  }
+}

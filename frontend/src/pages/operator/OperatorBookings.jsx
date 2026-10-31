@@ -15,6 +15,7 @@ import RefundsToSend from "../../components/operator/RefundsToSend";
 
 const tabs = [
   { label: "Pending", value: "PENDING" },
+  { label: "Awaiting Payment", value: "AWAITING_PAYMENT" },
   { label: "Upcoming", value: "UPCOMING" },
   { label: "In Progress", value: "IN_PROGRESS" },
   { label: "Completed", value: "COMPLETED" },
@@ -25,6 +26,12 @@ const tabs = [
 const CONFIRMED_STATUSES = new Set([
   "PAID",
 ]);
+
+// Deposit (or the whole amount) is in.
+const DEPOSIT_IN = new Set(["PARTIALLY_PAID", "FINAL_PAYMENT_PENDING_VERIFICATION", "PAID"]);
+
+// Accepted but not handed over yet.
+const BEFORE_HANDOVER = new Set(["PENDING_PAYMENT", "CONFIRMED", "PAID", "READY_FOR_PICKUP"]);
 
 export default function OperatorBookings() {
   const [searchParams] = useSearchParams();
@@ -41,18 +48,37 @@ export default function OperatorBookings() {
   const [actionLoading, setActionLoading] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
+
+  const [
+  showHandoverSoon,
+  setShowHandoverSoon,
+  ] = useState(true);
+
+  const [
+    showThisWeek,
+    setShowThisWeek,
+  ] = useState(true);
+
+  const [
+    showLaterUpcoming,
+    setShowLaterUpcoming,
+  ] = useState(false);
   
   useEffect(() => {
-  if (
-    statusParam &&
-    tabs.some(
-      (tab) =>
-        tab.value === statusParam
-    )
-  ) {
-    setActiveStatus(statusParam);
-    setCurrentPage(1);
-  }
+    if (
+      statusParam &&
+      tabs.some(
+        (tab) =>
+          tab.value === statusParam
+      )
+    ) {
+      setActiveStatus(statusParam);
+      setCurrentPage(1);
+
+      if (statusParam !== "UPCOMING") {
+        setShowLaterUpcoming(false);
+      }
+    }
   }, [statusParam]);
 
   const rowsPerPage = 10;
@@ -65,8 +91,6 @@ export default function OperatorBookings() {
       const res = await operatorService.getBookings({
   q: search || undefined,
 });
-
-console.log("BOOKINGS FROM BACKEND:", res.data.bookings);
 
 setBookings(res.data.bookings || []);
       setCurrentPage(1);
@@ -117,128 +141,167 @@ setBookings(res.data.bookings || []);
     };
 
   const filteredBookings = useMemo(() => {
-  const now = new Date();
+  return bookings
+    .filter((booking) => {
+      const status = String(
+        booking.status || ""
+      ).toUpperCase();
 
-  // Today's date at 00:00
-  const today = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate()
-  );
+      const pickupDate = booking.pickupDate
+        ? new Date(booking.pickupDate)
+        : null;
 
-  return bookings.filter((booking) => {
-    const status = String(
-      booking.status || ""
-    ).toUpperCase();
+      // =========================
+      // PENDING
+      // =========================
+      if (activeStatus === "PENDING") {
+        return status === "PENDING";
+      }
 
-    const pickupDate = booking.pickupDate
-      ? new Date(booking.pickupDate)
-      : null;
+      // =========================
+      // COMPLETED
+      // =========================
+      if (activeStatus === "COMPLETED") {
+        return status === "COMPLETED";
+      }
 
-    const returnDate = booking.returnDate
-      ? new Date(booking.returnDate)
-      : null;
+      // =========================
+      // CANCELLED
+      // =========================
+      if (activeStatus === "CANCELLED") {
+        return status === "CANCELLED";
+      }
 
-    // =========================
-    // PENDING
-    // =========================
-    if (activeStatus === "PENDING") {
-      return status === "PENDING";
-    }
+      // =========================
+      // OVERDUE
+      // =========================
+      if (activeStatus === "OVERDUE") {
+        return status === "OVERDUE";
+      }
 
-    // =========================
-    // COMPLETED
-    // =========================
-    if (activeStatus === "COMPLETED") {
-      return status === "COMPLETED";
-    }
+      const paymentStatus = String(booking.payment?.status || "").toUpperCase();
 
-    // =========================
-    // CANCELLED
-    // =========================
-    if (activeStatus === "CANCELLED") {
-      return status === "CANCELLED";
-    }
+      // Accepted, deposit not in yet (unpaid, or a receipt waiting for verification).
+      if (activeStatus === "AWAITING_PAYMENT") {
+        return status === "PENDING_PAYMENT" && !DEPOSIT_IN.has(paymentStatus);
+      }
 
-    // =========================
-    // OVERDUE
-    // =========================
-    if (activeStatus === "OVERDUE") {
-      return status === "OVERDUE";
-    }
+      // Car handed over and not yet returned.
+      if (activeStatus === "IN_PROGRESS") {
+        return status === "IN_PROGRESS";
+      }
 
-    // Upcoming / in-progress bookings must be fully paid
-    const paymentStatus = String(
-      booking.payment?.status || ""
-    ).toUpperCase();
+      // Deposit or full payment in, car not handed over yet.
+      if (activeStatus === "UPCOMING") {
+        return (
+          BEFORE_HANDOVER.has(status) &&
+          DEPOSIT_IN.has(paymentStatus) &&
+          Boolean(pickupDate) &&
+          !Number.isNaN(pickupDate.getTime())
+        );
+      }
 
-    const activeBookingStatuses = [
-      "PAID",
-      "READY_FOR_PICKUP",
-    ];
-
-    if (
-      paymentStatus !== "PAID" ||
-      !activeBookingStatuses.includes(status)
-    ) {
       return false;
-    }
+    })
+    .sort((a, b) => {
+      if (activeStatus !== "UPCOMING") {
+        return 0;
+      }
 
-    // Invalid pickup date
-    if (
-      !pickupDate ||
-      Number.isNaN(pickupDate.getTime())
-    ) {
-      return false;
-    }
+      const dateA =
+        new Date(a.pickupDate).getTime();
 
-    // =========================
-    // UPCOMING
-    // =========================
-   if (activeStatus === "UPCOMING") {
-      const pickupDay = new Date(
-        pickupDate.getFullYear(),
-        pickupDate.getMonth(),
-        pickupDate.getDate()
+      const dateB =
+        new Date(b.pickupDate).getTime();
+
+      return dateA - dateB;
+    });
+    }, [bookings, activeStatus]);
+
+
+    const upcomingGroups = useMemo(() => {
+      const groups = {
+        handoverSoon: [],
+        thisWeek: [],
+        later: [],
+      };
+
+      if (activeStatus !== "UPCOMING") {
+        return groups;
+      }
+
+      const now = new Date();
+
+      const today = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
       );
 
-      const twoDaysLater = new Date(today);
-      twoDaysLater.setDate(
-        twoDaysLater.getDate() + 2
-      );
+      filteredBookings.forEach((booking) => {
+        if (!booking.pickupDate) {
+          return;
+        }
 
-      /*
-      * Show paid bookings that need
-      * handover within the next 2 days.
-      *
-      * Includes:
-      * today
-      * tomorrow
-      * day after tomorrow
-      */
-      return (
-        pickupDay >= today &&
-        pickupDay <= twoDaysLater
-      );
-    }
+        const pickupDate =
+          new Date(booking.pickupDate);
 
-    // =========================
-    // IN PROGRESS
-    // =========================
-    if (activeStatus === "IN_PROGRESS") {
-      const hasStarted = pickupDate <= now;
+        if (
+          Number.isNaN(
+            pickupDate.getTime()
+          )
+        ) {
+          return;
+        }
 
-      const hasNotEnded =
-        !returnDate ||
-        Number.isNaN(returnDate.getTime()) ||
-        returnDate >= now;
+        const pickupDay = new Date(
+          pickupDate.getFullYear(),
+          pickupDate.getMonth(),
+          pickupDate.getDate()
+        );
 
-      return hasStarted && hasNotEnded;
-    }
+        const differenceInMs =
+          pickupDay.getTime() -
+          today.getTime();
 
-    return false;
-  });
-}, [bookings, activeStatus]);
+        const daysUntilPickup =
+          Math.floor(
+            differenceInMs /
+              (1000 * 60 * 60 * 24)
+          );
+
+        // Missed pickups, today, tomorrow, the day after
+        if (daysUntilPickup <= 2) {
+          groups.handoverSoon.push(
+            booking
+          );
+          return;
+        }
+
+        // 3 - 7 days
+        if (
+          daysUntilPickup >= 3 &&
+          daysUntilPickup <= 7
+        ) {
+          groups.thisWeek.push(
+            booking
+          );
+          return;
+        }
+
+        // More than 7 days
+        if (daysUntilPickup > 7) {
+          groups.later.push(
+            booking
+          );
+        }
+      });
+
+      return groups;
+    }, [
+      filteredBookings,
+      activeStatus,
+    ]);
 
   const totalPages = Math.max(
     1,
@@ -260,6 +323,206 @@ setBookings(res.data.bookings || []);
 
     setCurrentPage(page);
   };
+
+  const getHandoverLabel = (booking) => {
+  if (!booking.pickupDate) {
+    return "-";
+  }
+
+  const pickupDate =
+    new Date(booking.pickupDate);
+
+  if (
+    Number.isNaN(
+      pickupDate.getTime()
+    )
+  ) {
+    return "-";
+  }
+
+  const now = new Date();
+
+  const today = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+
+  const pickupDay = new Date(
+    pickupDate.getFullYear(),
+    pickupDate.getMonth(),
+    pickupDate.getDate()
+  );
+
+  const differenceInMs =
+    pickupDay.getTime() -
+    today.getTime();
+
+  const daysUntilPickup =
+    Math.round(
+      differenceInMs /
+        (1000 * 60 * 60 * 24)
+    );
+
+  if (daysUntilPickup < 0) {
+    return "Pickup missed";
+  }
+
+  if (daysUntilPickup === 0) {
+    return "Today";
+  }
+
+  if (daysUntilPickup === 1) {
+    return "Tomorrow";
+  }
+
+  if (daysUntilPickup === 2) {
+    return "In 2 Days";
+  }
+
+  return formatOperatorDateTime(
+    booking.pickupDate
+  );
+};
+
+const getPaymentBadge = (booking) => {
+  const payment = booking.payment || {};
+  const status = String(payment.status || "").toUpperCase();
+
+  if (status === "PAID") {
+    return { tone: "success", text: "✓ Fully Paid" };
+  }
+  if (status === "FINAL_PAYMENT_PENDING_VERIFICATION") {
+    return { tone: "info", text: "Balance receipt to verify" };
+  }
+  return {
+    tone: "warning",
+    text: `Deposit paid, ${formatOperatorMoney(payment.finalPaymentAmount)} due`,
+  };
+};
+
+
+const renderUpcomingTable = (
+  bookingList
+) => {
+  if (!bookingList.length) {
+    return (
+      <div className="operator-empty-state">
+        No bookings in this section.
+      </div>
+    );
+  }
+
+  return (
+    <div className="operator-table-wrap operator-booking-table-wrap">
+      <table className="operator-table operator-booking-table">
+        <thead>
+          <tr>
+            <th>Booking ID</th>
+            <th>Customer</th>
+            <th>Vehicle</th>
+            <th>Handover</th>
+            <th>Return</th>
+            <th>Amount</th>
+            <th>Payment</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {bookingList.map(
+            (booking) => (
+              <tr key={booking.id}>
+                <td>
+                  <Link
+                    to={`/operator/bookings/${booking.id}`}
+                  >
+                    {booking.bookingCode ||
+                      `BNPL-${String(
+                        booking.id
+                      ).padStart(
+                        4,
+                        "0"
+                      )}`}
+                  </Link>
+                </td>
+
+                <td>
+                  <strong>
+                    {booking.customer?.name ||
+                      "-"}
+                  </strong>
+
+                  <small>
+                    {booking.customer?.email ||
+                      "-"}
+                  </small>
+                </td>
+
+                <td>
+                  <strong>
+                    {booking.serviceName ||
+                      "-"}
+                  </strong>
+
+                  <small>
+                    {booking.serviceType ||
+                      "-"}
+                  </small>
+                </td>
+
+                <td>
+                  <div className="operator-handover-cell">
+                    <strong>
+                      {getHandoverLabel(
+                        booking
+                      )}
+                    </strong>
+
+                    <small>
+                      {formatOperatorDateTime(
+                        booking.pickupDate
+                      )}
+                    </small>
+                  </div>
+                </td>
+
+                <td>
+                  {formatOperatorDateTime(
+                    booking.returnDate
+                  )}
+                </td>
+
+                <td>
+                  {formatOperatorMoney(
+                    booking.totalAmount
+                  )}
+                </td>
+
+                <td>
+                  <span className={`operator-status ${getPaymentBadge(booking).tone}`}>
+                    {getPaymentBadge(booking).text}
+                  </span>
+                </td>
+
+                <td>
+                  <div className="operator-table-actions">
+                    <Link
+                      to={`/operator/bookings/${booking.id}`}
+                      title="View Booking"
+                    >
+                      👁
+                    </Link>
+                  </div>
+                </td>
+              </tr>
+            )
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
   const getPageNumbers = () => {
     const pages = [];
@@ -370,7 +633,210 @@ setBookings(res.data.bookings || []);
             Loading bookings...
           </div>
         ) : (
+          
           <>
+  {activeStatus === "UPCOMING" ? (
+    <div className="operator-upcoming-dashboard">
+
+      <div className="operator-upcoming-summary">
+
+        <div className="operator-upcoming-stat">
+          <span>Total Upcoming</span>
+          <strong>
+            {filteredBookings.length}
+          </strong>
+        </div>
+
+        <div className="operator-upcoming-stat">
+          <span>Handover Soon</span>
+          <strong>
+            {upcomingGroups.handoverSoon.length}
+          </strong>
+          <small>
+            Within 2 days
+          </small>
+        </div>
+
+        <div className="operator-upcoming-stat">
+          <span>This Week</span>
+          <strong>
+            {upcomingGroups.thisWeek.length}
+          </strong>
+          <small>
+            Within 3–7 days
+          </small>
+        </div>
+
+        <div className="operator-upcoming-stat">
+          <span>Later</span>
+          <strong>
+            {upcomingGroups.later.length}
+          </strong>
+          <small>
+            More than 7 days
+          </small>
+        </div>
+
+      </div>
+
+
+      <section className="operator-upcoming-section urgent">
+
+      <button
+        type="button"
+        className="operator-upcoming-section-toggle"
+        onClick={() =>
+          setShowHandoverSoon(
+            (current) => !current
+          )
+        }
+      >
+        <div className="operator-upcoming-section-title">
+          <div className="operator-upcoming-section-icon">
+            !
+          </div>
+
+          <div>
+            <h3>Handover Soon</h3>
+
+            <p>
+              Paid or deposit-paid bookings due for
+              handover within 2 days, and missed pickups.
+            </p>
+          </div>
+        </div>
+
+        <div className="operator-upcoming-section-actions">
+          <span className="operator-upcoming-count">
+            {
+              upcomingGroups
+                .handoverSoon
+                .length
+            }
+          </span>
+
+          <span className="operator-upcoming-chevron">
+            {showHandoverSoon
+              ? "▲"
+              : "▼"}
+          </span>
+        </div>
+      </button>
+
+      {showHandoverSoon &&
+        renderUpcomingTable(
+          upcomingGroups.handoverSoon
+        )}
+
+    </section>
+
+
+      <section className="operator-upcoming-section">
+
+      <button
+        type="button"
+        className="operator-upcoming-section-toggle"
+        onClick={() =>
+          setShowThisWeek(
+            (current) => !current
+          )
+        }
+      >
+        <div className="operator-upcoming-section-title">
+          <div className="operator-upcoming-section-icon">
+            7
+          </div>
+
+          <div>
+            <h3>This Week</h3>
+
+            <p>
+              Upcoming handovers within
+              the next 3–7 days.
+            </p>
+          </div>
+        </div>
+
+        <div className="operator-upcoming-section-actions">
+          <span className="operator-upcoming-count">
+            {
+              upcomingGroups
+                .thisWeek
+                .length
+            }
+          </span>
+
+          <span className="operator-upcoming-chevron">
+            {showThisWeek
+              ? "▲"
+              : "▼"}
+          </span>
+        </div>
+      </button>
+
+      {showThisWeek &&
+        renderUpcomingTable(
+          upcomingGroups.thisWeek
+        )}
+
+    </section>
+
+
+      <section className="operator-upcoming-section">
+
+      <button
+        type="button"
+        className="operator-upcoming-section-toggle"
+        onClick={() =>
+          setShowLaterUpcoming(
+            (current) => !current
+          )
+        }
+      >
+        <div className="operator-upcoming-section-title">
+          <div className="operator-upcoming-section-icon">
+            +
+          </div>
+
+          <div>
+            <h3>Later Upcoming</h3>
+
+            <p>
+              Paid or deposit-paid bookings more
+              than 7 days away.
+            </p>
+          </div>
+        </div>
+
+        <div className="operator-upcoming-section-actions">
+          <span className="operator-upcoming-count">
+            {
+              upcomingGroups
+                .later
+                .length
+            }
+          </span>
+
+          <span className="operator-upcoming-chevron">
+            {showLaterUpcoming
+              ? "▲"
+              : "▼"}
+          </span>
+        </div>
+      </button>
+
+      {showLaterUpcoming &&
+        renderUpcomingTable(
+          upcomingGroups.later
+        )}
+
+    </section>
+
+    </div>
+  ) : (
+    <>
+          
+
             <div className="operator-table-wrap operator-booking-table-wrap">
               <table className="operator-table operator-booking-table">
                 <thead>
@@ -527,6 +993,8 @@ setBookings(res.data.bookings || []);
                 </tbody>
               </table>
             </div>
+            </>
+            )}
 
             {filteredBookings.length > 0 && (
               <div className="operator-pagination">
