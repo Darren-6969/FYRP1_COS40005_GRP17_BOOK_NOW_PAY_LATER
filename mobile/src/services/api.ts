@@ -15,11 +15,33 @@ export async function apiRequest(
   };
 
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    headers.Authorization =
+      `Bearer ${token}`;
   }
 
+  const requestUrl =
+    `${API_URL}${path}`;
+
+  console.log(
+    "========== API REQUEST =========="
+  );
+
+  console.log(
+    "Method:",
+    options.method || "GET"
+  );
+
+  console.log(
+    "URL:",
+    requestUrl
+  );
+
+  console.log(
+    "================================="
+  );
+
   const response = await fetch(
-    `${API_URL}${path}`,
+    requestUrl,
     {
       ...options,
       headers,
@@ -31,33 +53,43 @@ export async function apiRequest(
     .catch(() => null);
 
   if (!response.ok) {
-  console.log(
-    "========== API ERROR =========="
-  );
+    console.log(
+      "========== API ERROR =========="
+    );
 
-  console.log(
-    "Status:",
-    response.status
-  );
+    console.log(
+      "Method:",
+      options.method || "GET"
+    );
 
-  console.log(
-    "Response:",
-    JSON.stringify(
-      data,
-      null,
-      2
-    )
-  );
+    console.log(
+      "URL:",
+      requestUrl
+    );
 
-  console.log(
-    "==============================="
-  );
+    console.log(
+      "Status:",
+      response.status
+    );
 
-  throw new Error(
-    data?.message ||
-      `Request failed (${response.status})`
-  );
-}
+    console.log(
+      "Response:",
+      JSON.stringify(
+        data,
+        null,
+        2
+      )
+    );
+
+    console.log(
+      "==============================="
+    );
+
+    throw new Error(
+      data?.message ||
+        `Request failed (${response.status})`
+    );
+  }
 
   return data;
 }
