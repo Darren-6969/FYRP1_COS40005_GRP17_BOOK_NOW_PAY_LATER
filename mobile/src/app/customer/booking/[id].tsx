@@ -1021,16 +1021,17 @@ export default function BookingDetailScreen() {
               },
             ]}
             onPress={() =>
-              router.push({
+            router.push({
                 pathname:
-                  "/customer/checkout",
+                "/customer/checkout",
                 params: {
-                  bookingId:
+                bookingId:
                     String(
-                      booking.id
+                    booking.id
                     ),
+                type: "DOWN_PAYMENT",
                 },
-              })
+            })
             }
           >
             <View>

@@ -21,6 +21,10 @@ import CarFilterModal, {
   DEFAULT_CAR_FILTERS,
 } from "../../../components/CarFilterModal";
 
+import TripSearchModal, {
+  TripSearch,
+} from "../../../components/TripSearchModal";
+
 import {
   Image,
   Pressable,
@@ -43,6 +47,18 @@ export default function CustomerHome() {
     useState<CarFilters>(
       DEFAULT_CAR_FILTERS
     );
+
+  const [trip, setTrip] =
+  useState<TripSearch>({
+    city: "",
+    from: "",
+    fromTime: "10:00",
+    to: "",
+    toTime: "10:00",
+  });
+
+  const [tripVisible, setTripVisible] =
+  useState(false);
 
   const [filterVisible, setFilterVisible] =
     useState(false);
@@ -168,6 +184,13 @@ export default function CustomerHome() {
           .includes(search);
 
       if (!searchMatch) return false;
+
+      if (
+        trip.city &&
+        car.branch?.city !== trip.city
+      ) {
+        return false;
+      }
 
       if (
         filters.vehicleTypes.length &&
@@ -344,6 +367,7 @@ export default function CustomerHome() {
     cars,
     searchText,
     filters,
+    trip.city,
   ]);
 
   return (
@@ -356,52 +380,67 @@ export default function CustomerHome() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.deliveryLabel}>Current Location</Text>
+          <Pressable
+            onPress={() =>
+              setTripVisible(true)
+            }
+          >
+            <Text style={styles.deliveryLabel}>
+              Pick-up Location
+            </Text>
 
             <Text style={styles.location}>
-              Kuala Lumpur, Malaysia ▼
+              {trip.city
+                ? `${trip.city}, Malaysia`
+                : "Choose location"}
+              {" ▼"}
             </Text>
-          </View>
+          </Pressable>
 
           <Pressable
-          style={({ pressed }) => [
-            styles.notificationButton,
-            pressed && {
-              opacity: 0.75,
-              transform: [
-                {
-                  scale: 0.95,
-                },
-              ],
-            },
-          ]}
-          onPress={() =>
-            router.push("/customer/notifications")
-          }
-        >
-          <Ionicons
-            name="notifications-outline"
-            size={23}
-            color="#17313C"
-          />
+            style={({ pressed }) => [
+              styles.notificationButton,
+              pressed && {
+                opacity: 0.75,
+                transform: [
+                  {
+                    scale: 0.95,
+                  },
+                ],
+              },
+            ]}
+            onPress={() =>
+              router.push(
+                "/customer/notifications"
+              )
+            }
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={23}
+              color="#17313C"
+            />
 
-          <View style={styles.notificationDot} />
-        </Pressable>
+            <View
+              style={styles.notificationDot}
+            />
+          </Pressable>
         </View>
 
         {/* Search */}
         <View style={styles.searchRow}>
           <View style={styles.searchBox}>
-            <Text style={styles.searchIcon}>⌕</Text>
+            <Text style={styles.searchIcon}>
+              ⌕
+            </Text>
 
             <TextInput
-            placeholder="Search cars or brands..."
-            placeholderTextColor="#90A0A8"
-            style={styles.searchInput}
-            value={searchText}
-            onChangeText={setSearchText}
-          />
+              placeholder="Search cars or brands..."
+              placeholderTextColor="#90A0A8"
+              style={styles.searchInput}
+              value={searchText}
+              onChangeText={setSearchText}
+            />
           </View>
 
           <Pressable
@@ -428,10 +467,65 @@ export default function CustomerHome() {
                   : Boolean(value) &&
                     value !== "recommended"
             ) && (
-              <View style={styles.filterDot} />
+              <View
+                style={styles.filterDot}
+              />
             )}
           </Pressable>
         </View>
+
+        <Pressable
+          style={styles.tripSummary}
+          onPress={() =>
+            setTripVisible(true)
+          }
+        >
+          <View style={styles.tripSummaryItem}>
+            <Ionicons
+              name="calendar-outline"
+              size={19}
+              color="#07869B"
+            />
+
+            <View>
+              <Text style={styles.tripSummaryLabel}>
+                Pick-up
+              </Text>
+
+              <Text style={styles.tripSummaryValue}>
+                {trip.from
+                  ? `${trip.from} · ${trip.fromTime}`
+                  : "Select date & time"}
+              </Text>
+            </View>
+          </View>
+
+          <Ionicons
+            name="arrow-forward"
+            size={17}
+            color="#9AABB2"
+          />
+
+          <View style={styles.tripSummaryItem}>
+            <Ionicons
+              name="calendar-outline"
+              size={19}
+              color="#07869B"
+            />
+
+            <View>
+              <Text style={styles.tripSummaryLabel}>
+                Return
+              </Text>
+
+              <Text style={styles.tripSummaryValue}>
+                {trip.to
+                  ? `${trip.to} · ${trip.toTime}`
+                  : "Select date & time"}
+              </Text>
+            </View>
+          </View>
+        </Pressable>
 
         {/* Hero Banner */}
         <View style={styles.heroBanner}>
@@ -581,10 +675,17 @@ export default function CustomerHome() {
               style={styles.carCard}
               onPress={() =>
                 router.push({
-                  pathname:
-                    "/customer/car-details",
+                  pathname: "/customer/car-details",
                   params: {
                     id: String(car.id),
+
+                    city: trip.city || "",
+
+                    from: trip.from || "",
+                    ft: trip.fromTime || "",
+
+                    to: trip.to || "",
+                    tt: trip.toTime || "",
                   },
                 })
               }
@@ -803,7 +904,19 @@ export default function CustomerHome() {
         </View>
       </View>
     )}
-      </ScrollView>
+            </ScrollView>
+
+      <TripSearchModal
+        visible={tripVisible}
+        value={trip}
+        onClose={() =>
+          setTripVisible(false)
+        }
+        onApply={(nextTrip) =>
+          setTrip(nextTrip)
+        }
+      />
+
       <CarFilterModal
         visible={filterVisible}
         cars={cars}
@@ -815,6 +928,7 @@ export default function CustomerHome() {
           setFilters(nextFilters)
         }
       />
+
     </SafeAreaView>
   );
 }
@@ -1307,6 +1421,39 @@ filterDot: {
   position: "absolute",
   right: 9,
   top: 8,
+},
+
+tripSummary: {
+  backgroundColor: "#FFFFFF",
+  borderRadius: 18,
+  borderWidth: 1,
+  borderColor: "#E3EBED",
+  padding: 13,
+  marginBottom: 18,
+
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+},
+
+tripSummaryItem: {
+  flex: 1,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+},
+
+tripSummaryLabel: {
+  color: "#8A9AA2",
+  fontSize: 9,
+  fontWeight: "700",
+},
+
+tripSummaryValue: {
+  color: "#17313C",
+  fontSize: 10,
+  fontWeight: "800",
+  marginTop: 2,
 },
 
 });

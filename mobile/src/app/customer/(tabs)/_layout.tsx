@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { Platform, StyleSheet } from "react-native";
+import { Platform } from "react-native";
 
 export default function CustomerTabLayout() {
   return (
@@ -17,7 +17,10 @@ export default function CustomerTabLayout() {
           position: "absolute",
           left: 14,
           right: 14,
-          bottom: Platform.OS === "ios" ? 18 : 12,
+          bottom:
+            Platform.OS === "ios"
+              ? 18
+              : 12,
 
           height: 72,
 
@@ -28,7 +31,9 @@ export default function CustomerTabLayout() {
 
           paddingTop: 9,
           paddingBottom:
-            Platform.OS === "ios" ? 9 : 8,
+            Platform.OS === "ios"
+              ? 9
+              : 8,
 
           shadowColor: "#17313C",
           shadowOffset: {
@@ -58,7 +63,6 @@ export default function CustomerTabLayout() {
           title: "Home",
 
           tabBarIcon: ({
-            color,
             focused,
           }) => (
             <Ionicons
@@ -68,7 +72,11 @@ export default function CustomerTabLayout() {
                   : "home-outline"
               }
               size={22}
-              colour={color}
+              color={
+                focused
+                  ? "#07869B"
+                  : "#8A9AA3"
+              }
             />
           ),
         }}
@@ -80,7 +88,6 @@ export default function CustomerTabLayout() {
           title: "Bookings",
 
           tabBarIcon: ({
-            color,
             focused,
           }) => (
             <Ionicons
@@ -90,7 +97,11 @@ export default function CustomerTabLayout() {
                   : "calendar-outline"
               }
               size={22}
-              colour={color}
+              color={
+                focused
+                  ? "#07869B"
+                  : "#8A9AA3"
+              }
             />
           ),
         }}
@@ -102,7 +113,6 @@ export default function CustomerTabLayout() {
           title: "Payments",
 
           tabBarIcon: ({
-            color,
             focused,
           }) => (
             <Ionicons
@@ -112,7 +122,11 @@ export default function CustomerTabLayout() {
                   : "wallet-outline"
               }
               size={22}
-              colour={color}
+              color={
+                focused
+                  ? "#07869B"
+                  : "#8A9AA3"
+              }
             />
           ),
         }}
@@ -124,7 +138,6 @@ export default function CustomerTabLayout() {
           title: "Profile",
 
           tabBarIcon: ({
-            color,
             focused,
           }) => (
             <Ionicons
@@ -134,7 +147,11 @@ export default function CustomerTabLayout() {
                   : "person-outline"
               }
               size={22}
-              colour={color}
+              color={
+                focused
+                  ? "#07869B"
+                  : "#8A9AA3"
+              }
             />
           ),
         }}
@@ -142,5 +159,3 @@ export default function CustomerTabLayout() {
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({});

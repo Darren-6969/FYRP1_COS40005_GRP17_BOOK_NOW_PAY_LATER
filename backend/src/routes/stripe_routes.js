@@ -1015,76 +1015,188 @@ router.post(
         return { status: 400, body: { message: "Payment schedule has not been created yet" } };
       }
 
-      const paymentSpec = getPaymentSpec(booking.payment, paymentType);
-      const platformFeePercent = Number((await getPlatformSettings()).commissionRate);
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-      const totalCents = Math.round(paymentSpec.amount * 100);
+      const paymentSpec =
+  getPaymentSpec(
+    booking.payment,
+    paymentType
+  );
 
-      // Charge the platform account now; operator transfers happen only after
-      // service resolution and the configured appeal window.
-      const paymentIntentData = {
-        metadata: {
-          bookingId: String(booking.id),
-          customerId: String(req.user.id),
-          paymentType,
-          feeRateBps: String(Math.round(platformFeePercent * 100)),
-          fundedBy: booking.discountFundedBy,
-        },
-      };
+const platformFeePercent =
+  Number(
+    (
+      await getPlatformSettings()
+    ).commissionRate
+  );
 
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card", "fpx", "grabpay"],
-        mode: "payment",
-        customer_email: booking.customer.email,
-        line_items: [
-          {
-            quantity: 1,
-            price_data: {
-              currency: "myr",
-              unit_amount: totalCents,
-              product_data: {
-                name: booking.serviceName,
-                description: `Booking via ${booking.operator.companyName}`,
-              },
+const stripe =
+  new Stripe(
+    process.env.STRIPE_SECRET_KEY
+  );
+
+const totalCents =
+  Math.round(
+    paymentSpec.amount * 100
+  );
+
+// ✅ 一定要放在 session create 之前
+const isMobile =
+  req.body?.source === "mobile";
+
+const successUrl = isMobile
+  ? `mobile://customer/payment-status/${booking.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`
+  : `${
+      process.env.FRONTEND_URL ||
+      "http://localhost:5173"
+    }/customer/payment-status/${booking.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`;
+
+const cancelUrl = isMobile
+  ? `mobile://customer/booking/${booking.id}?payment=cancelled`
+  : `${
+      process.env.FRONTEND_URL ||
+      "http://localhost:5173"
+    }/customer/checkout/${booking.id}?payment=cancelled`;
+
+const paymentIntentData = {
+  metadata: {
+    bookingId:
+      String(booking.id),
+
+    customerId:
+      String(req.user.id),
+
+    paymentType,
+
+    feeRateBps:
+      String(
+        Math.round(
+          platformFeePercent * 100
+        )
+      ),
+
+    fundedBy:
+      booking.discountFundedBy,
+  },
+};
+
+const session =
+  await stripe.checkout.sessions.create(
+    {
+      payment_method_types: [
+        "card",
+        "fpx",
+        "grabpay",
+      ],
+
+      mode: "payment",
+
+      customer_email:
+        booking.customer.email,
+
+      line_items: [
+        {
+          quantity: 1,
+
+          price_data: {
+            currency: "myr",
+
+            unit_amount:
+              totalCents,
+
+            product_data: {
+              name:
+                booking.serviceName,
+
+              description:
+                `Booking via ${booking.operator.companyName}`,
             },
           },
-        ],
-        payment_intent_data: paymentIntentData,
-        metadata: {
-          bookingId: String(booking.id),
-          customerId: String(req.user.id),
-          paymentType,
-          feeRateBps: String(Math.round(platformFeePercent * 100)),
-          fundedBy: booking.discountFundedBy,
         },
-        success_url: `${
-          process.env.FRONTEND_URL || "http://localhost:5173"
-        }/customer/payment-status/${booking.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${
-          process.env.FRONTEND_URL || "http://localhost:5173"
-        }/customer/checkout/${booking.id}?payment=cancelled`,
-      }, { idempotencyKey: key });
+      ],
 
-      const storedPaymentSpec = getPaymentSpec(booking.payment, paymentType);
-      const paymentReferenceData = paymentType === PAYMENT_TYPES.FULL_PAYMENT
-        ? {
-            downPaymentTransactionId: session.id,
-            finalPaymentTransactionId: session.id,
-          }
-        : { [storedPaymentSpec.transactionField]: session.id };
-      const referenceStatusField = storedPaymentSpec.statusField || "status";
-      await prisma.payment.updateMany({
-        where: {
-          bookingId: booking.id,
-          [referenceStatusField]: { not: "PAID" },
-        },
-        data: { method: "STRIPE", ...paymentReferenceData },
-      });
+      payment_intent_data:
+        paymentIntentData,
 
-      return { status: 200, body: { url: session.url } };
+      metadata: {
+        bookingId:
+          String(booking.id),
+
+        customerId:
+          String(req.user.id),
+
+        paymentType,
+
+        feeRateBps:
+          String(
+            Math.round(
+              platformFeePercent * 100
+            )
+          ),
+
+        fundedBy:
+          booking.discountFundedBy,
+      },
+
+      success_url:
+        successUrl,
+
+      cancel_url:
+        cancelUrl,
+    },
+    {
+      idempotencyKey: key,
+    }
+  );
+
+  const storedPaymentSpec =
+  getPaymentSpec(
+    booking.payment,
+    paymentType
+  );
+
+const paymentReferenceData =
+  paymentType ===
+  PAYMENT_TYPES.FULL_PAYMENT
+    ? {
+        downPaymentTransactionId:
+          session.id,
+        finalPaymentTransactionId:
+          session.id,
+      }
+    : {
+        [storedPaymentSpec.transactionField]:
+          session.id,
+      };
+
+const referenceStatusField =
+  storedPaymentSpec.statusField ||
+  "status";
+
+await prisma.payment.updateMany({
+  where: {
+    bookingId: booking.id,
+
+    [referenceStatusField]: {
+      not: "PAID",
+    },
+  },
+
+  data: {
+    method: "STRIPE",
+    ...paymentReferenceData,
+  },
+});
+
+return {
+  status: 200,
+  body: {
+    url: session.url,
+  },
+};
     });
   }
 );
+      
+ 
 
 // ── Confirm session (frontend fallback when webhook is delayed) ───────────────
 router.post(

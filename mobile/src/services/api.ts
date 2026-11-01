@@ -31,11 +31,33 @@ export async function apiRequest(
     .catch(() => null);
 
   if (!response.ok) {
-    throw new Error(
-      data?.message ||
-        `Request failed (${response.status})`
-    );
-  }
+  console.log(
+    "========== API ERROR =========="
+  );
+
+  console.log(
+    "Status:",
+    response.status
+  );
+
+  console.log(
+    "Response:",
+    JSON.stringify(
+      data,
+      null,
+      2
+    )
+  );
+
+  console.log(
+    "==============================="
+  );
+
+  throw new Error(
+    data?.message ||
+      `Request failed (${response.status})`
+  );
+}
 
   return data;
 }
