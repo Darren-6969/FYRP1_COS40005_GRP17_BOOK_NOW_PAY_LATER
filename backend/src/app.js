@@ -170,6 +170,11 @@ async function isAllowedOrigin(origin) {
 
 const corsOptions = {
   origin: (origin, callback) => {
+    // Native mobile apps / Expo Go may not send an Origin header.
+    if (!origin) {
+      return callback(null, true);
+    }
+
     isAllowedOrigin(origin)
       .then((ok) =>
         ok
