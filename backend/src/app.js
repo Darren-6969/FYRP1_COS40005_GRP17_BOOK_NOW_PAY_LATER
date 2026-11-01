@@ -59,6 +59,21 @@ function requiredEnvStatus() {
 
 requiredEnvStatus();
 
+// ── JWT secret strength guard (OWASP A02 2025 / NIST SP 800-63B) ─────────────
+// Detects placeholder secrets before a token is ever issued, so misconfigured
+// deployments fail loudly at startup rather than silently accepting weak tokens.
+(function warnWeakJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return; // already reported by requiredEnvStatus
+  if (secret.length < 32) {
+    console.warn("[SECURITY] JWT_SECRET is shorter than 32 characters. Use at least 256 bits (32 random bytes).");
+  }
+  const knownWeak = ["secret", "changeme", "password", "bnpl", "test", "dev", "1234", "admin"];
+  if (knownWeak.some((w) => secret.toLowerCase().includes(w))) {
+    console.warn("[SECURITY] JWT_SECRET appears to be a low-entropy placeholder. Replace it with a cryptographically random value before going to production.");
+  }
+}());
+
 // ── Security headers (OWASP A05 2025 / PCI DSS Req 6.3) ─────────────────────
 app.use(
   helmet({
@@ -132,7 +147,10 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 async function isAllowedOrigin(origin) {
-  if (!origin) return true;
+  // OWASP A07 2025 – restrict null/absent origin to non-production environments only.
+  // A missing Origin is typical of server-to-server calls (curl, cron jobs); in production
+  // those callers must present a valid Origin or use an API key instead.
+  if (!origin) return process.env.NODE_ENV !== "production";
   if (allowedOrigins.includes(origin)) return true;
 
   // Allow preview deployments only outside production
@@ -180,8 +198,11 @@ app.use("/api/stripe", stripeRoutes);
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
-// ── Static uploads – only in non-production; use object storage in prod ─────
-if (process.env.NODE_ENV !== "production") {
+// ── Static uploads – development only; staging and production use object storage ─
+// Explicitly check for "development" so that a missing or non-standard NODE_ENV
+// (e.g. "staging", "test") does NOT accidentally serve local upload files.
+// OWASP A05 2025 – avoid accidental file exposure in non-development environments.
+if (process.env.NODE_ENV === "development") {
   app.use("/uploads", express.static("uploads"));
 }
 
@@ -192,11 +213,13 @@ app.get("/", (_req, res) => {
 
 app.get("/health", (_req, res) => {
   const config = requiredEnvStatus();
+  // OWASP A05 2025 – do not expose configuration details (missing env-var names) in production.
+  // The missing list is useful for local dev; in production only the aggregated status is safe to return.
+  const isProduction = process.env.NODE_ENV === "production";
   res.status(config.ok ? 200 : 503).json({
     status: config.ok ? "ok" : "degraded",
-    message: "BNPL API health check",
-    config,
     timestamp: new Date().toISOString(),
+    ...(isProduction ? {} : { config }),
   });
 });
 

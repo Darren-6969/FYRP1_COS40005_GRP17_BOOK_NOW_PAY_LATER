@@ -38,6 +38,9 @@ const REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 function isValidProfileImage(value) {
   if (!value) return true;
   if (typeof value !== "string") return false;
+  // OWASP A03 2025 – SVG data URIs can embed <script> tags that execute in
+  // some rendering contexts (browsers that display the data URI directly).
+  if (value.startsWith("data:image/svg")) return false;
   return value.startsWith("data:image/") || value.startsWith("https://");
 }
 

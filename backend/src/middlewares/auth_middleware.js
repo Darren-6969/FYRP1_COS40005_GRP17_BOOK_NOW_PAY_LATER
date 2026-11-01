@@ -14,7 +14,8 @@ export async function verifyToken(req, res, next) {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      // OWASP A07 2025 – pin the algorithm to prevent alg:none / RS256 confusion attacks
+      decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
     } catch (err) {
       // Distinguish between expired and invalid so the client can decide to refresh
       if (err.name === "TokenExpiredError") {
@@ -58,7 +59,7 @@ export function attachUserIdIfPresent(req, _res, next) {
   try {
     const header = req.headers.authorization;
     if (header && header.startsWith("Bearer ")) {
-      const decoded = jwt.verify(header.split(" ")[1], process.env.JWT_SECRET);
+      const decoded = jwt.verify(header.split(" ")[1], process.env.JWT_SECRET, { algorithms: ["HS256"] });
       if (Number.isInteger(decoded?.id)) req.analyticsUserId = decoded.id;
     }
   } catch {

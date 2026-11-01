@@ -38,6 +38,9 @@ function toNumber(value) {
 
 function isValidReceiptImage(value) {
   if (typeof value !== "string" || !value) return false;
+  // OWASP A03 2025 – SVG data URIs can embed <script> tags that execute in
+  // some rendering contexts (browsers that display the data URI directly).
+  if (value.startsWith("data:image/svg")) return false;
   // Accept an uploaded image (data URL) or an https link only.
   return value.startsWith("data:image/") || value.startsWith("https://");
 }
