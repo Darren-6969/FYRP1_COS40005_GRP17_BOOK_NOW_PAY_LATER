@@ -1,15 +1,16 @@
 // Public (signed-out) listing reads for the customer-facing pages.
 //
-// Cars come from the backend (/api/public/cars). The whole published fleet is
-// fetched once and filtered, faceted and sorted here, which is fine while the
-// fleet is small; move search to the server once it outgrows one response.
+// Car search runs on the server (/api/public/cars/search, car_search_service.js)
+// so the results page and the chatbot share one copy of the rules. The fleet
+// cache below is only for the landing page's featured cars, and searchFleet()
+// is kept for the seller page, which filters one operator's cars it already has.
 // Car detail and quotes always come from the server, which is the source of
-// truth for every price. Tours and announcements are still mock data.
+// truth for every price.
 
 import api from "./api";
 import { PICKUP_CITIES } from "./mock/listings.mock";
 import { klDateTimeToIso, klToday } from "../utils/formatPublic";
-import { FACET_GROUPS, hasDates } from "../utils/carSearchParams";
+import { FACET_GROUPS, hasDates, toCarSearchParams } from "../utils/carSearchParams";
 import { depositFor, priceDuration, rentalHours } from "../utils/carPricing";
 
 const FEATURED_COUNT = 3;
@@ -259,69 +260,28 @@ function findTightest(fleet, c, days) {
   return best;
 }
 
-// Display quotes here cover the rental only; the detail page quote adds
-// overtime, point charges and add-ons.
+// Results, facets and bounds for the results page, computed on the server.
+// Display quotes cover the rental only; the detail page quote adds overtime,
+// point charges and add-ons.
 export async function searchCars(c) {
-  const {
-    items: fleet,
-    cities,
-  } = await loadFleet();
+  const params = Object.fromEntries(toCarSearchParams(c));
+  const { data } = await api.get("/public/cars/search", { params });
+  return { data: { ...data, cityOptions: data.cityOptions?.length ? data.cityOptions : PICKUP_CITIES } };
+}
 
-  const days =
-    rentalDays(c);
-
-  let availabilityById =
-    null;
-
-  if (
-    c.from &&
-    days > 0
-  ) {
-    const to =
-      addDays(
-        c.from,
-        days
-      );
-
-    const response =
-      await getCarsAvailability(
-        c.from,
-        to
-      );
-
-    availabilityById =
-      new Map(
-        (
-          response.data?.items ||
-          []
-        ).map(
-          (item) => [
-            Number(
-              item.listingId
-            ),
-            item,
-          ]
-        )
-      );
-  }
-
-  return {
-    data:
-      searchFleet(
-        fleet,
-        c,
-        {
-          cities,
-          availabilityById,
-        }
-      ),
-  };
+// Stock for the requested trip, as Map<listingId, {available}>, for the seller
+// page. Null without dates; searchFleet then falls back to bookedDates.
+export async function getAvailabilityById({ from, to, ft, tt }) {
+  const days = rentalDays({ from, to, ft, tt });
+  if (!from || !days) return null;
+  const { data } = await getCarsAvailability(from, addDays(from, days));
+  return new Map((data?.items || []).map((item) => [Number(item.listingId), item]));
 }
 
 /**
- * Filter, facet and sort a set of cars against search criteria. The results
- * page passes the whole fleet; the seller page passes one operator's cars and
- * groups them by branch instead of by city.
+ * Seller page only: filter, facet and sort one operator's cars in the browser.
+ * The results page uses searchCars(); keep this in step with
+ * backend/src/services/car_search_service.js until the seller page moves too.
  */
 export function searchFleet(
   fleet,

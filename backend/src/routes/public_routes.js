@@ -7,6 +7,7 @@ import {
   getCar,
   listCars,
   quoteCar,
+  searchCars,
 } from "../controllers/public_car_controller.js";
 
 import {
@@ -30,6 +31,15 @@ const router = express.Router();
 
 // Quotes run several queries each;
 // the page requests one per selection change.
+// Search reads the whole fleet per call, so it gets its own limit.
+const searchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many searches. Please wait a moment and try again.", code: "RATE_LIMITED" },
+});
+
 const quoteLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
@@ -68,7 +78,13 @@ router.get(
 );
 
 // IMPORTANT:
-// Put this before /cars/:id
+// Put these before /cars/:id
+router.get(
+  "/cars/search",
+  searchLimiter,
+  searchCars
+);
+
 router.get(
   "/cars/availability",
   getCarsAvailability

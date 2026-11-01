@@ -1,7 +1,8 @@
 // Public (signed-out) car catalogue. Read-only; quotes are recomputed on
 // every call and never stored.
 
-import {getCarAvailability, getPublicCarsAvailability, getPublicCar, listPublicCars, quotePublicCar } from "../services/public_car_service.js";
+import {getCarAvailability, getPublicCarsAvailability, getPublicCar, listPublicCars, quotePublicCar, searchPublicCars } from "../services/public_car_service.js";
+import { parseCarSearchQuery } from "../services/car_search_service.js";
 import { parseId } from "../utils/parseId.js";
 
 // GET /api/public/cars?city=Kuching
@@ -13,6 +14,18 @@ export async function listCars(req, res, next) {
     const city = typeof req.query.city === "string" && req.query.city.trim() ? req.query.city.trim() : undefined;
     res.set("Cache-Control", "public, max-age=30");
     res.json(await listPublicCars({ city }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/public/cars/search?city=&from=&to=&ft=&tt=&type=&seats=&...&sort=
+// Results, facets, price and deposit bounds, and the tightest filter, for the
+// results page and the chatbot. Same parameters as the results page URL.
+export async function searchCars(req, res, next) {
+  try {
+    res.set("Cache-Control", "public, max-age=30");
+    res.json(await searchPublicCars(parseCarSearchQuery(req.query)));
   } catch (err) {
     next(err);
   }

@@ -23,6 +23,7 @@ import {
   toSen,
 } from "./car_pricing_service.js";
 import {calendarAvailability, horizonAvailability, loadAvailability, loadPeakDates } from "./car_availability_service.js";
+import { availabilityWindow, searchFleet } from "./car_search_service.js";
 
 const DEFAULT_DOWN_PAYMENT_PCT = 30;
 const ACCEPTANCE_WINDOW_DAYS = 180;
@@ -362,6 +363,28 @@ export async function listPublicCars({ city } = {}) {
     items: listings.map((l) => toCarDto(l, facts.get(l.operatorId), availability.get(l.id))),
     cities,
   };
+}
+
+/**
+ * Car search for the results page and the chatbot's search_cars tool
+ * (GET /api/public/cars/search). Loads the published fleet, checks stock for
+ * the requested dates, then filters, facets and sorts in car_search_service.
+ */
+export async function searchPublicCars(criteria) {
+  const { items, cities } = await listPublicCars();
+  const win = availabilityWindow(criteria);
+  let availabilityById = null;
+  if (win) {
+    const stock = await loadAvailability(items, win.from, win.toExclusive);
+    availabilityById = new Map(
+      items.map((car) => {
+        const entry = stock.get(car.id);
+        const available = Boolean(entry) && [...entry.remaining.values()].every((n) => n > 0);
+        return [car.id, { available }];
+      })
+    );
+  }
+  return searchFleet(items, criteria, { cities, availabilityById });
 }
 
 async function loadPublicListing(id) {
