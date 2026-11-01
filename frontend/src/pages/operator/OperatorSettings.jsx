@@ -1804,8 +1804,8 @@ function StripeConnectCard() {
         >
           <strong>Transfers capability inactive.</strong> Customers cannot pay
           until this is enabled. Click <em>Complete Stripe Onboarding</em> below
-          — it will request the capability automatically. In sandbox mode it
-          activates instantly.
+          — it will request the capability automatically. With a real Stripe
+          account Stripe may need to verify your details first.
         </div>
       )}
 

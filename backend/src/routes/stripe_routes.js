@@ -35,7 +35,9 @@ import {
 } from "../services/stripe_connect_service.js";
 import { trackPaymentSuccess } from "../services/analytics_service.js";
 import { completeProviderRefund } from "../services/refund_service.js";
-import { unrecordedStripeRefundCents } from "../services/stripe_refund_service.js";
+import { applyStripeRefundUpdate, unrecordedStripeRefundCents } from "../services/stripe_refund_service.js";
+import { verifyStripeEvent, webhookSecrets } from "../services/stripe_webhook_verify.js";
+import { stripeReadiness } from "../config/stripe_readiness.js";
 
 const router = express.Router();
 
@@ -361,9 +363,9 @@ router.post(
   express.raw({ type: "application/json" }),
   async (req, res) => {
     const sig = req.headers["stripe-signature"];
-    const secret = process.env.STRIPE_WEBHOOK_SECRET;
+    const secrets = webhookSecrets();
 
-    if (!secret) {
+    if (!secrets.length) {
       console.error("[Stripe] STRIPE_WEBHOOK_SECRET not set. Rejecting webhook.");
       return res.status(500).json({ message: "Webhook endpoint is not configured" });
     }
@@ -377,7 +379,16 @@ router.post(
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
     try {
-      event = stripe.webhooks.constructEvent(req.body, sig, secret);
+      // The endpoint for this account and the Connect endpoint for connected
+      // accounts have different secrets; the event must also be from the same
+      // mode (test or live) as the key.
+      event = verifyStripeEvent({
+        stripe,
+        rawBody: req.body,
+        signature: sig,
+        secrets,
+        secretKey: process.env.STRIPE_SECRET_KEY,
+      });
     } catch (err) {
       console.error("[Stripe] Webhook signature error:", err.message);
       return res.status(400).json({ message: `Webhook Error: ${err.message}` });
@@ -725,6 +736,88 @@ export async function processStripeWebhookEvent(event, requestIp = null, databas
           break;
         }
 
+        // ── A refund this platform sent has finished or failed ──────────────
+        // Bank methods (FPX, GrabPay) settle later, and a refund waits as
+        // pending until the platform balance can cover it.
+        case "refund.updated":
+        case "refund.failed":
+        case "charge.refund.updated": {
+          const result = await applyStripeRefundUpdate(event.data.object, { database });
+          if (!result.changed) break;
+
+          const refund = result.refund;
+          const booking = await database.booking.findUnique({
+            where: { id: refund.bookingId },
+            include: { customer: { select: { id: true, name: true, email: true } } },
+          });
+          const code = refund.booking?.bookingCode || refund.bookingId;
+          if (refund.status === "REFUNDED") {
+            await notifyCustomerByBooking({
+              booking,
+              title: "Refund sent",
+              message: `Your refund of MYR ${Number(refund.amount).toFixed(2)} for booking ${code} has reached the bank. Allow 5 to 10 business days to see it on your card.`,
+              type: "PAYMENT_REFUNDED",
+            });
+          } else if (refund.status === "FAILED") {
+            await notifyOperatorUsersByBooking({
+              booking,
+              title: "Card refund failed",
+              message: `Stripe could not complete the MYR ${Number(refund.amount).toFixed(2)} refund for booking ${code}. Open the booking and press Retry Card Refund.`,
+              type: "REFUND_FAILED",
+            });
+          }
+          break;
+        }
+
+        // ── A customer disputed a card payment with their bank ──────────────
+        // Not handled automatically: a dispute has a deadline for evidence, and
+        // the money is taken back from the platform balance. The administrator
+        // is told at once so it can be answered in the Stripe dashboard.
+        case "charge.dispute.created": {
+          const dispute = event.data.object;
+          const disputedPayment = dispute.payment_intent
+            ? await prisma.payment.findFirst({
+                where: {
+                  OR: [
+                    { transactionId: dispute.payment_intent },
+                    { downPaymentTransactionId: dispute.payment_intent },
+                    { finalPaymentTransactionId: dispute.payment_intent },
+                  ],
+                },
+                select: { bookingId: true },
+              })
+            : null;
+          const due = dispute.evidence_details?.due_by
+            ? new Date(dispute.evidence_details.due_by * 1000).toLocaleDateString("en-MY", { dateStyle: "medium" })
+            : "the date Stripe shows";
+          const amount = `${String(dispute.currency || "").toUpperCase()} ${(Number(dispute.amount) / 100).toFixed(2)}`;
+
+          await prisma.auditLog.create({
+            data: {
+              userId: null,
+              action: "STRIPE_DISPUTE_CREATED",
+              entityType: "Booking",
+              entityId: disputedPayment ? String(disputedPayment.bookingId) : dispute.id,
+              details: {
+                disputeId: dispute.id,
+                paymentIntent: dispute.payment_intent,
+                amount: Number(dispute.amount) / 100,
+                currency: dispute.currency,
+                reason: dispute.reason,
+                evidenceDueBy: dispute.evidence_details?.due_by ?? null,
+              },
+            },
+          });
+          await notifyMasterUsers({
+            title: "Stripe dispute opened",
+            message: `A customer disputed ${amount} (${String(dispute.reason || "unknown reason").replaceAll("_", " ")}). Send your evidence in the Stripe dashboard by ${due}.${disputedPayment ? ` Booking id ${disputedPayment.bookingId}.` : ""}`,
+            type: "STRIPE_DISPUTE",
+            relatedEntityType: "Booking",
+            relatedEntityId: disputedPayment?.bookingId ?? null,
+          });
+          break;
+        }
+
         // ── Payout to bank account (platform-level) ─────────────────────────
         case "payout.created": {
           const payout = event.data.object;
@@ -753,6 +846,13 @@ export async function processStripeWebhookEvent(event, requestIp = null, databas
           console.log(`[Stripe] Unhandled event type: ${event.type}`);
   }
 }
+
+// ── Go-live checklist (administrator) ────────────────────────────────────────
+// Shows the Stripe mode in use and anything that must be fixed before real
+// money moves. Never returns a key or a secret.
+router.get("/readiness", verifyToken, allowRoles("MASTER_SELLER"), (_req, res) => {
+  res.json(stripeReadiness());
+});
 
 // ── Stripe Connect: account status ───────────────────────────────────────────
 router.get(

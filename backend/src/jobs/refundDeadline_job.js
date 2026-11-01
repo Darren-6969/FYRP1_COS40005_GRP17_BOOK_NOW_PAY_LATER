@@ -1,12 +1,24 @@
 import cron from "node-cron";
 import { runRefundDeadlineSweep } from "../services/refund_deadline_service.js";
+import { reconcileProcessingCardRefunds } from "../services/stripe_refund_service.js";
 import { runLoggedCronJob } from "../services/cron_job_service.js";
 
 // Refund policy, step 3: daily reminders for DuitNow refunds the operator has
 // still to send, escalation to the administrator once the deadline passes.
 // runLoggedCronJob takes an advisory lock and writes a log row for each run.
 export function runRefundDeadlineJob() {
-  return runLoggedCronJob("REFUND_DEADLINE", () => runRefundDeadlineSweep());
+  return runLoggedCronJob("REFUND_DEADLINE", async () => {
+    const deadlines = await runRefundDeadlineSweep();
+    // Card refunds Stripe accepted but had not finished are settled here too.
+    const cards = await reconcileProcessingCardRefunds();
+    return {
+      ...deadlines,
+      cardRefundsSettled: cards.settledCount,
+      processedCount: deadlines.processedCount + cards.settledCount,
+      failureCount: deadlines.failureCount + cards.failureCount,
+      errors: [...deadlines.errors, ...cards.errors],
+    };
+  });
 }
 
 export function startRefundDeadlineJob() {

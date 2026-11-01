@@ -78,7 +78,7 @@ const paymentOptions = useMemo(() => {
     acceptedPaymentMethods.stripe && [
       "STRIPE",
       "Stripe",
-      "Card payment using Stripe sandbox",
+      "Card or online banking through Stripe",
     ],
     acceptedPaymentMethods.duitnowSpay && receiptUploadEnabled && [
       "DUITNOW_SPAY",
@@ -321,9 +321,14 @@ const effectiveMethod = paymentOptions.some(([value]) => value === method)
 
           {effectiveMethod === "STRIPE" && (
             <p className="customer-payment-note">
-              You will be redirected to Stripe&apos;s secure checkout. Use card{" "}
-              <strong>4242 4242 4242 4242</strong>, any future expiry, and any
-              CVC in the sandbox.
+              You will be redirected to Stripe&apos;s secure checkout.
+              {/* Only in the sandbox build (VITE_STRIPE_SANDBOX_HINT=true). */}
+              {import.meta.env.VITE_STRIPE_SANDBOX_HINT === "true" && (
+                <>
+                  {" "}Sandbox: use card <strong>4242 4242 4242 4242</strong>,
+                  any future expiry, and any CVC.
+                </>
+              )}
             </p>
           )}
 

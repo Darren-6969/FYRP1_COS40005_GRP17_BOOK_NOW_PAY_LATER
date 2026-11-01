@@ -10,8 +10,9 @@ import { reverseRefundInLedger } from "./refund_service.js";
 // A refund still marked PROCESSING after this long was interrupted (a crash or
 // a timeout), so it may be picked up again.
 const STALE_PROCESSING_MS = 5 * 60_000;
-// Stripe reports a refund as "pending" while a bank method settles it. The
-// platform balance has already been debited, so it counts as sent.
+// Stripe reports a refund as "pending" while a bank method (FPX, GrabPay)
+// settles it, or while the platform balance cannot yet cover it. It can still
+// fail later, so the record stays PROCESSING until Stripe says it succeeded.
 const ACCEPTED_STRIPE_STATUSES = ["succeeded", "pending"];
 const DEAD_STRIPE_STATUSES = ["failed", "canceled"];
 
@@ -243,23 +244,102 @@ export async function processStripeRefund({
     throw refundError(`Stripe could not process the refund: ${detail}`, fromStripe ? 502 : error.statusCode || 502);
   }
 
+  const providerRefundId = sent.map((item) => item.id).join(",");
+  const stripeRefunds = sent.map((item) => ({ id: item.id, amount: item.cents / 100, status: item.status }));
+
+  // Accepted but not finished: keep the ids and wait for Stripe to say it
+  // succeeded (a webhook, or the reconcile job), or failed.
+  if (sent.some((item) => item.status !== "succeeded")) {
+    const waiting = await database.refund.update({
+      where: { id: refund.id },
+      data: { status: "PROCESSING", providerRefundId, lastError: null },
+    });
+    return { refund: waiting, booking: refund.booking, stripeRefunds, pending: true };
+  }
+
   const settled = await database.$transaction(async (tx) => {
     const updated = await tx.refund.update({
       where: { id: refund.id },
-      data: {
-        status: "REFUNDED",
-        processedAt: now,
-        providerRefundId: sent.map((item) => item.id).join(","),
-        lastError: null,
-      },
+      data: { status: "REFUNDED", processedAt: now, providerRefundId, lastError: null },
     });
     await reverseRefundInLedger(tx, updated);
     return updated;
   });
 
-  return {
-    refund: settled,
-    booking: refund.booking,
-    stripeRefunds: sent.map((item) => ({ id: item.id, amount: item.cents / 100, status: item.status })),
-  };
+  return { refund: settled, booking: refund.booking, stripeRefunds, pending: false };
+}
+
+// Stripe tells us a refund we sent has finished or failed (refund.updated,
+// refund.failed). Only refunds made from this platform carry our record id in
+// their metadata; one made in the Stripe dashboard is recorded by the
+// charge.refunded webhook instead.
+export async function applyStripeRefundUpdate(stripeRefund, { database = prisma, now = new Date() } = {}) {
+  const id = Number(stripeRefund?.metadata?.bnplRefundId);
+  if (!Number.isInteger(id) || id <= 0) return { handled: false };
+
+  const record = await database.refund.findUnique({
+    where: { id },
+    include: { booking: { select: { id: true, bookingCode: true, operatorId: true, customerId: true } } },
+  });
+  if (!record || record.method !== "STRIPE") return { handled: false };
+  if (record.status === "REFUNDED") return { handled: true, changed: false, refund: record };
+
+  const ids = String(record.providerRefundId || "").split(",").filter(Boolean);
+  if (ids.length && !ids.includes(stripeRefund.id)) return { handled: true, changed: false, refund: record };
+
+  if (DEAD_STRIPE_STATUSES.includes(stripeRefund.status)) {
+    const reason = stripeRefund.failure_reason ? ` (${String(stripeRefund.failure_reason).replaceAll("_", " ")})` : "";
+    const failed = await database.refund.update({
+      where: { id },
+      data: { status: "FAILED", lastError: `Stripe could not complete the refund${reason}.`.slice(0, 500) },
+    });
+    return { handled: true, changed: true, refund: { ...failed, booking: record.booking } };
+  }
+
+  if (stripeRefund.status === "succeeded") {
+    // A refund paid from two payments is finished only when both are: leave it
+    // to the reconcile job, which checks them all.
+    if (ids.length > 1) return { handled: true, changed: false, needsReconcile: true, refund: record };
+    const done = await database.$transaction(async (tx) => {
+      const updated = await tx.refund.update({
+        where: { id },
+        data: { status: "REFUNDED", processedAt: now, providerRefundId: stripeRefund.id, lastError: null },
+      });
+      await reverseRefundInLedger(tx, updated);
+      return updated;
+    });
+    return { handled: true, changed: true, refund: { ...done, booking: record.booking } };
+  }
+
+  return { handled: true, changed: false, refund: record };
+}
+
+// Refunds still waiting on Stripe after an hour are checked again: a retry
+// adopts the refund Stripe already made and settles it once it has succeeded.
+export async function reconcileProcessingCardRefunds({
+  database = prisma,
+  now = new Date(),
+  send = processStripeRefund,
+  olderThanMs = 60 * 60 * 1000,
+  limit = 50,
+} = {}) {
+  const waiting = await database.refund.findMany({
+    where: { method: "STRIPE", status: "PROCESSING", updatedAt: { lt: new Date(now.getTime() - olderThanMs) } },
+    select: { id: true, bookingId: true },
+    take: limit,
+  });
+
+  let settledCount = 0;
+  let stillPendingCount = 0;
+  const errors = [];
+  for (const item of waiting) {
+    try {
+      const result = await send({ bookingId: item.bookingId, refundId: item.id, operatorId: null, actorId: null, database, now });
+      if (result.pending) stillPendingCount += 1;
+      else settledCount += 1;
+    } catch (error) {
+      errors.push({ refundId: item.id, message: error.message });
+    }
+  }
+  return { checkedCount: waiting.length, settledCount, stillPendingCount, failureCount: errors.length, errors };
 }

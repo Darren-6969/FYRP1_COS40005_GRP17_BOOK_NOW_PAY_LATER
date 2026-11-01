@@ -172,13 +172,17 @@ export async function processBookingStripeRefund(req, res, next) {
       await notifyCustomerByBooking({
         booking,
         title: "Refund processed",
-        message: `A refund of MYR ${amount.toFixed(2)} for booking ${code} has been sent to your card. Banks usually take 5 to 10 working days to show it.`,
+        message: result.pending
+          ? `Your refund of MYR ${amount.toFixed(2)} for booking ${code} is being processed by Stripe. We will tell you when it is sent.`
+          : `A refund of MYR ${amount.toFixed(2)} for booking ${code} has been sent to your card. Banks usually take 5 to 10 working days to show it.`,
         type: "PAYMENT_REFUNDED",
       }).catch((error) => console.error("[refund] customer notification failed:", error.message));
     }
 
     res.json({
-      message: "Refund sent to the customer's card.",
+      message: result.pending
+        ? "Stripe has accepted the refund and is still processing it."
+        : "Refund sent to the customer's card.",
       refund: mapRefund(result.refund),
       stripeRefunds: result.stripeRefunds,
     });

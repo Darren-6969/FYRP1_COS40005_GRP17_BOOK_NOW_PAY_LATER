@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   allocateRefund,
+  applyStripeRefundUpdate,
   processStripeRefund,
+  reconcileProcessingCardRefunds,
   refundIntentIds,
   unrecordedStripeRefundCents,
 } from "../../src/services/stripe_refund_service.js";
@@ -19,6 +21,7 @@ function makeStripe(intents) {
     refunds: [],
     created: [],
     failNext: null,
+    nextStatus: null,
   };
   class FakeStripe {
     constructor(key) {
@@ -42,7 +45,7 @@ function makeStripe(intents) {
           }
           const refund = {
             id: `re_${state.refunds.length + 1}`,
-            status: "succeeded",
+            status: state.nextStatus || "succeeded",
             ...params,
           };
           state.refunds.push(refund);
@@ -108,6 +111,9 @@ function makeDatabase({ refund = {}, payment = {}, ledger = {}, operatorId = 7 }
     row,
     entries,
     refund: {
+      findUnique: async ({ where }) =>
+        where.id === row.id ? { ...row, booking: { id: row.bookingId, bookingCode: "BNPL-5", operatorId, customerId: 3 } } : null,
+      findMany: async () => (["PROCESSING"].includes(row.status) ? [{ id: row.id, bookingId: row.bookingId }] : []),
       findFirst: async ({ where }) => {
         if (where.id !== row.id || where.bookingId !== row.bookingId) return null;
         if (where.booking?.operatorId && where.booking.operatorId !== operatorId) return null;
@@ -373,4 +379,88 @@ test("missing Stripe configuration or payment intent is reported before anything
     (error) => error.appCode === "NO_PAYMENT_INTENT"
   );
   assert.equal(noIntent.row.status, "PENDING");
+});
+
+// ---- refunds that Stripe accepts but has not finished ------------------------------
+
+test("a refund Stripe has accepted but not finished stays PROCESSING, with no ledger reversal yet", async () => {
+  const { FakeStripe, state } = makeStripe({ pi_down: 10000 });
+  state.nextStatus = "pending"; // a bank method, or a platform balance that cannot cover it yet
+  const database = makeDatabase();
+
+  const result = await processStripeRefund(base(database, FakeStripe));
+
+  assert.equal(result.pending, true);
+  assert.equal(database.row.status, "PROCESSING");
+  assert.equal(database.row.providerRefundId, "re_1");
+  assert.equal(database.row.processedAt, null);
+  assert.equal(database.entries.some((entry) => entry.paymentType === "REFUND"), false, "nothing is reversed until the money has gone");
+});
+
+test("when Stripe later says it succeeded the refund is settled once, and the ledger reversed once", async () => {
+  const { FakeStripe, state } = makeStripe({ pi_down: 10000 });
+  state.nextStatus = "pending";
+  const database = makeDatabase();
+  await processStripeRefund(base(database, FakeStripe));
+
+  const event = { id: "re_1", status: "succeeded", metadata: { bnplRefundId: "1" } };
+  const first = await applyStripeRefundUpdate(event, { database, now: NOW });
+  assert.equal(first.changed, true);
+  assert.equal(database.row.status, "REFUNDED");
+  assert.equal(database.entries.filter((entry) => entry.paymentType === "REFUND").length, 1);
+
+  const again = await applyStripeRefundUpdate(event, { database, now: NOW }); // a redelivered webhook
+  assert.equal(again.changed, false);
+  assert.equal(database.entries.filter((entry) => entry.paymentType === "REFUND").length, 1);
+});
+
+test("when Stripe later says it failed the refund is marked Failed, ready for Retry Card Refund", async () => {
+  const { FakeStripe, state } = makeStripe({ pi_down: 10000 });
+  state.nextStatus = "pending";
+  const database = makeDatabase();
+  await processStripeRefund(base(database, FakeStripe));
+
+  const result = await applyStripeRefundUpdate(
+    { id: "re_1", status: "failed", failure_reason: "expired_or_canceled_card", metadata: { bnplRefundId: "1" } },
+    { database, now: NOW }
+  );
+
+  assert.equal(result.changed, true);
+  assert.equal(database.row.status, "FAILED");
+  assert.match(database.row.lastError, /could not complete the refund \(expired or canceled card\)/);
+  assert.equal(database.entries.some((entry) => entry.paymentType === "REFUND"), false);
+});
+
+test("a refund made in the Stripe dashboard is left to the charge.refunded webhook", async () => {
+  const database = makeDatabase();
+  assert.deepEqual(await applyStripeRefundUpdate({ id: "re_x", status: "succeeded", metadata: {} }, { database }), { handled: false });
+  assert.deepEqual(await applyStripeRefundUpdate({ id: "re_x", status: "succeeded", metadata: { bnplRefundId: "999" } }, { database }), { handled: false });
+});
+
+test("the reconcile job settles a waiting refund once Stripe reports it succeeded", async () => {
+  const { FakeStripe, state } = makeStripe({ pi_down: 10000 });
+  state.nextStatus = "pending";
+  const database = makeDatabase();
+  await processStripeRefund(base(database, FakeStripe));
+  assert.equal(database.row.status, "PROCESSING");
+
+  const later = new Date(NOW.getTime() + 3 * 3600_000);
+  const stillWaiting = await reconcileProcessingCardRefunds({
+    database,
+    now: later,
+    send: (input) => processStripeRefund({ ...input, StripeClient: FakeStripe, secretKey: "sk_test_key" }),
+  });
+  assert.equal(stillWaiting.stillPendingCount, 1, "Stripe has not finished yet");
+  assert.equal(database.row.status, "PROCESSING");
+
+  state.refunds[0].status = "succeeded"; // the bank has paid it back
+  const settled = await reconcileProcessingCardRefunds({
+    database,
+    now: new Date(later.getTime() + 3 * 3600_000),
+    send: (input) => processStripeRefund({ ...input, StripeClient: FakeStripe, secretKey: "sk_test_key" }),
+  });
+  assert.equal(settled.settledCount, 1);
+  assert.equal(database.row.status, "REFUNDED");
+  assert.equal(state.created.length, 1, "no second refund was made");
+  assert.equal(database.entries.filter((entry) => entry.paymentType === "REFUND").length, 1);
 });
