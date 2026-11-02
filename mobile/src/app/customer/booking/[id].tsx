@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   RefreshControl,
   SafeAreaView,
@@ -347,6 +348,16 @@ export default function BookingDetailScreen() {
       booking.totalAmount || 0
     );
 
+  const remainingAmount =
+  Math.max(
+    total - paidAmount,
+    0
+  );
+
+  const overallPaymentStatus =
+  payment?.status ||
+  "UNPAID";
+
   const progress =
     total > 0
       ? Math.min(
@@ -363,6 +374,29 @@ export default function BookingDetailScreen() {
     booking.status || ""
   );
 
+  const getNextPaymentType = () => {
+  const payment = booking?.payment;
+
+  if (!payment) {
+    return "FULL_PAYMENT";
+  }
+
+  if (
+    payment.downPaymentStatus === "PAID" &&
+    payment.finalPaymentStatus !== "PAID"
+  ) {
+    return "FINAL_PAYMENT";
+  }
+
+  if (
+    payment.downPaymentStatus !== "PAID"
+  ) {
+    return "DOWN_PAYMENT";
+  }
+
+  return "FULL_PAYMENT";
+};
+
   const waitingForOperator =
     booking.status === "PENDING";
 
@@ -373,6 +407,39 @@ export default function BookingDetailScreen() {
   ].includes(
     booking.status || ""
   );
+
+  const openDocument = async (
+    url?: string
+    ) => {
+    if (!url) {
+        return;
+    }
+
+    try {
+        const supported =
+        await Linking.canOpenURL(
+            url
+        );
+
+        if (!supported) {
+        console.log(
+            "Unable to open document:",
+            url
+        );
+
+        return;
+        }
+
+        await Linking.openURL(
+        url
+        );
+    } catch (err) {
+        console.log(
+        "Failed to open document:",
+        err
+        );
+    }
+    };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -639,197 +706,480 @@ export default function BookingDetailScreen() {
         </View>
 
         {/* PAYMENT */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <View
-              style={
-                styles.sectionIconBox
+<View style={styles.sectionCard}>
+  <View style={styles.sectionHeader}>
+    <View
+      style={
+        styles.sectionIconBox
+      }
+    >
+      <Ionicons
+        name="wallet-outline"
+        size={20}
+        color="#07869B"
+      />
+    </View>
+
+    <Text
+      style={styles.sectionTitle}
+    >
+      Payment Overview
+    </Text>
+  </View>
+
+  {payment ? (
+    <>
+      {/* TOTAL SUMMARY */}
+      <View
+        style={
+          styles.paymentSummary
+        }
+      >
+        <View>
+          <Text
+            style={
+              styles.paymentLabel
+            }
+          >
+            Paid
+          </Text>
+
+          <Text
+            style={
+              styles.paymentPaid
+            }
+          >
+            {money(paidAmount)}
+          </Text>
+        </View>
+
+        <View
+          style={{
+            alignItems: "flex-end",
+          }}
+        >
+          <Text
+            style={
+              styles.paymentLabel
+            }
+          >
+            Total
+          </Text>
+
+          <Text
+            style={
+              styles.paymentTotal
+            }
+          >
+            {money(total)}
+          </Text>
+        </View>
+      </View>
+
+      {/* PROGRESS */}
+      <View
+        style={
+          styles.progressBackground
+        }
+      >
+        <View
+          style={[
+            styles.progressBar,
+            {
+              width: `${progress}%`,
+            },
+          ]}
+        />
+      </View>
+
+      <Text
+        style={
+          styles.progressText
+        }
+      >
+        {Math.round(progress)}% paid
+      </Text>
+
+      {/* PAYMENT BREAKDOWN */}
+      <View
+        style={
+          styles.paymentBreakdown
+        }
+      >
+        <View
+          style={
+            styles.paymentPart
+          }
+        >
+          <Text
+            style={
+              styles.paymentPartLabel
+            }
+          >
+            Down Payment
+          </Text>
+
+          <Text
+            style={
+              styles.paymentPartAmount
+            }
+          >
+            {money(
+              payment.downPaymentAmount
+            )}
+          </Text>
+
+          <Text
+            style={[
+              styles.paymentPartStatus,
+              payment.downPaymentStatus ===
+                "PAID" && {
+                color: "#258552",
+              },
+            ]}
+          >
+            {readableStatus(
+              payment.downPaymentStatus
+            )}
+          </Text>
+        </View>
+
+        <View
+          style={
+            styles.paymentPart
+          }
+        >
+          <Text
+            style={
+              styles.paymentPartLabel
+            }
+          >
+            Final Payment
+          </Text>
+
+          <Text
+            style={
+              styles.paymentPartAmount
+            }
+          >
+            {money(
+              payment.finalPaymentAmount
+            )}
+          </Text>
+
+          <Text
+            style={[
+              styles.paymentPartStatus,
+              payment.finalPaymentStatus ===
+                "PAID" && {
+                color: "#258552",
+              },
+            ]}
+          >
+            {readableStatus(
+              payment.finalPaymentStatus
+            )}
+          </Text>
+        </View>
+      </View>
+
+      {/* FINANCIAL SUMMARY */}
+      <View
+        style={
+          styles.paymentFinancialSummary
+        }
+      >
+        <View
+          style={
+            styles.financialRow
+          }
+        >
+          <Text
+            style={
+              styles.financialLabel
+            }
+          >
+            Total Paid
+          </Text>
+
+          <Text
+            style={
+              styles.financialValue
+            }
+          >
+            {money(paidAmount)}
+          </Text>
+        </View>
+
+        <View
+          style={
+            styles.financialRow
+          }
+        >
+          <Text
+            style={
+              styles.financialLabel
+            }
+          >
+            Remaining
+          </Text>
+
+          <Text
+            style={[
+              styles.financialValue,
+              remainingAmount === 0 && {
+                color: "#258552",
+              },
+            ]}
+          >
+            {money(
+              remainingAmount
+            )}
+          </Text>
+        </View>
+
+        <View
+          style={
+            styles.financialDivider
+          }
+        />
+
+        <View
+          style={
+            styles.financialRow
+          }
+        >
+          <Text
+            style={
+              styles.financialStatusLabel
+            }
+          >
+            Overall Payment
+          </Text>
+
+          <View
+            style={[
+              styles.paymentStatusBadge,
+
+              overallPaymentStatus ===
+                "PAID" && {
+                backgroundColor:
+                  "#E9F8EF",
+              },
+            ]}
+          >
+            <Ionicons
+              name={
+                overallPaymentStatus ===
+                "PAID"
+                  ? "checkmark-circle-outline"
+                  : "time-outline"
               }
-            >
-              <Ionicons
-                name="wallet-outline"
-                size={20}
-                color="#07869B"
-              />
-            </View>
+              size={15}
+              color={
+                overallPaymentStatus ===
+                "PAID"
+                  ? "#258552"
+                  : "#A86D00"
+              }
+            />
 
             <Text
-              style={styles.sectionTitle}
+              style={[
+                styles.paymentStatusText,
+
+                {
+                  color:
+                    overallPaymentStatus ===
+                    "PAID"
+                      ? "#258552"
+                      : "#A86D00",
+                },
+              ]}
             >
-              Payment Overview
+              {readableStatus(
+                overallPaymentStatus
+              )}
             </Text>
           </View>
+        </View>
+      </View>
 
-          {payment ? (
-            <>
+      {/* INVOICE / RECEIPT */}
+      {(booking.invoice ||
+        booking.receipt) && (
+        <View
+          style={
+            styles.documentSection
+          }
+        >
+          <Text
+            style={
+              styles.documentSectionTitle
+            }
+          >
+            Payment Documents
+          </Text>
+
+          {booking.invoice ? (
+            <Pressable
+            style={({ pressed }) => [
+                styles.documentRow,
+                pressed && {
+                opacity: 0.7,
+                },
+            ]}
+            onPress={() =>
+                router.push({
+                pathname:
+                    "/customer/invoice/[id]",
+                params: {
+                    id: String(
+                    booking.id
+                    ),
+                },
+                })
+            }
+            >
               <View
                 style={
-                  styles.paymentSummary
+                  styles.documentIcon
                 }
               >
-                <View>
-                  <Text
-                    style={
-                      styles.paymentLabel
-                    }
-                  >
-                    Paid
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.paymentPaid
-                    }
-                  >
-                    {money(paidAmount)}
-                  </Text>
-                </View>
-
-                <View
-                  style={{
-                    alignItems: "flex-end",
-                  }}
-                >
-                  <Text
-                    style={
-                      styles.paymentLabel
-                    }
-                  >
-                    Total
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.paymentTotal
-                    }
-                  >
-                    {money(total)}
-                  </Text>
-                </View>
-              </View>
-
-              <View
-                style={
-                  styles.progressBackground
-                }
-              >
-                <View
-                  style={[
-                    styles.progressBar,
-                    {
-                      width: `${progress}%`,
-                    },
-                  ]}
+                <Ionicons
+                  name="document-text-outline"
+                  size={20}
+                  color="#07869B"
                 />
               </View>
 
-              <Text
-                style={
-                  styles.progressText
-                }
+              <View
+                style={{
+                  flex: 1,
+                }}
               >
-                {Math.round(progress)}%
-                paid
-              </Text>
+                <Text
+                  style={
+                    styles.documentTitle
+                  }
+                >
+                  Invoice
+                </Text>
 
+                <Text
+                  style={
+                    styles.documentSubtitle
+                  }
+                >
+                  {booking.invoice
+                    ?.invoiceNo ||
+                    "Invoice available"}
+                </Text>
+              </View>
+
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color="#07869B"
+                />
+            </Pressable>
+          ) : null}
+
+          {booking.receipt ? (
+            <Pressable
+                style={({ pressed }) => [
+                styles.documentRow,
+
+                pressed && {
+                    opacity: 0.7,
+                },
+                ]}
+                disabled={
+                !booking.receipt
+                    ?.imageUrl
+                }
+                onPress={() =>
+                openDocument(
+                    booking.receipt
+                    ?.imageUrl
+                )
+                }
+            >
               <View
                 style={
-                  styles.paymentBreakdown
+                  styles.documentIcon
                 }
               >
-                <View
-                  style={
-                    styles.paymentPart
-                  }
-                >
-                  <Text
-                    style={
-                      styles.paymentPartLabel
-                    }
-                  >
-                    Down Payment
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.paymentPartAmount
-                    }
-                  >
-                    {money(
-                      payment.downPaymentAmount
-                    )}
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.paymentPartStatus
-                    }
-                  >
-                    {readableStatus(
-                      payment.downPaymentStatus
-                    )}
-                  </Text>
-                </View>
-
-                <View
-                  style={
-                    styles.paymentPart
-                  }
-                >
-                  <Text
-                    style={
-                      styles.paymentPartLabel
-                    }
-                  >
-                    Final Payment
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.paymentPartAmount
-                    }
-                  >
-                    {money(
-                      payment.finalPaymentAmount
-                    )}
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.paymentPartStatus
-                    }
-                  >
-                    {readableStatus(
-                      payment.finalPaymentStatus
-                    )}
-                  </Text>
-                </View>
+                <Ionicons
+                  name="receipt-outline"
+                  size={20}
+                  color="#07869B"
+                />
               </View>
-            </>
-          ) : (
-            <View
-              style={
-                styles.noPaymentBox
-              }
-            >
-              <Ionicons
-                name="hourglass-outline"
-                size={22}
-                color="#B27A00"
-              />
 
-              <Text
-                style={
-                  styles.noPaymentText
-                }
+              <View
+                style={{
+                  flex: 1,
+                }}
               >
-                Payment schedule will be
-                created after operator
-                approval.
-              </Text>
-            </View>
-          )}
+                <Text
+                  style={
+                    styles.documentTitle
+                  }
+                >
+                  Payment Receipt
+                </Text>
+
+                <Text
+                  style={
+                    styles.documentSubtitle
+                  }
+                >
+                  Receipt available
+                </Text>
+              </View>
+
+              <Ionicons
+                name={
+                    booking.receipt?.imageUrl
+                    ? "open-outline"
+                    : "checkmark-circle"
+                }
+                size={20}
+                color={
+                    booking.receipt?.imageUrl
+                    ? "#07869B"
+                    : "#258552"
+                }
+                />
+            </Pressable>
+          ) : null}
         </View>
+      )}
+    </>
+  ) : (
+    <View
+      style={
+        styles.noPaymentBox
+      }
+    >
+      <Ionicons
+        name="hourglass-outline"
+        size={22}
+        color="#B27A00"
+      />
+
+      <Text
+        style={
+          styles.noPaymentText
+        }
+      >
+        Payment schedule will be
+        created after operator approval.
+      </Text>
+    </View>
+  )}
+</View>
 
         {/* PAYMENT SCHEDULE */}
         {booking.paymentSchedule &&
@@ -1020,19 +1370,30 @@ export default function BookingDetailScreen() {
                 opacity: 0.85,
               },
             ]}
-            onPress={() =>
+            onPress={() => {
+            const nextPaymentType =
+                getNextPaymentType();
+
+            console.log(
+                "Next payment type:",
+                nextPaymentType
+            );
+
             router.push({
                 pathname:
                 "/customer/checkout",
+
                 params: {
                 bookingId:
                     String(
                     booking.id
                     ),
-                type: "DOWN_PAYMENT",
+
+                type:
+                    nextPaymentType,
                 },
-            })
-            }
+            });
+            }}
           >
             <View>
               <Text
@@ -1606,4 +1967,100 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     fontSize: 12,
   },
+
+  paymentFinancialSummary: {
+  marginTop: 16,
+  padding: 14,
+  borderRadius: 16,
+  backgroundColor: "#F7FAFB",
+  borderWidth: 1,
+  borderColor: "#E3EAED",
+},
+
+financialRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingVertical: 7,
+},
+
+financialLabel: {
+  color: "#82949C",
+  fontSize: 11,
+},
+
+financialValue: {
+  color: "#17313C",
+  fontSize: 12,
+  fontWeight: "900",
+},
+
+financialDivider: {
+  height: 1,
+  backgroundColor: "#E3EAED",
+  marginVertical: 8,
+},
+
+financialStatusLabel: {
+  color: "#17313C",
+  fontSize: 11,
+  fontWeight: "800",
+},
+
+paymentStatusBadge: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 5,
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 20,
+  backgroundColor: "#FFF4D6",
+},
+
+paymentStatusText: {
+  fontSize: 10,
+  fontWeight: "900",
+},
+
+documentSection: {
+  marginTop: 18,
+  paddingTop: 16,
+  borderTopWidth: 1,
+  borderTopColor: "#E3EAED",
+},
+
+documentSectionTitle: {
+  color: "#17313C",
+  fontSize: 12,
+  fontWeight: "900",
+  marginBottom: 10,
+},
+
+documentRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 11,
+  paddingVertical: 10,
+},
+
+documentIcon: {
+  width: 40,
+  height: 40,
+  borderRadius: 13,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#EAF8FA",
+},
+
+documentTitle: {
+  color: "#17313C",
+  fontSize: 11,
+  fontWeight: "900",
+},
+
+documentSubtitle: {
+  marginTop: 3,
+  color: "#82949C",
+  fontSize: 10,
+},
 });
