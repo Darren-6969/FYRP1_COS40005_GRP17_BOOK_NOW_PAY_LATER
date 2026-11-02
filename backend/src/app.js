@@ -22,6 +22,7 @@ import stripeRoutes     from "./routes/stripe_routes.js";
 import emailRoutes      from "./routes/email_routes.js";
 import cronRoutes       from "./routes/cron_routes.js";
 import refundRoutes     from "./routes/refund_routes.js";
+import testItemRoutes   from "./routes/test_item_routes.js"; // TEST-ITEM-MISC: delete with the test item
 import hostRoutes       from "./routes/host_routes.js";
 import uploadRoutes     from "./routes/upload_routes.js";
 import operatorApplicationRoutes from "./routes/operator_application_routes.js";
@@ -246,6 +247,7 @@ app.use("/api/operators/listings", listingRoutes);
 app.use("/api/operators/branches", branchRoutes);
 app.use("/api/payments",  paymentRoutes);
 app.use("/api/refunds",   refundRoutes);
+app.use("/api/test-items", testItemRoutes); // TEST-ITEM-MISC: delete with the test item
 app.use("/api/receipts",  receiptRoutes);
 app.use("/api/invoices",  invoiceRoutes);
 app.use("/api/operators", operatorRoutes);

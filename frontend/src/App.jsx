@@ -80,6 +80,7 @@ import OperatorStorefront from "./pages/public/OperatorStorefront";
 import Home from "./pages/public/Home";
 import CarResults from "./pages/public/CarResults";
 import CarDetail from "./pages/public/CarDetail";
+import TestItems from "./pages/public/TestItems"; // TEST-ITEM-MISC: delete with the test item
 import CarBookingForm from "./pages/public/CarBookingForm";
 import NotAvailable from "./pages/public/NotAvailable";
 import InfoPage from "./pages/public/InfoPage";
@@ -105,6 +106,8 @@ export default function App() {
           {/* Signed-out visitors go to /login?redirect=<this URL>, which keeps every selection. */}
           <Route element={<ProtectedRoute allowedRoles={["CUSTOMER"]} />}>
             <Route path="/cars/:listingId/book" element={<CarBookingForm />} />
+            {/* TEST-ITEM-MISC: the bookable test item. Delete this route when testing is finished. */}
+            <Route path="/test-items" element={<TestItems />} />
           </Route>
           <Route path="*" element={<NotAvailable />} />
         </Route>

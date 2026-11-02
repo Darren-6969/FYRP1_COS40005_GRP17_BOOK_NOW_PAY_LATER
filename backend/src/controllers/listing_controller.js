@@ -915,6 +915,8 @@ export async function createListing(
       ![
         "CAR_RENTAL",
         "TOUR",
+        // TEST-ITEM-MISC: delete this line to stop accepting the test item.
+        "MISCELLANEOUS",
       ].includes(category)
     ) {
       return res.status(400).json({

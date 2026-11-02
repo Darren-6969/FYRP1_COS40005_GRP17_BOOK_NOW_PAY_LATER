@@ -450,6 +450,11 @@ export default function OperatorListings() {
               <option value="TOUR">
                 Tour Package
               </option>
+
+              {/* TEST-ITEM-MISC: delete this option when testing is finished */}
+              <option value="MISCELLANEOUS">
+                Miscellaneous (test item)
+              </option>
             </select>
 
             <input
@@ -1292,6 +1297,13 @@ function getCategoryLabel(
     category === "TOUR"
   ) {
     return "Tour Package";
+  }
+
+  // TEST-ITEM-MISC: delete this block when testing is finished
+  if (
+    category === "MISCELLANEOUS"
+  ) {
+    return "Miscellaneous (test item)";
   }
 
   return category || "-";

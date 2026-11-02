@@ -101,6 +101,10 @@ enum BookingStatus {
 enum ListingCategory {
   CAR_RENTAL
   TOUR
+  // TEST-ITEM-MISC: a fixed-price item for testing. Remove with the rest of
+  // TEST-ITEM-MISC (see backend/TEST_ITEM_MISCELLANEOUS.md). A Postgres enum value
+  // cannot be dropped, so after deleting the listings it is harmless to leave.
+  MISCELLANEOUS
 }
 
 enum ListingStatus {
