@@ -1,0 +1,334 @@
+/* Admin console: Policies and answers (pages/master/Policies.jsx). */
+
+.pol-page {
+  --pol-line: #e5e7eb;
+  --pol-muted: #64748b;
+  --pol-ink: #0f172a;
+  --pol-accent: #185fa5;
+  --pol-accent-soft: #eff6ff;
+  --pol-warn-bg: #fffbeb;
+  --pol-warn-line: #f5d58a;
+  --pol-warn-ink: #78350f;
+}
+
+.pol-rule-note {
+  background: var(--pol-warn-bg);
+  border: 1px solid var(--pol-warn-line);
+  color: var(--pol-warn-ink);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+/* The grey rule is an inset shadow, not a border, so the active tab's
+   underline can sit on it without overflowing; overflow-x: auto alone would
+   make the 1px overflow scroll vertically. */
+.pol-tabs {
+  display: flex;
+  gap: 6px;
+  box-shadow: inset 0 -1px 0 var(--pol-line);
+  margin-bottom: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.pol-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pol-muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pol-tab.active {
+  color: var(--pol-accent);
+  border-bottom-color: var(--pol-accent);
+}
+
+.pol-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.pol-list {
+  display: grid;
+  gap: 14px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.pol-group {
+  display: grid;
+  gap: 4px;
+}
+
+.pol-group-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--pol-ink);
+}
+
+.pol-group-use {
+  font-size: 12px;
+  color: var(--pol-muted);
+  margin-bottom: 4px;
+}
+
+.pol-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--pol-line);
+  background: white;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--pol-ink);
+  cursor: pointer;
+}
+
+.pol-item:hover {
+  border-color: #cbd5e1;
+}
+
+.pol-item.active {
+  border-color: var(--pol-accent);
+  background: var(--pol-accent-soft);
+}
+
+.pol-item-add {
+  justify-content: flex-start;
+  border-style: dashed;
+  color: var(--pol-accent);
+  font-weight: 700;
+}
+
+.pol-item-meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pol-muted);
+}
+
+.pol-main {
+  min-width: 0;
+}
+
+.pol-editor {
+  display: grid;
+  gap: 14px;
+}
+
+.pol-editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.pol-editor-head h4 {
+  margin: 2px 0 4px;
+  font-size: 17px;
+  color: var(--pol-ink);
+}
+
+.pol-eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pol-muted);
+}
+
+.pol-muted {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pol-muted);
+}
+
+.pol-editor input,
+.pol-editor select,
+.pol-editor textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.pol-editor textarea {
+  resize: vertical;
+}
+
+.pol-hint {
+  font-size: 12px;
+  color: var(--pol-muted);
+}
+
+.pol-placeholders {
+  display: grid;
+  gap: 6px;
+}
+
+.pol-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pol-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  border: 1px dashed #93c5fd;
+  background: var(--pol-accent-soft);
+  color: var(--pol-accent);
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pol-chip span {
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  color: var(--pol-muted);
+}
+
+.pol-preview-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--pol-muted);
+  margin-bottom: -8px;
+}
+
+.pol-preview {
+  border: 1px solid var(--pol-line);
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--pol-ink);
+  overflow-wrap: anywhere;
+}
+
+.pol-preview h5 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.pol-preview p {
+  margin: 0 0 8px;
+}
+
+.pol-preview ul {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+
+.pol-preview-old {
+  background: white;
+}
+
+.pol-chat {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.pol-chat-button {
+  border: 1px solid var(--pol-accent);
+  color: var(--pol-accent);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  background: white;
+}
+
+.pol-chat-bubble {
+  background: white;
+  border: 1px solid var(--pol-line);
+  border-radius: 12px 12px 12px 4px;
+  padding: 10px 12px;
+  max-width: 520px;
+  white-space: pre-line;
+}
+
+.pol-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pol-editor-actions .btn,
+.pol-history .btn {
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+.pol-editor-actions .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pol-history .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pol-history-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pol-history-item {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--pol-line);
+  padding-top: 8px;
+}
+
+.pol-history-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--pol-muted);
+}
+
+@media (max-width: 900px) {
+  .pol-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .pol-list {
+    max-height: 40vh;
+  }
+}

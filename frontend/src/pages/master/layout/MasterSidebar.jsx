@@ -20,6 +20,7 @@ import {
   Store,
   Gavel,
   Undo2,
+  ScrollText,
 } from "lucide-react";
 
 const links = [
@@ -37,6 +38,7 @@ const links = [
   { to: "/master/settlements", label: "Settlements", icon: Wallet },
   { to: "/master/cron-jobs", label: "Cron Jobs", icon: Clock },
   { to: "/master/system-settings", label: "System Settings", icon: Settings },
+  { to: "/master/policies", label: "Policies & Answers", icon: ScrollText },
   { to: "/master/email-logs", label: "Email Logs", icon: Mail },
   { to: "/master/system-logs", label: "System Logs", icon: FileText },
   { to: "/master/profile", label: "Profile", icon: UserRound },

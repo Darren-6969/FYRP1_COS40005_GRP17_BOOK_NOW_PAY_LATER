@@ -9,6 +9,7 @@ import {
   quoteCar,
   searchCars,
 } from "../controllers/public_car_controller.js";
+import { getPublicPolicy } from "../controllers/policy_controller.js";
 
 import {
   validate,
@@ -133,6 +134,13 @@ router.get(
 router.get(
   "/sign-in-panel",
   getSignInPanel
+);
+
+// Policy library wording for the info pages
+// (terms, privacy, refund rules).
+router.get(
+  "/policies/:documentKey",
+  getPublicPolicy
 );
 
 export default router;

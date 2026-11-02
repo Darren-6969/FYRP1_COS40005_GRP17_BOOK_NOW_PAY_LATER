@@ -29,6 +29,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import EmailLogs from "./pages/master/EmailLogs";
 import MasterHelp from "./pages/master/MasterHelp";
 import CreditAppeals from "./pages/master/CreditAppeals";
+import Policies from "./pages/master/Policies";
 
 // Customer Pages
 import CustomerLayout from "./pages/customer/layout/CustomerLayout";
@@ -139,6 +140,7 @@ export default function App() {
               <Route path="cron-jobs" element={<CronJobs />} />
               <Route path="system-logs" element={<SystemLogs />} />
               <Route path="system-settings" element={<SystemSettings />} />
+              <Route path="policies" element={<Policies />} />
               <Route path="email-logs" element={<EmailLogs />} />
               <Route path="help" element={<MasterHelp />} />
               <Route path="credit-appeals" element={<CreditAppeals />} />
