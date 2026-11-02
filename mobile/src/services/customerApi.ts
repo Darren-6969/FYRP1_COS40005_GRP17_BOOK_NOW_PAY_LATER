@@ -52,6 +52,75 @@ export async function createStripeCheckoutSession(
   );
 }
 
+export type ManualPaymentType =
+  | "DOWN_PAYMENT"
+  | "FINAL_PAYMENT"
+  | "FULL_PAYMENT";
+
+export type ManualPaymentMethod =
+  | "DUITNOW"
+  | "SPAY"
+  | "BANK_TRANSFER";
+
+export async function getManualPaymentOptions(
+  bookingId: number | string
+) {
+  return apiRequest(
+    `/customer/bookings/${bookingId}/manual-payment`,
+    {
+      method: "GET",
+    }
+  );
+}
+
+export async function getCustomerPayments() {
+  return apiRequest(
+    "/customer/payments",
+    {
+      method: "GET",
+    }
+  );
+}
+
+export async function uploadCustomerReceipt(
+  bookingId: number | string,
+  input: {
+    imageUrl: string;
+    remarks?: string;
+    method: ManualPaymentMethod;
+    paymentType: ManualPaymentType;
+  }
+) {
+  const idempotencyKey =
+    `receipt-${bookingId}-${input.paymentType}-${Date.now()}`;
+
+  return apiRequest(
+    `/customer/bookings/${bookingId}/receipt`,
+    {
+      method: "POST",
+
+      headers: {
+        "Idempotency-Key":
+          idempotencyKey,
+      },
+
+      body: JSON.stringify({
+        imageUrl:
+          input.imageUrl,
+
+        remarks:
+          input.remarks || "",
+
+        method:
+          input.method,
+
+        paymentType:
+          input.paymentType,
+      }),
+    }
+  );
+}
+
 export async function markCustomerNotificationRead(
   id: number | string
 ) {
