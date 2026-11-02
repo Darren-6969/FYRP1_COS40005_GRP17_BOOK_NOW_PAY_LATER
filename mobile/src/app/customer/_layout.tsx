@@ -72,6 +72,30 @@ export default function CustomerLayout() {
           animation: "slide_from_right",
         }}
       />
+
+      <Stack.Screen
+        name="support-chat"
+        options={{
+            animation:
+            "slide_from_right",
+        }}
+        />
+
+      <Stack.Screen
+        name="terms"
+        options={{
+            animation:
+            "slide_from_right",
+        }}
+        />
+
+      <Stack.Screen
+        name="privacy"
+        options={{
+            animation:
+            "slide_from_right",
+        }}
+        />
     </Stack>
   );
 }

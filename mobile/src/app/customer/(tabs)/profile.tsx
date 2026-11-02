@@ -1076,6 +1076,11 @@ export default function ProfileScreen() {
             icon="help-circle-outline"
             title="Help & Support"
             subtitle="Get help with your bookings and payments"
+            onPress={() =>
+              router.push(
+                "/customer/support-chat"
+              )
+            }
           />
 
           <View
@@ -1088,6 +1093,11 @@ export default function ProfileScreen() {
             icon="document-text-outline"
             title="Terms & Conditions"
             subtitle="Review platform terms"
+            onPress={() =>
+              router.push(
+                "/customer/terms"
+              )
+            }
           />
 
           <View
@@ -1100,6 +1110,11 @@ export default function ProfileScreen() {
             icon="shield-checkmark-outline"
             title="Privacy Policy"
             subtitle="Learn how your information is handled"
+            onPress={() =>
+              router.push(
+                "/customer/privacy"
+              )
+            }
           />
         </View>
 

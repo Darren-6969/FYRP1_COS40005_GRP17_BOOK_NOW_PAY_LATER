@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -39,6 +40,12 @@ import {
 export default function CustomerHome() {
   const router = useRouter();
 
+  const scrollViewRef =
+  useRef<any>(null);
+
+  const carsSectionY =
+    useRef(0);
+
   const [cars, setCars] = useState<any[]>([]);
   const [loadingCars, setLoadingCars] =
     useState(true);
@@ -71,6 +78,16 @@ export default function CustomerHome() {
 
   const [loadingBooking, setLoadingBooking] =
     useState(true);
+
+  const scrollToCars = () => {
+    scrollViewRef.current?.scrollTo({
+      y: Math.max(
+        carsSectionY.current - 20,
+        0
+      ),
+      animated: true,
+    });
+  };
 
     useEffect(() => {
     const loadCars = async () => {
@@ -375,6 +392,7 @@ export default function CustomerHome() {
       <StatusBar style="dark" />
 
       <ScrollView
+        ref={scrollViewRef}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -529,28 +547,50 @@ export default function CustomerHome() {
 
         {/* Hero Banner */}
         <View style={styles.heroBanner}>
-          <View style={styles.heroTextArea}>
-            <Text style={styles.heroTitle}>
-              Drive Now{"\n"}Pay Later
+        <View style={styles.heroTextArea}>
+          <Text style={styles.heroTitle}>
+            Book Now{"\n"}Pay Later
+          </Text>
+
+          <Text style={styles.heroSubtitle}>
+            Flexible car rental with BNPL payment options.
+          </Text>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.heroButton,
+
+              pressed && {
+                opacity: 0.8,
+              },
+            ]}
+            onPress={scrollToCars}
+          >
+            <Text
+              style={
+                styles.heroButtonText
+              }
+            >
+              Browse Cars
             </Text>
 
-            <Text style={styles.heroSubtitle}>
-              Flexible car rental with BNPL payment options.
+            <Text
+              style={
+                styles.heroArrow
+              }
+            >
+              →
             </Text>
-
-            <Pressable style={styles.heroButton}>
-              <Text style={styles.heroButtonText}>View Deals</Text>
-              <Text style={styles.heroArrow}>→</Text>
-            </Pressable>
-          </View>
-
-          <Image
-            source={{
-              uri: "https://images.unsplash.com/photo-1504215680853-026ed2a45def?auto=format&fit=crop&w=900&q=80",
-            }}
-            style={styles.heroImage}
-          />
+          </Pressable>
         </View>
+
+        <Image
+          source={{
+            uri: "https://images.unsplash.com/photo-1504215680853-026ed2a45def?auto=format&fit=crop&w=900&q=80",
+          }}
+          style={styles.heroImage}
+        />
+      </View>
 
         {/* Categories */}
         <ScrollView
@@ -617,9 +657,14 @@ export default function CustomerHome() {
           })}
         </ScrollView>
         
-
-        {/* Featured Cars Header */}
-    <View style={styles.sectionHeader}>
+    {/* Featured Cars Header */}
+    <View
+      style={styles.sectionHeader}
+      onLayout={(event) => {
+        carsSectionY.current =
+          event.nativeEvent.layout.y;
+      }}
+    >
       <Text style={styles.sectionTitle}>
         Featured Cars
       </Text>
