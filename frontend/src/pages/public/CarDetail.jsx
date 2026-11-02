@@ -881,35 +881,37 @@ export default function CarDetail() {
         </dl>
       </section>
 
-      <section className={styles.card} aria-labelledby="faq-h">
-        <h2 id="faq-h" className={`${styles.h2} ${styles.cardTitle}`}>
-          Questions about this car
-        </h2>
-        {listing.faqs.map((f, i) => {
-          const open = openFaq === i;
-          return (
-            <div key={f.q} className={styles.faqItem}>
-              <h3 className={styles.faqQ}>
-                <button
-                  type="button"
-                  className={styles.faqButton}
-                  aria-expanded={open}
-                  aria-controls={`${uid}-faq-${i}`}
-                  onClick={() => setOpenFaq(open ? -1 : i)}
-                >
-                  {f.q}
-                  <Plus size={18} aria-hidden="true" className={`${styles.faqIcon} ${disclosure.icon} ${open ? disclosure.iconOpen : ""}`} />
-                </button>
-              </h3>
-              <div id={`${uid}-faq-${i}`} className={`${disclosure.panel} ${open ? disclosure.panelOpen : ""}`}>
-                <div className={disclosure.panelInner}>
-                  <p className={styles.faqA}>{f.a}</p>
+      {listing.faqs.length > 0 && (
+        <section className={styles.card} aria-labelledby="faq-h">
+          <h2 id="faq-h" className={`${styles.h2} ${styles.cardTitle}`}>
+            Questions about this car
+          </h2>
+          {listing.faqs.map((f, i) => {
+            const open = openFaq === i;
+            return (
+              <div key={f.q} className={styles.faqItem}>
+                <h3 className={styles.faqQ}>
+                  <button
+                    type="button"
+                    className={styles.faqButton}
+                    aria-expanded={open}
+                    aria-controls={`${uid}-faq-${i}`}
+                    onClick={() => setOpenFaq(open ? -1 : i)}
+                  >
+                    {f.q}
+                    <Plus size={18} aria-hidden="true" className={`${styles.faqIcon} ${disclosure.icon} ${open ? disclosure.iconOpen : ""}`} />
+                  </button>
+                </h3>
+                <div id={`${uid}-faq-${i}`} className={`${disclosure.panel} ${open ? disclosure.panelOpen : ""}`}>
+                  <div className={disclosure.panelInner}>
+                    <p className={styles.faqA}>{f.a}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </section>
+            );
+          })}
+        </section>
+      )}
 
       {offerId ? (
         <OfferModeBanner bookingId={offerId} placement="bottom" />

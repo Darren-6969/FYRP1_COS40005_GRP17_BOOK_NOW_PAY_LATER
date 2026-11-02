@@ -3,6 +3,7 @@
 // All money in responses is integer sen.
 
 import prisma from "../config/db.js";
+import { getCarFaqs } from "./policy_service.js";
 import { getExposureLimit } from "./concurrent_exposure_service.js";
 import { isCreditTierPolicyEnabled } from "./platform_settings_service.js";
 import {
@@ -47,13 +48,6 @@ export const LISTING_INCLUDE = {
   images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] },
   addons: { where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
 };
-
-// Generic until operators can write their own. Platform text, not operator terms.
-const STANDARD_FAQS = [
-  { q: "Do I need an international driving permit?", a: "Drivers with a licence in English or Malay do not. Other licences need an international driving permit alongside the original, uploaded by the licence deadline." },
-  { q: "When do I pay the balance?", a: "The balance is due before pick-up, on the date shown in your payment schedule. If the balance deadline is missed, the refund rule shown on the listing applies to the deposit." },
-  { q: "What if I pick up late?", a: "Call the branch as soon as you know you will be late. The operator decides how long the car is held." },
-];
 
 export const VEHICLE_TYPE_LABEL = { SEDAN: "Sedan", HATCHBACK: "Hatchback", COMPACT: "Compact", SUV: "SUV", MPV: "MPV", PICKUP: "Pickup", VAN: "Van" };
 const POWERTRAIN_LABEL = { PETROL: "Petrol", DIESEL: "Diesel", HYBRID: "Hybrid", EV: "Electric" };
@@ -250,7 +244,9 @@ function policyFor(listing) {
   };
 }
 
-export function toCarDto(listing, facts, availability) {
+// faqs: the generic car questions from the policy library (getCarFaqs), passed
+// by the detail page only; list and seller page DTOs carry none.
+export function toCarDto(listing, facts, availability, faqs = []) {
   const { config } = facts;
   const additional = listing.addons.find((a) => /additional driver/i.test(a.name));
   const hasHours = listing.branch.openTime && listing.branch.closeTime;
@@ -338,7 +334,7 @@ export function toCarDto(listing, facts, availability) {
       responseWindowHours: config ? Math.round(config.bookingResponseDeadlineMinutes / 60) : 2,
     },
     policy: policyFor(listing),
-    faqs: STANDARD_FAQS,
+    faqs,
     operatorStats: {
       responseTimeMins: facts.responseTimeMins,
       acceptanceRate: facts.acceptanceRate,
@@ -436,8 +432,12 @@ export async function getCarAvailability(
 
 export async function getPublicCar(id) {
   const listing = await loadPublicListing(id);
-  const [facts, availability] = await Promise.all([loadOperatorFacts([listing.operatorId]), horizonAvailability([listing])]);
-  return toCarDto(listing, facts.get(listing.operatorId), availability.get(listing.id));
+  const [facts, availability, faqs] = await Promise.all([
+    loadOperatorFacts([listing.operatorId]),
+    horizonAvailability([listing]),
+    getCarFaqs(),
+  ]);
+  return toCarDto(listing, facts.get(listing.operatorId), availability.get(listing.id), faqs);
 }
 
 export async function getPublicCarsAvailability(

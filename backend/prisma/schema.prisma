@@ -290,6 +290,10 @@ model User {
   reviewedCreditAppeals    CreditAppeal[]              @relation("CreditAppealReviewer")
   bookingStatusChanges     BookingStatusHistory[]      @relation("BookingStatusActor")
   savedListings            SavedListing[]
+  chatConversations        ChatConversation[]
+  assignedEscalations      ChatEscalation[]            @relation("EscalationAssignee")
+  policySectionsPublished  PolicySection[]             @relation("PolicySectionPublisher")
+  aiModelChanges           AiModelChange[]             @relation("AiModelChangeActor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -437,6 +441,7 @@ model Operator {
   subscriptionUpgradeRequests SubscriptionUpgradeRequest[]
   subscriptionPayments        SubscriptionPayment[]
   subscriptionNotices         SubscriptionNotice[]
+  chatEscalations             ChatEscalation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -757,6 +762,7 @@ model Booking {
   licenceDocuments        CustomerLicenceDocument[]
   statusHistory           BookingStatusHistory[]
   creditEvents            CreditProfileEvent[] @relation("CreditEventBooking")
+  chatEscalations         ChatEscalation[]
   receipt                 Receipt?
   invoice                 Invoice?
 
@@ -1289,6 +1295,7 @@ model Listing {
 
   alternativeBookings Booking[] @relation("BookingAlternativeListing")
   savedBy             SavedListing[]
+  chatConversationsInView ChatConversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1563,4 +1570,295 @@ model AnalyticsEvent {
   @@index([bookingId])
   @@index([userId])
   @@map("analytics_events")
+}
+
+// ── Chatbot (SRS 5.3.8, chatbot design) ──────────────────────────────
+
+enum ChatConversationStatus {
+  OPEN
+  ESCALATED
+  CLOSED
+}
+
+enum ChatSenderRole {
+  CUSTOMER
+  VISITOR
+  ASSISTANT
+  OPERATOR
+  ADMIN
+}
+
+enum ChatLayer {
+  RULE
+  AI
+  HUMAN
+}
+
+enum ChatFeedback {
+  UP
+  DOWN
+}
+
+enum ChatEscalationRoute {
+  OPERATOR
+  ADMIN
+}
+
+enum ChatEscalationStatus {
+  OPEN
+  ANSWERED
+  RESOLVED
+}
+
+// One chat with the assistant. customerId is null for a signed-out visitor,
+// who is recognised by visitorToken instead. searchCriteria carries the car
+// search filters between turns, so "anything cheaper?" keeps the dates.
+model ChatConversation {
+  id Int @id @default(autoincrement())
+
+  customerId      Int?
+  customer        User?                  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  visitorToken    String?
+  contactEmail    String?
+  listingInViewId Int?
+  listingInView   Listing?               @relation(fields: [listingInViewId], references: [id], onDelete: SetNull)
+  searchCriteria  Json?                  @db.JsonB
+  status          ChatConversationStatus @default(OPEN)
+
+  messages    ChatMessage[]
+  escalations ChatEscalation[]
+
+  escalatedAt   DateTime?
+  lastMessageAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([customerId, lastMessageAt])
+  @@index([visitorToken])
+  @@index([status])
+  @@map("chat_conversations")
+}
+
+// One message. The AI fields are filled only for layer AI; modelUsed keeps
+// the model name as it was, aiModelId links it for the usage panels.
+model ChatMessage {
+  id Int @id @default(autoincrement())
+
+  conversationId Int
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderRole     ChatSenderRole
+  senderId       Int?
+  content        String
+  isRead         Boolean          @default(false)
+  layer          ChatLayer?
+
+  aiModelId        Int?
+  aiModel          AiModel?      @relation(fields: [aiModelId], references: [id], onDelete: SetNull)
+  modelUsed        String?
+  inputTokens      Int?
+  outputTokens     Int?
+  estimatedCostUsd Decimal?      @db.Decimal(12, 6)
+  errorType        String?
+  toolsCalled      Json?         @db.JsonB
+  responseMs       Int?
+  fallbackUsed     Boolean       @default(false)
+  checkFailed      Boolean       @default(false)
+  feedback         ChatFeedback?
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([aiModelId, createdAt])
+  @@index([layer, createdAt])
+  @@map("chat_messages")
+}
+
+// A hand-off to a person. reference is the ticket number shown to the
+// customer. Routed to the booking's operator, or to the admin.
+model ChatEscalation {
+  id Int @id @default(autoincrement())
+
+  reference      String               @unique
+  conversationId Int
+  conversation   ChatConversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  route          ChatEscalationRoute
+  operatorId     Int?
+  operator       Operator?            @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+  bookingId      Int?
+  booking        Booking?             @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  topic          String
+  reason         String
+  assignedToId   Int?
+  assignedTo     User?                @relation("EscalationAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  status         ChatEscalationStatus @default(OPEN)
+  dueAt          DateTime?
+  resolvedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([route, status, dueAt])
+  @@index([operatorId, status])
+  @@index([conversationId])
+  @@map("chat_escalations")
+}
+
+// ── Policy library ───────────────────────────────────────────────────
+
+enum PolicyAudience {
+  PLATFORM
+  RENTAL
+}
+
+model PolicyDocument {
+  id Int @id @default(autoincrement())
+
+  key            String         @unique
+  title          String
+  audience       PolicyAudience @default(PLATFORM)
+  currentVersion Int            @default(1)
+
+  sections PolicySection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("policy_documents")
+}
+
+// Every published version is kept, so a dispute can show what the customer
+// saw. The current wording of a section is its highest version.
+model PolicySection {
+  id Int @id @default(autoincrement())
+
+  documentId    Int
+  document      PolicyDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  key           String
+  title         String
+  body          String
+  sortOrder     Int            @default(0)
+  version       Int            @default(1)
+  publishedAt   DateTime       @default(now())
+  publishedById Int?
+  publishedBy   User?          @relation("PolicySectionPublisher", fields: [publishedById], references: [id], onDelete: SetNull)
+
+  @@unique([documentId, key, version])
+  @@index([documentId, key])
+  @@map("policy_sections")
+}
+
+// Layer 1 fixed answers. placeholders lists the {names} the body may use,
+// so the editor can reject a template that references a missing number.
+model ChatAnswerTemplate {
+  id Int @id @default(autoincrement())
+
+  key              String
+  quickActionLabel String?
+  keywords         String[]
+  placeholders     String[]
+  body             String
+  signedInOnly     Boolean  @default(false)
+  sortOrder        Int      @default(0)
+  version          Int      @default(1)
+  publishedAt      DateTime @default(now())
+
+  @@unique([key, version])
+  @@index([key])
+  @@map("chat_answer_templates")
+}
+
+// ── AI models ────────────────────────────────────────────────────────
+
+enum AiProvider {
+  ANTHROPIC
+  OPENAI
+  GOOGLE
+}
+
+enum AiPlan {
+  FREE
+  PAID
+}
+
+// One row per model in the switching order. Prices are USD per million
+// tokens. The limits are entered by the admin for free plans.
+model AiModel {
+  id Int @id @default(autoincrement())
+
+  provider            AiProvider
+  modelName           String
+  displayName         String
+  position            Int
+  enabled             Boolean    @default(false)
+  plan                AiPlan     @default(FREE)
+  lastTestScore       Decimal?   @db.Decimal(5, 2)
+  lastTestAt          DateTime?
+  promptVersion       String?
+  skippedUntil        DateTime?
+  consecutiveFailures Int        @default(0)
+  priceInput          Decimal    @db.Decimal(10, 4)
+  priceOutput         Decimal    @db.Decimal(10, 4)
+  pricesCheckedAt     DateTime   @default(now())
+  monthlyCapUsd       Decimal?   @db.Decimal(10, 2)
+  rpmLimit            Int?
+  tpmLimit            Int?
+  dailyLimit          Int?
+
+  messages ChatMessage[]
+  changes  AiModelChange[]
+  alerts   AiAlert[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, modelName])
+  @@index([position])
+  @@map("ai_models")
+}
+
+// Single row (id 1).
+model AiSettings {
+  id Int @id @default(1)
+
+  liveCustomerMode        Boolean @default(false)
+  monthlyCapUsd           Decimal @db.Decimal(10, 2)
+  alertPercent            Int     @default(80)
+  messagesPerCustomerHour Int     @default(20)
+  messagesPerIpHour       Int     @default(10)
+  maxMessageChars         Int     @default(500)
+
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_settings")
+}
+
+// Audit log for the AI models page. modelId is null for a settings change.
+model AiModelChange {
+  id Int @id @default(autoincrement())
+
+  modelId     Int?
+  model       AiModel? @relation(fields: [modelId], references: [id], onDelete: SetNull)
+  field       String
+  oldValue    String?
+  newValue    String?
+  changedById Int?
+  changedBy   User?    @relation("AiModelChangeActor", fields: [changedById], references: [id], onDelete: SetNull)
+  changedAt   DateTime @default(now())
+
+  @@index([modelId, changedAt])
+  @@map("ai_model_changes")
+}
+
+// Alerts already emailed, so the same alert goes out at most once a day.
+model AiAlert {
+  id Int @id @default(autoincrement())
+
+  type    String
+  modelId Int?
+  model   AiModel? @relation(fields: [modelId], references: [id], onDelete: SetNull)
+  message String
+  sentAt  DateTime @default(now())
+
+  @@index([type, modelId, sentAt])
+  @@map("ai_alerts")
 }

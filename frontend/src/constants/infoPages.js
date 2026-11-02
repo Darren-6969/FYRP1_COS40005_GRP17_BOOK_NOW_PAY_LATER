@@ -1,8 +1,10 @@
 import { BRAND } from "./brand";
 
-// Text for the /info/:slug pages. Pilot drafts written from the rules the
-// site and booking flow already state; the team reviews them before they are
-// final. A slug not listed here falls through to NotAvailable.
+// Text for the /info/:slug pages. For terms, privacy and refund rules the
+// sections are only a fallback: the live wording is in the policy library
+// (admin console, Policies and answers), seeded from
+// backend/prisma/seed_data/chatbot.js. A slug not listed here falls through
+// to NotAvailable.
 
 const SITE = `${BRAND.name}${BRAND.suffix}`;
 
@@ -60,7 +62,7 @@ export const INFO_PAGES = {
       {
         heading: "Missed deadlines",
         paragraphs: [
-          "If the balance or your licence is not in by its deadline, the booking can be cancelled and the car released. The deposit is then kept by the operator, unless the listing shows a partial refund rule. The refund rules page explains this in full.",
+          "If the balance or your licence is not in by its deadline, the booking can be cancelled and the car released. The deposit is then kept by the operator, unless the listing shows a partial refund rule. Any balance you have already paid is refunded in full. The refund rules page explains this in full.",
         ],
       },
       {
@@ -83,7 +85,7 @@ export const INFO_PAGES = {
         heading: "What we collect",
         list: [
           "Account details: your name, email address and password. The password is stored only in a scrambled form we cannot read.",
-          "Booking details: your phone number, the driver's name and date of birth, the car, the dates and the places you asked for.",
+          "Booking details: your phone number, the driver's name, the car, the dates and the places you asked for.",
           "Your driving licence, and an international driving permit where one is needed.",
           "Payment records: amounts, dates and status. Card details are entered on Stripe's page and never reach our servers. DuitNow receipts you upload are kept with the booking.",
           "When you agreed to these terms and this notice, and the network address you agreed from, as a record of your consent.",
@@ -130,13 +132,23 @@ export const INFO_PAGES = {
         paragraphs: [
           "The booking can be cancelled, the car is released, and the deposit is kept by the operator. This is the default.",
           "Some operators choose a partial refund rule instead, for standard rentals outside the platform's peak dates. Where they have, the listing says how much of the deposit you get back, for example 60%.",
-          "A licence that is still being checked when the deadline passes does not cancel your booking.",
+          "Any balance you have already paid is refunded in full. A licence that is still being checked when the deadline passes does not cancel your booking.",
         ],
       },
       {
         heading: "If you cancel",
         paragraphs: [
-          "The listing's refund rule says how much of the deposit the operator refunds when you cancel. You are not charged the balance if you cancel before it is due.",
+          "You can cancel up to pickup time. The deposit follows the listing's refund rule, the same as for a missed deadline, and any balance you have paid is refunded in full. You are not charged the balance if you cancel before it is due. After pickup time there is no refund.",
+        ],
+      },
+      {
+        heading: "If the operator cancels",
+        paragraphs: ["If the operator cancels a booking you are up to date on, everything you paid is refunded."],
+      },
+      {
+        heading: "How refunds are paid",
+        paragraphs: [
+          "Card payments are refunded to the same card automatically. DuitNow payments are refunded by the operator, within a deadline the platform sets. No fee is taken from your refund.",
         ],
       },
       {
