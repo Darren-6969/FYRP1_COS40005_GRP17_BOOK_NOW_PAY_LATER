@@ -33,6 +33,7 @@ const initialForm = {
 
   vehicleMake: "",
   vehicleModel: "",
+  vehicleType: "",
   modelYear: "",
   seats: "",
   transmission: "AUTOMATIC",
@@ -208,6 +209,9 @@ export default function OperatorListingForm() {
 
         vehicleModel:
           listing.vehicleModel || "",
+
+        vehicleType:
+          listing.vehicleType || "",
 
         modelYear:
           listing.modelYear || "",
@@ -492,6 +496,10 @@ export default function OperatorListingForm() {
         return "Vehicle model is required.";
       }
 
+      if (!form.vehicleType) {
+        return "Vehicle type is required.";
+      }
+
       if (!form.transmission) {
         return "Transmission is required.";
       }
@@ -576,6 +584,9 @@ export default function OperatorListingForm() {
 
         vehicleModel:
           form.vehicleModel.trim(),
+
+        vehicleType:
+          form.vehicleType,
 
         modelYear:
           form.modelYear
@@ -1215,6 +1226,51 @@ export default function OperatorListingForm() {
                   placeholder="Axia"
                 />
               </label>
+
+              <div className="form-group">
+              <label htmlFor="vehicleType">
+                Vehicle Type
+              </label>
+
+              <select
+                id="vehicleType"
+                name="vehicleType"
+                value={form.vehicleType}
+                onChange={handleChange}
+              >
+                <option value="">
+                  Select vehicle type
+                </option>
+
+                <option value="COMPACT">
+                  Compact
+                </option>
+
+                <option value="HATCHBACK">
+                  Hatchback
+                </option>
+
+                <option value="SEDAN">
+                  Sedan
+                </option>
+
+                <option value="SUV">
+                  SUV
+                </option>
+
+                <option value="MPV">
+                  MPV
+                </option>
+
+                <option value="PICKUP">
+                  Pickup
+                </option>
+
+                <option value="VAN">
+                  Van
+                </option>
+              </select>
+            </div>
 
               <label className="operator-field">
                 Model Year
