@@ -16,6 +16,7 @@ import api from "../../services/api";
 import { downloadElementAsPdf } from "../../utils/pdfUtils";
 import { formatOperatorMoney } from "../../services/operator_service";
 import { getPilotMetrics } from "../../services/admin_service";
+import DatePicker from "../../components/common/DatePicker";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -384,8 +385,8 @@ export default function MasterAnalytics() {
             <p>Event counts use event dates. Tier rates use bookings created in-period and due by its end; allocation utilisation is reserved ÷ available unit-days.</p>
           </div>
           <div className="master-analytics-controls">
-            <label>From <input className="master-analytics-select" type="date" value={pilotPeriod.from} max={pilotPeriod.to} onChange={(event) => { setPilotLoading(true); setPilotError(""); setPilotPeriod((period) => ({ ...period, from: event.target.value })); }} /></label>
-            <label>To <input className="master-analytics-select" type="date" min={pilotPeriod.from} max={isoDay(new Date())} value={pilotPeriod.to} onChange={(event) => { setPilotLoading(true); setPilotError(""); setPilotPeriod((period) => ({ ...period, to: event.target.value })); }} /></label>
+            <label>From <DatePicker className="master-analytics-select" required value={pilotPeriod.from} max={pilotPeriod.to} onChange={(event) => { setPilotLoading(true); setPilotError(""); setPilotPeriod((period) => ({ ...period, from: event.target.value })); }} /></label>
+            <label>To <DatePicker className="master-analytics-select" required min={pilotPeriod.from} max={isoDay(new Date())} value={pilotPeriod.to} onChange={(event) => { setPilotLoading(true); setPilotError(""); setPilotPeriod((period) => ({ ...period, to: event.target.value })); }} /></label>
             <button type="button" className="master-analytics-btn secondary" disabled={!pilotMetrics || pilotLoading} onClick={() => downloadPilotCSV(pilotMetrics)}>↓ CSV</button>
           </div>
         </div>

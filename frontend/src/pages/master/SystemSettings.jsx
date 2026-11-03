@@ -38,6 +38,7 @@ import {
 } from "../../components/system/SettingsParts";
 import SignInPanelSettings from "../../components/system/SignInPanelSettings";
 import { signInPanelFromForm, signInPanelSummary, signInPanelToForm } from "../../components/system/signInPanelForm";
+import DatePicker from "../../components/common/DatePicker";
 
 // creditTierPolicy is the E17 switch. Credit tier thresholds, the down payment
 // floor and the exposure limits have no effect while it is off.
@@ -831,7 +832,7 @@ export default function SystemSettings() {
           >
             <form className="operator-settings-form-grid" onSubmit={addPeakDate}>
               <FormField label="Date">
-                <input type="date" value={peakForm.date} onChange={(event) => setPeakForm((prev) => ({ ...prev, date: event.target.value }))} required />
+                <DatePicker value={peakForm.date} onChange={(event) => setPeakForm((prev) => ({ ...prev, date: event.target.value }))} required />
               </FormField>
 
               <FormField label="Label">
