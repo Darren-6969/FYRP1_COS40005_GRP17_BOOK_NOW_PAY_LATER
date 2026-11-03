@@ -1227,7 +1227,6 @@ export default function OperatorListingForm() {
                 />
               </label>
 
-              <div>
               <label className="operator-field">
               Vehicle Type *
 
