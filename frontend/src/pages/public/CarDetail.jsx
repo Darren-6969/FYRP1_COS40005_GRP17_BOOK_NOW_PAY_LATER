@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, Heart, Minus, Plus } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Heart, MessageCircleMore, Minus, Plus } from "lucide-react";
 import { getCarListing, quoteCarBooking } from "../../services/listing_public_service";
 import { reportClientEvent } from "../../services/analytics";
 import { parseBookingSelection, toBookingParams, tripParams } from "../../utils/carSearchParams";
@@ -20,9 +20,11 @@ import OperatorStrip from "../../components/public/OperatorStrip";
 import BookingBar from "../../components/public/BookingBar";
 import OfferModeBanner, { OfferAddonStatus } from "../../components/public/OfferModeBanner";
 import SaveSigninPrompt from "../../components/public/SaveSigninPrompt";
+import DatePicker from "../../components/common/DatePicker";
 import styles from "../../assets/styles/public/CarDetail.module.css";
 import disclosure from "../../assets/styles/public/Disclosure.module.css";
 import AvailabilityCalendar from "../../components/public/AvailabilityCalendar";
+import { openChat, setPageListing } from "../../components/chat/chatStore";
 
 const TRANSMISSION = { AUTOMATIC: "Automatic", MANUAL: "Manual" };
 
@@ -175,17 +177,31 @@ function PickerField({ id, label, type, value, display, onChange, min, error, er
         <span aria-hidden="true" className={value ? styles.pickerValue : styles.pickerEmpty}>
           {display}
         </span>
-        <input
-          id={id}
-          ref={inputRef}
-          type={type}
-          value={value}
-          min={min}
-          onChange={onChange}
-          className={styles.pickerInput}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? errorId : undefined}
-        />
+        {type === "date" ? (
+          // The field shows its own text; the calendar button covers it.
+          <DatePicker
+            id={id}
+            ref={inputRef}
+            value={value}
+            min={min}
+            onChange={onChange}
+            className={styles.pickerInput}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? errorId : undefined}
+          />
+        ) : (
+          <input
+            id={id}
+            ref={inputRef}
+            type={type}
+            value={value}
+            min={min}
+            onChange={onChange}
+            className={styles.pickerInput}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? errorId : undefined}
+          />
+        )}
       </span>
       {error && (
         <p id={errorId} className={styles.fieldError}>
@@ -267,6 +283,14 @@ export default function CarDetail() {
 
   const loading = listingRes.id !== listingId;
   const listing = listingRes.data;
+
+  // The chat treats "this car" as the car on this page.
+  const chatCarId = listing?.id ?? null;
+  const chatCarName = listing ? `${listing.vehicleMake} ${listing.vehicleModel}` : "";
+  useEffect(() => {
+    setPageListing(chatCarId ? { id: chatCarId, name: chatCarName } : null);
+    return () => setPageListing(null);
+  }, [chatCarId, chatCarName]);
 
   if (loading) return <DetailSkeleton />;
 
@@ -498,6 +522,10 @@ export default function CarDetail() {
         <p className={styles.subtitle}>
           {listing.vehicleType} · {listing.branch.name}
         </p>
+        <button type="button" className={styles.askCar} onClick={() => openChat()}>
+          <MessageCircleMore size={16} aria-hidden="true" />
+          Ask about this car
+        </button>
         <ul className={styles.chips}>
           {quickChips.map((c) => (
             <li key={c} className={styles.chip}>

@@ -84,6 +84,7 @@ import CarDetail from "./pages/public/CarDetail";
 import CarBookingForm from "./pages/public/CarBookingForm";
 import NotAvailable from "./pages/public/NotAvailable";
 import InfoPage from "./pages/public/InfoPage";
+import Assistant from "./pages/public/Assistant";
 import ForOperators from "./pages/public/ForOperators";
 
 export default function App() {
@@ -100,6 +101,8 @@ export default function App() {
           <Route path="/cars/:listingId" element={<CarDetail />} />
           {/* Terms, privacy, refund rules and contact; other slugs render NotAvailable. */}
           <Route path="/info/:slug" element={<InfoPage />} />
+          {/* Chatbot (Module 10): the same chat as the floating help panel. */}
+          <Route path="/assistant" element={<Assistant />} />
           {/* Tours are out of scope for now (15 Oct 2026); old links land on car search. */}
           <Route path="/tours" element={<Navigate to="/cars" replace />} />
           <Route path="/tours/*" element={<Navigate to="/cars" replace />} />
