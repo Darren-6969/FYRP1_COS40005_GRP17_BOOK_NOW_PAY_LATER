@@ -1227,16 +1227,18 @@ export default function OperatorListingForm() {
                 />
               </label>
 
-              <div className="form-group">
-              <label htmlFor="vehicleType">
-                Vehicle Type
-              </label>
+              <div>
+              <label className="operator-field">
+              Vehicle Type *
 
               <select
-                id="vehicleType"
                 name="vehicleType"
-                value={form.vehicleType}
-                onChange={handleChange}
+                value={
+                  form.vehicleType
+                }
+                onChange={
+                  handleChange
+                }
               >
                 <option value="">
                   Select vehicle type
@@ -1270,7 +1272,7 @@ export default function OperatorListingForm() {
                   Van
                 </option>
               </select>
-            </div>
+            </label>
 
               <label className="operator-field">
                 Model Year
