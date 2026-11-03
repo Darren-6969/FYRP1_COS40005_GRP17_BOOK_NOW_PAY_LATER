@@ -168,14 +168,76 @@ export default function CustomerHome() {
     );
   }
 
-  const VEHICLE_TYPES = [
-  "All",
+  const VEHICLE_TYPE_ORDER = [
   "Compact",
+  "Hatchback",
   "Sedan",
   "SUV",
   "MPV",
   "Pickup",
+  "Van",
 ];
+
+function normalizeVehicleType(
+  value?: string
+) {
+  return String(
+    value || ""
+  )
+    .trim()
+    .toLowerCase();
+}
+
+  const vehicleTypes =
+  useMemo(() => {
+    const availableTypes =
+      Array.from(
+        new Set(
+          cars
+            .map((car) =>
+              String(
+                car.vehicleType ||
+                  ""
+              ).trim()
+            )
+            .filter(Boolean)
+        )
+      );
+
+    const orderedTypes =
+      VEHICLE_TYPE_ORDER.filter(
+        (type) =>
+          availableTypes.some(
+            (availableType) =>
+              normalizeVehicleType(
+                availableType
+              ) ===
+              normalizeVehicleType(
+                type
+              )
+          )
+      );
+
+    const extraTypes =
+      availableTypes.filter(
+        (type) =>
+          !VEHICLE_TYPE_ORDER.some(
+            (knownType) =>
+              normalizeVehicleType(
+                knownType
+              ) ===
+              normalizeVehicleType(
+                type
+              )
+          )
+      );
+
+    return [
+      "All",
+      ...orderedTypes,
+      ...extraTypes,
+    ];
+  }, [cars]);
 
   const filteredCars = useMemo(() => {
     const search =
@@ -210,12 +272,25 @@ export default function CustomerHome() {
       }
 
       if (
-        filters.vehicleTypes.length &&
-        !filters.vehicleTypes.includes(
-          car.vehicleType
-        )
+        filters.vehicleTypes.length
       ) {
-        return false;
+        const selectedTypes =
+          filters.vehicleTypes.map(
+            normalizeVehicleType
+          );
+
+        const carType =
+          normalizeVehicleType(
+            car.vehicleType
+          );
+
+        if (
+          !selectedTypes.includes(
+            carType
+          )
+        ) {
+          return false;
+        }
       }
 
       if (filters.seats.length) {
@@ -598,11 +673,19 @@ export default function CustomerHome() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categories}
         >
-          {VEHICLE_TYPES.map((category) => {
+          {vehicleTypes.map((category) => {
             const selected =
-              category === "All"
-                ? filters.vehicleTypes.length === 0
-                : filters.vehicleTypes.includes(category);
+            category === "All"
+              ? filters.vehicleTypes.length === 0
+              : filters.vehicleTypes.some(
+                  (type) =>
+                    normalizeVehicleType(
+                      type
+                    ) ===
+                    normalizeVehicleType(
+                      category
+                    )
+                );
 
             return (
               <Pressable
