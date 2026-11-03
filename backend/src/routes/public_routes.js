@@ -26,12 +26,24 @@ import {
 
 import { reportClientEvent } from "../controllers/public_events_controller.js";
 import { getSignInPanel, getSubscriptionPlans } from "../controllers/public_platform_controller.js";
-import { attachUserIdIfPresent } from "../middlewares/auth_middleware.js";
+import { attachChatCustomer, attachUserIdIfPresent } from "../middlewares/auth_middleware.js";
+import { getChatConversation, postChatMessage, putChatFeedback } from "../controllers/chat_controller.js";
+import { chatFeedbackSchema, chatMessageSchema } from "../validators/chat_validator.js";
 
 const router = express.Router();
 
 // Quotes run several queries each;
 // the page requests one per selection change.
+// Chat window (FR-CHAT): a burst limit against scripted abuse. The per-hour
+// limits on AI messages are separate and editable on the AI models page.
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "You're sending messages very quickly. Please wait a moment.", code: "RATE_LIMITED" },
+});
+
 // Search reads the whole fleet per call, so it gets its own limit.
 const searchLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -134,6 +146,17 @@ router.get(
 router.get(
   "/sign-in-panel",
   getSignInPanel
+);
+
+// Chatbot (Layer 1 for now). The customer comes from the session only.
+router.post("/chat/messages", chatLimiter, attachChatCustomer, validate(chatMessageSchema), postChatMessage);
+router.get("/chat/conversations/:id", chatLimiter, attachChatCustomer, getChatConversation);
+router.put(
+  "/chat/conversations/:id/messages/:messageId/feedback",
+  chatLimiter,
+  attachChatCustomer,
+  validate(chatFeedbackSchema),
+  putChatFeedback
 );
 
 // Policy library wording for the info pages

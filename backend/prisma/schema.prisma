@@ -1664,6 +1664,9 @@ model ChatMessage {
   fallbackUsed     Boolean       @default(false)
   checkFailed      Boolean       @default(false)
   feedback         ChatFeedback?
+  // What the chat window draws for an assistant message (car cards, options,
+  // booking cards, links), so a reopened conversation looks the same.
+  payload          Json?         @db.JsonB
 
   createdAt DateTime @default(now())
 

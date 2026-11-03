@@ -11,6 +11,7 @@
 import prisma from "../config/db.js";
 import { createAuditLog } from "./log_service.js";
 import { clearPolicyCache } from "./policy_service.js";
+import { clearTemplateCache } from "./chat/chat_rules_service.js";
 import { missingRequiredPlaceholders, orderWithInsert, sectionKeyFor, unknownPlaceholders } from "../utils/policy_text.js";
 
 function httpError(statusCode, message, appCode, extra = {}) {
@@ -299,5 +300,6 @@ export async function publishTemplate({ key, quickActionLabel, keywords, body, b
     );
     return row;
   }, { maxWait: 10_000, timeout: 20_000 });
+  clearTemplateCache();
   return templateDto(created);
 }
