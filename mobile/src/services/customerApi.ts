@@ -211,3 +211,43 @@ export async function createCarBooking(
     }
   );
 }
+
+export async function getSavedListingIds() {
+  return apiRequest(
+    "/customer/saved/ids",
+    {
+      method: "GET",
+    }
+  );
+}
+
+export async function getSavedListings() {
+  return apiRequest(
+    "/customer/saved",
+    {
+      method: "GET",
+    }
+  );
+}
+
+export async function saveListing(
+  listingId: number | string
+) {
+  return apiRequest(
+    `/customer/saved/${listingId}`,
+    {
+      method: "PUT",
+    }
+  );
+}
+
+export async function removeSavedListing(
+  listingId: number | string
+) {
+  return apiRequest(
+    `/customer/saved/${listingId}`,
+    {
+      method: "DELETE",
+    }
+  );
+}

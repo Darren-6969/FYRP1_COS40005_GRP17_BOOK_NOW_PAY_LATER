@@ -96,6 +96,21 @@ export default function CustomerLayout() {
             "slide_from_right",
         }}
         />
+
+      <Stack.Screen
+        name="cars"
+        options={{
+            animation:
+            "slide_from_right",
+        }}
+        />
+
+      <Stack.Screen
+        name="saved-cars"
+        options={{
+            animation: "slide_from_right",
+        }}
+        />
     </Stack>
   );
 }

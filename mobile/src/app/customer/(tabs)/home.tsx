@@ -15,6 +15,9 @@ import {
 
 import {
   getCustomerBookings,
+  getSavedListingIds,
+  removeSavedListing,
+  saveListing,
 } from "../../../services/customerApi";
 
 import CarFilterModal, {
@@ -40,6 +43,86 @@ import {
 export default function CustomerHome() {
   const router = useRouter();
 
+  const handleToggleSaved =
+  async (
+    listingId: number
+  ) => {
+    if (
+      savingListingId ===
+      listingId
+    ) {
+      return;
+    }
+
+    const isSaved =
+      savedListingIds.has(
+        listingId
+      );
+
+    try {
+      setSavingListingId(
+        listingId
+      );
+
+      setSavedListingIds(
+        (current) => {
+          const next =
+            new Set(current);
+
+          if (isSaved) {
+            next.delete(
+              listingId
+            );
+          } else {
+            next.add(
+              listingId
+            );
+          }
+
+          return next;
+        }
+      );
+
+      if (isSaved) {
+        await removeSavedListing(
+          listingId
+        );
+      } else {
+        await saveListing(
+          listingId
+        );
+      }
+    } catch (error) {
+      console.log(
+        "Failed to update saved listing:",
+        error
+      );
+
+      setSavedListingIds(
+        (current) => {
+          const next =
+            new Set(current);
+
+          if (isSaved) {
+            next.add(
+              listingId
+            );
+          } else {
+            next.delete(
+              listingId
+            );
+          }
+
+          return next;
+        }
+      );
+    } finally {
+      setSavingListingId(
+        null
+      );
+    }
+  };
+
   const scrollViewRef =
   useRef<any>(null);
 
@@ -49,6 +132,20 @@ export default function CustomerHome() {
   const [cars, setCars] = useState<any[]>([]);
   const [loadingCars, setLoadingCars] =
     useState(true);
+
+  const [
+    savedListingIds,
+    setSavedListingIds,
+  ] = useState<Set<number>>(
+    new Set()
+  );
+
+  const [
+    savingListingId,
+    setSavingListingId,
+  ] = useState<number | null>(
+    null
+  );
 
   const [filters, setFilters] =
     useState<CarFilters>(
@@ -115,6 +212,32 @@ export default function CustomerHome() {
 
     loadCars();
   }, []);
+
+  useEffect(() => {
+  const loadSavedListings =
+    async () => {
+      try {
+        const data =
+          await getSavedListingIds();
+
+        const ids =
+          Array.isArray(data?.ids)
+            ? data.ids.map(Number)
+            : [];
+
+        setSavedListingIds(
+          new Set(ids)
+        );
+      } catch (error) {
+        console.log(
+          "Failed to load saved listings:",
+          error
+        );
+      }
+    };
+
+  loadSavedListings();
+}, []);
 
   useEffect(() => {
     const loadLatestBooking = async () => {
@@ -752,11 +875,41 @@ function normalizeVehicleType(
         Featured Cars
       </Text>
 
-      <Pressable>
-        <Text style={styles.seeAll}>
-          See All
-        </Text>
-      </Pressable>
+      <Pressable
+      onPress={() =>
+        router.push({
+          pathname:
+            "/customer/cars",
+
+          params: {
+            city:
+              trip.city || "",
+
+            from:
+              trip.from || "",
+
+            ft:
+              trip.fromTime ||
+              "",
+
+            to:
+              trip.to || "",
+
+            tt:
+              trip.toTime ||
+              "",
+          },
+        })
+      }
+    >
+      <Text
+        style={
+          styles.seeAll
+        }
+      >
+        See All
+      </Text>
+    </Pressable>
     </View>
 
     {/* Loading Cars */}
@@ -846,17 +999,37 @@ function normalizeVehicleType(
                 )}
 
                 <Pressable
-                  style={styles.heartButton}
-                  onPress={(event) => {
-                    event.stopPropagation();
-                  }}
-                >
-                  <Ionicons
-                    name="heart-outline"
-                    size={20}
-                    color="#17313C"
-                  />
-                </Pressable>
+                style={styles.heartButton}
+                disabled={
+                  savingListingId ===
+                  Number(car.id)
+                }
+                onPress={(event) => {
+                  event.stopPropagation();
+
+                  handleToggleSaved(
+                    Number(car.id)
+                  );
+                }}
+              >
+                <Ionicons
+                  name={
+                    savedListingIds.has(
+                      Number(car.id)
+                    )
+                      ? "heart"
+                      : "heart-outline"
+                  }
+                  size={20}
+                  color={
+                    savedListingIds.has(
+                      Number(car.id)
+                    )
+                      ? "#E84B4B"
+                      : "#17313C"
+                  }
+                />
+              </Pressable>
               </View>
 
               <View style={styles.carInfo}>

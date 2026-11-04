@@ -1032,6 +1032,23 @@ export default function ProfileScreen() {
           />
 
           <MenuRow
+            icon="heart-outline"
+            title="Saved Cars"
+            subtitle="View vehicles you saved for later"
+            onPress={() =>
+              router.push(
+                "/customer/saved-cars"
+              )
+            }
+          />
+
+          <View
+            style={
+              styles.divider
+            }
+          />
+
+          <MenuRow
             icon="lock-closed-outline"
             title="Change Password"
             subtitle="Update your account password"
@@ -2080,6 +2097,7 @@ function MenuRow({
   | "notifications-outline"
   | "wallet-outline"
   | "car-outline"
+  | "heart-outline"
   | "lock-closed-outline"
   | "settings-outline"
   | "help-circle-outline"
