@@ -1,7 +1,11 @@
 import prisma from "../config/db.js";
 import { acceptBookingAndRequestPayment } from "../services/booking_accept_service.js";
 import { createAuditLog } from "../services/log_service.js";
-import { getBookingStatusHistory, transitionBookingStatus } from "../services/booking_status_service.js";
+import {
+  allowedNextBookingStatuses,
+  getBookingStatusHistory,
+  transitionBookingStatus,
+} from "../services/booking_status_service.js";
 import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_service.js";
 import { notifyCustomerBookingRejected } from "../services/notification_email_service.js";
 
@@ -44,7 +48,16 @@ export async function getBookings(req, res, next) {
       include: bookingInclude,
     });
 
-    res.json(bookings);
+    // What an administrator may move each booking to. Cancelling has its own
+    // action, so it is left out of the status override.
+    res.json(
+      bookings.map((booking) => ({
+        ...booking,
+        allowedNextStatuses: allowedNextBookingStatuses(booking.status).filter(
+          (status) => status !== "CANCELLED" && ADMIN_BOOKING_STATUSES.includes(status)
+        ),
+      }))
+    );
   } catch (err) {
     next(err);
   }

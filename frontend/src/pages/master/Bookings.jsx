@@ -509,17 +509,16 @@ function getPageNumbers() {
                   required
                 >
                   <option value="" disabled>Select status</option>
-                  <option value="PENDING">Pending</option>
-                  <option value="ACCEPTED">Accepted</option>
-                  <option value="REJECTED">Rejected</option>
-                  <option value="ALTERNATIVE_SUGGESTED">Alternative suggested</option>
-                  <option value="PENDING_PAYMENT">Pending payment</option>
-                  <option value="PAID">Paid</option>
-                  <option value="IN_PROGRESS">In progress</option>
-                  <option value="OVERDUE">Overdue</option>
-                  <option value="COMPLETED">Completed</option>
-                  <option value="NO_SHOW">No show</option>
+                  {(interventionBooking.allowedNextStatuses || []).map((status) => (
+                    <option key={status} value={status}>{label(status).charAt(0) + label(status).slice(1).toLowerCase()}</option>
+                  ))}
                 </select>
+                {!(interventionBooking.allowedNextStatuses || []).length && (
+                  <small>
+                    A {label(interventionBooking.status).toLowerCase()} booking cannot move to another status.
+                    {CANCELLABLE.includes(interventionBooking.status) ? " Use Cancel booking to cancel it." : ""}
+                  </small>
+                )}
               </label>
 
               <label className="wide">
