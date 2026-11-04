@@ -170,6 +170,25 @@ export default function CustomerHome() {
   const [searchText, setSearchText] =
     useState("");
 
+  const openSearchResults = (
+  nextFilters: CarFilters = filters,
+  nextSearch: string = searchText,
+  nextTrip: TripSearch = trip
+) => {
+  router.push({
+    pathname: "/customer/cars",
+    params: {
+      search: nextSearch.trim(),
+      filters: JSON.stringify(nextFilters),
+      city: nextTrip.city || "",
+      from: nextTrip.from || "",
+      ft: nextTrip.fromTime || "",
+      to: nextTrip.to || "",
+      tt: nextTrip.toTime || "",
+    },
+  });
+};
+
   const [latestBooking, setLatestBooking] =
     useState<any | null>(null);
 
@@ -585,6 +604,31 @@ function normalizeVehicleType(
     trip.city,
   ]);
 
+  const hasActiveFilters =
+  Boolean(searchText.trim()) ||
+  Boolean(trip.city) ||
+  filters.vehicleTypes.length > 0 ||
+  filters.seats.length > 0 ||
+  filters.transmissions.length > 0 ||
+  filters.fuels.length > 0 ||
+  filters.drives.length > 0 ||
+  filters.brands.length > 0 ||
+  filters.refunds.length > 0 ||
+  filters.operators.length > 0 ||
+  Boolean(filters.priceMin) ||
+  Boolean(filters.priceMax) ||
+  filters.sort !== "recommended";
+
+const clearAllFilters = () => {
+  setSearchText("");
+  setFilters(DEFAULT_CAR_FILTERS);
+
+  setTrip((current) => ({
+    ...current,
+    city: "",
+  }));
+};
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -656,6 +700,10 @@ function normalizeVehicleType(
               style={styles.searchInput}
               value={searchText}
               onChangeText={setSearchText}
+              returnKeyType="search"
+              onSubmitEditing={() =>
+                openSearchResults()
+              }
             />
           </View>
 
@@ -818,14 +866,16 @@ function normalizeVehicleType(
                   selected && styles.categorySelected,
                 ]}
                 onPress={() => {
-                  setFilters((current) => ({
-                    ...current,
-                    vehicleTypes:
-                      category === "All"
-                        ? []
-                        : [category],
-                  }));
-                }}
+                const nextFilters = {
+                  ...filters,
+                  vehicleTypes:
+                    category === "All"
+                      ? []
+                      : [category],
+                };
+
+                openSearchResults(nextFilters);
+              }}
               >
                 <View
                   style={[
@@ -863,211 +913,319 @@ function normalizeVehicleType(
           })}
         </ScrollView>
         
-    {/* Featured Cars Header */}
-    <View
-      style={styles.sectionHeader}
-      onLayout={(event) => {
-        carsSectionY.current =
-          event.nativeEvent.layout.y;
-      }}
-    >
-      <Text style={styles.sectionTitle}>
-        Featured Cars
-      </Text>
+    
+{/* Car Results Section */}
+<View
+  style={styles.sectionHeader}
+  onLayout={(event) => {
+    carsSectionY.current =
+      event.nativeEvent.layout.y;
+  }}
+>
+  <Text style={styles.sectionTitle}>
+    {hasActiveFilters
+      ? "Search Results"
+      : "Featured Cars"}
+  </Text>
 
-      <Pressable
+  {hasActiveFilters ? (
+    <Pressable onPress={clearAllFilters}>
+      <Text style={styles.seeAll}>
+        Clear Filters
+      </Text>
+    </Pressable>
+  ) : (
+    <Pressable
       onPress={() =>
         router.push({
-          pathname:
-            "/customer/cars",
-
+          pathname: "/customer/cars",
           params: {
-            city:
-              trip.city || "",
-
-            from:
-              trip.from || "",
-
-            ft:
-              trip.fromTime ||
-              "",
-
-            to:
-              trip.to || "",
-
-            tt:
-              trip.toTime ||
-              "",
+            city: trip.city || "",
+            from: trip.from || "",
+            ft: trip.fromTime || "",
+            to: trip.to || "",
+            tt: trip.toTime || "",
           },
         })
       }
     >
-      <Text
-        style={
-          styles.seeAll
-        }
-      >
+      <Text style={styles.seeAll}>
         See All
       </Text>
     </Pressable>
+  )}
+</View>
+
+{hasActiveFilters && !loadingCars && (
+  <Text style={styles.resultsCount}>
+    {filteredCars.length} vehicles found
+  </Text>
+)}
+
+{loadingCars ? (
+  <View style={styles.loadingCars}>
+    <Text style={styles.loadingCarsText}>
+      Loading cars...
+    </Text>
+  </View>
+) : hasActiveFilters ? (
+  cars.length === 0 ? (
+    <View style={styles.noCarsCard}>
+      <Ionicons
+        name="search-outline"
+        size={30}
+        color="#81939C"
+      />
+
+      <Text style={styles.noCarsTitle}>
+        No matching cars
+      </Text>
+
+      <Text style={styles.noCarsText}>
+        Try changing or clearing your filters.
+      </Text>
     </View>
+  ) : (
+    <View style={styles.resultsList}>
+      {cars.map((car) => {
+        const imageUrl =
+          car.images?.[0]?.imageUrl;
 
-    {/* Loading Cars */}
-    {loadingCars ? (
-      <View style={styles.loadingCars}>
-        <Text style={styles.loadingCarsText}>
-          Loading cars...
-        </Text>
-      </View>
-    ) : filteredCars.length === 0 ? (
-      <View style={styles.noCarsCard}>
-        <Ionicons
-          name="car-outline"
-          size={30}
-          color="#81939C"
-        />
+        const dailyRate =
+          Number(
+            car.booking?.dailyRateSen || 0
+          ) / 100;
 
-        <Text style={styles.noCarsTitle}>
-          No cars found
-        </Text>
+        const isSaved =
+          savedListingIds.has(Number(car.id));
 
-        <Text style={styles.noCarsText}>
-          Try changing your search or vehicle type.
-        </Text>
-      </View>
-    ) : (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.carList}
-      >
-        {filteredCars.map((car) => {
-          const imageUrl =
-            car.images?.[0]?.imageUrl;
-
-          const dailyRate =
-            Number(
-              car.booking?.dailyRateSen || 0
-            ) / 100;
-
-          return (
-            <Pressable
-              key={car.id}
-              style={styles.carCard}
-              onPress={() =>
-                router.push({
-                  pathname: "/customer/car-details",
-                  params: {
-                    id: String(car.id),
-
-                    city: trip.city || "",
-
-                    from: trip.from || "",
-                    ft: trip.fromTime || "",
-
-                    to: trip.to || "",
-                    tt: trip.toTime || "",
-                  },
-                })
-              }
-            >
-              <View
-                style={
-                  styles.carImageWrapper
-                }
-              >
-                {imageUrl ? (
-                  <Image
-                    source={{
-                      uri: imageUrl,
-                    }}
-                    style={styles.carImage}
-                    resizeMode="cover"
+        return (
+          <Pressable
+            key={car.id}
+            style={({ pressed }) => [
+              styles.resultCard,
+              pressed && { opacity: 0.85 },
+            ]}
+            onPress={() =>
+              router.push({
+                pathname: "/customer/car-details",
+                params: {
+                  id: String(car.id),
+                  city: trip.city || "",
+                  from: trip.from || "",
+                  ft: trip.fromTime || "",
+                  to: trip.to || "",
+                  tt: trip.toTime || "",
+                },
+              })
+            }
+          >
+            <View style={styles.resultImageBox}>
+              {imageUrl ? (
+                <Image
+                  source={{ uri: imageUrl }}
+                  style={styles.resultImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View
+                  style={styles.resultPlaceholder}
+                >
+                  <Ionicons
+                    name="car-sport-outline"
+                    size={35}
+                    color="#91A5AD"
                   />
-                ) : (
-                  <View
-                    style={
-                      styles.carImagePlaceholder
-                    }
-                  >
-                    <Ionicons
-                      name="car-sport-outline"
-                      size={45}
-                      color="#91A5AD"
-                    />
-                  </View>
-                )}
+                </View>
+              )}
+            </View>
 
-                <Pressable
-                style={styles.heartButton}
-                disabled={
-                  savingListingId ===
-                  Number(car.id)
+            <View style={styles.resultInfo}>
+              <Text
+                style={styles.resultName}
+                numberOfLines={2}
+              >
+                {car.name ||
+                  `${car.vehicleMake || ""} ${
+                    car.vehicleModel || ""
+                  }`.trim()}
+              </Text>
+
+              <Text
+                style={styles.resultDetails}
+                numberOfLines={2}
+              >
+                {car.vehicleType || "Car"}
+                {" · "}
+                {car.transmission || "N/A"}
+              </Text>
+
+              {car.seats ? (
+                <Text style={styles.resultDetails}>
+                  {car.seats} seats
+                </Text>
+              ) : null}
+
+              <View style={styles.resultPriceRow}>
+                <Text style={styles.resultPrice}>
+                  RM {dailyRate.toFixed(2)}
+                </Text>
+
+                <Text style={styles.resultPerDay}>
+                  {" "}/ day
+                </Text>
+              </View>
+            </View>
+
+            <Pressable
+              style={styles.resultHeart}
+              disabled={
+                savingListingId === Number(car.id)
+              }
+              onPress={(event) => {
+                event.stopPropagation();
+
+                handleToggleSaved(Number(car.id));
+              }}
+            >
+              <Ionicons
+                name={
+                  isSaved ? "heart" : "heart-outline"
                 }
-                onPress={(event) => {
-                  event.stopPropagation();
+                size={20}
+                color={
+                  isSaved ? "#E84B4B" : "#17313C"
+                }
+              />
+            </Pressable>
+          </Pressable>
+        );
+      })}
+    </View>
+  )
+) : cars.length === 0 ? (
+  <View style={styles.noCarsCard}>
+    <Ionicons
+      name="car-outline"
+      size={30}
+      color="#81939C"
+    />
 
-                  handleToggleSaved(
-                    Number(car.id)
-                  );
-                }}
+    <Text style={styles.noCarsTitle}>
+      No cars available
+    </Text>
+  </View>
+) : (
+  <ScrollView
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={styles.carList}
+  >
+    {cars.map((car) => {
+      const imageUrl =
+        car.images?.[0]?.imageUrl;
+
+      const dailyRate =
+        Number(
+          car.booking?.dailyRateSen || 0
+        ) / 100;
+
+      const isSaved =
+        savedListingIds.has(Number(car.id));
+
+      return (
+        <Pressable
+          key={car.id}
+          style={styles.carCard}
+          onPress={() =>
+            router.push({
+              pathname: "/customer/car-details",
+              params: {
+                id: String(car.id),
+                city: trip.city || "",
+                from: trip.from || "",
+                ft: trip.fromTime || "",
+                to: trip.to || "",
+                tt: trip.toTime || "",
+              },
+            })
+          }
+        >
+          <View style={styles.carImageWrapper}>
+            {imageUrl ? (
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.carImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={styles.carImagePlaceholder}
               >
                 <Ionicons
-                  name={
-                    savedListingIds.has(
-                      Number(car.id)
-                    )
-                      ? "heart"
-                      : "heart-outline"
-                  }
-                  size={20}
-                  color={
-                    savedListingIds.has(
-                      Number(car.id)
-                    )
-                      ? "#E84B4B"
-                      : "#17313C"
-                  }
+                  name="car-sport-outline"
+                  size={45}
+                  color="#91A5AD"
                 />
-              </Pressable>
               </View>
+            )}
 
-              <View style={styles.carInfo}>
-                <Text
-                  style={styles.carName}
-                  numberOfLines={1}
-                >
-                  {car.name ||
-                    `${car.vehicleMake || ""} ${
-                      car.vehicleModel || ""
-                    }`.trim()}
-                </Text>
+            <Pressable
+              style={styles.heartButton}
+              disabled={
+                savingListingId === Number(car.id)
+              }
+              onPress={(event) => {
+                event.stopPropagation();
 
-                <Text
-                  style={styles.carDetails}
-                >
-                  {car.vehicleType || "Car"}
-                  {" · "}
-                  {car.transmission ||
-                    "Transmission N/A"}
-                </Text>
-
-                <View style={styles.priceRow}>
-                  <Text style={styles.price}>
-                    RM {dailyRate.toFixed(2)}
-                  </Text>
-
-                  <Text style={styles.perDay}>
-                    {" "}
-                    / day
-                  </Text>
-                </View>
-              </View>
+                handleToggleSaved(Number(car.id));
+              }}
+            >
+              <Ionicons
+                name={
+                  isSaved ? "heart" : "heart-outline"
+                }
+                size={20}
+                color={
+                  isSaved ? "#E84B4B" : "#17313C"
+                }
+              />
             </Pressable>
-          );
-        })}
-      </ScrollView>
-    )}
+          </View>
+
+          <View style={styles.carInfo}>
+            <Text
+              style={styles.carName}
+              numberOfLines={1}
+            >
+              {car.name ||
+                `${car.vehicleMake || ""} ${
+                  car.vehicleModel || ""
+                }`.trim()}
+            </Text>
+
+            <Text style={styles.carDetails}>
+              {car.vehicleType || "Car"}
+              {" · "}
+              {car.transmission || "N/A"}
+            </Text>
+
+            <View style={styles.priceRow}>
+              <Text style={styles.price}>
+                RM {dailyRate.toFixed(2)}
+              </Text>
+
+              <Text style={styles.perDay}>
+                {" "}/ day
+              </Text>
+            </View>
+          </View>
+        </Pressable>
+      );
+    })}
+  </ScrollView>
+)}
+
 
     {/* My Booking Header */}
     <View style={styles.sectionHeader}>
@@ -1225,9 +1383,11 @@ function normalizeVehicleType(
         onClose={() =>
           setFilterVisible(false)
         }
-        onApply={(nextFilters) =>
-          setFilters(nextFilters)
-        }
+        onApply={(nextFilters) => {
+          setFilters(nextFilters);
+          setFilterVisible(false);
+          openSearchResults(nextFilters);
+        }}
       />
 
     </SafeAreaView>
@@ -1756,5 +1916,95 @@ tripSummaryValue: {
   fontWeight: "800",
   marginTop: 2,
 },
+
+
+resultsCount: {
+  fontSize: 12,
+  color: "#81939C",
+  marginBottom: 14,
+  marginTop: -4,
+},
+
+resultsList: {
+  gap: 12,
+  marginBottom: 10,
+},
+
+resultCard: {
+  backgroundColor: "#FFFFFF",
+  borderRadius: 18,
+  borderWidth: 1,
+  borderColor: "#E3EAED",
+  flexDirection: "row",
+  alignItems: "center",
+  padding: 10,
+  minHeight: 128,
+},
+
+resultImageBox: {
+  width: 118,
+  height: 105,
+  borderRadius: 13,
+  backgroundColor: "#EEF3F5",
+  overflow: "hidden",
+},
+
+resultImage: {
+  width: "100%",
+  height: "100%",
+},
+
+resultPlaceholder: {
+  flex: 1,
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+resultInfo: {
+  flex: 1,
+  paddingLeft: 13,
+  paddingRight: 5,
+  justifyContent: "center",
+},
+
+resultName: {
+  color: "#17313C",
+  fontSize: 14,
+  fontWeight: "900",
+},
+
+resultDetails: {
+  color: "#81939C",
+  fontSize: 10,
+  marginTop: 5,
+},
+
+resultPriceRow: {
+  flexDirection: "row",
+  alignItems: "baseline",
+  marginTop: 11,
+},
+
+resultPrice: {
+  color: "#07869B",
+  fontSize: 15,
+  fontWeight: "900",
+},
+
+resultPerDay: {
+  color: "#8C9BA2",
+  fontSize: 9,
+},
+
+resultHeart: {
+  width: 35,
+  height: 35,
+  borderRadius: 12,
+  backgroundColor: "#F4F8F9",
+  justifyContent: "center",
+  alignItems: "center",
+  alignSelf: "flex-start",
+},
+
 
 });

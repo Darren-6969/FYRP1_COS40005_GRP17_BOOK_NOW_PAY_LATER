@@ -28,6 +28,11 @@ import {
 } from "../../services/carApi";
 
 import {
+  CarFilters,
+  DEFAULT_CAR_FILTERS,
+} from "../../components/CarFilterModal";
+
+import {
   getSavedListingIds,
   removeSavedListing,
   saveListing,
@@ -58,13 +63,15 @@ export default function CarsScreen() {
     useRouter();
 
   const params =
-    useLocalSearchParams<{
-      city?: string;
-      from?: string;
-      ft?: string;
-      to?: string;
-      tt?: string;
-    }>();
+  useLocalSearchParams<{
+    city?: string;
+    from?: string;
+    ft?: string;
+    to?: string;
+    tt?: string;
+    search?: string;
+    filters?: string;
+  }>();
 
   const [cars, setCars] =
     useState<any[]>([]);
@@ -87,12 +94,30 @@ const [
     );
 
   const [searchText, setSearchText] =
-    useState("");
+  useState(params.search || "");
+
+  const [activeFilters, setActiveFilters] =
+  useState<CarFilters>(() => {
+    try {
+      const parsed = params.filters
+        ? JSON.parse(params.filters)
+        : {};
+
+      return {
+        ...DEFAULT_CAR_FILTERS,
+        ...parsed,
+      };
+    } catch {
+      return DEFAULT_CAR_FILTERS;
+    }
+  });
 
   const [
-    selectedVehicleType,
-    setSelectedVehicleType,
-  ] = useState("All");
+  selectedVehicleType,
+  setSelectedVehicleType,
+    ] = useState(
+    activeFilters.vehicleTypes[0] || "All"
+    );
 
   useEffect(() => {
     const loadCars =
@@ -210,59 +235,175 @@ const [
       ];
     }, [cars]);
 
-  const filteredCars =
-    useMemo(() => {
-      const search =
-        searchText
-          .trim()
-          .toLowerCase();
+  
+const filteredCars = useMemo(() => {
+  const search = searchText.trim().toLowerCase();
 
-      return cars.filter(
-        (car) => {
-          const carName =
-            car.name ||
-            `${car.vehicleMake || ""} ${
-              car.vehicleModel ||
-              ""
-            }`;
+  const result = cars.filter((car) => {
+    const carName =
+      car.name ||
+      `${car.vehicleMake || ""} ${car.vehicleModel || ""}`;
 
-          const matchesSearch =
-            !search ||
-            carName
-              .toLowerCase()
-              .includes(search) ||
-            car.vehicleMake
-              ?.toLowerCase()
-              .includes(search) ||
-            car.vehicleModel
-              ?.toLowerCase()
-              .includes(search);
+    const searchMatch =
+      !search ||
+      String(carName).toLowerCase().includes(search) ||
+      String(car.vehicleMake || "").toLowerCase().includes(search) ||
+      String(car.vehicleModel || "").toLowerCase().includes(search);
 
-          if (!matchesSearch) {
-            return false;
-          }
+    if (!searchMatch) return false;
 
-          if (
-            selectedVehicleType !==
-              "All" &&
-            normalizeVehicleType(
-              car.vehicleType
-            ) !==
-              normalizeVehicleType(
-                selectedVehicleType
-              )
-          ) {
-            return false;
-          }
+    if (
+      params.city &&
+      String(car.branch?.city || "").toLowerCase() !==
+        String(params.city).toLowerCase()
+    ) {
+      return false;
+    }
 
-          return true;
-        }
+    const selectedTypes =
+      selectedVehicleType === "All"
+        ? []
+        : [selectedVehicleType];
+
+    if (
+      selectedTypes.length &&
+      !selectedTypes.some(
+        (type) =>
+          normalizeVehicleType(type) ===
+          normalizeVehicleType(car.vehicleType)
+      )
+    ) {
+      return false;
+    }
+
+    if (activeFilters.seats.length) {
+      const minimumSeats = Math.min(
+        ...activeFilters.seats.map(Number)
       );
-    }, [
-      cars,
-      searchText,
-      selectedVehicleType,
-    ]);
+
+      if (Number(car.seats || 0) < minimumSeats) {
+        return false;
+      }
+    }
+
+    if (
+      activeFilters.transmissions.length &&
+      !activeFilters.transmissions.includes(
+        car.transmission
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      activeFilters.fuels.length &&
+      !activeFilters.fuels.includes(car.fuelType)
+    ) {
+      return false;
+    }
+
+    if (
+      activeFilters.drives.length &&
+      !activeFilters.drives.includes(car.driveType)
+    ) {
+      return false;
+    }
+
+    if (
+      activeFilters.brands.length &&
+      !activeFilters.brands.includes(car.vehicleMake)
+    ) {
+      return false;
+    }
+
+    if (
+      activeFilters.operators.length &&
+      !activeFilters.operators.includes(
+        String(car.operator?.id)
+      )
+    ) {
+      return false;
+    }
+
+    if (activeFilters.refunds.length) {
+      const refundType =
+        car.booking?.refundRule?.type === "PARTIAL"
+          ? "partial"
+          : "none";
+
+      if (!activeFilters.refunds.includes(refundType)) {
+        return false;
+      }
+    }
+
+    const dailyRate =
+      Number(car.booking?.dailyRateSen || 0) / 100;
+
+    if (
+      activeFilters.priceMin &&
+      dailyRate < Number(activeFilters.priceMin)
+    ) {
+      return false;
+    }
+
+    if (
+      activeFilters.priceMax &&
+      dailyRate > Number(activeFilters.priceMax)
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
+  switch (activeFilters.sort) {
+    case "daily":
+      result.sort(
+        (a, b) =>
+          Number(a.booking?.dailyRateSen || 0) -
+          Number(b.booking?.dailyRateSen || 0)
+      );
+      break;
+
+    case "payable":
+      result.sort((a, b) => {
+        const aPayable =
+          Number(a.booking?.dailyRateSen || 0) *
+          Number(a.booking?.downPaymentPct || 0);
+
+        const bPayable =
+          Number(b.booking?.dailyRateSen || 0) *
+          Number(b.booking?.downPaymentPct || 0);
+
+        return aPayable - bPayable;
+      });
+      break;
+
+    case "seats":
+      result.sort(
+        (a, b) =>
+          Number(a.seats || 0) - Number(b.seats || 0)
+      );
+      break;
+
+    case "recent":
+      result.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() -
+          new Date(a.createdAt).getTime()
+      );
+      break;
+  }
+
+  return result;
+}, [
+  cars,
+  searchText,
+  selectedVehicleType,
+  activeFilters,
+  params.city,
+]);
+
 
     const handleToggleSaved =
   async (
@@ -380,7 +521,7 @@ const [
               styles.title
             }
           >
-            All Cars
+            Search Results
           </Text>
 
           <Text
@@ -919,29 +1060,27 @@ const styles =
     },
 
     carGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent:
-        "space-between",
-      gap: 12,
+    flexDirection: "column",
+    gap: 12,
     },
 
     carCard: {
-      width: "48%",
-      backgroundColor:
-        "#FFFFFF",
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor:
-        "#E3EAED",
-      overflow: "hidden",
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E3EAED",
+    overflow: "hidden",
+    minHeight: 125,
     },
 
     imageWrapper: {
-      height: 125,
-      position: "relative",
-      backgroundColor:
-        "#EEF3F5",
+    width: 125,
+    height: 125,
+    position: "relative",
+    backgroundColor: "#EEF3F5",
     },
 
     carImage: {
@@ -957,27 +1096,27 @@ const styles =
     },
 
     heartButton: {
-      position: "absolute",
-      top: 9,
-      right: 9,
-      width: 34,
-      height: 34,
-      borderRadius: 12,
-      backgroundColor:
-        "rgba(255,255,255,0.92)",
-      alignItems: "center",
-      justifyContent:
-        "center",
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.94)",
+    alignItems: "center",
+    justifyContent: "center",
     },
 
     carInfo: {
-      padding: 12,
+    flex: 1,
+    padding: 13,
+    justifyContent: "center",
     },
 
     carName: {
-      color: "#17313C",
-      fontSize: 12,
-      fontWeight: "900",
+    color: "#17313C",
+    fontSize: 14,
+    fontWeight: "900",
     },
 
     carMeta: {
