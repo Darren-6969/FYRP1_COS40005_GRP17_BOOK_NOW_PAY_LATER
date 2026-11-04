@@ -32,8 +32,6 @@ import { chatFeedbackSchema, chatMessageSchema } from "../validators/chat_valida
 
 const router = express.Router();
 
-// Quotes run several queries each;
-// the page requests one per selection change.
 // Chat window (FR-CHAT): a burst limit against scripted abuse. The per-hour
 // limits on AI messages are separate and editable on the AI models page.
 const chatLimiter = rateLimit({
@@ -53,6 +51,8 @@ const searchLimiter = rateLimit({
   message: { message: "Too many searches. Please wait a moment and try again.", code: "RATE_LIMITED" },
 });
 
+// Quotes run several queries each;
+// the page requests one per selection change.
 const quoteLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,

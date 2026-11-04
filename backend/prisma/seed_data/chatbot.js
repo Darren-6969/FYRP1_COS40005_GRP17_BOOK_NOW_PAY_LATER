@@ -329,7 +329,7 @@ export const ANSWER_TEMPLATES = [
   {
     key: "payments-due",
     quickActionLabel: "Payments due",
-    keywords: ["payment due", "how much left", "amount due", "paid"],
+    keywords: ["payment due", "how much left", "amount due", "paid", "my balance", "balance due"],
     placeholders: ["payment_lines"],
     signedInOnly: true,
     body: "Payments on your bookings:\n{payment_lines}",

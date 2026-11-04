@@ -15,7 +15,11 @@ const UPCOMING = [
   "PAID",
   "READY_FOR_PICKUP",
   "IN_PROGRESS",
+  "OVERDUE",
 ];
+
+// The car is with the customer: shown even after the booked return time.
+const ON_RENTAL = ["IN_PROGRESS", "OVERDUE"];
 
 const STATUS_LABEL = {
   PENDING: "Waiting for the operator",
@@ -26,6 +30,7 @@ const STATUS_LABEL = {
   PAID: "Paid in full",
   READY_FOR_PICKUP: "Ready for pickup",
   IN_PROGRESS: "On rental",
+  OVERDUE: "Return overdue",
 };
 
 const PART_LABEL = {
@@ -70,7 +75,10 @@ function toSen(decimal) {
   return Math.round(Number(decimal || 0) * 100);
 }
 
-/** Up to five upcoming car bookings with what is paid, due and needed. */
+/**
+ * Up to five current car bookings with what is paid, due and needed:
+ * upcoming ones, plus any car still with the customer past its return time.
+ */
 export async function upcomingBookings(customerId) {
   if (!Number.isInteger(customerId)) return [];
   const rows = await prisma.booking.findMany({
@@ -78,7 +86,7 @@ export async function upcomingBookings(customerId) {
       customerId,
       listingId: { not: null },
       status: { in: UPCOMING },
-      OR: [{ returnDate: null }, { returnDate: { gte: new Date() } }],
+      OR: [{ returnDate: null }, { returnDate: { gte: new Date() } }, { status: { in: ON_RENTAL } }],
     },
     orderBy: [{ pickupDate: "asc" }, { id: "asc" }],
     take: 5,
