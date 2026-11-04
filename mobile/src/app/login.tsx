@@ -47,46 +47,61 @@ export default function LoginScreen() {
   const [error, setError] =
     useState("");
 
-  const handleLogin = async () => {
-    setError("");
+  
+const handleLogin = async () => {
+  setError("");
 
-    if (!email.trim() || !password) {
+  if (!email.trim() || !password) {
+    setError(
+      "Please enter your email and password."
+    );
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    const data = await loginUser(
+      email.trim(),
+      password
+    );
+
+    const role = data.user?.role;
+
+    if (
+      role !== "CUSTOMER" &&
+      role !== "NORMAL_SELLER"
+    ) {
       setError(
-        "Please enter your email and password."
+        "This account role is not supported in the mobile app."
       );
       return;
     }
 
-    try {
-      setLoading(true);
+    await saveSession(
+      data.token,
+      data.refreshToken,
+      data.user
+    );
 
-      const data = await loginUser(
-        email.trim(),
-        password
-      );
-
-      await saveSession(
-        data.token,
-        data.refreshToken,
-        data.user
-      );
-
-      if (data.user?.role === "CUSTOMER") {
-        router.replace("/customer/home");
-        return;
-      }
-
-      setError(
-        "This mobile app currently supports customer accounts only."
-      );
-    } catch (err: any) {
-      setError(
-        err?.message || "Login failed."
-      );
-    } finally {
-      setLoading(false);
+    if (role === "CUSTOMER") {
+      router.replace("/customer/home");
+      return;
     }
-  };
+
+    if (role === "NORMAL_SELLER") {
+      router.replace("/operator/dashboard");
+      return;
+    }
+  } catch (err: any) {
+    setError(
+      err?.message || "Login failed."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleRegister = async () => {
     setError("");
