@@ -3,6 +3,7 @@ import { acceptBookingAndRequestPayment } from "../services/booking_accept_servi
 import { createAuditLog } from "../services/log_service.js";
 import { getBookingStatusHistory, transitionBookingStatus } from "../services/booking_status_service.js";
 import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_service.js";
+import { notifyCustomerBookingRejected } from "../services/notification_email_service.js";
 
 // Shared include spec for full booking relations
 const bookingInclude = {
@@ -269,6 +270,8 @@ export async function rejectBooking(req, res, next) {
       before: { status: booking.status },
       after: { status: updated.status },
     });
+
+    await notifyCustomerBookingRejected({ booking: updated, reason: req.body?.reason });
 
     res.json(updated);
   } catch (err) {
