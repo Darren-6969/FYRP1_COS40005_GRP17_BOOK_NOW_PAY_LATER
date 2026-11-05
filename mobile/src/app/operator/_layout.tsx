@@ -95,11 +95,10 @@ export default function OperatorLayout() {
         animation: "slide_from_right",
       }}
     >
-      <Stack.Screen name="dashboard" />
     </Stack>
   );
 
-  return (
+    return (
     <Stack
       screenOptions={{
         headerShown: false,
@@ -108,6 +107,13 @@ export default function OperatorLayout() {
     >
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="booking/[id]" />
+      <Stack.Screen name="notifications" />
+      <Stack.Screen name="listing/form" />
+      <Stack.Screen name="listing/manage" />
+      <Stack.Screen name="branches" />
+      <Stack.Screen name="branch/points" />
+      <Stack.Screen name="licence-checks" />
     </Stack>
   );
 }
+

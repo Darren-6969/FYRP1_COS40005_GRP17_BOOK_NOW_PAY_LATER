@@ -34,7 +34,7 @@ export default function OperatorTabLayout() {
         },
 
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: "800",
         },
       }}
@@ -84,6 +84,21 @@ export default function OperatorTabLayout() {
             ? "#07869B"
             : "#8A9AA3"
         }
+      />
+    ),
+  }}
+/>
+
+
+<Tabs.Screen
+  name="listings"
+  options={{
+    title: "Listings",
+    tabBarIcon: ({ focused }) => (
+      <Ionicons
+        name={focused ? "car-sport" : "car-sport-outline"}
+        size={22}
+        color={focused ? "#07869B" : "#8A9AA3"}
       />
     ),
   }}

@@ -24,6 +24,7 @@ import {
 
 import {
   getOperatorDashboard,
+  getOperatorNotifications,
   OperatorDashboard,
 } from "../../../services/operatorApi";
 
@@ -34,6 +35,8 @@ import {
 
 export default function OperatorDashboardScreen() {
   const router = useRouter();
+
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const [dashboard, setDashboard] =
     useState<OperatorDashboard | null>(null);
@@ -66,9 +69,27 @@ export default function OperatorDashboardScreen() {
 
       setOperatorName(user?.name || "Operator");
 
-      const data = await getOperatorDashboard();
+      
+const data = await getOperatorDashboard();
 
-      setDashboard(data);
+setDashboard(data);
+
+// Load unread operator notifications.
+try {
+  const response = await getOperatorNotifications();
+
+  const unread = (response.notifications || []).filter(
+    (notification) => !notification.isRead
+  ).length;
+
+  setUnreadCount(unread);
+} catch (notificationError) {
+  console.log(
+    "Unable to load notification count:",
+    notificationError
+  );
+}
+
     } catch (err: any) {
       setError(
         err?.message ||
@@ -146,6 +167,23 @@ export default function OperatorDashboardScreen() {
             </Text>
           </View>
 
+          
+          <Pressable
+            style={styles.notificationButton}
+            onPress={() => router.push("/operator/notifications")}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={23}
+              color="#17313C"
+            />
+
+            {unreadCount > 0 && (
+              <View style={styles.notificationDot} />
+            )}
+          </Pressable>
+
+
           <Pressable
             style={styles.logoutButton}
             onPress={handleLogout}
@@ -193,6 +231,55 @@ export default function OperatorDashboardScreen() {
             <Text style={styles.sectionTitle}>
               Overview
             </Text>
+
+            <Pressable
+  onPress={() => router.push("/operator/licence-checks")}
+  style={{
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E3EAED",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  }}
+>
+  <Ionicons
+    name="id-card-outline"
+    size={24}
+    color="#07869B"
+  />
+
+  <View style={{ flex: 1 }}>
+    <Text
+      style={{
+        fontSize: 14,
+        fontWeight: "900",
+        color: "#17313C",
+      }}
+    >
+      Licence Checks
+    </Text>
+    <Text
+      style={{
+        fontSize: 11,
+        color: "#81939C",
+        marginTop: 5,
+      }}
+    >
+      Review submitted driving licences
+    </Text>
+  </View>
+
+  <Ionicons
+    name="chevron-forward"
+    size={19}
+    color="#81939C"
+  />
+</Pressable>
+
 
             <View style={styles.statsGrid}>
               <StatCard
@@ -299,6 +386,7 @@ export default function OperatorDashboardScreen() {
             )}
           </>
         )}
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -536,4 +624,28 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 14,
   },
+
+  notificationButton: {
+  width: 46,
+  height: 46,
+  borderRadius: 15,
+  backgroundColor: "#FFFFFF",
+  borderWidth: 1,
+  borderColor: "#E3EAED",
+  justifyContent: "center",
+  alignItems: "center",
+  marginRight: 10,
+},
+
+notificationDot: {
+  position: "absolute",
+  top: 9,
+  right: 10,
+  height: 9,
+  width: 9,
+  borderRadius: 5,
+  backgroundColor: "#D14343",
+  borderWidth: 1.5,
+  borderColor: "#FFFFFF",
+},
 });

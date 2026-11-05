@@ -17,6 +17,8 @@ import {
   StyleSheet,
   Text,
   View,
+  Alert,
+  Modal,
 } from "react-native";
 
 import {
@@ -26,6 +28,10 @@ import {
 
 import {
   getCustomerBookingById,
+  getCustomerCancellationQuote,
+  cancelCustomerBooking,
+  type CustomerCancellationQuote,
+  type CustomerCancellationReason,
 } from "../../../services/customerApi";
 
 type Payment = {
@@ -238,6 +244,18 @@ export default function BookingDetailScreen() {
   const [error, setError] =
     useState("");
 
+  const [cancelVisible, setCancelVisible] = useState(false);
+
+  const [cancelQuote, setCancelQuote] =
+  useState<CustomerCancellationQuote | null>(null);
+
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+
+  const [cancelReason, setCancelReason] =
+  useState<CustomerCancellationReason | null>(null);
+
   const loadBooking = async (
     refresh = false
   ) => {
@@ -268,6 +286,112 @@ export default function BookingDetailScreen() {
       setRefreshing(false);
     }
   };
+
+  
+const openCancelDialog = async () => {
+  if (!booking || !canCancelBooking(booking)) return;
+
+  setCancelVisible(true);
+  setCancelQuote(null);
+  setCancelError("");
+  setCancelReason(null);
+  setCancelLoading(true);
+
+  try {
+    const quote = await getCustomerCancellationQuote(booking.id);
+    setCancelQuote(quote);
+  } catch (err: any) {
+    setCancelError(
+      err?.message || "Unable to calculate cancellation refund."
+    );
+  } finally {
+    setCancelLoading(false);
+  }
+};
+
+const closeCancelDialog = () => {
+  if (cancelling) return;
+
+  setCancelVisible(false);
+  setCancelQuote(null);
+  setCancelReason(null);
+  setCancelError("");
+};
+
+const confirmCancellation = () => {
+  if (!booking || !cancelQuote || cancelling) return;
+
+  const id = booking.id;
+  const reason = cancelReason;
+
+  Alert.alert(
+    "Confirm Cancellation",
+    "Are you sure you want to cancel this booking? This action cannot be undone.",
+    [
+      { text: "Keep Booking", style: "cancel" },
+      {
+        text: "Cancel Booking",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setCancelling(true);
+            setCancelError("");
+
+            await cancelCustomerBooking(
+              id,
+              reason || undefined
+            );
+
+            setCancelVisible(false);
+            setCancelQuote(null);
+
+            // Reload booking from the same backend.
+            await loadBooking(true);
+
+            Alert.alert(
+              "Booking Cancelled",
+              "Your booking has been cancelled. Any applicable refund will be processed according to the cancellation policy."
+            );
+          } catch (err: any) {
+            const message =
+              err?.message || "Unable to cancel booking.";
+
+            setCancelError(message);
+            Alert.alert("Cancellation Failed", message);
+          } finally {
+            setCancelling(false);
+          }
+        },
+      },
+    ]
+  );
+};
+
+
+  const CANCELLABLE_STATUSES = [
+  "PENDING",
+  "ALTERNATIVE_SUGGESTED",
+  "ACCEPTED",
+  "PENDING_PAYMENT",
+  "CONFIRMED",
+  "PAID",
+  "READY_FOR_PICKUP",
+];
+
+function canCancelBooking(booking: Booking): boolean {
+  if (!CANCELLABLE_STATUSES.includes(booking.status || "")) {
+    return false;
+  }
+
+  if (
+    booking.pickupDate &&
+    new Date(booking.pickupDate).getTime() <= Date.now()
+  ) {
+    return false;
+  }
+
+  return true;
+}
 
   useFocusEffect(
     useCallback(() => {
@@ -1357,6 +1481,41 @@ export default function BookingDetailScreen() {
           </View>
         )}
 
+        
+{canCancelBooking(booking) && (
+  <Pressable
+    onPress={openCancelDialog}
+    style={{
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "#E6B5B5",
+      borderRadius: 15,
+      minHeight: 52,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 9,
+      marginTop: 14,
+    }}
+  >
+    <Ionicons
+      name="close-circle-outline"
+      size={20}
+      color="#C64F4F"
+    />
+    <Text
+      style={{
+        color: "#C64F4F",
+        fontSize: 14,
+        fontWeight: "900",
+      }}
+    >
+      Cancel Booking
+    </Text>
+  </Pressable>
+)}
+
+
         <View style={{ height: 120 }} />
       </ScrollView>
 
@@ -1453,6 +1612,235 @@ export default function BookingDetailScreen() {
           </View>
         )}
       </View>
+
+    
+<Modal
+  visible={cancelVisible}
+  transparent
+  animationType="slide"
+  onRequestClose={closeCancelDialog}
+>
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "flex-end",
+    }}
+  >
+    <View
+      style={{
+        backgroundColor: "#FFFFFF",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 22,
+        maxHeight: "85%",
+      }}
+    >
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <Text
+          style={{
+            fontSize: 21,
+            fontWeight: "900",
+            color: "#17313C",
+            marginBottom: 8,
+          }}
+        >
+          Cancel Booking
+        </Text>
+
+        <Text
+          style={{
+            fontSize: 12,
+            color: "#81939C",
+            marginBottom: 20,
+          }}
+        >
+          Review the refund details before cancelling.
+        </Text>
+
+        {cancelLoading ? (
+          <ActivityIndicator
+            size="large"
+            color="#07869B"
+          />
+        ) : cancelError ? (
+          <Text style={{ color: "#C64F4F", marginBottom: 15 }}>
+            {cancelError}
+          </Text>
+        ) : cancelQuote ? (
+          <View
+            style={{
+              backgroundColor: "#F7FAFB",
+              padding: 16,
+              borderRadius: 15,
+              marginBottom: 20,
+              gap: 12,
+            }}
+          >
+            {([
+              ["Amount Paid", cancelQuote.totalPaid],
+              ["Deposit Kept", cancelQuote.depositKept],
+              ["Deposit Refunded", cancelQuote.depositRefund],
+              ["Balance Refunded", cancelQuote.balanceRefund],
+              ["Total Refund", cancelQuote.totalRefund],
+            ] as [string, number][]).map(([label, amount]) => (
+              <View
+                key={label}
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  gap: 10,
+                }}
+              >
+                <Text style={{ color: "#617780" }}>
+                  {label}
+                </Text>
+                <Text
+                  style={{
+                    color: "#17313C",
+                    fontWeight: "800",
+                  }}
+                >
+                  RM {Number(amount || 0).toFixed(2)}
+                </Text>
+              </View>
+            ))}
+
+            {!!cancelQuote.explanation && (
+              <Text
+                style={{
+                  color: "#617780",
+                  fontSize: 12,
+                  lineHeight: 19,
+                  marginTop: 8,
+                }}
+              >
+                {cancelQuote.explanation}
+              </Text>
+            )}
+
+            {cancelQuote.refundVia === "CARD" && (
+              <Text style={{ color: "#617780", fontSize: 12 }}>
+                Card refund processing times depend on the payment provider.
+              </Text>
+            )}
+
+            {cancelQuote.refundVia === "OPERATOR_TRANSFER" && (
+              <Text style={{ color: "#617780", fontSize: 12 }}>
+                Refund will be arranged by the operator.
+                {cancelQuote.refundDeadline
+                  ? ` Deadline: ${new Date(
+                      cancelQuote.refundDeadline
+                    ).toLocaleDateString("en-MY")}`
+                  : ""}
+              </Text>
+            )}
+          </View>
+        ) : null}
+
+        <Text
+          style={{
+            fontSize: 14,
+            fontWeight: "900",
+            color: "#17313C",
+            marginBottom: 12,
+          }}
+        >
+          Cancellation Reason (Optional)
+        </Text>
+
+        {([
+          ["PLANS_CHANGED", "Plans Changed"],
+          ["FOUND_ANOTHER_CAR", "Found Another Car"],
+          ["PRICE", "Price"],
+          ["OTHER", "Other"],
+        ] as [CustomerCancellationReason, string][]).map(
+          ([value, label]) => (
+            <Pressable
+              key={value}
+              disabled={cancelling}
+              onPress={() =>
+                setCancelReason(
+                  cancelReason === value ? null : value
+                )
+              }
+              style={{
+                padding: 14,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor:
+                  cancelReason === value
+                    ? "#07869B"
+                    : "#E3EAED",
+                backgroundColor:
+                  cancelReason === value
+                    ? "#EAF8FA"
+                    : "#FFFFFF",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 8,
+              }}
+            >
+              <Ionicons
+                name={
+                  cancelReason === value
+                    ? "radio-button-on"
+                    : "radio-button-off"
+                }
+                color="#07869B"
+                size={20}
+              />
+              <Text style={{ color: "#17313C" }}>
+                {label}
+              </Text>
+            </Pressable>
+          )
+        )}
+
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+          <Pressable
+            onPress={closeCancelDialog}
+            disabled={cancelling}
+            style={{
+              flex: 1,
+              padding: 16,
+              borderRadius: 13,
+              backgroundColor: "#EEF2F4",
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ fontWeight: "800", color: "#17313C" }}>
+              Keep Booking
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={confirmCancellation}
+            disabled={cancelling || cancelLoading || !cancelQuote}
+            style={{
+              flex: 1,
+              padding: 16,
+              borderRadius: 13,
+              backgroundColor: "#C64F4F",
+              alignItems: "center",
+              opacity:
+                cancelling || cancelLoading || !cancelQuote
+                  ? 0.5
+                  : 1,
+            }}
+          >
+            <Text style={{ color: "#FFFFFF", fontWeight: "900" }}>
+              {cancelling ? "Cancelling..." : "Confirm Cancel"}
+            </Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </View>
+  </View>
+</Modal>
+
+
     </SafeAreaView>
   );
 }

@@ -16,9 +16,35 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useState } from "react";
+
+import { useEffect, useState } from "react";
+import { getPublicCarById } from "../../services/carApi";
 
 import DateTimePicker from "@react-native-community/datetimepicker";
+
+
+type BookingPoint = {
+  id: string;
+  label: string;
+  address?: string;
+  note?: string;
+  usage?: "PICKUP" | "DROPOFF" | "BOTH";
+  pickupFeeSen?: number;
+  dropoffFeeSen?: number;
+};
+
+type BookingCDW = {
+  id: string;
+  label: string;
+  description?: string;
+  priceSen: number;
+  unit: string;
+};
+
+function formatFee(sen: number | undefined) {
+  return `RM ${(Number(sen || 0) / 100).toFixed(2)}`;
+}
+
 
 export default function BookingRequest() {
   const router = useRouter();
@@ -32,6 +58,75 @@ export default function BookingRequest() {
       to?: string;
       tt?: string;
     }>();
+
+const [cdw, setCdw] = useState<BookingCDW | null>(null);
+
+const [cdwSelected, setCdwSelected] = useState(false);
+  
+const [pickupPoints, setPickupPoints] =
+  useState<BookingPoint[]>([]);
+
+const [dropoffPoints, setDropoffPoints] =
+  useState<BookingPoint[]>([]);
+
+const [pickupPointId, setPickupPointId] = useState("");
+const [dropoffPointId, setDropoffPointId] = useState("");
+
+const [pointsLoading, setPointsLoading] = useState(true);
+const [pointsError, setPointsError] = useState("");
+
+useEffect(() => {
+  if (!params.listingId) {
+    setPointsError("Vehicle listing is missing.");
+    setPointsLoading(false);
+    return;
+  }
+
+  let active = true;
+
+  const loadPoints = async () => {
+    try {
+      setPointsLoading(true);
+      setPointsError("");
+
+      const car = await getPublicCarById(params.listingId!);
+
+      if (!active) return;
+
+const availableCdw = car?.booking?.cdw ?? null;
+
+setCdw(availableCdw);
+setCdwSelected(false);
+
+      const pickup: BookingPoint[] =
+        car?.booking?.pickupPoints || [];
+
+      const dropoff: BookingPoint[] =
+        car?.booking?.dropoffPoints || [];
+
+      setPickupPoints(pickup);
+      setDropoffPoints(dropoff);
+
+      setPickupPointId(pickup[0]?.id || "");
+      setDropoffPointId(dropoff[0]?.id || "");
+    } catch (err: any) {
+      if (active) {
+        setPointsError(
+          err?.message || "Unable to load pickup locations."
+        );
+      }
+    } finally {
+      if (active) setPointsLoading(false);
+    }
+  };
+
+  loadPoints();
+
+  return () => {
+    active = false;
+  };
+}, [params.listingId]);
+
 
   const [fullName, setFullName] =
     useState("");
@@ -99,6 +194,11 @@ export default function BookingRequest() {
       tt:
         params.tt || "10:00",
 
+      pickupPointId,
+      dropoffPointId,
+
+      cdw: String(Boolean(cdw && cdwSelected)),
+
       fullName:
         fullName.trim(),
 
@@ -144,7 +244,11 @@ export default function BookingRequest() {
     rentalTermsAccepted &&
     forfeitureAccepted &&
     (driverIsBooker ||
-      driverName.trim().length >= 2);
+    driverName.trim().length >= 2) &&
+    !pointsLoading &&
+    !pointsError &&
+    pickupPointId.length > 0 &&
+    dropoffPointId.length > 0;
 
   return (
     <SafeAreaView
@@ -292,6 +396,257 @@ export default function BookingRequest() {
               </Text>
             </View>
           </View>
+
+          
+<View style={{ marginBottom: 24 }}>
+  <Text
+    style={{
+      fontSize: 19,
+      fontWeight: "800",
+      color: "#17313C",
+      marginBottom: 12,
+    }}
+  >
+    Pickup & Drop-off Locations
+  </Text>
+
+  {pointsLoading ? (
+    <Text style={{ color: "#81939C" }}>
+      Loading available locations...
+    </Text>
+  ) : pointsError ? (
+    <Text style={{ color: "#D14343" }}>
+      {pointsError}
+    </Text>
+  ) : (
+    <>
+      <Text
+        style={{
+          fontSize: 14,
+          fontWeight: "800",
+          color: "#17313C",
+          marginBottom: 10,
+        }}
+      >
+        Select Pickup Location *
+      </Text>
+
+      {pickupPoints.map((point) => (
+        <Pressable
+          key={point.id}
+          onPress={() => setPickupPointId(point.id)}
+          style={{
+            backgroundColor:
+              pickupPointId === point.id
+                ? "#E6F7F9"
+                : "#FFFFFF",
+            borderColor:
+              pickupPointId === point.id
+                ? "#07869B"
+                : "#E3EAED",
+            borderWidth: 1,
+            borderRadius: 14,
+            padding: 15,
+            marginBottom: 9,
+          }}
+        >
+          <Text
+            style={{
+              color: "#17313C",
+              fontWeight: "800",
+            }}
+          >
+            {pickupPointId === point.id ? "◉ " : "○ "}
+            {point.label}
+          </Text>
+
+          {!!point.address && (
+            <Text style={{ color: "#81939C", marginTop: 5 }}>
+              {point.address}
+            </Text>
+          )}
+
+          <Text
+            style={{
+              color: "#07869B",
+              fontWeight: "700",
+              marginTop: 7,
+            }}
+          >
+            Pickup Fee: {formatFee(point.pickupFeeSen)}
+          </Text>
+        </Pressable>
+      ))}
+
+      <Text
+        style={{
+          fontSize: 14,
+          fontWeight: "800",
+          color: "#17313C",
+          marginTop: 16,
+          marginBottom: 10,
+        }}
+      >
+        Select Drop-off Location *
+      </Text>
+
+      {dropoffPoints.map((point) => (
+        <Pressable
+          key={point.id}
+          onPress={() => setDropoffPointId(point.id)}
+          style={{
+            backgroundColor:
+              dropoffPointId === point.id
+                ? "#E6F7F9"
+                : "#FFFFFF",
+            borderColor:
+              dropoffPointId === point.id
+                ? "#07869B"
+                : "#E3EAED",
+            borderWidth: 1,
+            borderRadius: 14,
+            padding: 15,
+            marginBottom: 9,
+          }}
+        >
+          <Text
+            style={{
+              color: "#17313C",
+              fontWeight: "800",
+            }}
+          >
+            {dropoffPointId === point.id ? "◉ " : "○ "}
+            {point.label}
+          </Text>
+
+          {!!point.address && (
+            <Text style={{ color: "#81939C", marginTop: 5 }}>
+              {point.address}
+            </Text>
+          )}
+
+          <Text
+            style={{
+              color: "#07869B",
+              fontWeight: "700",
+              marginTop: 7,
+            }}
+          >
+            Drop-off Fee: {formatFee(point.dropoffFeeSen)}
+          </Text>
+        </Pressable>
+      ))}
+    </>
+  )}
+</View>
+
+
+{cdw && (
+  <View
+    style={{
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "#E3EAED",
+      borderRadius: 18,
+      padding: 18,
+      marginBottom: 22,
+    }}
+  >
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 13,
+      }}
+    >
+      <Ionicons
+        name="shield-checkmark-outline"
+        size={25}
+        color="#07869B"
+      />
+
+      <View style={{ flex: 1 }}>
+        <Text
+          style={{
+            fontSize: 16,
+            fontWeight: "900",
+            color: "#17313C",
+          }}
+        >
+          {cdw.label}
+        </Text>
+
+        <Text
+          style={{
+            color: "#81939C",
+            fontSize: 11,
+            marginTop: 4,
+          }}
+        >
+          Optional Protection
+        </Text>
+      </View>
+    </View>
+
+    <Text
+      style={{
+        fontSize: 12,
+        color: "#617780",
+        lineHeight: 19,
+        marginBottom: 15,
+      }}
+    >
+      {cdw.description ||
+        "Optional collision damage waiver subject to rental terms."}
+    </Text>
+
+    <Pressable
+      onPress={() => setCdwSelected((previous) => !previous)}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        borderWidth: 1,
+        borderColor: cdwSelected ? "#07869B" : "#E3EAED",
+        backgroundColor: cdwSelected ? "#E6F7F9" : "#F7FAFB",
+        borderRadius: 13,
+        padding: 14,
+      }}
+    >
+      <View>
+        <Text
+          style={{
+            fontSize: 16,
+            color: "#17313C",
+            fontWeight: "900",
+          }}
+        >
+          RM {(Number(cdw.priceSen) / 100).toFixed(2)}
+          {" / day"}
+        </Text>
+
+        <Text
+          style={{
+            color: "#81939C",
+            fontSize: 11,
+            marginTop: 4,
+          }}
+        >
+          {cdwSelected ? "CDW included" : "Not selected"}
+        </Text>
+      </View>
+
+      <Ionicons
+        name={cdwSelected ? "checkbox" : "square-outline"}
+        size={26}
+        color="#07869B"
+      />
+    </Pressable>
+  </View>
+)}
+
+
 
           <Text
             style={

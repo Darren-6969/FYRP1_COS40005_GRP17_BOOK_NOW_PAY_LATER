@@ -251,3 +251,53 @@ export async function removeSavedListing(
     }
   );
 }
+
+
+export type CustomerCancellationReason =
+  | "PLANS_CHANGED"
+  | "FOUND_ANOTHER_CAR"
+  | "PRICE"
+  | "OTHER";
+
+export type CustomerCancellationQuote = {
+  bookingId: number;
+  bookingCode?: string | null;
+
+  totalPaid: number;
+  depositPaid: number;
+  balancePaid: number;
+
+  depositKept: number;
+  depositRefund: number;
+  depositRefundPercent: number;
+  balanceRefund: number;
+  totalRefund: number;
+
+  explanation?: string;
+  refundVia?: "CARD" | "OPERATOR_TRANSFER" | null;
+  refundDeadline?: string | null;
+};
+
+export async function getCustomerCancellationQuote(
+  bookingId: number | string
+): Promise<CustomerCancellationQuote> {
+  return apiRequest(
+    `/customer/bookings/${bookingId}/cancellation-quote`,
+    { method: "GET" }
+  );
+}
+
+export async function cancelCustomerBooking(
+  bookingId: number | string,
+  reasonCode?: CustomerCancellationReason
+) {
+  return apiRequest(
+    `/customer/bookings/${bookingId}/cancel`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        reasonCode: reasonCode || null,
+      }),
+    }
+  );
+}
