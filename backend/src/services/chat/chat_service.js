@@ -113,10 +113,11 @@ async function aiReply({ text, conversation, customer, listingLoader }) {
   });
   const history = toAiHistory([...rows.reverse(), { senderRole: customer ? "CUSTOMER" : "VISITOR", content: text }]);
   const listing = await listingLoader();
-  const carInView = listing ? { name: `${listing.vehicleMake} ${listing.vehicleModel}`.trim() } : null;
+  const carInView = listing ? { id: listing.id, name: `${listing.vehicleMake} ${listing.vehicleModel}`.trim() } : null;
 
   try {
-    const answer = await answerWithAi({ history, signedIn: Boolean(customer), carInView });
+    // The customer comes from the session only; the tools never take one from the AI.
+    const answer = await answerWithAi({ history, customerId: customer?.id ?? null, carInView });
     const ai = {
       aiModelId: answer.model.id,
       modelUsed: answer.model.modelName,
@@ -125,6 +126,7 @@ async function aiReply({ text, conversation, customer, listingLoader }) {
       estimatedCostUsd: answer.costUsd,
       responseMs: answer.responseMs,
       errorType: attemptsSummary(answer.attempts),
+      toolsCalled: answer.toolsCalled.length ? answer.toolsCalled : undefined,
     };
     // An empty answer (e.g. cut off at the length limit) is not shown.
     if (!answer.text) return { reply: null, ai: { ...ai, errorType: ai.errorType ? `${ai.errorType},empty` : "empty" }, down: true };

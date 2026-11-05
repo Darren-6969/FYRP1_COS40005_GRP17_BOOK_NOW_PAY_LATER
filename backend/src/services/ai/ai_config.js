@@ -22,5 +22,8 @@ export const BREAKER_OPEN_MS = 10 * 60 * 1000;
 /** Longest answer, in output tokens. Chat answers are a few sentences. */
 export const MAX_OUTPUT_TOKENS = 600;
 
+/** Rounds of tool calls per message (chatbot design, Limits per message). */
+export const MAX_TOOL_ROUNDS = 3;
+
 /** Earlier messages resent with each new one, so follow-ups keep context. */
 export const HISTORY_MESSAGES = 12;

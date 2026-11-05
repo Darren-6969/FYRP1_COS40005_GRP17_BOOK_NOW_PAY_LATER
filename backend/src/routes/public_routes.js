@@ -148,7 +148,7 @@ router.get(
   getSignInPanel
 );
 
-// Chatbot (Layer 1 for now). The customer comes from the session only.
+// Chatbot (Layers 1 and 2). The customer comes from the session only.
 router.post("/chat/messages", chatLimiter, attachChatCustomer, validate(chatMessageSchema), postChatMessage);
 router.get("/chat/conversations/:id", chatLimiter, attachChatCustomer, getChatConversation);
 router.put(

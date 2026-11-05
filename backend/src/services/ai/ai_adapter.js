@@ -3,12 +3,14 @@
 //
 // adapter.send(request) → Promise<result>
 //   request:
-//     model      provider model ID, e.g. "claude-haiku-5-5"
+//     model      provider model ID, e.g. "gpt-6-luna"
 //     system     the system prompt (prompts.js)
 //     messages   [{ role: "user", text }
 //                 { role: "assistant", text, toolCalls?: [{ id, name, input }] }
 //                 { role: "tool", results: [{ id, name, output, isError? }] }]
 //     tools      [{ name, description, parameters (JSON schema) }], or []
+//     toolChoice "none" to send the tools but require a text answer (the
+//                call after the last tool round); omitted = the model decides
 //     maxTokens, signal (AbortSignal), timeoutMs
 //   result:
 //     { text, toolCalls: [{ id, name, input }], inputTokens, outputTokens, finishReason }

@@ -136,7 +136,14 @@ const FACETS = {
     ],
     get: (l) => l.driveType,
   },
-  brand: { label: "Brand", limit: 6, get: (l) => l.vehicleMake },
+  // Case-insensitive, like city and model, so a typed "toyota" (the chatbot's
+  // search_cars) finds Toyota; the page's own chips always match exactly.
+  brand: {
+    label: "Brand",
+    limit: 6,
+    get: (l) => l.vehicleMake,
+    test: (l, v) => String(l.vehicleMake || "").toLowerCase() === String(v).toLowerCase(),
+  },
   refund: {
     label: "Refund treatment",
     values: [

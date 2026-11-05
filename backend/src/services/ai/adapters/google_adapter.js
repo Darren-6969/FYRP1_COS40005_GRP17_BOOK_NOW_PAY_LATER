@@ -44,17 +44,24 @@ export function createGoogleAdapter(apiKey) {
   const client = new GoogleGenAI({ apiKey });
   return {
     provider: "GOOGLE",
-    async send({ model, system, messages, tools = [], maxTokens, signal, timeoutMs }) {
+    async send({ model, system, messages, tools = [], toolChoice, maxTokens, signal, timeoutMs }) {
       const res = await client.models.generateContent({
         model,
         contents: toGoogleContents(messages),
         config: {
           systemInstruction: system,
           maxOutputTokens: maxTokens,
+          thinkingConfig: { thinkingLevel: "LOW" },
           abortSignal: signal,
           // No SDK retries: a failed call moves straight on to the next model.
           httpOptions: { timeout: timeoutMs, retryOptions: { attempts: 1 } },
-          ...(tools.length ? { tools: toGoogleTools(tools), automaticFunctionCalling: { disable: true } } : {}),
+          ...(tools.length
+            ? {
+                tools: toGoogleTools(tools),
+                automaticFunctionCalling: { disable: true },
+                ...(toolChoice === "none" ? { toolConfig: { functionCallingConfig: { mode: "NONE" } } } : {}),
+              }
+            : {}),
         },
       });
       return fromGoogleResponse(res);

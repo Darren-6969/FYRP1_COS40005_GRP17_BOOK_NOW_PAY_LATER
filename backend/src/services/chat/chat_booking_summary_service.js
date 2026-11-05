@@ -75,6 +75,27 @@ function toSen(decimal) {
   return Math.round(Number(decimal || 0) * 100);
 }
 
+const BOOKING_SELECT = {
+  id: true,
+  bookingCode: true,
+  serviceName: true,
+  status: true,
+  pickupDate: true,
+  returnDate: true,
+  operator: { select: { companyName: true } },
+  listing: { select: { name: true, vehicleMake: true, vehicleModel: true } },
+  paymentScheduleEntries: {
+    where: { status: { not: "VOID" } },
+    orderBy: { dueAt: "asc" },
+    select: { type: true, paymentPart: true, amount: true, dueAt: true, status: true },
+  },
+  licenceDocuments: {
+    orderBy: { submittedAt: "desc" },
+    take: 1,
+    select: { status: true },
+  },
+};
+
 /**
  * Up to five current car bookings with what is paid, due and needed:
  * upcoming ones, plus any car still with the customer past its return time.
@@ -90,57 +111,54 @@ export async function upcomingBookings(customerId) {
     },
     orderBy: [{ pickupDate: "asc" }, { id: "asc" }],
     take: 5,
-    select: {
-      id: true,
-      bookingCode: true,
-      serviceName: true,
-      status: true,
-      pickupDate: true,
-      returnDate: true,
-      operator: { select: { companyName: true } },
-      listing: { select: { name: true, vehicleMake: true, vehicleModel: true } },
-      paymentScheduleEntries: {
-        where: { status: { not: "VOID" } },
-        orderBy: { dueAt: "asc" },
-        select: { type: true, paymentPart: true, amount: true, dueAt: true, status: true },
-      },
-      licenceDocuments: {
-        orderBy: { submittedAt: "desc" },
-        take: 1,
-        select: { status: true },
-      },
-    },
+    select: BOOKING_SELECT,
   });
+  return rows.map(toSummary);
+}
 
-  return rows.map((b) => {
-    const payments = b.paymentScheduleEntries.filter((e) => e.type === "PAYMENT");
-    const licenceTask = b.paymentScheduleEntries.find((e) => e.type === "LICENCE");
-    const paidSen = payments.filter((e) => e.status === "PAID").reduce((sum, e) => sum + toSen(e.amount), 0);
-    const due = payments
-      .filter((e) => e.status === "DUE")
-      .map((e) => ({ label: PART_LABEL[e.paymentPart] || "payment", amountSen: toSen(e.amount), dueAt: e.dueAt }));
-    const licenceDoc = b.licenceDocuments[0] || null;
-
-    let licence = null;
-    if (licenceDoc) licence = { state: licenceDoc.status, text: LICENCE_LABEL[licenceDoc.status] || "uploaded" };
-    else if (licenceTask && licenceTask.status === "DUE") licence = { state: "MISSING", text: `not uploaded yet, due ${dueText(licenceTask.dueAt)}` };
-
-    return {
-      id: b.id,
-      code: b.bookingCode,
-      car: carName(b),
-      operator: b.operator?.companyName || "",
-      dates: dateLine(b),
-      status: b.status,
-      statusLabel: STATUS_LABEL[b.status] || b.status,
-      paidSen,
-      due,
-      licence,
-      href: `/customer/bookings/${b.id}`,
-      payHref: due.length ? `/customer/checkout/${b.id}` : null,
-      licenceHref: licence && licence.state !== "APPROVED" && licence.state !== "UNDER_REVIEW" ? "/customer/licence" : null,
-    };
+/**
+ * One of the customer's own car bookings by its code, in any status, or
+ * null. The customer is part of the query, so another customer's code finds
+ * nothing (the chatbot's get_my_bookings, acceptance test 3).
+ */
+export async function customerBookingByCode(customerId, code) {
+  const bookingCode = String(code || "").trim().toUpperCase();
+  if (!Number.isInteger(customerId) || !bookingCode) return null;
+  const row = await prisma.booking.findFirst({
+    where: { customerId, listingId: { not: null }, bookingCode: { equals: bookingCode, mode: "insensitive" } },
+    select: BOOKING_SELECT,
   });
+  return row ? toSummary(row) : null;
+}
+
+function toSummary(b) {
+  const payments = b.paymentScheduleEntries.filter((e) => e.type === "PAYMENT");
+  const licenceTask = b.paymentScheduleEntries.find((e) => e.type === "LICENCE");
+  const paidSen = payments.filter((e) => e.status === "PAID").reduce((sum, e) => sum + toSen(e.amount), 0);
+  const due = payments
+    .filter((e) => e.status === "DUE")
+    .map((e) => ({ label: PART_LABEL[e.paymentPart] || "payment", amountSen: toSen(e.amount), dueAt: e.dueAt }));
+  const licenceDoc = b.licenceDocuments[0] || null;
+
+  let licence = null;
+  if (licenceDoc) licence = { state: licenceDoc.status, text: LICENCE_LABEL[licenceDoc.status] || "uploaded" };
+  else if (licenceTask && licenceTask.status === "DUE") licence = { state: "MISSING", text: `not uploaded yet, due ${dueText(licenceTask.dueAt)}` };
+
+  return {
+    id: b.id,
+    code: b.bookingCode,
+    car: carName(b),
+    operator: b.operator?.companyName || "",
+    dates: dateLine(b),
+    status: b.status,
+    statusLabel: STATUS_LABEL[b.status] || b.status,
+    paidSen,
+    due,
+    licence,
+    href: `/customer/bookings/${b.id}`,
+    payHref: due.length ? `/customer/checkout/${b.id}` : null,
+    licenceHref: licence && licence.state !== "APPROVED" && licence.state !== "UNDER_REVIEW" ? "/customer/licence" : null,
+  };
 }
 
 // ── Lines for the three templates ───────────────────────────────────

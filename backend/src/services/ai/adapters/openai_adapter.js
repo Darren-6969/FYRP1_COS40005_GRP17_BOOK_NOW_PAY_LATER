@@ -71,7 +71,7 @@ export function fromOpenAiResponse(res) {
  * provider-only fields.
  */
 export function openAiRequestBody(
-  { model, system, messages, tools = [], maxTokens },
+  { model, system, messages, tools = [], toolChoice, maxTokens },
   { tokenParam = "max_completion_tokens", extra = {}, toolId, emptyContent } = {}
 ) {
   return {
@@ -79,7 +79,7 @@ export function openAiRequestBody(
     [tokenParam]: maxTokens,
     ...extra,
     messages: toOpenAiMessages(system, messages, { toolId, emptyContent }),
-    ...(tools.length ? { tools: toOpenAiTools(tools) } : {}),
+    ...(tools.length ? { tools: toOpenAiTools(tools), ...(toolChoice === "none" ? { tool_choice: "none" } : {}) } : {}),
   };
 }
 
