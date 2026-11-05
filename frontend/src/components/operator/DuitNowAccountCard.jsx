@@ -152,7 +152,7 @@ export default function DuitNowAccountCard() {
       {showInput && (
         <div style={{ display: "grid", gap: "0.75rem", marginBottom: "0.75rem" }}>
           <div>
-            <label className="operator-btn" style={{ display: "inline-block", cursor: busy ? "wait" : "pointer" }}>
+            <label className="operator-primary-btn" style={{ cursor: busy ? "wait" : "pointer", opacity: busy ? 0.7 : 1 }}>
               {busy ? "Saving..." : "Upload your DuitNow QR image"}
               <input
                 type="file"
@@ -182,7 +182,7 @@ export default function DuitNowAccountCard() {
             />
             <button
               type="button"
-              className="operator-btn"
+              className="operator-secondary-btn"
               style={{ marginTop: "0.5rem" }}
               disabled={busy || !pasted.trim()}
               onClick={() => save(pasted)}
@@ -196,16 +196,16 @@ export default function DuitNowAccountCard() {
       {configured && (
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           {!editing && (
-            <button type="button" className="operator-btn" disabled={busy} onClick={() => setEditing(true)}>
+            <button type="button" className="operator-secondary-btn" disabled={busy} onClick={() => setEditing(true)}>
               Replace QR code
             </button>
           )}
           {editing && (
-            <button type="button" className="operator-btn" disabled={busy} onClick={() => setEditing(false)}>
+            <button type="button" className="operator-secondary-btn" disabled={busy} onClick={() => setEditing(false)}>
               Cancel
             </button>
           )}
-          <button type="button" className="operator-btn" disabled={busy} onClick={remove}>
+          <button type="button" className="operator-danger-btn" disabled={busy} onClick={remove}>
             Remove
           </button>
         </div>
