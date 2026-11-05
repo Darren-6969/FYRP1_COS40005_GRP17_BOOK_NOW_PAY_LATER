@@ -488,6 +488,18 @@ updateBranchPoint(
     );
   },
 
+  getDuitnowAccount() {
+    return api.get("/operators/settings/duitnow-account");
+  },
+
+  saveDuitnowAccount(payload) {
+    return api.put("/operators/settings/duitnow-account", { payload });
+  },
+
+  clearDuitnowAccount() {
+    return api.delete("/operators/settings/duitnow-account");
+  },
+
   uploadOperatorLogo(file) {
     const formData = new FormData();
 

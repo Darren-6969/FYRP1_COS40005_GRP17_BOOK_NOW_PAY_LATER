@@ -6,6 +6,7 @@ import { useCustomerBooking } from "../../hooks/useBookings";
 import { useFeatureFlag } from "../../hooks/useFeatureFlag";
 import { getCustomerManualPaymentOptions } from "../../services/customer_service";
 import { formatCustomerDate, formatMoney } from "../../utils/customerUtils";
+import DuitNowQr from "../../components/payment/DuitNowQr";
 
 function compressImageToDataUrl(file, maxWidth = 900, quality = 0.72) {
   return new Promise((resolve, reject) => {
@@ -196,6 +197,18 @@ const handleFileChange = async (event) => {
                 </label>
               )}
 
+              {selected.qrPayload && (
+                <div className="customer-qr-section">
+                  <div className="customer-qr-box">
+                    <DuitNowQr payload={selected.qrPayload} alt="DuitNow QR code with the amount filled in" />
+                  </div>
+                  <p className="customer-payment-note">
+                    Scan this with your banking app. The amount and booking reference are
+                    already filled in. Check the amount matches before you confirm.
+                  </p>
+                </div>
+              )}
+
               <div className="customer-info-list compact">
                 <div>
                   <span>Amount to pay</span>
@@ -212,8 +225,9 @@ const handleFileChange = async (event) => {
               </div>
 
               <p className="customer-payment-note">
-                Pay exactly this amount and put the reference in your payment
-                remarks, so the operator can match your receipt.
+                {selected.qrPayload
+                  ? "Pay the amount shown, then upload the receipt so the operator can match it."
+                  : "Pay exactly this amount and put the reference in your payment remarks, so the operator can match your receipt."}
                 {due.note ? ` ${due.note}` : ""}
               </p>
 

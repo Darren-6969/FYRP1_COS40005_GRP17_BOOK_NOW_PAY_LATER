@@ -33,6 +33,7 @@ import { operatorService } from "../../services/operator_service";
 import { useDirtyState } from "../../hooks/useDirtyState";
 
 import IntegrationSettings from "../../components/operator/IntegrationSettings";
+import DuitNowAccountCard from "../../components/operator/DuitNowAccountCard";
 
 const SETTINGS_STORAGE_KEY = "bnpl_operator_settings_v1";
 
@@ -922,6 +923,8 @@ const activeMenu = SETTINGS_MENU.find(
                 }
               />
             </div>
+
+            {form.acceptedPaymentMethods.duitnowSpay && <DuitNowAccountCard />}
 
             {form.acceptedPaymentMethods.duitnowSpay && (
               <FormField

@@ -1047,6 +1047,13 @@ model BNPLConfig {
   acceptedPaymentMethods Json?
   manualPaymentNote      String?
 
+  // The operator's own DuitNow account (tag 26 of the QR code their bank app
+  // shows), used to build a fixed-amount QR for each payment.
+  duitnowAccount          String?
+  duitnowMerchantName     String?
+  duitnowMerchantCity     String?
+  duitnowMerchantCategory String?
+
   // Notification settings
   operatorReminderBeforeAutoRejectMinutes Int     @default(30)
   enableOperatorReminderAlerts            Boolean @default(true)
