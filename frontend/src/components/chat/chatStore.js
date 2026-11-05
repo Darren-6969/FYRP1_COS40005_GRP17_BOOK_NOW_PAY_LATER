@@ -126,7 +126,7 @@ function errorText(err) {
 async function post(body, userText) {
   if (state.sending) return;
   const optimistic = userText ? [{ id: `${tempPrefix}-${++tempId}`, role: "user", text: userText, pending: true }] : [];
-  setState({ messages: [...state.messages, ...optimistic], sending: true, sendingHint: hintFor(body.action), error: "" });
+  setState({ messages: [...state.messages, ...optimistic], sending: true, sendingHint: body.text ? "Thinking" : hintFor(body.action), error: "" });
   try {
     const { data } = await postChatMessage({
       ...body,

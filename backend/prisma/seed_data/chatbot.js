@@ -356,8 +356,11 @@ export const ANSWER_TEMPLATES = [
 // key. Prices are USD per million tokens, from the chatbot design (2 Nov 2026).
 
 export const AI_MODELS = [
-  { position: 1, provider: "ANTHROPIC", modelName: "claude-haiku-5-5", displayName: "Claude Haiku 5.5", priceInput: "0.10", priceOutput: "0.50" },
-  { position: 2, provider: "OPENAI", modelName: "gpt-6-luna", displayName: "GPT-6 Luna", priceInput: "0.10", priceOutput: "0.50" },
+  { position: 1, provider: "OPENAI", modelName: "gpt-6-luna", displayName: "GPT-6 Luna", priceInput: "0.10", priceOutput: "0.50" },
+  // Added 4 Nov 2026. The Free plan includes a monthly API allowance; turn off
+  // training on your data under API → Privacy. Paid prices, for cost
+  // estimates only; check them on Mistral's pricing page before the pilot.
+  { position: 2, provider: "MISTRAL", modelName: "mistral-small-latest", displayName: "Mistral Small", priceInput: "0.10", priceOutput: "0.30" },
   { position: 3, provider: "GOOGLE", modelName: "gemini-3.8-flash", displayName: "Gemini 3.8 Flash", priceInput: "0.75", priceOutput: "3.75" },
 ];
 

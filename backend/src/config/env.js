@@ -27,9 +27,9 @@ const env = {
   DB_URL: process.env.DATABASE_URL,
   JWT_SECRET: process.env.JWT_SECRET,
   AI_KEYS: {
-    anthropic: optional("ANTHROPIC_API_KEY"),
     openai: optional("OPENAI_API_KEY"),
     google: optional("GEMINI_API_KEY"),
+    mistral: optional("MISTRAL_API_KEY"),
   },
 };
 

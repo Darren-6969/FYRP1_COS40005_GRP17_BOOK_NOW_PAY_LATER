@@ -16,6 +16,7 @@
     "lint": "eslint .",
     "test": "node --test \"tests/unit/**/*.test.js\"",
     "check:ai-keys": "node scripts/check-ai-keys.js",
+    "check:ai-chat": "node scripts/check-ai-chat.js",
     "test:integration": "node --test \"tests/integration/**/*.test.js\""
   },
   "engines": {

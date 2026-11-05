@@ -1773,9 +1773,9 @@ model ChatAnswerTemplate {
 // ── AI models ────────────────────────────────────────────────────────
 
 enum AiProvider {
-  ANTHROPIC
   OPENAI
   GOOGLE
+  MISTRAL
 }
 
 enum AiPlan {

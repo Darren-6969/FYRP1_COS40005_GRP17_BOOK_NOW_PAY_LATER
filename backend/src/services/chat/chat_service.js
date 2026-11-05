@@ -1,8 +1,8 @@
 // The chat window's conversations: who owns them, what each message gets as
-// an answer, and what is stored. Step 5 of the chatbot build covers Layer 1
-// (fixed answers and the guided Find a car flow); a typed message Layer 1
-// can't answer gets a fallback that offers both, and is where the AI layer
-// plugs in later.
+// an answer, and what is stored. Layer 1 (fixed answers and the guided Find a
+// car flow) answers first. A typed message Layer 1 can't answer goes to the
+// AI (Layer 2); when no AI model is switched on, or every model fails, it
+// gets a fallback offering the quick actions and the guided flow.
 //
 // Ownership: a signed-in customer's conversation is theirs by customer id. A
 // visitor's is theirs by a random token the window keeps for the session.
@@ -11,6 +11,9 @@
 import crypto from "node:crypto";
 import prisma from "../../config/db.js";
 import { getPublicCar } from "../public_car_service.js";
+import { AiUnavailableError, answerWithAi, attemptsSummary } from "../ai/ai_service.js";
+import { HISTORY_MESSAGES } from "../ai/ai_config.js";
+import { toAiHistory } from "../ai/chat_history.js";
 import { advanceGuided, choiceLabel, startGuided } from "./chat_guided_service.js";
 import { FIND_CAR_ACTION, matchMessage, quickActions, ruleAnswer, welcomeMessage } from "./chat_rules_service.js";
 
@@ -85,18 +88,62 @@ function userView(row) {
   return { id: row.id, role: "user", text: row.content, createdAt: row.createdAt };
 }
 
-async function fallbackReply({ signedIn }) {
+async function fallbackReply({ signedIn, aiDown = false }) {
   return {
     kind: "text",
-    text: "I couldn't match that to one of my topics yet. Pick one below, or find a car step by step.",
+    text: aiDown
+      ? "I can't answer that in my own words right now. Pick a topic below, or find a car step by step."
+      : "I couldn't match that to one of my topics yet. Pick one below, or find a car step by step.",
     actions: await quickActions({ signedIn }),
     fallback: true,
   };
 }
 
 /**
+ * Layer 2: the AI answers a typed message Layer 1 couldn't.
+ * Returns { reply, ai } with what to log, or { reply: null, ai, down } when
+ * no model answered (down is false when no model is switched on at all).
+ */
+async function aiReply({ text, conversation, customer, listingLoader }) {
+  const rows = await prisma.chatMessage.findMany({
+    where: { conversationId: conversation.id },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: HISTORY_MESSAGES,
+    select: { senderRole: true, content: true },
+  });
+  const history = toAiHistory([...rows.reverse(), { senderRole: customer ? "CUSTOMER" : "VISITOR", content: text }]);
+  const listing = await listingLoader();
+  const carInView = listing ? { name: `${listing.vehicleMake} ${listing.vehicleModel}`.trim() } : null;
+
+  try {
+    const answer = await answerWithAi({ history, signedIn: Boolean(customer), carInView });
+    const ai = {
+      aiModelId: answer.model.id,
+      modelUsed: answer.model.modelName,
+      inputTokens: answer.inputTokens,
+      outputTokens: answer.outputTokens,
+      estimatedCostUsd: answer.costUsd,
+      responseMs: answer.responseMs,
+      errorType: attemptsSummary(answer.attempts),
+    };
+    // An empty answer (e.g. cut off at the length limit) is not shown.
+    if (!answer.text) return { reply: null, ai: { ...ai, errorType: ai.errorType ? `${ai.errorType},empty` : "empty" }, down: true };
+    return { reply: { kind: "text", text: answer.text }, ai };
+  } catch (err) {
+    if (!(err instanceof AiUnavailableError)) throw err;
+    if (err.reason === "no_models") return { reply: null, ai: null, down: false };
+    return {
+      reply: null,
+      ai: { errorType: attemptsSummary(err.attempts) || err.reason, responseMs: err.attempts.reduce((sum, a) => sum + a.ms, 0) || null },
+      down: true,
+    };
+  }
+}
+
+/**
  * Works out the answer to one message or button.
- * Returns { userText, reply, guided?, criteria?, fallback }.
+ * Returns { userText, reply, guided?, criteria?, fallback, ai? }, where ai
+ * holds the AI fields to store on the answer (model, tokens, cost, errors).
  */
 async function answer({ text, action, conversation, customer, listingLoader }) {
   const signedIn = Boolean(customer);
@@ -146,7 +193,9 @@ async function answer({ text, action, conversation, customer, listingLoader }) {
     const reply = await ruleAnswer(key, { listing: await listingLoader(), customerId: customer?.id });
     if (reply) return { userText: text, reply };
   }
-  return { userText: text, reply: await fallbackReply({ signedIn }), fallback: true };
+  const ai = await aiReply({ text, conversation, customer, listingLoader });
+  if (ai.reply) return { userText: text, reply: ai.reply, ai: ai.ai };
+  return { userText: text, reply: await fallbackReply({ signedIn, aiDown: ai.down }), fallback: true, ai: ai.ai };
 }
 
 /**
@@ -209,8 +258,9 @@ export async function handleChatMessage(body, customer = null) {
         conversationId: conversation.id,
         senderRole: "ASSISTANT",
         content: result.reply.text,
-        layer: "RULE",
+        layer: result.ai && !result.fallback ? "AI" : "RULE",
         fallbackUsed: Boolean(result.fallback),
+        ...(result.ai || {}),
         payload: result.reply,
         isRead: true,
         createdAt: new Date(now + 1),

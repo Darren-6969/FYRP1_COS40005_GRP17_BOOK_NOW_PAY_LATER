@@ -3,23 +3,16 @@
 // see, so the exact IDs for the admin AI models page can be copied from here.
 // Usage: npm run check:ai-keys
 
-import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 import env from "../src/config/env.js";
+import { MISTRAL_BASE_URL } from "../src/services/ai/adapters/openai_adapter.js";
 
 const MATCH = {
-  anthropic: /haiku|sonnet/i,
   openai: /^gpt/i,
   google: /flash/i,
+  mistral: /small|medium/i,
 };
-
-async function anthropicModels(apiKey) {
-  const client = new Anthropic({ apiKey });
-  const ids = [];
-  for await (const m of client.models.list({ limit: 100 })) ids.push(m.id);
-  return ids;
-}
 
 async function openaiModels(apiKey) {
   const client = new OpenAI({ apiKey });
@@ -36,10 +29,17 @@ async function googleModels(apiKey) {
   return ids;
 }
 
+async function mistralModels(apiKey) {
+  const client = new OpenAI({ apiKey, baseURL: MISTRAL_BASE_URL });
+  const ids = [];
+  for await (const m of client.models.list()) ids.push(m.id);
+  return ids;
+}
+
 const PROVIDERS = [
-  ["anthropic", "ANTHROPIC_API_KEY", anthropicModels],
   ["openai", "OPENAI_API_KEY", openaiModels],
   ["google", "GEMINI_API_KEY", googleModels],
+  ["mistral", "MISTRAL_API_KEY", mistralModels],
 ];
 
 let failed = 0;
