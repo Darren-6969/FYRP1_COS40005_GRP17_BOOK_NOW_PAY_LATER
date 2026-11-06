@@ -1,6 +1,6 @@
-// Runs the Step 7 test questions against one AI model with the real tools
-// and the real database, and prints which tools the model called, with what
-// input, and its answer. It goes straight through the model's adapter, so it
+// Runs the chatbot test questions against one AI model with the real tools,
+// the real database and the answer check, and prints which tools the model
+// called, with what input, its answer, and whether the check let it through. It goes straight through the model's adapter, so it
 // works while the model is switched off and never changes its failure count,
 // skip time or the circuit breaker. Read-only: no tool writes anything.
 //
@@ -10,6 +10,7 @@
 //
 // --customer=ID runs the booking questions as that customer (a test account
 // with invented bookings); without it they run as a signed-out visitor.
+// --timeout=5000 gives each AI call the chat's own time limit.
 // --only=4,9 runs just those questions. Each question costs about 6,000 to
 // 12,000 tokens, so use --only to save a free plan's daily allowance.
 
@@ -19,11 +20,13 @@ import { CALL_TIMEOUT_MS as CHAT_CALL_MS, MAX_OUTPUT_TOKENS } from "../src/servi
 import { classifyAiError } from "../src/services/ai/ai_errors.js";
 import { runChatTool } from "../src/services/ai/ai_service.js";
 import { chatSystemPrompt } from "../src/services/ai/prompts.js";
-import { runToolLoop } from "../src/services/ai/tool_loop.js";
+import { checkedAnswer } from "../src/services/ai/checked_answer.js";
 import { TOOL_DEFINITIONS, TOOL_NAMES } from "../src/services/ai/tools/chat_tools.js";
 import { klToday } from "../src/services/car_pricing_service.js";
 
-const LIMIT_MS = 20000; // generous; the chat itself allows CALL_TIMEOUT_MS per call
+// Generous by default; --timeout=5000 uses the chat's own limit instead.
+const timeoutArg = process.argv.find((a) => a.startsWith("--timeout="));
+const LIMIT_MS = timeoutArg ? Number(timeoutArg.split("=")[1]) : 20000;
 const PAUSE_MS = 3000; // between questions, to stay inside free-plan rate limits
 
 const args = process.argv.slice(2);
@@ -75,19 +78,27 @@ if (!modelName) {
       if (i) await new Promise((r) => setTimeout(r, PAUSE_MS));
       console.log(`\n#${q.n} ${q.text}\n   expected: ${q.expect}`);
       try {
-        const out = await runToolLoop({
+        const out = await checkedAnswer({
           router: router(model, adapter),
           system,
           messages: [{ role: "user", text: q.text }],
           tools: TOOL_DEFINITIONS,
           runTool: (call) => runChatTool(call, ctx),
           maxTokens: MAX_OUTPUT_TOKENS,
+          customerText: q.text,
+          today,
         });
         if (!out.toolsCalled.length) console.log("   tools: none");
         out.toolsCalled.forEach((t) =>
           console.log(`   round ${t.round}: ${t.name}(${JSON.stringify(t.input)})${t.ok ? "" : `  ✗ ${t.error}`}`)
         );
+        if (out.checkFailed) console.log(`   check: first answer stated ${out.firstUnsupported.join(", ")} without support; retried`);
         console.log(`   answer: ${out.text || "(empty)"}`);
+        console.log(
+          out.shown
+            ? `   check: ${out.checkFailed ? "retry passed" : "passed"}`
+            : `   ✗ check: refused (${out.unsupported.join(", ")}); the chat shows the guided flow instead`
+        );
         const each = out.calls.map((c) => `AI ${c.ms} ms${c.toolMs !== undefined ? ` + tools ${c.toolMs} ms` : ""}`).join(", ");
         const slow = out.calls.filter((c) => c.ms > CHAT_CALL_MS).length;
         console.log(`   ${out.responseMs} ms (${each}), ${out.inputTokens} in / ${out.outputTokens} out`);

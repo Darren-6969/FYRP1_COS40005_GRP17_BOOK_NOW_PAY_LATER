@@ -361,7 +361,9 @@ export const AI_MODELS = [
   // training on your data under API → Privacy. Paid prices, for cost
   // estimates only; check them on Mistral's pricing page before the pilot.
   { position: 2, provider: "MISTRAL", modelName: "mistral-small-latest", displayName: "Mistral Small", priceInput: "0.10", priceOutput: "0.30" },
-  { position: 3, provider: "GOOGLE", modelName: "gemini-3.8-flash", displayName: "Gemini 3.8 Flash", priceInput: "0.75", priceOutput: "3.75" },
+  // Gemini 3.5 Flash-Lite replaced Gemini 3.8 Flash (6 Nov 2026), which timed
+  // out at 20 seconds on the free plan even for a one-word reply.
+  { position: 3, provider: "GOOGLE", modelName: "gemini-3.5-flash-lite", displayName: "Gemini 3.5 Flash-Lite", priceInput: "0.30", priceOutput: "2.50" },
 ];
 
 // Starting values, editable on the AI models page. The monthly cap is a

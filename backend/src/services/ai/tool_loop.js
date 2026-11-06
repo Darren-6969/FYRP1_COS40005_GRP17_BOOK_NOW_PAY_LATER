@@ -19,7 +19,9 @@ import { AiUnavailableError } from "./model_router.js";
  * router: { complete(request) } from model_router.js
  * runTool(call) → { id, name, input?, output, isError } and never throws
  * Returns { text, model, attempts, rounds, toolsCalled, toolResults, calls,
- *           inputTokens, outputTokens, costUsd, responseMs }
+ *           conversation, inputTokens, outputTokens, costUsd, responseMs }
+ * conversation: the messages sent, with every tool call and result, so the
+ * answer check's retry can continue from it.
  * calls: [{ round, model, ms (the AI call), toolMs (the tools it asked for) }]
  * or throws AiUnavailableError, carrying every failed attempt so far.
  */
@@ -65,6 +67,7 @@ export async function runToolLoop({ router, system, messages, tools, runTool, ma
         toolsCalled,
         toolResults,
         calls,
+        conversation,
         inputTokens,
         outputTokens,
         costUsd: Math.round(costUsd * 1_000_000) / 1_000_000,

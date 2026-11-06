@@ -107,17 +107,41 @@ function Options({ message, interactive, disabled }) {
   );
 }
 
-function CarCards({ message, onNavigate }) {
+// A search's filters. On the latest AI search each chip is a button that
+// reruns the search without that filter, with no AI call; the guided flow's
+// chips (plain strings) and older messages' chips are just labels.
+function Chips({ message, interactive, disabled }) {
+  if (!message.chips?.length) return null;
+  const editable = message.chipsEditable && interactive;
+  return (
+    <ul className={styles.criteria} aria-label="Searched with">
+      {message.chips.map((c) => {
+        const label = typeof c === "string" ? c : c.label;
+        if (!editable || typeof c === "string") return <li key={label}>{label}</li>;
+        return (
+          <li key={c.key} className={styles.chipItem}>
+            <button
+              type="button"
+              className={styles.chipRemove}
+              disabled={disabled}
+              aria-label={`Search again without ${label}`}
+              onClick={() => sendAction({ type: "chip", key: c.key }, `Remove: ${label}`)}
+            >
+              {label}
+              <X size={12} strokeWidth={2.6} aria-hidden="true" />
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function CarCards({ message, interactive, disabled, onNavigate }) {
   return (
     <div className={styles.cardsBlock}>
       <div className={styles.bubble}>{message.intro || message.text}</div>
-      {message.chips?.length > 0 && (
-        <ul className={styles.criteria} aria-label="Searched with">
-          {message.chips.map((c) => (
-            <li key={c}>{c}</li>
-          ))}
-        </ul>
-      )}
+      <Chips message={message} interactive={interactive} disabled={disabled} />
       <ul className={styles.carList}>
         {message.cars.map((car) => (
           <li key={car.id}>
@@ -226,7 +250,7 @@ function AssistantMessage({ message, latest, sending, onNavigate }) {
   return (
     <div className={styles.assistantRow}>
       {message.kind === "options" && <Options message={message} interactive={latest} disabled={sending} />}
-      {message.kind === "cars" && <CarCards message={message} onNavigate={onNavigate} />}
+      {message.kind === "cars" && <CarCards message={message} interactive={latest} disabled={sending} onNavigate={onNavigate} />}
       {message.kind === "bookings" && <BookingCards message={message} onNavigate={onNavigate} />}
       {(message.kind === "text" || !message.kind) && <div className={styles.bubble}>{message.text}</div>}
       {message.links?.length > 0 && (

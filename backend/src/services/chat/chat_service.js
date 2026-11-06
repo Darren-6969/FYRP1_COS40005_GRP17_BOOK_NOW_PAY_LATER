@@ -10,7 +10,11 @@
 
 import crypto from "node:crypto";
 import prisma from "../../config/db.js";
-import { getPublicCar } from "../public_car_service.js";
+import { trackEvent } from "../analytics_service.js";
+import { parseCarSearchQuery } from "../car_search_service.js";
+import { getPublicCar, searchPublicCars } from "../public_car_service.js";
+import { searchInputFrom, searchView, withoutChip } from "../ai/tools/tool_results.js";
+import { aiReplyPayload } from "./chat_ai_view.js";
 import { AiUnavailableError, answerWithAi, attemptsSummary } from "../ai/ai_service.js";
 import { HISTORY_MESSAGES } from "../ai/ai_config.js";
 import { toAiHistory } from "../ai/chat_history.js";
@@ -88,21 +92,33 @@ function userView(row) {
   return { id: row.id, role: "user", text: row.content, createdAt: row.createdAt };
 }
 
-async function fallbackReply({ signedIn, aiDown = false }) {
+const FALLBACK_TEXT = {
+  down: "I can't answer that in my own words right now. Pick a topic below, or find a car step by step.",
+  unmatched: "I couldn't match that to one of my topics yet. Pick one below, or find a car step by step.",
+  // The answer check refused the AI's answer twice (Step 8).
+  unchecked: "I couldn't confirm every detail of that from the platform's live data, so I won't guess. Pick a topic below, or find a car step by step.",
+};
+
+async function fallbackReply({ signedIn, reason = "unmatched" }) {
   return {
     kind: "text",
-    text: aiDown
-      ? "I can't answer that in my own words right now. Pick a topic below, or find a car step by step."
-      : "I couldn't match that to one of my topics yet. Pick one below, or find a car step by step.",
+    text: FALLBACK_TEXT[reason],
     actions: await quickActions({ signedIn }),
     fallback: true,
   };
 }
 
+function withError(errorType, extra) {
+  return errorType ? `${errorType},${extra}` : extra;
+}
+
 /**
- * Layer 2: the AI answers a typed message Layer 1 couldn't.
- * Returns { reply, ai } with what to log, or { reply: null, ai, down } when
- * no model answered (down is false when no model is switched on at all).
+ * Layer 2: the AI answers a typed message Layer 1 couldn't, and the answer
+ * check (Step 8) decides whether it is shown.
+ * Returns { reply, ai, lastSearch } with what to log, or { reply: null, ai,
+ * reason } when nothing can be shown: "down" (no model answered),
+ * "unchecked" (the answer failed the check twice) or "unmatched" (no model
+ * is switched on at all).
  */
 async function aiReply({ text, conversation, customer, listingLoader }) {
   const rows = await prisma.chatMessage.findMany({
@@ -115,9 +131,12 @@ async function aiReply({ text, conversation, customer, listingLoader }) {
   const listing = await listingLoader();
   const carInView = listing ? { id: listing.id, name: `${listing.vehicleMake} ${listing.vehicleModel}`.trim() } : null;
 
+  const stored = conversation.searchCriteria?.lastSearch;
+  const lastSearch = stored ? searchInputFrom(stored) : null;
+
   try {
     // The customer comes from the session only; the tools never take one from the AI.
-    const answer = await answerWithAi({ history, customerId: customer?.id ?? null, carInView });
+    const answer = await answerWithAi({ history, customerId: customer?.id ?? null, carInView, lastSearch });
     const ai = {
       aiModelId: answer.model.id,
       modelUsed: answer.model.modelName,
@@ -127,19 +146,49 @@ async function aiReply({ text, conversation, customer, listingLoader }) {
       responseMs: answer.responseMs,
       errorType: attemptsSummary(answer.attempts),
       toolsCalled: answer.toolsCalled.length ? answer.toolsCalled : undefined,
+      checkFailed: answer.checkFailed,
     };
+    if (answer.checkFailed) {
+      // What was unsupported goes in the log, for the Health panel and tuning.
+      const note = answer.shown ? `check_retry:${answer.firstUnsupported.join("|")}` : `check_failed:${answer.unsupported.join("|")}`;
+      ai.errorType = withError(ai.errorType, note).slice(0, 500);
+    }
+    if (!answer.shown) return { reply: null, ai, reason: "unchecked" };
     // An empty answer (e.g. cut off at the length limit) is not shown.
-    if (!answer.text) return { reply: null, ai: { ...ai, errorType: ai.errorType ? `${ai.errorType},empty` : "empty" }, down: true };
-    return { reply: { kind: "text", text: answer.text }, ai };
+    if (!answer.text) return { reply: null, ai: { ...ai, errorType: withError(ai.errorType, "empty") }, reason: "down" };
+    const { payload, lastSearch: searched } = aiReplyPayload(answer.text, answer.toolResults);
+    return { reply: payload, ai, lastSearch: searched };
   } catch (err) {
     if (!(err instanceof AiUnavailableError)) throw err;
-    if (err.reason === "no_models") return { reply: null, ai: null, down: false };
+    if (err.reason === "no_models") return { reply: null, ai: null, reason: "unmatched" };
     return {
       reply: null,
       ai: { errorType: attemptsSummary(err.attempts) || err.reason, responseMs: err.attempts.reduce((sum, a) => sum + a.ms, 0) || null },
-      down: true,
+      reason: "down",
     };
   }
+}
+
+/**
+ * A chip on a search's cards was tapped: rerun the search without that
+ * filter, with no AI call (chatbot design, "How search results appear").
+ */
+async function chipReply(lastSearch, chipKey) {
+  if (!lastSearch) return null;
+  const query = withoutChip(lastSearch, chipKey);
+  const found = await searchPublicCars(parseCarSearchQuery(query));
+  trackEvent({
+    name: "search_performed",
+    properties: { input_mode: "conversational", filters_applied: Object.keys(query), result_count: found.total, category: "CAR_RENTAL" },
+  });
+  const view = searchView(found, query);
+  const text = found.total
+    ? `Here ${found.total === 1 ? "is 1 car" : `are ${found.total} cars`} without that filter.`
+    : "Still nothing matches. Remove another filter below, or find a car step by step.";
+  return {
+    reply: { kind: "cars", text, intro: text, cars: view.cars, chips: view.chips, chipsEditable: true, total: view.total, resultsHref: view.resultsHref },
+    criteria: query,
+  };
 }
 
 /**
@@ -165,6 +214,13 @@ async function answer({ text, action, conversation, customer, listingLoader }) {
     const reply = label ? await ruleAnswer(action.key, { listing: await listingLoader(), customerId: customer?.id }) : null;
     if (!reply) return { userText: label || null, reply: await fallbackReply({ signedIn }), fallback: true };
     return { userText: label, reply };
+  }
+
+  if (action?.type === "chip") {
+    const label = (stored.lastSearchChips || []).find((c) => c.key === action.key)?.label;
+    const result = await chipReply(stored.lastSearch, action.key);
+    if (!result) return { userText: null, reply: await fallbackReply({ signedIn }), fallback: true };
+    return { userText: label ? `Remove: ${label}` : "Remove a filter", reply: result.reply, criteria: result.criteria };
   }
 
   if (action?.type === "guided") {
@@ -196,8 +252,8 @@ async function answer({ text, action, conversation, customer, listingLoader }) {
     if (reply) return { userText: text, reply };
   }
   const ai = await aiReply({ text, conversation, customer, listingLoader });
-  if (ai.reply) return { userText: text, reply: ai.reply, ai: ai.ai };
-  return { userText: text, reply: await fallbackReply({ signedIn, aiDown: ai.down }), fallback: true, ai: ai.ai };
+  if (ai.reply) return { userText: text, reply: ai.reply, ai: ai.ai, ...(ai.lastSearch ? { criteria: ai.lastSearch } : {}) };
+  return { userText: text, reply: await fallbackReply({ signedIn, reason: ai.reason }), fallback: true, ai: ai.ai };
 }
 
 /**
@@ -229,7 +285,12 @@ export async function handleChatMessage(body, customer = null) {
 
   const criteria = { ...(conversation.searchCriteria || {}) };
   if (result.guided) criteria.guided = result.guided;
-  if (result.criteria) criteria.lastSearch = result.criteria;
+  if (result.criteria) {
+    criteria.lastSearch = result.criteria;
+    // The chips the customer can tap next, so a tap can be labelled.
+    if (result.reply.chipsEditable) criteria.lastSearchChips = result.reply.chips;
+    else delete criteria.lastSearchChips;
+  }
 
   // Explicit times keep the customer's message before the answer, whatever
   // order the database stamps them in.

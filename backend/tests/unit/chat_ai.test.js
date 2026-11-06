@@ -7,7 +7,7 @@ import { toAiHistory } from "../../src/services/ai/chat_history.js";
 import { AiUnavailableError, createModelRouter } from "../../src/services/ai/model_router.js";
 import { estimateCostUsd } from "../../src/services/ai/ai_cost.js";
 import { fromOpenAiResponse, mistralToolId, openAiRequestBody, toOpenAiMessages } from "../../src/services/ai/adapters/openai_adapter.js";
-import { fromGoogleResponse, toGoogleContents } from "../../src/services/ai/adapters/google_adapter.js";
+import { SKIP_SIGNATURE, fromGoogleResponse, googleDeadline, toGoogleContents } from "../../src/services/ai/adapters/google_adapter.js";
 
 // ── Errors ──────────────────────────────────────────────────────────
 
@@ -139,6 +139,31 @@ test("Google adapter maps tool calls and results and counts thinking as output",
   assert.equal(res.text, "Two.");
   assert.deepEqual(res.toolCalls, [{ id: "gen_0", name: "get_car", input: { id: 5 } }]);
   assert.equal(res.outputTokens, 25);
+});
+
+test("Gemini's thought signatures go back with their calls; other models' calls get the bypass value", () => {
+  const res = fromGoogleResponse({
+    candidates: [{ content: { parts: [{ functionCall: { id: "a", name: "search_cars", args: {} }, thoughtSignature: "sig1" }, { functionCall: { id: "b", name: "get_car", args: {} } }] } }],
+  });
+  assert.equal(res.toolCalls[0].thoughtSignature, "sig1");
+  assert.equal("thoughtSignature" in res.toolCalls[1], false);
+
+  const back = toGoogleContents([{ role: "user", text: "q" }, { role: "assistant", text: "", toolCalls: res.toolCalls }]);
+  assert.equal(back[1].parts[0].thoughtSignature, "sig1");
+  assert.equal("thoughtSignature" in back[1].parts[1], false, "only the first parallel call is signed");
+
+  const fromOpenAi = toGoogleContents([{ role: "assistant", text: "", toolCalls: [{ id: "x", name: "get_car", input: {} }, { id: "y", name: "get_car", input: {} }] }]);
+  assert.equal(fromOpenAi[0].parts[0].thoughtSignature, SKIP_SIGNATURE);
+  assert.equal("thoughtSignature" in fromOpenAi[0].parts[1], false);
+
+  const toOpenAi = toOpenAiMessages("s", [{ role: "assistant", text: "", toolCalls: res.toolCalls }], {});
+  assert.equal(JSON.stringify(toOpenAi).includes("sig1"), false, "signatures never reach OpenAI or Mistral");
+});
+
+test("Google gets a deadline of at least 10 seconds; the router still cuts the call at 5", () => {
+  assert.equal(googleDeadline(5000), 10000);
+  assert.equal(googleDeadline(20000), 20000);
+  assert.equal(googleDeadline(undefined), 10000);
 });
 
 // ── Router ──────────────────────────────────────────────────────────

@@ -89,7 +89,15 @@ export function createModelRouter(deps) {
         return { result, model, attempts, responseMs: now() - started };
       } catch (err) {
         const errorType = classifyAiError(err);
-        attempts.push({ modelId: model.id, provider: model.provider, modelName: model.modelName, errorType, ms: now() - callStarted });
+        // message: the provider's own words, for the server log only (not stored).
+        attempts.push({
+          modelId: model.id,
+          provider: model.provider,
+          modelName: model.modelName,
+          errorType,
+          ms: now() - callStarted,
+          message: String(err?.message || "").slice(0, 300),
+        });
 
         const failures = await deps.recordFailure(model);
         if (failures >= SKIP_AFTER_FAILURES) {

@@ -1039,6 +1039,41 @@
   color: var(--pub-ok-fg);
 }
 
+.criteria li.chipItem {
+  padding: 0;
+  background: none;
+}
+
+.chipRemove {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 9px 5px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--pub-ok-bg);
+  color: var(--pub-ok-fg);
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.chipRemove:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+
+.chipRemove:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.chipRemove:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .carList {
   list-style: none;
   margin: 0;

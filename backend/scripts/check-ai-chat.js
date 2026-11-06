@@ -5,14 +5,19 @@
 //
 //   npm run check:ai-chat                  every model row
 //   npm run check:ai-chat -- gpt-6-luna    one model, by modelName
+//   npm run check:ai-chat -- gpt-6-luna --timeout=5000
+//       use the chat's own time limit instead of the generous 20 seconds
 
 import prisma from "../src/config/db.js";
 import { adapterFor } from "../src/services/ai/ai_adapter.js";
 import { CALL_TIMEOUT_MS } from "../src/services/ai/ai_config.js";
 import { classifyAiError } from "../src/services/ai/ai_errors.js";
 
-const LIMIT_MS = 20000; // generous here; anything over CALL_TIMEOUT_MS is flagged
-const only = process.argv[2] || null;
+const args = process.argv.slice(2);
+const timeoutArg = args.find((a) => a.startsWith("--timeout="));
+// Generous by default; anything over CALL_TIMEOUT_MS is flagged.
+const LIMIT_MS = timeoutArg ? Number(timeoutArg.split("=")[1]) : 20000;
+const only = args.find((a) => !a.startsWith("--")) || null;
 
 const TOOL = {
   name: "get_platform_time",

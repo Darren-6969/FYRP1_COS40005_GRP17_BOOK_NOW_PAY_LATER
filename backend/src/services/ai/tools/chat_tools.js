@@ -33,7 +33,13 @@ import {
   quoteSummary,
   searchQueryFrom,
   searchResult,
+  searchView,
 } from "./tool_results.js";
+
+/** Marks a run's return value as { output, view } rather than the output itself. */
+function split(value) {
+  return value && typeof value === "object" && "output" in value && "view" in value ? value : { output: value, view: null };
+}
 
 /** A result the AI reads as a failed lookup, with the reason. */
 export class ToolInputError extends Error {
@@ -84,7 +90,8 @@ const TOOLS = [
           category: "CAR_RENTAL",
         },
       });
-      return searchResult(found, query);
+      // The AI gets the small result; the chat window gets cards and chips.
+      return { output: searchResult(found, query), view: searchView(found, query) };
     },
   },
   {
@@ -179,8 +186,9 @@ function errorOutput(err) {
  * deps: { searchPublicCars, parseCarSearchQuery, getPublicCar, quotePublicCar,
  *         getStorefront, upcomingBookings, customerBookingByCode,
  *         getPublishedSections, trackEvent?, log? }
- * Returns runTool(call, ctx) → { id, name, output, isError }, which never
- * throws: a failure goes back to the AI as an error result.
+ * Returns runTool(call, ctx) → { id, name, input, output, view?, isError },
+ * where view holds what the chat window draws and is never sent to the AI.
+ * runTool never throws: a failure goes back to the AI as an error result.
  * ctx: { customerId (session) or null, carInViewId or null, today YYYY-MM-DD }
  */
 export function createToolRunner(deps) {
@@ -193,7 +201,9 @@ export function createToolRunner(deps) {
       return { id: call.id, name: call.name, output: `Input not accepted: ${issuesText(parsed.error)}`, isError: true };
     }
     try {
-      return { id: call.id, name: call.name, input: parsed.data, output: await tool.run(parsed.data, ctx, deps), isError: false };
+      const { output, view } = split(await tool.run(parsed.data, ctx, deps));
+      // view (cards for the chat window) never goes to the AI.
+      return { id: call.id, name: call.name, input: parsed.data, output, ...(view ? { view } : {}), isError: false };
     } catch (err) {
       if (!(err instanceof ToolInputError) && err?.statusCode !== 404) deps.log?.(`[chat-ai] tool ${call.name} failed: ${err?.message}`);
       return { id: call.id, name: call.name, input: parsed.data, output: errorOutput(err), isError: true };

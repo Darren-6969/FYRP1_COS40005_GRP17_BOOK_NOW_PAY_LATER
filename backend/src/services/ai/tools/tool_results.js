@@ -328,3 +328,97 @@ export function bookingHref(listingId, sel) {
   const qs = p.toString();
   return `/cars/${listingId}/book${qs ? `?${qs}` : ""}`;
 }
+
+// ── Chat window: car cards and chips (Step 8) ───────────────────────
+
+/** A search result as the chat window's car card (same shape as the guided flow's). */
+export function carCard(item, query) {
+  const l = item.listing;
+  return {
+    id: l.id,
+    name: carName(l),
+    operator: l.operator.companyName,
+    city: l.branch.city,
+    seats: l.seats,
+    imageUrl: l.images?.[0]?.imageUrl || null,
+    dailySen: item.rateSen,
+    totalSen: item.quote?.totalSen ?? null,
+    depositSen: item.quote?.depositSen ?? null,
+    href: carHref(l.id, query),
+  };
+}
+
+// Each chip removes one filter. Keys group query fields that go together.
+export const CHIP_FIELDS = {
+  dates: ["from", "to", "ft", "tt"],
+  city: ["city"],
+  brand: ["brand"],
+  model: ["model"],
+  type: ["type"],
+  seats: ["seats"],
+  trans: ["trans"],
+  fuel: ["fuel"],
+  drive: ["drive"],
+  refund: ["refund"],
+  operator: ["operator"],
+  price: ["pmin", "pmax"],
+  pay: ["dmin", "dmax"],
+};
+
+/** The filters of a search as removable chips: [{ key, label }]. */
+export function chipsFor(query, operatorNames = {}) {
+  const chips = [];
+  const list = (v) => v.split(",").join(" or ");
+  if (query.from && query.to) chips.push({ key: "dates", label: `${klDate(query.from)} ${query.ft} to ${klDate(query.to)} ${query.tt}` });
+  if (query.city) chips.push({ key: "city", label: query.city });
+  if (query.brand) chips.push({ key: "brand", label: list(query.brand) });
+  if (query.model) chips.push({ key: "model", label: list(query.model) });
+  if (query.type) chips.push({ key: "type", label: list(query.type) });
+  if (query.seats) chips.push({ key: "seats", label: `${query.seats}+ seats` });
+  if (query.trans) chips.push({ key: "trans", label: query.trans === "MANUAL" ? "Manual" : "Automatic" });
+  if (query.fuel) chips.push({ key: "fuel", label: list(query.fuel) });
+  if (query.drive) chips.push({ key: "drive", label: query.drive === "4WD" ? "4WD or AWD" : "2WD" });
+  if (query.refund) chips.push({ key: "refund", label: query.refund === "partial" ? "Partial refund" : "Non-refundable deposit" });
+  if (query.operator) {
+    chips.push({ key: "operator", label: query.operator.split(",").map((id) => operatorNames[id] || `Operator ${id}`).join(" or ") });
+  }
+  if (query.pmin || query.pmax) chips.push({ key: "price", label: `${priceRange(query.pmin, query.pmax)} a day` });
+  if (query.dmin || query.dmax) chips.push({ key: "pay", label: `${priceRange(query.dmin, query.dmax)} payable now` });
+  return chips;
+}
+
+/** The query without one chip's filter. */
+export function withoutChip(query, chipKey) {
+  const next = { ...query };
+  (CHIP_FIELDS[chipKey] || []).forEach((k) => delete next[k]);
+  return next;
+}
+
+/** A stored query as search_cars input, so follow-ups can reuse it. */
+export function searchInputFrom(query) {
+  const input = {};
+  VEHICLE_FIELDS.forEach(([key, field]) => {
+    if (query[key]) input[field] = /^(pmin|pmax|dmin|dmax)$/.test(key) ? Number(query[key]) : query[key];
+  });
+  LIST_FIELDS.forEach(([key, field]) => {
+    if (query[key]) input[field] = query[key].split(",").map((v) => (key === "operator" ? Number(v) : v));
+  });
+  if (query.seats) input.min_seats = Number(query.seats);
+  if (query.trans) input.transmission = query.trans;
+  if (query.drive) input.drivetrain = query.drive;
+  if (query.refund) input.refund = query.refund;
+  return input;
+}
+
+/** What the chat shows for a search: the cards, chips and results link. */
+export function searchView(found, query) {
+  const items = found.groups.flatMap((g) => g.items);
+  const operatorNames = Object.fromEntries(items.map((i) => [String(i.listing.operator.id), i.listing.operator.companyName]));
+  return {
+    query,
+    total: found.total,
+    cars: items.slice(0, MAX_CARS).map((item) => carCard(item, query)),
+    chips: chipsFor(query, operatorNames),
+    resultsHref: resultsHref(query),
+  };
+}

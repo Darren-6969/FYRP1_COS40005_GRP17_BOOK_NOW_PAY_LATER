@@ -2,7 +2,7 @@
 // PROMPT_VERSION whenever the wording changes, because a model's test result
 // (Step 12) only counts for the prompt version it was run on.
 
-export const PROMPT_VERSION = "2026-11-06.1";
+export const PROMPT_VERSION = "2026-11-06.3";
 
 /**
  * context:
@@ -10,8 +10,9 @@ export const PROMPT_VERSION = "2026-11-06.1";
  *   signedIn      whether a customer is signed in
  *   carInView     { id, name } of the car on screen, or null
  *   toolNames     names of the tools offered with this request
+ *   lastSearch    the conversation's last search as search_cars input, or null
  */
-export function chatSystemPrompt({ today, signedIn, carInView = null, toolNames = [] }) {
+export function chatSystemPrompt({ today, signedIn, carInView = null, toolNames = [], lastSearch = null }) {
   const weekday = new Date(`${today}T12:00:00+08:00`).toLocaleDateString("en-GB", { weekday: "long", timeZone: "Asia/Kuala_Lumpur" });
   const lines = [
     "You are the assistant on a Malaysian car rental booking platform with operators in several cities in Sarawak. Customers book a car with a local operator, pay a deposit after the operator accepts, and pay the balance before pickup.",
@@ -36,10 +37,17 @@ export function chatSystemPrompt({ today, signedIn, carInView = null, toolNames 
       "- If a detail is missing, search with what you have rather than asking first. Ask at most one question.",
       "- get_car, quote_price and make_booking_link need a listing_id from search_cars unless the customer is looking at a car. To ask about a car by name, search for it first.",
       "- For the price of one car on given dates use quote_price; for its details use get_car; for an operator's pickup points, hours or phone use get_operator; for rules use get_policy.",
+      "- Write dates the way a person reads them, such as \"Sat 7 Nov\", never as 2026-11-07.",
       "- Copy amounts exactly as the tools write them (for example \"RM 150\"). Name at most three cars in words; the customer can open the results link for the rest.",
       "- When nothing matches, say what you searched. If the result's hint shows that dropping one filter brings matches, search again without it and name what you changed.",
-      "- Never type a link; the chat adds the right one from the tool results."
+      "- Never type a link; the chat adds the right one from the tool results, and shows the cars of a search as cards under your answer.",
+      "- Every price, percentage, date, car and operator you state is checked against the tool results before the customer sees it. Search again in this message rather than repeat a figure from an earlier one."
     );
+    if (lastSearch && Object.keys(lastSearch).length) {
+      lines.push(
+        `- The customer's last search used: ${JSON.stringify(lastSearch)}. For follow-ups such as "anything cheaper?" or "what about Sunday?", search again from these filters, changing only what the customer asks.`
+      );
+    }
   }
   lines.push("", signedIn ? "- The customer is signed in. get_my_bookings shows only their own bookings." : "- The customer is not signed in. For anything about their bookings, ask them to sign in.");
   if (carInView?.name) lines.push(`- The customer is looking at the ${carInView.name} listing; "this car" means that car. Leave listing_id out to use it.`);
