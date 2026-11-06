@@ -22,6 +22,7 @@ import { searchInputFrom, searchView, withoutChip } from "../ai/tools/tool_resul
 import { aiReplyPayload } from "./chat_ai_view.js";
 import { AiUnavailableError, answerWithAi, attemptsSummary } from "../ai/ai_service.js";
 import { HISTORY_MESSAGES } from "../ai/ai_config.js";
+import { countIpMessage, limitReached, loadAiSettings, monthSpend, noteSpend, overallCapReached } from "../ai/ai_limits.js";
 import { toAiHistory } from "../ai/chat_history.js";
 import { advanceGuided, choiceLabel, startGuided } from "./chat_guided_service.js";
 import { FIND_CAR_ACTION, matchMessage, quickActions, ruleAnswer, welcomeMessage } from "./chat_rules_service.js";
@@ -29,11 +30,7 @@ import { HANDOFF_ACTION, advanceHandoff, emergencyReply, handoffFromAi, startHan
 import { activeTicket, customerResolve, noteCustomerMessage, ticketBanner } from "../support/support_ticket_service.js";
 import { isEmergencyMessage, isHandoffMessage } from "../support/support_rules.js";
 
-const SETTINGS_MS = 60 * 1000;
 const HISTORY_LIMIT = 60;
-const DEFAULT_MAX_CHARS = 500;
-
-let settingsCache = null;
 
 function httpError(statusCode, message, appCode) {
   const err = new Error(message);
@@ -43,11 +40,7 @@ function httpError(statusCode, message, appCode) {
 }
 
 async function maxMessageChars() {
-  if (!settingsCache || Date.now() - settingsCache.at > SETTINGS_MS) {
-    const row = await prisma.aiSettings.findUnique({ where: { id: 1 }, select: { maxMessageChars: true } }).catch(() => null);
-    settingsCache = { at: Date.now(), maxChars: row?.maxMessageChars || DEFAULT_MAX_CHARS };
-  }
-  return settingsCache.maxChars;
+  return (await loadAiSettings()).maxMessageChars;
 }
 
 function newToken() {
@@ -116,6 +109,8 @@ const FALLBACK_TEXT = {
   unmatched: "I couldn't match that to one of my topics yet. Pick one below, or find a car step by step.",
   // The answer check refused the AI's answer twice (Step 8).
   unchecked: "I couldn't confirm every detail of that from the platform's live data, so I won't guess. Pick a topic below, or find a car step by step.",
+  // Step 10: the customer's hourly limit. The monthly cap uses "down".
+  limit: "You've asked me a lot in the last hour, so I can't answer in my own words for a little while. You can still pick a topic below, find a car step by step, or talk to a person.",
 };
 
 // Every fallback also offers a person (design: hand-off after the AI fails
@@ -190,6 +185,27 @@ async function aiReply({ text, conversation, customer, listingLoader }) {
       reason: "down",
     };
   }
+}
+
+/**
+ * Whether a typed message may go to the AI (Step 10). Returns null, or
+ * { reason, errorType } for the fallback: the overall monthly cap ("down",
+ * logged as cap:monthly) or the customer's hourly limit ("limit", logged as
+ * limit:customer or limit:ip, which the AI models page counts).
+ */
+async function aiHeldBack({ customer, ip }) {
+  const settings = await loadAiSettings();
+  if (overallCapReached(settings, await monthSpend())) return { reason: "down", errorType: "cap:monthly" };
+  const limit = await limitReached({ customer, ip, settings });
+  if (limit) return { reason: "limit", errorType: `limit:${limit.limit}` };
+  return null;
+}
+
+/** After a message went to the AI: count it for the visitor, and add its cost. */
+function afterAiAttempt({ ai, customer, ip }) {
+  if (!ai?.responseMs) return; // no model was called
+  if (!customer) countIpMessage(ip);
+  noteSpend(ai.aiModelId, ai.estimatedCostUsd);
 }
 
 /**
@@ -292,7 +308,15 @@ async function answer({ text, action, conversation, customer, listingLoader, ip 
     const reply = await ruleAnswer(key, { listing: await listingLoader(), customerId: customer?.id });
     if (reply) return { userText: text, reply };
   }
+  // Step 10: the monthly cap and the customer's hourly limit. Layer 1 above
+  // still answers; only the AI call is held back.
+  const held = await aiHeldBack({ customer, ip });
+  if (held) {
+    return { userText: text, reply: await fallbackReply({ signedIn, reason: held.reason }), fallback: true, ai: { errorType: held.errorType } };
+  }
+
   const ai = await aiReply({ text, conversation, customer, listingLoader });
+  afterAiAttempt({ ai: ai.ai, customer, ip });
   if (ai.reply && ai.handoffDraft) {
     // The AI's words, then the flow's next step (usually the Send button).
     const flow = await handoffFromAi({ draft: ai.handoffDraft, customer });

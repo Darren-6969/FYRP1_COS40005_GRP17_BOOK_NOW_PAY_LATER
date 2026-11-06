@@ -14,7 +14,8 @@ import { adapterFor } from "./ai_adapter.js";
 import { MAX_OUTPUT_TOKENS } from "./ai_config.js";
 import { chatBreaker } from "./circuit_breaker.js";
 import { AiUnavailableError, createModelRouter } from "./model_router.js";
-import { loadEnabledModels, recordModelFailure, recordModelSuccess, skipModel } from "./model_store.js";
+import { recordModelFailure, recordModelSuccess, skipModel } from "./model_store.js";
+import { loadUncappedModels } from "./ai_limits.js";
 import { chatSystemPrompt, PROMPT_VERSION } from "./prompts.js";
 import { checkedAnswer } from "./checked_answer.js";
 import { createToolRunner, TOOL_DEFINITIONS, TOOL_NAMES } from "./tools/chat_tools.js";
@@ -23,7 +24,9 @@ export { AiUnavailableError, PROMPT_VERSION };
 
 // Alert emails for these come with the AI models page (Step 11).
 function logEvent(event) {
-  if (event.type === "model_skipped") {
+  if (event.type === "model_capped") {
+    console.warn(`[chat-ai] ${event.model.displayName} skipped: its monthly cap of USD ${Number(event.model.monthlyCapUsd)} is reached`);
+  } else if (event.type === "model_skipped") {
     console.warn(`[chat-ai] ${event.model.displayName} skipped until ${event.until.toISOString()} after ${event.errorType}`);
   } else if (event.type === "breaker_opened") {
     console.warn(`[chat-ai] circuit breaker open (${event.reason}): ${event.attempts.map((a) => `${a.modelName} ${a.errorType}`).join(", ") || "no calls"}`);
@@ -31,8 +34,10 @@ function logEvent(event) {
   }
 }
 
+// Step 10: models that reached their own monthly cap are left out
+// (ai_limits.js), so the next model in the order answers.
 const router = createModelRouter({
-  loadModels: loadEnabledModels,
+  loadModels: () => loadUncappedModels({ onEvent: logEvent }),
   adapterFor,
   recordFailure: recordModelFailure,
   skipModel,
