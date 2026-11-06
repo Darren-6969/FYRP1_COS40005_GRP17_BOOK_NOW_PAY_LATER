@@ -121,6 +121,16 @@ export const makeBookingLinkSchema = z
   })
   .superRefine(bothDatesOrNeither);
 
+// Step 9. hand_off writes nothing itself: it shows the customer a Send
+// button, and the ticket is raised only when they press it.
+export const handOffSchema = z.object({
+  topic: z
+    .enum(["BOOKING", "PAYMENT", "OPERATOR_PROBLEM", "ACCOUNT", "OTHER", "EMERGENCY"])
+    .describe("BOOKING: one booking's car, pickup, return or a change. PAYMENT: payments and refunds. OPERATOR_PROBLEM: a complaint or dispute with an operator. ACCOUNT: the customer's account. EMERGENCY: breakdown or accident. OTHER: anything else."),
+  summary: z.string().trim().min(3).max(500).describe("One or two sentences, in the customer's words, saying what they need. Staff read this first."),
+  booking_code: z.string().trim().max(40).optional().describe("The booking code, if the customer named one."),
+});
+
 /** The JSON schema the AI sees for a zod schema. */
 export function toParameters(schema) {
   const json = z.toJSONSchema(schema, { io: "input", unrepresentable: "any" });

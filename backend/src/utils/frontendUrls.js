@@ -21,3 +21,18 @@ export function operatorBookingUrl(bookingId) {
 export function operatorDashboardUrl() {
   return `${frontendBase()}/operator/dashboard`;
 }
+
+// App.jsx: /operator/customer-messages -> OperatorCustomerMessages (Step 9)
+export function operatorSupportUrl(ticketId) {
+  return `${frontendBase()}/operator/customer-messages${ticketId ? `?ticket=${ticketId}` : ""}`;
+}
+
+// App.jsx: /master/support -> MasterSupport (Step 9)
+export function adminSupportUrl(ticketId) {
+  return `${frontendBase()}/master/support${ticketId ? `?ticket=${ticketId}` : ""}`;
+}
+
+// App.jsx: /assistant -> Assistant (the chat window)
+export function assistantUrl() {
+  return `${frontendBase()}/assistant`;
+}

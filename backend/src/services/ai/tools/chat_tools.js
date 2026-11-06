@@ -10,7 +10,9 @@
 // the AI: get_my_bookings has no customer input at all, so no wording can
 // reach another customer's booking (acceptance tests 3 and 4).
 //
-// hand_off writes a record, so it comes with Step 9.
+// hand_off (Step 9) raises nothing itself: it hands the chat a draft, and
+// the chat shows the customer a Send button. The ticket is created only when
+// they press it, so their agreement is always a deliberate tap.
 
 import {
   dropNulls,
@@ -18,6 +20,7 @@ import {
   getMyBookingsSchema,
   getOperatorSchema,
   getPolicySchema,
+  handOffSchema,
   issuesText,
   makeBookingLinkSchema,
   quotePriceSchema,
@@ -165,6 +168,18 @@ const TOOLS = [
       const id = carId(input, ctx);
       await deps.getPublicCar(id); // a 404 here means the car is not bookable
       return { booking_link: bookingHref(id, selection(input)), note: "The customer confirms everything on the form." };
+    },
+  },
+  {
+    name: "hand_off",
+    description:
+      "Offer to pass the customer to a person: the operator for a question about one of their bookings, platform support for payments, refunds, disputes or anything the other tools can't answer. Use it only when the customer asks for a person, complains, raises a dispute or emergency, or you can't answer from the tools. It raises nothing by itself: the chat shows the customer a Send button to confirm.",
+    schema: handOffSchema,
+    async run(input) {
+      return {
+        output: { offered: true, message: "The customer now sees a Send button to confirm. Tell them in one sentence that you can pass this on and they can press Send. Do not say it has been sent." },
+        view: { handoff: { topic: input.topic, summary: input.summary, bookingCode: input.booking_code || null } },
+      };
     },
   },
 ];

@@ -4,7 +4,7 @@ import { parseId } from "../utils/parseId.js";
 // POST /api/public/chat/messages
 export async function postChatMessage(req, res, next) {
   try {
-    res.json(await handleChatMessage(req.body, req.chatCustomer || null));
+    res.json(await handleChatMessage(req.body, req.chatCustomer || null, { ip: req.ip }));
   } catch (err) {
     next(err);
   }

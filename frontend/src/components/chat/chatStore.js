@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { postChatMessage, putChatFeedback } from "../../services/chat_service";
+import { getChatConversation, postChatMessage, putChatFeedback } from "../../services/chat_service";
 
 // One chat for the whole site: the floating panel and the /assistant page
 // read and write the same conversation. It lasts for the browser session
@@ -21,6 +21,7 @@ const EMPTY = {
   sendingHint: "", // what the assistant is doing while it answers
   error: "",
   listing: null, // { id, name } of the car on screen
+  ticket: null, // { reference, status, with } while a person is handling the chat (Step 9)
 };
 
 function load() {
@@ -41,8 +42,8 @@ const listeners = new Set();
 
 function persist() {
   try {
-    const { open, view, conversationId, visitorToken, userId, messages } = state;
-    sessionStorage.setItem(KEY, JSON.stringify({ open, view, conversationId, visitorToken, userId, messages: messages.slice(-MAX_KEPT) }));
+    const { open, view, conversationId, visitorToken, userId, messages, ticket } = state;
+    sessionStorage.setItem(KEY, JSON.stringify({ open, view, conversationId, visitorToken, userId, ticket, messages: messages.slice(-MAX_KEPT) }));
   } catch {
     // Storage full or blocked: the chat still works for this page.
   }
@@ -52,6 +53,40 @@ function setState(patch) {
   state = { ...state, ...patch };
   persist();
   listeners.forEach((l) => l());
+  syncPolling();
+}
+
+// ── Replies from a person (Step 9) ──────────────────────────────────
+// While a ticket is open, the window asks for new messages every so often,
+// so a reply typed on the operator or admin page appears without a reload.
+// It is also how a visitor's window updates: visitors have no socket room.
+
+const POLL_MS = 15 * 1000;
+let pollTimer = null;
+
+function syncPolling() {
+  if (typeof window === "undefined") return;
+  const wanted = Boolean(state.ticket && state.conversationId);
+  if (wanted && !pollTimer) pollTimer = setInterval(refreshConversation, POLL_MS);
+  if (!wanted && pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+/** Reloads the conversation from the server (new staff replies, ticket state). */
+export async function refreshConversation() {
+  if (!state.conversationId || state.sending) return;
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+  try {
+    const { data } = await getChatConversation(state.conversationId, state.visitorToken);
+    if (state.sending) return;
+    const lastId = (list) => list.filter((m) => typeof m.id === "number").at(-1)?.id;
+    const changed = lastId(data.messages) !== lastId(state.messages) || data.ticket?.status !== state.ticket?.status || Boolean(data.ticket) !== Boolean(state.ticket);
+    if (changed) setState({ messages: data.messages.slice(-MAX_KEPT), ticket: data.ticket || null });
+  } catch {
+    // Offline or the conversation is gone: try again next time.
+  }
 }
 
 function subscribe(listener) {
@@ -93,7 +128,7 @@ export function syncUser(userId) {
 }
 
 export function newChat() {
-  setState({ conversationId: null, visitorToken: null, messages: [], error: "", sending: false, sendingHint: "" });
+  setState({ conversationId: null, visitorToken: null, messages: [], ticket: null, error: "", sending: false, sendingHint: "" });
   startConversation();
 }
 
@@ -126,7 +161,8 @@ function errorText(err) {
 async function post(body, userText) {
   if (state.sending) return;
   const optimistic = userText ? [{ id: `${tempPrefix}-${++tempId}`, role: "user", text: userText, pending: true }] : [];
-  setState({ messages: [...state.messages, ...optimistic], sending: true, sendingHint: body.text ? "Thinking" : hintFor(body.action), error: "" });
+  const hint = body.text ? (state.ticket ? "Sending" : "Thinking") : hintFor(body.action);
+  setState({ messages: [...state.messages, ...optimistic], sending: true, sendingHint: hint, error: "" });
   try {
     const { data } = await postChatMessage({
       ...body,
@@ -135,11 +171,17 @@ async function post(body, userText) {
       listingId: state.listing?.id ?? null,
     });
     const restarted = state.conversationId && data.conversationId !== state.conversationId;
-    const kept = (restarted ? optimistic : state.messages).map((m) => (m.pending ? { ...m, pending: false } : m));
+    // With a ticket open, a typed message goes to the person and gets no
+    // assistant answer: the server sends back the stored message instead.
+    const kept = (restarted ? optimistic : state.messages)
+      .filter((m) => !(data.sent && m.pending))
+      .map((m) => (m.pending ? { ...m, pending: false } : m));
+    const added = [data.sent, data.reply].filter(Boolean);
     setState({
       conversationId: data.conversationId,
       visitorToken: data.visitorToken,
-      messages: [...kept, data.reply].slice(-MAX_KEPT),
+      messages: [...kept, ...added].slice(-MAX_KEPT),
+      ticket: data.ticket || null,
       sending: false,
       sendingHint: "",
     });
@@ -186,3 +228,6 @@ export function openChat({ text, action, label } = {}) {
   else if (action) sendAction(action, label);
   else startConversation();
 }
+
+// A reload with a ticket open picks the polling up again.
+syncPolling();

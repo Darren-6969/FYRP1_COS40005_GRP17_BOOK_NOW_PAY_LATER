@@ -29,6 +29,7 @@ import operatorApplicationRoutes from "./routes/operator_application_routes.js";
 import carsxeRoutes from "./routes/carsxe_routes.js";
 import publicRoutes from "./routes/public_routes.js";
 import policyRoutes from "./routes/policy_routes.js";
+import supportRoutes from "./routes/support_routes.js";
 
 import { errorHandler }  from "./middlewares/errorHandler.js";
 import { requestLogger } from "./middlewares/logger_middleware.js";
@@ -263,6 +264,7 @@ app.use("/api/host",      hostRoutes);
 app.use("/api/carsxe",    carsxeRoutes);
 app.use("/api/public",    publicRoutes);
 app.use("/api/policies",  policyRoutes);
+app.use("/api/support",   supportRoutes);
 
 // ── Error handler ────────────────────────────────────────────────────────────
 app.use((req, _res, next) => {

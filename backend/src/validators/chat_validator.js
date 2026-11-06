@@ -7,6 +7,11 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("quick"), key: z.string().trim().min(1).max(60) }),
   z.object({ type: z.literal("guided"), value: z.string().trim().min(1).max(40) }),
   // A chip under an AI search's cards: rerun the search without that filter.
+  // Step 9: the "Talk to a person" flow and closing an open ticket.
+  z.object({
+    type: z.literal("handoff"),
+    value: z.string().trim().regex(/^(start|cancel|confirm|close|topic:[A-Z_]{2,20}|booking:(none|\d{1,10}))$/),
+  }),
   z.object({ type: z.literal("chip"), key: z.enum(["dates", "city", "brand", "model", "type", "seats", "trans", "fuel", "drive", "refund", "operator", "price", "pay"]) }),
 ]);
 

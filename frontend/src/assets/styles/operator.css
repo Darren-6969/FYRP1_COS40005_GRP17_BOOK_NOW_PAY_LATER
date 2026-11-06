@@ -6392,3 +6392,22 @@
 .operator-table .operator-primary-btn:active {
   color: #ffffff !important;
 }
+/* Step 9: open chat requests on the Customer Messages link. */
+.operator-nav-count {
+  margin-left: auto;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.operator-nav-count[data-overdue] {
+  background: #e11d48;
+}

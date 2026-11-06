@@ -4,6 +4,11 @@
 // AI (Layer 2); when no AI model is switched on, or every model fails, it
 // gets a fallback offering the quick actions and the guided flow.
 //
+// Layer 3 (Step 9): the customer can ask for a person. A short button flow
+// (chat_handoff_service) raises a support ticket once they press Send; while
+// the ticket is open, what they type goes to the operator or platform
+// support instead of the assistant, and staff replies appear in the chat.
+//
 // Ownership: a signed-in customer's conversation is theirs by customer id. A
 // visitor's is theirs by a random token the window keeps for the session.
 // Nobody can open a conversation by guessing its number.
@@ -20,6 +25,9 @@ import { HISTORY_MESSAGES } from "../ai/ai_config.js";
 import { toAiHistory } from "../ai/chat_history.js";
 import { advanceGuided, choiceLabel, startGuided } from "./chat_guided_service.js";
 import { FIND_CAR_ACTION, matchMessage, quickActions, ruleAnswer, welcomeMessage } from "./chat_rules_service.js";
+import { HANDOFF_ACTION, advanceHandoff, emergencyReply, handoffFromAi, startHandoff, typedIntoHandoff } from "./chat_handoff_service.js";
+import { activeTicket, customerResolve, noteCustomerMessage, ticketBanner } from "../support/support_ticket_service.js";
+import { isEmergencyMessage, isHandoffMessage } from "../support/support_rules.js";
 
 const SETTINGS_MS = 60 * 1000;
 const HISTORY_LIMIT = 60;
@@ -92,6 +100,17 @@ function userView(row) {
   return { id: row.id, role: "user", text: row.content, createdAt: row.createdAt };
 }
 
+// A reply typed by the operator or platform support on their page.
+function staffView(row) {
+  return { id: row.id, role: "staff", from: row.payload?.from || "Support", text: row.content, createdAt: row.createdAt };
+}
+
+function messageView(row) {
+  if (row.senderRole === "ASSISTANT") return assistantView(row);
+  if (row.senderRole === "OPERATOR" || row.senderRole === "ADMIN") return staffView(row);
+  return userView(row);
+}
+
 const FALLBACK_TEXT = {
   down: "I can't answer that in my own words right now. Pick a topic below, or find a car step by step.",
   unmatched: "I couldn't match that to one of my topics yet. Pick one below, or find a car step by step.",
@@ -99,11 +118,13 @@ const FALLBACK_TEXT = {
   unchecked: "I couldn't confirm every detail of that from the platform's live data, so I won't guess. Pick a topic below, or find a car step by step.",
 };
 
+// Every fallback also offers a person (design: hand-off after the AI fails
+// twice on the same question).
 async function fallbackReply({ signedIn, reason = "unmatched" }) {
   return {
     kind: "text",
     text: FALLBACK_TEXT[reason],
-    actions: await quickActions({ signedIn }),
+    actions: [...(await quickActions({ signedIn })), HANDOFF_ACTION],
     fallback: true,
   };
 }
@@ -157,7 +178,9 @@ async function aiReply({ text, conversation, customer, listingLoader }) {
     // An empty answer (e.g. cut off at the length limit) is not shown.
     if (!answer.text) return { reply: null, ai: { ...ai, errorType: withError(ai.errorType, "empty") }, reason: "down" };
     const { payload, lastSearch: searched } = aiReplyPayload(answer.text, answer.toolResults);
-    return { reply: payload, ai, lastSearch: searched };
+    // The AI offered a person: the chat shows the Send button (Step 9).
+    const offer = [...(answer.toolResults || [])].reverse().find((r) => r.name === "hand_off" && !r.isError && r.view?.handoff);
+    return { reply: payload, ai, lastSearch: searched, handoffDraft: offer?.view.handoff || null };
   } catch (err) {
     if (!(err instanceof AiUnavailableError)) throw err;
     if (err.reason === "no_models") return { reply: null, ai: null, reason: "unmatched" };
@@ -196,9 +219,15 @@ async function chipReply(lastSearch, chipKey) {
  * Returns { userText, reply, guided?, criteria?, fallback, ai? }, where ai
  * holds the AI fields to store on the answer (model, tokens, cost, errors).
  */
-async function answer({ text, action, conversation, customer, listingLoader }) {
+async function answer({ text, action, conversation, customer, listingLoader, ip }) {
   const signedIn = Boolean(customer);
   const stored = conversation.searchCriteria || {};
+
+  if (action?.type === "handoff") {
+    const result = await advanceHandoff({ value: action.value, stored: stored.handoff, conversation, customer, ip });
+    const reply = result.showTopics ? { ...result.reply, actions: await quickActions({ signedIn }) } : result.reply;
+    return { userText: result.userText, reply, handoff: result.state, ticket: result.ticket || null };
+  }
 
   if (action?.type === "welcome") {
     return { userText: null, reply: await welcomeMessage({ signedIn }) };
@@ -246,14 +275,34 @@ async function answer({ text, action, conversation, customer, listingLoader }) {
       reply: { kind: "text", text: `That message is a bit long. Please keep it under ${maxChars} characters.` },
     };
   }
+
+  // The hand-off flow is waiting for the details or an email address.
+  const typed = typedIntoHandoff({ text, stored: stored.handoff, customer });
+  if (typed) return { userText: text, reply: typed.reply, handoff: typed.state };
+
+  // Layer 1 wording for Layer 3: emergencies and asking for a person.
+  if (isEmergencyMessage(text)) return { userText: text, reply: await emergencyReply(customer?.id), handoff: null };
+  if (isHandoffMessage(text)) {
+    const { state, reply } = startHandoff({ signedIn });
+    return { userText: text, reply, handoff: { ...state, reason: "customer_request" } };
+  }
+
   const key = await matchMessage(text);
   if (key) {
     const reply = await ruleAnswer(key, { listing: await listingLoader(), customerId: customer?.id });
     if (reply) return { userText: text, reply };
   }
   const ai = await aiReply({ text, conversation, customer, listingLoader });
+  if (ai.reply && ai.handoffDraft) {
+    // The AI's words, then the flow's next step (usually the Send button).
+    const flow = await handoffFromAi({ draft: ai.handoffDraft, customer });
+    const reply = flow.reply.kind === "options" ? { ...flow.reply, intro: ai.reply.text } : { ...flow.reply, text: `${ai.reply.text} ${flow.reply.text}` };
+    return { userText: text, reply, ai: ai.ai, handoff: flow.state };
+  }
   if (ai.reply) return { userText: text, reply: ai.reply, ai: ai.ai, ...(ai.lastSearch ? { criteria: ai.lastSearch } : {}) };
-  return { userText: text, reply: await fallbackReply({ signedIn, reason: ai.reason }), fallback: true, ai: ai.ai };
+  // A refused answer starts the flow's reason as check_failed if the customer takes the offer.
+  const handoff = ai.reason === "unchecked" ? { step: "offered", reason: "check_failed" } : undefined;
+  return { userText: text, reply: await fallbackReply({ signedIn, reason: ai.reason }), fallback: true, ai: ai.ai, ...(handoff ? { handoff } : {}) };
 }
 
 /**
@@ -261,12 +310,32 @@ async function answer({ text, action, conversation, customer, listingLoader }) {
  * body: { conversationId?, visitorToken?, listingId?, text?, action? }
  * customer: { id, name } from the session, or null.
  */
-export async function handleChatMessage(body, customer = null) {
+export async function handleChatMessage(body, customer = null, { ip = null } = {}) {
   const conversation = await resolveConversation({
     conversationId: body.conversationId,
     visitorToken: body.visitorToken,
     customer,
   });
+
+  const ticket = conversation.status === "ESCALATED" ? await activeTicket(conversation.id) : null;
+  const typedText = (body.text || "").trim();
+
+  // While a ticket is open, typed messages go to the person handling it.
+  if (ticket && !body.action && typedText) return messageToTicket({ conversation, customer, ticket, text: typedText });
+
+  // "Back to the assistant": the customer says they're done with the ticket.
+  if (ticket && body.action?.type === "handoff" && body.action.value === "close") {
+    await customerResolve(ticket);
+    return saveExchange({
+      conversation,
+      customer,
+      userText: "Back to the assistant",
+      reply: { kind: "text", text: `Request ${ticket.reference} is closed. How else can I help?`, actions: await quickActions({ signedIn: Boolean(customer) }) },
+      criteria: conversation.searchCriteria || {},
+      listingInViewId: conversation.listingInViewId,
+      ticket: null,
+    });
+  }
 
   // The car on screen: a new one from the page replaces the stored one;
   // null means the customer left the car page.
@@ -281,10 +350,16 @@ export async function handleChatMessage(body, customer = null) {
   const text = (body.text || "").trim();
   if (!body.action && !text) throw httpError(400, "Type a message or pick an option.", "CHAT_EMPTY");
 
-  const result = await answer({ text, action: body.action, conversation, customer, listingLoader });
+  const result = await answer({ text, action: body.action, conversation, customer, listingLoader, ip });
 
   const criteria = { ...(conversation.searchCriteria || {}) };
   if (result.guided) criteria.guided = result.guided;
+  if (result.handoff !== undefined) {
+    if (result.handoff) criteria.handoff = result.handoff;
+    else delete criteria.handoff;
+  } else if (text && !body.action) {
+    delete criteria.handoff; // a typed question leaves an unfinished hand-off
+  }
   if (result.criteria) {
     criteria.lastSearch = result.criteria;
     // The chips the customer can tap next, so a tap can be labelled.
@@ -292,6 +367,15 @@ export async function handleChatMessage(body, customer = null) {
     else delete criteria.lastSearchChips;
   }
 
+  const currentTicket = result.ticket || ticket;
+  return saveExchange({ conversation, customer, userText: result.userText, reply: result.reply, result, criteria, listingInViewId, ticket: currentTicket });
+}
+
+/**
+ * Stores the customer's message (if any) and the assistant's reply, and
+ * returns what the window shows.
+ */
+async function saveExchange({ conversation, customer, userText, reply, result = {}, criteria, listingInViewId, ticket }) {
   // Explicit times keep the customer's message before the answer, whatever
   // order the database stamps them in.
   const now = Date.now();
@@ -301,14 +385,14 @@ export async function handleChatMessage(body, customer = null) {
       data: { listingInViewId, searchCriteria: criteria, lastMessageAt: new Date(now + 1) },
     }),
   ];
-  if (result.userText) {
+  if (userText) {
     writes.push(
       prisma.chatMessage.create({
         data: {
           conversationId: conversation.id,
           senderRole: customer ? "CUSTOMER" : "VISITOR",
           senderId: customer?.id ?? null,
-          content: result.userText,
+          content: userText,
           isRead: true,
           createdAt: new Date(now),
         },
@@ -320,11 +404,11 @@ export async function handleChatMessage(body, customer = null) {
       data: {
         conversationId: conversation.id,
         senderRole: "ASSISTANT",
-        content: result.reply.text,
+        content: reply.text,
         layer: result.ai && !result.fallback ? "AI" : "RULE",
         fallbackUsed: Boolean(result.fallback),
         ...(result.ai || {}),
-        payload: result.reply,
+        payload: reply,
         isRead: true,
         createdAt: new Date(now + 1),
       },
@@ -337,6 +421,34 @@ export async function handleChatMessage(body, customer = null) {
     conversationId: conversation.id,
     visitorToken: conversation.visitorToken || null,
     reply: assistantView(saved),
+    ticket: ticketBanner(ticket),
+  };
+}
+
+/** A typed message while a ticket is open: stored, and passed to staff. No assistant answer. */
+async function messageToTicket({ conversation, customer, ticket, text }) {
+  const maxChars = await maxMessageChars();
+  const now = new Date();
+  const [message] = await prisma.$transaction([
+    prisma.chatMessage.create({
+      data: {
+        conversationId: conversation.id,
+        senderRole: customer ? "CUSTOMER" : "VISITOR",
+        senderId: customer?.id ?? null,
+        content: text.slice(0, maxChars),
+        isRead: true,
+        createdAt: now,
+      },
+    }),
+    prisma.chatConversation.update({ where: { id: conversation.id }, data: { lastMessageAt: now } }),
+  ]);
+  const updated = await noteCustomerMessage(ticket, message.id);
+  return {
+    conversationId: conversation.id,
+    visitorToken: conversation.visitorToken || null,
+    reply: null,
+    sent: userView(message),
+    ticket: ticketBanner(updated),
   };
 }
 
@@ -353,7 +465,8 @@ export async function getConversation({ conversationId, visitorToken, customer }
   });
   return {
     conversationId: conversation.id,
-    messages: rows.reverse().map((row) => (row.senderRole === "ASSISTANT" ? assistantView(row) : userView(row))),
+    messages: rows.reverse().map(messageView),
+    ticket: conversation.status === "ESCALATED" ? ticketBanner(await activeTicket(conversation.id)) : null,
   };
 }
 

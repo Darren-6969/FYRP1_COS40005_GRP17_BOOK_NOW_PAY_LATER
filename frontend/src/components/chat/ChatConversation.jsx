@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ArrowUp, Check, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { ArrowRight, ArrowUp, Check, Headset, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { sendAction, sendFeedback, sendText, setPageListing, startConversation, useChat } from "./chatStore";
 import DatePicker from "../common/DatePicker";
 import styles from "../../assets/styles/public/Chat.module.css";
@@ -31,7 +31,7 @@ function Actions({ actions, disabled }) {
   return (
     <div className={styles.actions}>
       {actions.map((a) => (
-        <button key={a.key} type="button" className={styles.chip} disabled={disabled} onClick={() => sendAction({ type: "quick", key: a.key }, a.label)}>
+        <button key={a.key} type="button" className={styles.chip} disabled={disabled} onClick={() => sendAction(a.action || { type: "quick", key: a.key }, a.label)}>
           {a.label}
         </button>
       ))}
@@ -72,7 +72,10 @@ function Options({ message, interactive, disabled }) {
   const [picked, setPicked] = useState(null);
   // The choice stays marked only while its answer is on the way.
   const shownPick = disabled ? picked : null;
+  const type = message.optionType || "guided";
   return (
+    <>
+    {message.intro && <div className={styles.bubble}>{message.intro}</div>}
     <div className={styles.stepCard} data-answered={interactive ? undefined : ""}>
       <div className={styles.stepHead}>
         <span className={styles.stepQuestion}>{message.text}</span>
@@ -90,7 +93,7 @@ function Options({ message, interactive, disabled }) {
                 aria-pressed={shownPick === o.value}
                 onClick={() => {
                   setPicked(o.value);
-                  sendAction({ type: "guided", value: o.value }, o.label);
+                  sendAction({ type, value: o.value }, o.label);
                 }}
               >
                 <span>{o.label}</span>
@@ -99,11 +102,13 @@ function Options({ message, interactive, disabled }) {
             ))}
           </div>
           {message.allowCustomDates && <CustomDates disabled={disabled} />}
+          {message.note && <span className={styles.muted}>{message.note}</span>}
         </>
       ) : (
         <span className={styles.muted}>Answered</span>
       )}
     </div>
+    </>
   );
 }
 
@@ -268,7 +273,35 @@ function AssistantMessage({ message, latest, sending, onNavigate }) {
   );
 }
 
-function Composer({ disabled, autoFocus }) {
+// A reply typed by the operator or platform support (Step 9).
+function StaffMessage({ message }) {
+  return (
+    <div className={styles.assistantRow}>
+      <span className={styles.staffFrom}>
+        <Headset size={14} aria-hidden="true" /> {message.from}
+      </span>
+      <div className={`${styles.bubble} ${styles.staffBubble}`}>{message.text}</div>
+    </div>
+  );
+}
+
+const TICKET_STATUS = { OPEN: "waiting for a reply", ANSWERED: "replied" };
+
+// While a person is handling the chat, what the customer types goes to them.
+function TicketBanner({ ticket, sending }) {
+  return (
+    <div className={styles.ticketBanner} role="status">
+      <span>
+        <strong>{ticket.reference}</strong> with {ticket.with} · {TICKET_STATUS[ticket.status] || ticket.status}. Messages you type go to them.
+      </span>
+      <button type="button" className={styles.secondaryButton} disabled={sending} onClick={() => sendAction({ type: "handoff", value: "close" }, "Back to the assistant")}>
+        Back to the assistant
+      </button>
+    </div>
+  );
+}
+
+function Composer({ disabled, autoFocus, placeholder = "Ask about cars, deposits or refunds" }) {
   const id = useId();
   const [text, setText] = useState("");
   const ref = useRef(null);
@@ -303,7 +336,7 @@ function Composer({ disabled, autoFocus }) {
         rows={1}
         value={text}
         maxLength={1000}
-        placeholder="Ask about cars, deposits or refunds"
+        placeholder={placeholder}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) submit(e);
@@ -388,6 +421,8 @@ export default function ChatConversation({ onNavigate, autoFocus = false, starte
               <div key={m.id} className={styles.userRow}>
                 <div className={styles.userBubble}>{m.text}</div>
               </div>
+            ) : m.role === "staff" ? (
+              <StaffMessage key={m.id} message={m} />
             ) : (
               <AssistantMessage key={m.id} message={m} latest={m === lastAssistant} sending={chat.sending} onNavigate={onNavigate} />
             )
@@ -402,7 +437,8 @@ export default function ChatConversation({ onNavigate, autoFocus = false, starte
       </div>
 
       <div className={styles.footer}>
-        <Composer disabled={chat.sending} autoFocus={autoFocus} />
+        {chat.ticket && <TicketBanner ticket={chat.ticket} sending={chat.sending} />}
+        <Composer disabled={chat.sending} autoFocus={autoFocus} placeholder={chat.ticket ? `Message ${chat.ticket.with}` : undefined} />
         <p className={styles.disclaimer}>The assistant can't book, pay or cancel for you.</p>
       </div>
     </div>

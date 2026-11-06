@@ -80,8 +80,8 @@ const customer = { customerId: 42, carInViewId: null, today: TODAY };
 
 // ── Definitions ─────────────────────────────────────────────────────
 
-test("the seven read-only tools are offered, with JSON schemas and no hand_off yet", () => {
-  assert.deepEqual(TOOL_NAMES, ["search_cars", "get_car", "quote_price", "get_operator", "get_my_bookings", "get_policy", "make_booking_link"]);
+test("the seven read-only tools and hand_off are offered, with JSON schemas", () => {
+  assert.deepEqual(TOOL_NAMES, ["search_cars", "get_car", "quote_price", "get_operator", "get_my_bookings", "get_policy", "make_booking_link", "hand_off"]);
   TOOL_DEFINITIONS.forEach((t) => {
     assert.equal(t.parameters.type, "object", t.name);
     assert.equal(t.parameters.$schema, undefined, t.name);
@@ -89,6 +89,20 @@ test("the seven read-only tools are offered, with JSON schemas and no hand_off y
   });
   const bookings = TOOL_DEFINITIONS.find((t) => t.name === "get_my_bookings");
   assert.deepEqual(Object.keys(bookings.parameters.properties), ["booking_code"], "no customer input of any kind");
+});
+
+test("hand_off raises nothing itself: it returns a draft for the Send button", async () => {
+  const runTool = createToolRunner({});
+  const result = await runTool(
+    { id: "h1", name: "hand_off", input: { topic: "BOOKING", summary: "I want to change my pickup time", booking_code: "BK-1234", customer_id: 99 } },
+    { customerId: 5, carInViewId: null, today: "2026-11-07" }
+  );
+  assert.equal(result.isError, false);
+  assert.equal(result.output.offered, true);
+  assert.deepEqual(result.view.handoff, { topic: "BOOKING", summary: "I want to change my pickup time", bookingCode: "BK-1234" });
+  assert.equal(JSON.stringify(result.output).includes("BK-1234"), false, "the draft stays out of what the AI reads");
+  const definition = TOOL_DEFINITIONS.find((t) => t.name === "hand_off");
+  assert.deepEqual(Object.keys(definition.parameters.properties).sort(), ["booking_code", "summary", "topic"], "no customer or email input");
 });
 
 test("get_policy's keys match the seeded policy library", () => {

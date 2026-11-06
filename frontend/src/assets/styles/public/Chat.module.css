@@ -1760,3 +1760,33 @@
     opacity: 0.6;
   }
 }
+
+/* Step 9: replies from a person, and the open-request banner. */
+.staffFrom {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pub-label);
+  margin-bottom: 2px;
+}
+
+.staffBubble {
+  background: var(--pub-ok-bg);
+  color: var(--pub-ok-fg);
+}
+
+.ticketBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--pub-info-bg);
+  color: var(--pub-info-fg);
+  font-size: 13px;
+  line-height: 1.45;
+}

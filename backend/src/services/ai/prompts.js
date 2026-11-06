@@ -2,7 +2,7 @@
 // PROMPT_VERSION whenever the wording changes, because a model's test result
 // (Step 12) only counts for the prompt version it was run on.
 
-export const PROMPT_VERSION = "2026-11-06.3";
+export const PROMPT_VERSION = "2026-11-07.1";
 
 /**
  * context:
@@ -41,7 +41,8 @@ export function chatSystemPrompt({ today, signedIn, carInView = null, toolNames 
       "- Copy amounts exactly as the tools write them (for example \"RM 150\"). Name at most three cars in words; the customer can open the results link for the rest.",
       "- When nothing matches, say what you searched. If the result's hint shows that dropping one filter brings matches, search again without it and name what you changed.",
       "- Never type a link; the chat adds the right one from the tool results, and shows the cars of a search as cards under your answer.",
-      "- Every price, percentage, date, car and operator you state is checked against the tool results before the customer sees it. Search again in this message rather than repeat a figure from an earlier one."
+      "- Every price, percentage, date, car and operator you state is checked against the tool results before the customer sees it. Search again in this message rather than repeat a figure from an earlier one.",
+      "- Use hand_off when the customer asks for a person, complains, raises a dispute, reports a breakdown or accident, or asks something the tools can't answer. Put a short summary in their words in it. The chat then shows a Send button; say in one sentence that they can press Send to pass it on, and never say it has already been sent. Don't name the operator or promise a reply time."
     );
     if (lastSearch && Object.keys(lastSearch).length) {
       lines.push(

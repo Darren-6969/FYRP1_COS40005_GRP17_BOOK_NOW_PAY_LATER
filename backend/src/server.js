@@ -10,6 +10,7 @@ import { startSubscriptionLifecycleJob } from "./jobs/subscriptionLifecycle_job.
 import { startOperatorInactivityJob } from "./jobs/operatorInactivity_job.js";
 import { startJobQueueWorker } from "./jobs/jobQueue_worker.js";
 import { startRefundDeadlineJob } from "./jobs/refundDeadline_job.js";
+import { startSupportTicketJob } from "./jobs/supportTicket_job.js";
 import { logStripeReadiness } from "./config/stripe_readiness.js";
 
 dotenv.config();
@@ -28,6 +29,7 @@ startSubscriptionLifecycleJob();
 startOperatorInactivityJob();
 startJobQueueWorker();
 startRefundDeadlineJob();
+startSupportTicketJob();
 
 server.listen(PORT, () => {
   console.log(`BNPL backend running on http://localhost:${PORT}`);

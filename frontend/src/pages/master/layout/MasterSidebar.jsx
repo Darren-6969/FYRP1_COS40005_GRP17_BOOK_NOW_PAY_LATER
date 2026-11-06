@@ -21,7 +21,8 @@ import {
   Gavel,
   Undo2,
   ScrollText,
-  MessageSquareText,
+  BookOpen,
+  LifeBuoy,
 } from "lucide-react";
 
 // The sidebar is grouped by what the administrator is doing, in the same way
@@ -38,6 +39,14 @@ const groups = [
     links: [
       { to: "/master/bookings", label: "Booking Log", icon: ListOrdered },
       { to: "/master/credit-appeals", label: "Credit Appeals", icon: Gavel },
+    ],
+  },
+  {
+    id: "support",
+    label: "Customer Support",
+    links: [
+      { to: "/master/support", label: "Support Tickets", icon: LifeBuoy },
+      { to: "/master/policies", label: "Policies & Answers", icon: BookOpen },
     ],
   },
   {
@@ -73,7 +82,6 @@ const groups = [
     label: "System",
     links: [
       { to: "/master/system-settings", label: "System Settings", icon: Settings },
-      { to: "/master/policies", label: "Policies & Answers", icon: MessageSquareText },
       { to: "/master/cron-jobs", label: "Cron Jobs", icon: Clock },
       { to: "/master/email-logs", label: "Email Logs", icon: Mail },
       { to: "/master/system-logs", label: "System Logs", icon: ScrollText },
@@ -121,7 +129,7 @@ export default function MasterSidebar({
             onClick={onCloseMobile}
             aria-label="Close admin menu"
           >
-            x
+            ×
           </button>
         </div>
 
