@@ -52,11 +52,65 @@ export default function CustomerLayout() {
       />
 
       <Stack.Screen
+        name="payment-success"
+        options={{
+            animation: "fade",
+        }}
+        />
+
+      <Stack.Screen
+        name="invoice/[id]"
+        options={{
+            animation:
+            "slide_from_right",
+        }}
+        />
+
+      <Stack.Screen
         name="upload-receipt"
         options={{
           animation: "slide_from_right",
         }}
       />
+
+      <Stack.Screen
+        name="support-chat"
+        options={{
+            animation:
+            "slide_from_right",
+        }}
+        />
+
+      <Stack.Screen
+        name="terms"
+        options={{
+            animation:
+            "slide_from_right",
+        }}
+        />
+
+      <Stack.Screen
+        name="privacy"
+        options={{
+            animation:
+            "slide_from_right",
+        }}
+        />
+
+      <Stack.Screen
+        name="cars"
+        options={{
+            animation:
+            "slide_from_right",
+        }}
+        />
+
+      <Stack.Screen
+        name="saved-cars"
+        options={{
+            animation: "slide_from_right",
+        }}
+        />
     </Stack>
   );
 }

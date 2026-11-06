@@ -57,6 +57,11 @@ export function isValidBookingTransition(oldStatus, newStatus) {
   return oldStatus !== newStatus && (TRANSITIONS[oldStatus] || []).includes(newStatus);
 }
 
+// The statuses a booking in this status may move to, for screens that offer a choice.
+export function allowedNextBookingStatuses(status) {
+  return [...(TRANSITIONS[status] || [])];
+}
+
 export async function transitionBookingStatus({
   bookingId,
   newStatus,

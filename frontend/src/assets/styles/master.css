@@ -3566,3 +3566,44 @@
   color: #64748b;
   font-size: 12px;
 }
+
+/* =========================================
+   SIDEBAR GROUPS
+   Same grouping as the operator portal: a small heading over each set of
+   related pages, with the links a little tighter so all of them fit.
+========================================= */
+
+.master-nav-groups {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.master-nav-group {
+  display: grid;
+  gap: 6px;
+}
+
+.master-nav-group-label {
+  padding: 0 15px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.master-nav-group .master-nav-list {
+  gap: 2px;
+}
+
+.master-nav-group .master-nav-link {
+  margin-top: 0;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.master-nav-group .master-nav-icon {
+  width: 30px;
+  height: 30px;
+}

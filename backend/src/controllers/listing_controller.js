@@ -836,6 +836,7 @@ export async function createListing(
 
       vehicleMake,
       vehicleModel,
+      vehicleType,
       modelYear,
       seats,
       transmission,
@@ -915,6 +916,8 @@ export async function createListing(
       ![
         "CAR_RENTAL",
         "TOUR",
+        // TEST-ITEM-MISC: delete this line to stop accepting the test item.
+        "MISCELLANEOUS",
       ].includes(category)
     ) {
       return res.status(400).json({
@@ -957,6 +960,7 @@ export async function createListing(
       if (
         !vehicleMake ||
         !vehicleModel ||
+        !vehicleType ||
         !transmission
       ) {
         return res.status(400).json({
@@ -1030,6 +1034,9 @@ export async function createListing(
 
           vehicleModel:
             vehicleModel || null,
+
+          vehicleType:
+            vehicleType || null,
 
           modelYear:
             modelYear

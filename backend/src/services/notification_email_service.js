@@ -1,6 +1,7 @@
 import prisma from "../config/db.js";
 import { sendEmail } from "./email_service.js";
 import { emitToUser } from "../utils/socket.js";
+import { bookingStatusTemplate } from "./email_templates.js";
 
 function mapNotification(notification) {
   if (!notification) return null;
@@ -211,4 +212,35 @@ export async function notifyMasterUsers({
       });
     }
   }
+}
+
+/**
+ * Tell the customer an operator or admin declined their booking request:
+ * in-app notification plus email (with the reason and the operator's own
+ * wording from their email settings, if they set one).
+ */
+export async function notifyCustomerBookingRejected({ booking, reason }) {
+  const code = booking.bookingCode || booking.id;
+  const note = String(reason || "").trim();
+  const config = await prisma.bNPLConfig.findFirst({
+    where: { operatorId: booking.operatorId },
+    orderBy: { createdAt: "desc" },
+  });
+  const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;
+
+  await notifyCustomerByBooking({
+    booking,
+    title: "Booking rejected",
+    message: `${booking.operator?.companyName || "The operator"} declined your booking ${code}. ${note ? ` Reason: ${note}` : ""}`,
+    type: "BOOKING_REJECTED",
+    emailSubject: `Booking Declined - ${code}`,
+    emailHtml: bookingStatusTemplate({
+      booking,
+      status: "REJECTED",
+      customerUrl,
+      reason: note,
+      bookingRejectedEmailText: config?.bookingRejectedEmailText,
+      emailFooterText: config?.emailFooterText,
+    }),
+  });
 }

@@ -21,11 +21,11 @@ import {
 } from "react";
 
 import {
+  getCustomerBookings,
   getCustomerNotifications,
   markAllCustomerNotificationsRead,
   markCustomerNotificationRead,
-} 
-from "../../services/customerApi";
+} from "../../services/customerApi";
 
 type Notification = {
   id: number;
@@ -34,6 +34,7 @@ type Notification = {
   type?: string;
   isRead?: boolean;
   bookingRef?: string | null;
+  bookingId?: number | null;
   createdAt?: string;
 };
 
@@ -76,6 +77,27 @@ function getNotificationIcon(type?: string) {
     default:
       return "notifications-outline";
   }
+}
+
+function extractBookingCode(
+  item: Notification
+) {
+  const text = [
+    item.bookingRef,
+    item.title,
+    item.message,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const match =
+    text.match(
+      /\bBNPL-\d+\b/i
+    );
+
+  return match
+    ? match[0].toUpperCase()
+    : null;
 }
 
 export default function NotificationsScreen() {
@@ -128,14 +150,14 @@ export default function NotificationsScreen() {
     }, [])
   );
 
-  const handleNotificationPress =
-    async (item: Notification) => {
+  
+const handleNotificationPress =
+  async (item: Notification) => {
+    if (!item.isRead) {
       try {
-        if (!item.isRead) {
-          await markCustomerNotificationRead(
-            item.id
-          );
-        }
+        await markCustomerNotificationRead(
+          item.id
+        );
 
         setNotifications((current) =>
           current.map((notification) =>
@@ -147,23 +169,97 @@ export default function NotificationsScreen() {
               : notification
           )
         );
+      } catch (error) {
+        console.log(
+          "Failed to mark notification as read:",
+          error
+        );
+      }
+    }
 
-        if (item.bookingRef) {
-          const booking = item.bookingRef;
+    const type = String(
+      item.type || ""
+    ).toUpperCase();
 
-          const numericId =
-            booking.match(/\d+/)?.[0];
+    const isInvoice =
+      type.includes("INVOICE");
 
-          if (numericId) {
-            router.push(
-              `/customer/booking/${numericId}`
+    const isPayment =
+      type.includes("PAYMENT") ||
+      type.includes("RECEIPT") ||
+      type.includes("REFUND");
+
+    let bookingId =
+      item.bookingId &&
+      Number.isInteger(
+        Number(item.bookingId)
+      ) &&
+      Number(item.bookingId) > 0
+        ? Number(item.bookingId)
+        : null;
+
+    const bookingCode =
+      extractBookingCode(item);
+
+    if (!bookingId && bookingCode) {
+      try {
+        const bookings =
+          await getCustomerBookings();
+
+        if (Array.isArray(bookings)) {
+          const matchedBooking =
+            bookings.find(
+              (booking) =>
+                String(
+                  booking.bookingCode || ""
+                ).toUpperCase() ===
+                bookingCode
             );
+
+          if (matchedBooking) {
+            bookingId =
+              Number(
+                matchedBooking.id
+              );
           }
         }
-      } catch (err) {
-        console.log(err);
+      } catch (error) {
+        console.log(
+          "Failed to resolve notification booking:",
+          error
+        );
       }
-    };
+    }
+
+    if (bookingId) {
+      if (isInvoice) {
+        router.push(
+          `/customer/invoice/${bookingId}`
+        );
+
+        return;
+      }
+
+      router.push(
+        `/customer/booking/${bookingId}`
+      );
+
+      return;
+    }
+
+    if (isPayment || isInvoice) {
+      router.push(
+        "/customer/(tabs)/payments"
+      );
+
+      return;
+    }
+
+    router.push(
+      "/customer/(tabs)/bookings"
+    );
+  };
+
 
   const handleReadAll = async () => {
     try {

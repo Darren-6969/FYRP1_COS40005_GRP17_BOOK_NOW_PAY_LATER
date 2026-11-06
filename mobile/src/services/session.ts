@@ -56,6 +56,29 @@ export async function getStoredUser() {
   }
 }
 
+export async function saveStoredUser(
+  user: any
+) {
+  const value =
+    JSON.stringify(user);
+
+  if (
+    Platform.OS === "web"
+  ) {
+    localStorage.setItem(
+      USER_KEY,
+      value
+    );
+
+    return;
+  }
+
+  await SecureStore.setItemAsync(
+    USER_KEY,
+    value
+  );
+}
+
 export async function clearSession() {
   if (Platform.OS === "web") {
     localStorage.removeItem(TOKEN_KEY);

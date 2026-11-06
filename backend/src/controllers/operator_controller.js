@@ -8,6 +8,7 @@ import { generateInvoiceForBooking } from "../services/invoice_service.js";
 import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
 import {
   notifyCustomerByBooking,
+  notifyCustomerBookingRejected,
   notifyOperatorUsersByBooking,
   notifyMasterUsers,
 } from "../services/notification_email_service.js";
@@ -2026,18 +2027,7 @@ export async function rejectBooking(req, res, next) {
       },
     });
 
-    await notifyCustomerByBooking({
-      booking: updatedBooking,
-
-      title: "Booking rejected",
-
-      message: `Your booking ${
-        updatedBooking.bookingCode ||
-        updatedBooking.id
-      } was rejected by the operator. Reason: ${reason}`,
-
-      type: "BOOKING_REJECTED",
-    });
+    await notifyCustomerBookingRejected({ booking: updatedBooking, reason });
 
     res.json({
       message: "Booking rejected successfully",
@@ -2120,12 +2110,7 @@ export async function bulkBookingAction(req, res, next) {
             return tx.booking.findUnique({ where: { id }, include: includeBookingRelations() });
           });
           if (action === "reject") {
-            await notifyCustomerByBooking({
-              booking: updated,
-              title: "Booking rejected",
-              message: `Your booking ${updated.bookingCode || updated.id} was rejected by the operator.${note ? ` Reason: ${note}` : ""}`,
-              type: "BOOKING_REJECTED",
-            });
+            await notifyCustomerBookingRejected({ booking: updated, reason: note });
           }
         }
         return { bookingId: id, ok: true, booking: mapBooking(updated) };

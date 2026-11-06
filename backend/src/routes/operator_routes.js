@@ -1,6 +1,11 @@
 import express from "express";
 import { getMyStorefront, updateMyStorefront } from "../controllers/storefront_controller.js";
 import {
+  clearDuitnowAccount,
+  getDuitnowAccount,
+  saveDuitnowAccount,
+} from "../controllers/duitnow_account_controller.js";
+import {
   createOperator,
   createOperatorUser,
   updateOperatorUserStatus,
@@ -304,6 +309,9 @@ router.get("/storefront", ...ownerOnlyAccess, getMyStorefront);
 router.patch("/storefront", ...ownerOnlyAccess, updateMyStorefront);
 router.get("/settings", ...ownerOnlyAccess, getOperatorSettings);
 router.patch("/settings", ...ownerOnlyAccess, updateOperatorSettings);
+router.get("/settings/duitnow-account", ...ownerOnlyAccess, getDuitnowAccount);
+router.put("/settings/duitnow-account", ...ownerOnlyAccess, saveDuitnowAccount);
+router.delete("/settings/duitnow-account", ...ownerOnlyAccess, clearDuitnowAccount);
 router.get(
   "/settings/email-preview",
   ...ownerOnlyAccess,

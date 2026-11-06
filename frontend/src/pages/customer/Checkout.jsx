@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useCustomerBooking } from "../../hooks/useBookings";
 import { submitCustomerPayment } from "../../hooks/usePayments";
-import { createStripeCheckoutSession } from "../../services/customer_service";
+import { createStripeCheckoutSession, getCustomerManualPaymentOptions } from "../../services/customer_service";
 import { formatCustomerDate, formatMoney } from "../../utils/customerUtils";
-import duitnowQr from "../../assets/images/duitnow-qr.png";
+import DuitNowQr from "../../components/payment/DuitNowQr";
 import { useFeatureFlag } from "../../hooks/useFeatureFlag";
 
 const PAYMENT_TYPES = {
@@ -91,6 +91,26 @@ const paymentOptions = useMemo(() => {
 const effectiveMethod = paymentOptions.some(([value]) => value === method)
   ? method
   : paymentOptions[0]?.[0] || "";
+
+  // The QR code is built by the server for the part being paid, with its amount
+  // and the booking reference inside it.
+  const [manualDue, setManualDue] = useState(null);
+  const [manualDueFailed, setManualDueFailed] = useState(false);
+  useEffect(() => {
+    if (effectiveMethod !== "DUITNOW_SPAY") return undefined;
+    let current = true;
+    getCustomerManualPaymentOptions(id)
+      .then((res) => {
+        if (current) setManualDue(res.data);
+      })
+      .catch(() => {
+        if (current) setManualDueFailed(true);
+      });
+    return () => {
+      current = false;
+    };
+  }, [id, effectiveMethod]);
+  const qrPayload = manualDue?.options.find((item) => item.paymentType === paymentType)?.qrPayload || null;
 
   const handlePay = async () => {
     setSubmitError("");
@@ -347,12 +367,22 @@ const effectiveMethod = paymentOptions.some(([value]) => value === method)
 
               <div className="customer-qr-section">
                 <div className="customer-qr-box">
-                  <img src={duitnowQr} alt="DuitNow QR Code" />
+                  {qrPayload ? (
+                    <DuitNowQr payload={qrPayload} alt="DuitNow QR code with the amount filled in" />
+                  ) : (
+                    <p className="customer-muted">
+                      {manualDue || manualDueFailed
+                        ? "This operator has not set up a DuitNow QR code. Follow the payment instructions."
+                        : "Preparing the QR code..."}
+                    </p>
+                  )}
                 </div>
 
                 <div className="customer-qr-instructions">
                   <p>
-                    Scan this DuitNow QR code using your banking app or SPay.
+                    {qrPayload
+                      ? "Scan this DuitNow QR code with your banking app or SPay. The amount and booking reference are already filled in, so you do not need to type them."
+                      : "Pay the amount below by DuitNow using the operator's payment instructions."}{" "}
                     After completing payment, upload your receipt for operator
                     verification.
                   </p>
@@ -391,9 +421,10 @@ const effectiveMethod = paymentOptions.some(([value]) => value === method)
                   </div>
 
                   <p className="customer-payment-note">
-                    If your payment app allows remarks, please include the
-                    booking reference. Then click continue and upload your
-                    receipt.
+                    {qrPayload
+                      ? "Check that your banking app shows the same amount before you confirm. Then click continue and upload your receipt."
+                      : "If your payment app allows remarks, please include the booking reference. Then click continue and upload your receipt."}
+                    {manualDue?.note ? ` ${manualDue.note}` : ""}
                   </p>
                 </div>
               </div>

@@ -1,9 +1,12 @@
+// mobile/src/app/customer/checkout.tsx
+
 import { Ionicons } from "@expo/vector-icons";
 import {
   useLocalSearchParams,
   useRouter,
 } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+
 import {
   AppState,
   Linking,
@@ -14,6 +17,7 @@ import {
   Text,
   View,
 } from "react-native";
+
 import {
   useEffect,
   useMemo,
@@ -64,21 +68,25 @@ export default function CheckoutScreen() {
     useState(false);
 
   const appState =
-  useRef(AppState.currentState);
+    useRef(AppState.currentState);
 
   const waitingForStripe =
-  useRef(false);
+    useRef(false);
 
-  const initialPaymentType =
+  const initialPaymentType:
+    PaymentType =
     params.type ===
     PAYMENT_TYPES.FINAL_PAYMENT
       ? PAYMENT_TYPES.FINAL_PAYMENT
       : params.type ===
-        PAYMENT_TYPES.FULL_PAYMENT
-      ? PAYMENT_TYPES.FULL_PAYMENT
-      : PAYMENT_TYPES.DOWN_PAYMENT;
+          PAYMENT_TYPES.FULL_PAYMENT
+        ? PAYMENT_TYPES.FULL_PAYMENT
+        : PAYMENT_TYPES.DOWN_PAYMENT;
 
-  const [paymentType, setPaymentType] =
+  const [
+    paymentType,
+    setPaymentType,
+  ] =
     useState<PaymentType>(
       initialPaymentType
     );
@@ -88,11 +96,16 @@ export default function CheckoutScreen() {
       "STRIPE"
     );
 
+  // =========================================================
+  // LOAD BOOKING
+  // =========================================================
+
   useEffect(() => {
     if (!bookingId) {
       setError(
         "Booking information is missing."
       );
+
       setLoading(false);
       return;
     }
@@ -100,112 +113,292 @@ export default function CheckoutScreen() {
     loadBooking();
   }, [bookingId]);
 
+  // =========================================================
+  // CHECK PAYMENT AFTER RETURNING FROM SAFARI / STRIPE
+  // =========================================================
+
   useEffect(() => {
-  const subscription =
-    AppState.addEventListener(
-      "change",
-      async (nextAppState) => {
-        const wasBackground =
-          appState.current.match(
-            /inactive|background/
-          );
-
-        const isActive =
-          nextAppState === "active";
-
-        appState.current =
-          nextAppState;
-
-        if (
-          !wasBackground ||
-          !isActive ||
-          !waitingForStripe.current ||
-          !bookingId
-        ) {
-          return;
-        }
-
-        try {
-          const refreshed =
-            await getCustomerBookingById(
-              bookingId
+    const subscription =
+      AppState.addEventListener(
+        "change",
+        async (
+          nextAppState
+        ) => {
+          const wasBackground =
+            appState.current.match(
+              /inactive|background/
             );
 
-          setBooking(refreshed);
+          const isActive =
+            nextAppState ===
+            "active";
 
-          const paymentStatus =
-            refreshed?.payment?.status;
+          appState.current =
+            nextAppState;
 
-          const downPaymentStatus =
-            refreshed?.payment
-              ?.downPaymentStatus;
+          if (
+            !wasBackground ||
+            !isActive ||
+            !waitingForStripe.current ||
+            !bookingId
+          ) {
+            return;
+          }
 
-          const finalPaymentStatus =
-            refreshed?.payment
-              ?.finalPaymentStatus;
+          try {
+            console.log(
+              "Returned from Stripe. Checking payment..."
+            );
 
-          const paymentSucceeded =
-            paymentStatus === "PAID" ||
-            downPaymentStatus === "PAID" ||
-            finalPaymentStatus === "PAID";
+            const refreshed =
+              await getCustomerBookingById(
+                bookingId
+              );
 
-          if (paymentSucceeded) {
-            waitingForStripe.current =
+            setBooking(
+              refreshed
+            );
+
+            const payment =
+              refreshed?.payment ||
+              {};
+
+            const paymentStatus =
+              payment?.status;
+
+            const downPaymentStatus =
+              payment?.downPaymentStatus;
+
+            const finalPaymentStatus =
+              payment?.finalPaymentStatus;
+
+            console.log(
+              "Payment type:",
+              paymentType
+            );
+
+            console.log(
+              "Payment status:",
+              paymentStatus
+            );
+
+            console.log(
+              "Down payment status:",
+              downPaymentStatus
+            );
+
+            console.log(
+              "Final payment status:",
+              finalPaymentStatus
+            );
+
+            // =============================================
+            // IMPORTANT:
+            // Check the payment that the customer
+            // was actually trying to make.
+            // =============================================
+
+            let paymentSucceeded =
               false;
 
-            router.replace(
-              `/customer/booking/${bookingId}`
+            if (
+              paymentType ===
+              PAYMENT_TYPES.DOWN_PAYMENT
+            ) {
+              paymentSucceeded =
+                downPaymentStatus ===
+                  "PAID" ||
+                paymentStatus ===
+                  "PAID";
+            }
+
+            if (
+              paymentType ===
+              PAYMENT_TYPES.FINAL_PAYMENT
+            ) {
+              paymentSucceeded =
+                finalPaymentStatus ===
+                  "PAID" ||
+                paymentStatus ===
+                  "PAID";
+            }
+
+            if (
+              paymentType ===
+              PAYMENT_TYPES.FULL_PAYMENT
+            ) {
+              paymentSucceeded =
+                paymentStatus ===
+                "PAID";
+            }
+
+            if (paymentSucceeded) {
+            waitingForStripe.current = false;
+
+            const refreshedPayment =
+                refreshed?.payment || {};
+
+            let paidAmount = 0;
+
+            if (
+                paymentType ===
+                PAYMENT_TYPES.DOWN_PAYMENT
+            ) {
+                paidAmount =
+                Number(
+                    refreshedPayment
+                    ?.downPaymentAmount ||
+                    0
+                );
+            }
+
+            if (
+                paymentType ===
+                PAYMENT_TYPES.FINAL_PAYMENT
+            ) {
+                paidAmount =
+                Number(
+                    refreshedPayment
+                    ?.finalPaymentAmount ||
+                    0
+                );
+            }
+
+            if (
+                paymentType ===
+                PAYMENT_TYPES.FULL_PAYMENT
+            ) {
+                paidAmount =
+                Number(
+                    refreshedPayment?.amount ||
+                    refreshed?.totalAmount ||
+                    0
+                );
+            }
+
+            console.log(
+                "Paid amount:",
+                paidAmount
+            );
+
+            router.dismissAll();
+
+            router.replace({
+                pathname:
+                "/customer/payment-success",
+
+                params: {
+                bookingId:
+                    String(
+                    refreshed.id
+                    ),
+
+                bookingCode:
+                    refreshed.bookingCode ||
+                    "",
+
+                paymentType,
+
+                amount:
+                    String(
+                    paidAmount
+                    ),
+                },
+            });
+
+            return;
+            }
+
+            console.log(
+              "Payment has not been confirmed yet."
+            );
+          } catch (err) {
+            console.log(
+              "Failed to refresh payment status:",
+              err
             );
           }
-        } catch (err) {
-          console.log(
-            "Failed to refresh payment status:",
-            err
+        }
+      );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [
+    bookingId,
+    paymentType,
+    router,
+  ]);
+
+  // =========================================================
+  // LOAD BOOKING FUNCTION
+  // =========================================================
+
+  const loadBooking =
+    async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const data =
+          await getCustomerBookingById(
+            bookingId as string
+          );
+
+        setBooking(data);
+
+        // Safety:
+        // if down payment already paid,
+        // automatically switch to final payment.
+        const payment =
+          data?.payment || {};
+
+        if (
+          payment
+            ?.downPaymentStatus ===
+            "PAID" &&
+          payment
+            ?.finalPaymentStatus !==
+            "PAID" &&
+          params.type !==
+            PAYMENT_TYPES.FULL_PAYMENT
+        ) {
+          setPaymentType(
+            PAYMENT_TYPES.FINAL_PAYMENT
           );
         }
-      }
-    );
-
-  return () => {
-    subscription.remove();
-  };
-}, [bookingId, router]);
-
-  const loadBooking = async () => {
-    try {
-      setLoading(true);
-      setError("");
-
-      const data =
-        await getCustomerBookingById(
-          bookingId as string
+      } catch (
+        err: any
+      ) {
+        console.log(
+          "Failed to load booking:",
+          err
         );
 
-      setBooking(data);
-    } catch (err: any) {
-      console.log(
-        "Failed to load booking:",
-        err
-      );
+        setError(
+          err?.message ||
+            "Unable to load booking."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      setError(
-        err?.message ||
-          "Unable to load booking."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  // =========================================================
+  // PAYMENT DATA
+  // =========================================================
 
   const payment =
     booking?.payment || {};
 
   const downPaymentPaid =
-    payment?.downPaymentStatus ===
+    payment
+      ?.downPaymentStatus ===
     "PAID";
 
   const finalPaymentPaid =
-    payment?.finalPaymentStatus ===
+    payment
+      ?.finalPaymentStatus ===
     "PAID";
 
   const totalAmount =
@@ -217,17 +410,25 @@ export default function CheckoutScreen() {
 
   const downPaymentAmount =
     Number(
-      payment?.downPaymentAmount ??
-        booking?.downPaymentAmount ??
+      payment
+        ?.downPaymentAmount ??
+        booking
+          ?.downPaymentAmount ??
         0
     );
 
   const finalPaymentAmount =
     Number(
-      payment?.finalPaymentAmount ??
-        booking?.finalPaymentAmount ??
+      payment
+        ?.finalPaymentAmount ??
+        booking
+          ?.finalPaymentAmount ??
         0
     );
+
+  // =========================================================
+  // AMOUNT TO PAY
+  // =========================================================
 
   const amountToPay =
     useMemo(() => {
@@ -253,6 +454,10 @@ export default function CheckoutScreen() {
       totalAmount,
     ]);
 
+  // =========================================================
+  // FORMAT MONEY
+  // =========================================================
+
   const formatMoney = (
     value: number
   ) => {
@@ -260,6 +465,10 @@ export default function CheckoutScreen() {
       value || 0
     ).toFixed(2)}`;
   };
+
+  // =========================================================
+  // CONTINUE PAYMENT
+  // =========================================================
 
   const handleContinuePayment =
     async () => {
@@ -270,6 +479,10 @@ export default function CheckoutScreen() {
         return;
       }
 
+      // =============================================
+      // DUITNOW / SPAY
+      // =============================================
+
       if (
         method ===
         "DUITNOW_SPAY"
@@ -277,11 +490,13 @@ export default function CheckoutScreen() {
         router.push({
           pathname:
             "/customer/upload-receipt",
+
           params: {
             bookingId:
               String(
                 booking.id
               ),
+
             paymentType,
           },
         });
@@ -289,9 +504,18 @@ export default function CheckoutScreen() {
         return;
       }
 
+      // =============================================
+      // STRIPE
+      // =============================================
+
       try {
         setSubmitting(true);
         setError("");
+
+        console.log(
+          "Starting Stripe payment:",
+          paymentType
+        );
 
         const result =
           await createStripeCheckoutSession(
@@ -325,16 +549,26 @@ export default function CheckoutScreen() {
           );
         }
 
-        waitingForStripe.current = true;
+        // Important:
+        // AppState will know that we are
+        // waiting for the customer to
+        // return from Stripe.
+        waitingForStripe.current =
+          true;
 
         await Linking.openURL(
           checkoutUrl
         );
-      } catch (err: any) {
+      } catch (
+        err: any
+      ) {
         console.log(
           "Stripe payment failed:",
           err
         );
+
+        waitingForStripe.current =
+          false;
 
         setError(
           err?.message ||
@@ -345,21 +579,33 @@ export default function CheckoutScreen() {
       }
     };
 
+  // =========================================================
+  // LOADING
+  // =========================================================
+
   if (loading) {
     return (
       <SafeAreaView
         style={styles.center}
       >
-        <StatusBar style="dark" />
+        <StatusBar
+          style="dark"
+        />
 
         <Text
-          style={styles.loadingText}
+          style={
+            styles.loadingText
+          }
         >
           Loading checkout...
         </Text>
       </SafeAreaView>
     );
   }
+
+  // =========================================================
+  // LOAD ERROR
+  // =========================================================
 
   if (
     error &&
@@ -369,7 +615,9 @@ export default function CheckoutScreen() {
       <SafeAreaView
         style={styles.center}
       >
-        <StatusBar style="dark" />
+        <StatusBar
+          style="dark"
+        />
 
         <Ionicons
           name="alert-circle-outline"
@@ -378,19 +626,25 @@ export default function CheckoutScreen() {
         />
 
         <Text
-          style={styles.errorTitle}
+          style={
+            styles.errorTitle
+          }
         >
           Unable to open checkout
         </Text>
 
         <Text
-          style={styles.errorMessage}
+          style={
+            styles.errorMessage
+          }
         >
           {error}
         </Text>
 
         <Pressable
-          style={styles.retryButton}
+          style={
+            styles.retryButton
+          }
           onPress={loadBooking}
         >
           <Text
@@ -405,13 +659,26 @@ export default function CheckoutScreen() {
     );
   }
 
+  // =========================================================
+  // MAIN UI
+  // =========================================================
+
   return (
     <SafeAreaView
-      style={styles.safeArea}
+      style={
+        styles.safeArea
+      }
     >
-      <StatusBar style="dark" />
+      <StatusBar
+        style="dark"
+      />
 
-      <View style={styles.header}>
+      {/* HEADER */}
+      <View
+        style={
+          styles.header
+        }
+      >
         <Pressable
           style={
             styles.headerButton
@@ -427,7 +694,11 @@ export default function CheckoutScreen() {
           />
         </Pressable>
 
-        <View style={{ flex: 1 }}>
+        <View
+          style={{
+            flex: 1,
+          }}
+        >
           <Text
             style={
               styles.headerTitle
@@ -454,8 +725,17 @@ export default function CheckoutScreen() {
           styles.content
         }
       >
-        <View style={styles.card}>
-          <Text style={styles.eyebrow}>
+        {/* BOOKING SUMMARY */}
+        <View
+          style={
+            styles.card
+          }
+        >
+          <Text
+            style={
+              styles.eyebrow
+            }
+          >
             Booking
           </Text>
 
@@ -464,17 +744,20 @@ export default function CheckoutScreen() {
               styles.bookingCode
             }
           >
-            {booking?.bookingCode ||
+            {booking
+              ?.bookingCode ||
               `Booking #${booking?.id}`}
           </Text>
 
           <InfoRow
             label="Service"
             value={
-              booking?.serviceName ||
+              booking
+                ?.serviceName ||
               booking?.listing
                 ?.title ||
-              booking?.listing?.name ||
+              booking?.listing
+                ?.name ||
               "Car Rental"
             }
           />
@@ -518,7 +801,12 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
+        {/* PAYMENT TYPE */}
+        <View
+          style={
+            styles.card
+          }
+        >
           <Text
             style={
               styles.sectionTitle
@@ -597,7 +885,12 @@ export default function CheckoutScreen() {
           />
         </View>
 
-        <View style={styles.card}>
+        {/* PAYMENT METHOD */}
+        <View
+          style={
+            styles.card
+          }
+        >
           <Text
             style={
               styles.sectionTitle
@@ -608,13 +901,16 @@ export default function CheckoutScreen() {
 
           <PaymentMethodChoice
             selected={
-              method === "STRIPE"
+              method ===
+              "STRIPE"
             }
             icon="card-outline"
             label="Stripe"
             description="Secure card payment"
             onPress={() =>
-              setMethod("STRIPE")
+              setMethod(
+                "STRIPE"
+              )
             }
           />
 
@@ -634,6 +930,7 @@ export default function CheckoutScreen() {
           />
         </View>
 
+        {/* ERROR */}
         {error ? (
           <View
             style={
@@ -657,7 +954,12 @@ export default function CheckoutScreen() {
         ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
+      {/* FOOTER */}
+      <View
+        style={
+          styles.footer
+        }
+      >
         <View>
           <Text
             style={
@@ -679,9 +981,12 @@ export default function CheckoutScreen() {
         </View>
 
         <Pressable
-          disabled={submitting}
+          disabled={
+            submitting
+          }
           style={[
             styles.payButton,
+
             submitting &&
               styles.payButtonDisabled,
           ]}
@@ -697,9 +1002,9 @@ export default function CheckoutScreen() {
             {submitting
               ? "Processing..."
               : method ===
-                "DUITNOW_SPAY"
-              ? "Continue"
-              : "Pay Now"}
+                  "DUITNOW_SPAY"
+                ? "Continue"
+                : "Pay Now"}
           </Text>
 
           {!submitting && (
@@ -715,6 +1020,10 @@ export default function CheckoutScreen() {
   );
 }
 
+// =========================================================
+// INFO ROW
+// =========================================================
+
 function InfoRow({
   label,
   value,
@@ -723,21 +1032,33 @@ function InfoRow({
   value: string;
 }) {
   return (
-    <View style={styles.infoRow}>
+    <View
+      style={
+        styles.infoRow
+      }
+    >
       <Text
-        style={styles.infoLabel}
+        style={
+          styles.infoLabel
+        }
       >
         {label}
       </Text>
 
       <Text
-        style={styles.infoValue}
+        style={
+          styles.infoValue
+        }
       >
         {value}
       </Text>
     </View>
   );
 }
+
+// =========================================================
+// PAYMENT CHOICE
+// =========================================================
 
 function PaymentChoice({
   selected,
@@ -754,12 +1075,18 @@ function PaymentChoice({
 }) {
   return (
     <Pressable
-      disabled={disabled}
-      onPress={onPress}
+      disabled={
+        disabled
+      }
+      onPress={
+        onPress
+      }
       style={[
         styles.choice,
+
         selected &&
           styles.choiceSelected,
+
         disabled &&
           styles.choiceDisabled,
       ]}
@@ -767,6 +1094,7 @@ function PaymentChoice({
       <View
         style={[
           styles.radio,
+
           selected &&
             styles.radioSelected,
         ]}
@@ -780,7 +1108,11 @@ function PaymentChoice({
         ) : null}
       </View>
 
-      <View style={{ flex: 1 }}>
+      <View
+        style={{
+          flex: 1,
+        }}
+      >
         <Text
           style={
             styles.choiceTitle
@@ -800,6 +1132,10 @@ function PaymentChoice({
     </Pressable>
   );
 }
+
+// =========================================================
+// PAYMENT METHOD CHOICE
+// =========================================================
 
 function PaymentMethodChoice({
   selected,
@@ -816,9 +1152,12 @@ function PaymentMethodChoice({
 }) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={
+        onPress
+      }
       style={[
         styles.choice,
+
         selected &&
           styles.choiceSelected,
       ]}
@@ -829,7 +1168,11 @@ function PaymentMethodChoice({
         color="#07869B"
       />
 
-      <View style={{ flex: 1 }}>
+      <View
+        style={{
+          flex: 1,
+        }}
+      >
         <Text
           style={
             styles.choiceTitle
@@ -850,6 +1193,7 @@ function PaymentMethodChoice({
       <View
         style={[
           styles.radio,
+
           selected &&
             styles.radioSelected,
         ]}
@@ -866,286 +1210,394 @@ function PaymentMethodChoice({
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F7FAFB",
-  },
+// =========================================================
+// STYLES
+// =========================================================
 
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    backgroundColor: "#F7FAFB",
-  },
+const styles =
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor:
+        "#F7FAFB",
+    },
 
-  loadingText: {
-    color: "#70858E",
-    fontWeight: "700",
-  },
+    center: {
+      flex: 1,
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+      padding: 24,
+      backgroundColor:
+        "#F7FAFB",
+    },
 
-  errorTitle: {
-    color: "#17313C",
-    fontSize: 17,
-    fontWeight: "900",
-    marginTop: 12,
-  },
+    loadingText: {
+      color:
+        "#70858E",
+      fontWeight:
+        "700",
+    },
 
-  errorMessage: {
-    color: "#7A8E96",
-    fontSize: 12,
-    textAlign: "center",
-    marginTop: 6,
-  },
+    errorTitle: {
+      color:
+        "#17313C",
+      fontSize: 17,
+      fontWeight:
+        "900",
+      marginTop: 12,
+    },
 
-  retryButton: {
-    marginTop: 18,
-    paddingHorizontal: 20,
-    height: 46,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#07869B",
-  },
+    errorMessage: {
+      color:
+        "#7A8E96",
+      fontSize: 12,
+      textAlign:
+        "center",
+      marginTop: 6,
+    },
 
-  retryText: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-  },
+    retryButton: {
+      marginTop: 18,
+      paddingHorizontal:
+        20,
+      height: 46,
+      borderRadius:
+        14,
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+      backgroundColor:
+        "#07869B",
+    },
 
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5ECEF",
-  },
+    retryText: {
+      color:
+        "#FFFFFF",
+      fontWeight:
+        "900",
+    },
 
-  headerButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "#F3F7F8",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    header: {
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      gap: 12,
+      paddingHorizontal:
+        18,
+      paddingVertical:
+        14,
+      backgroundColor:
+        "#FFFFFF",
+      borderBottomWidth:
+        1,
+      borderBottomColor:
+        "#E5ECEF",
+    },
 
-  headerTitle: {
-    color: "#17313C",
-    fontSize: 18,
-    fontWeight: "900",
-  },
+    headerButton: {
+      width: 42,
+      height: 42,
+      borderRadius:
+        14,
+      backgroundColor:
+        "#F3F7F8",
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+    },
 
-  headerSubtitle: {
-    color: "#83969E",
-    fontSize: 10,
-    marginTop: 2,
-  },
+    headerTitle: {
+      color:
+        "#17313C",
+      fontSize: 18,
+      fontWeight:
+        "900",
+    },
 
-  content: {
-    padding: 18,
-    paddingBottom: 125,
-  },
+    headerSubtitle: {
+      color:
+        "#83969E",
+      fontSize: 10,
+      marginTop: 2,
+    },
 
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 16,
-  },
+    content: {
+      padding: 18,
+      paddingBottom:
+        125,
+    },
 
-  eyebrow: {
-    color: "#07869B",
-    fontSize: 10,
-    fontWeight: "900",
-    textTransform: "uppercase",
-  },
+    card: {
+      backgroundColor:
+        "#FFFFFF",
+      borderWidth: 1,
+      borderColor:
+        "#E3EAED",
+      borderRadius:
+        18,
+      padding: 16,
+      marginBottom:
+        16,
+    },
 
-  bookingCode: {
-    color: "#17313C",
-    fontSize: 21,
-    fontWeight: "900",
-    marginTop: 5,
-    marginBottom: 15,
-  },
+    eyebrow: {
+      color:
+        "#07869B",
+      fontSize: 10,
+      fontWeight:
+        "900",
+      textTransform:
+        "uppercase",
+    },
 
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 20,
-    paddingVertical: 8,
-  },
+    bookingCode: {
+      color:
+        "#17313C",
+      fontSize: 21,
+      fontWeight:
+        "900",
+      marginTop: 5,
+      marginBottom:
+        15,
+    },
 
-  infoLabel: {
-    color: "#82949C",
-    fontSize: 10,
-  },
+    infoRow: {
+      flexDirection:
+        "row",
+      justifyContent:
+        "space-between",
+      gap: 20,
+      paddingVertical:
+        8,
+    },
 
-  infoValue: {
-    flex: 1,
-    textAlign: "right",
-    color: "#17313C",
-    fontSize: 11,
-    fontWeight: "800",
-  },
+    infoLabel: {
+      color:
+        "#82949C",
+      fontSize: 10,
+    },
 
-  divider: {
-    height: 1,
-    backgroundColor: "#E7ECEF",
-    marginVertical: 13,
-  },
+    infoValue: {
+      flex: 1,
+      textAlign:
+        "right",
+      color:
+        "#17313C",
+      fontSize: 11,
+      fontWeight:
+        "800",
+    },
 
-  amountRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
+    divider: {
+      height: 1,
+      backgroundColor:
+        "#E7ECEF",
+      marginVertical:
+        13,
+    },
 
-  amountLabel: {
-    color: "#17313C",
-    fontSize: 13,
-    fontWeight: "800",
-  },
+    amountRow: {
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      justifyContent:
+        "space-between",
+    },
 
-  amountValue: {
-    color: "#07869B",
-    fontSize: 22,
-    fontWeight: "900",
-  },
+    amountLabel: {
+      color:
+        "#17313C",
+      fontSize: 13,
+      fontWeight:
+        "800",
+    },
 
-  sectionTitle: {
-    color: "#17313C",
-    fontSize: 14,
-    fontWeight: "900",
-    marginBottom: 12,
-  },
+    amountValue: {
+      color:
+        "#07869B",
+      fontSize: 22,
+      fontWeight:
+        "900",
+    },
 
-  choice: {
-    minHeight: 67,
-    borderWidth: 1,
-    borderColor: "#E1E9EC",
-    borderRadius: 15,
-    padding: 13,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 11,
-    marginBottom: 10,
-    backgroundColor: "#FAFCFD",
-  },
+    sectionTitle: {
+      color:
+        "#17313C",
+      fontSize: 14,
+      fontWeight:
+        "900",
+      marginBottom:
+        12,
+    },
 
-  choiceSelected: {
-    borderColor: "#07869B",
-    backgroundColor: "#EAF8FA",
-  },
+    choice: {
+      minHeight: 67,
+      borderWidth: 1,
+      borderColor:
+        "#E1E9EC",
+      borderRadius:
+        15,
+      padding: 13,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      gap: 11,
+      marginBottom:
+        10,
+      backgroundColor:
+        "#FAFCFD",
+    },
 
-  choiceDisabled: {
-    opacity: 0.42,
-  },
+    choiceSelected: {
+      borderColor:
+        "#07869B",
+      backgroundColor:
+        "#EAF8FA",
+    },
 
-  choiceTitle: {
-    color: "#17313C",
-    fontSize: 12,
-    fontWeight: "900",
-  },
+    choiceDisabled: {
+      opacity: 0.42,
+    },
 
-  choiceDescription: {
-    color: "#83969E",
-    fontSize: 10,
-    marginTop: 3,
-  },
+    choiceTitle: {
+      color:
+        "#17313C",
+      fontSize: 12,
+      fontWeight:
+        "900",
+    },
 
-  radio: {
-    width: 21,
-    height: 21,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: "#BAC9CE",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    choiceDescription: {
+      color:
+        "#83969E",
+      fontSize: 10,
+      marginTop: 3,
+    },
 
-  radioSelected: {
-    borderColor: "#07869B",
-  },
+    radio: {
+      width: 21,
+      height: 21,
+      borderRadius:
+        11,
+      borderWidth: 2,
+      borderColor:
+        "#BAC9CE",
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+    },
 
-  radioInner: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: "#07869B",
-  },
+    radioSelected: {
+      borderColor:
+        "#07869B",
+    },
 
-  errorCard: {
-    flexDirection: "row",
-    gap: 8,
-    padding: 13,
-    borderRadius: 14,
-    backgroundColor: "#FFF1F1",
-    borderWidth: 1,
-    borderColor: "#F0CCCC",
-  },
+    radioInner: {
+      width: 9,
+      height: 9,
+      borderRadius: 5,
+      backgroundColor:
+        "#07869B",
+    },
 
-  errorText: {
-    flex: 1,
-    color: "#A33E3E",
-    fontSize: 11,
-    fontWeight: "700",
-  },
+    errorCard: {
+      flexDirection:
+        "row",
+      gap: 8,
+      padding: 13,
+      borderRadius:
+        14,
+      backgroundColor:
+        "#FFF1F1",
+      borderWidth: 1,
+      borderColor:
+        "#F0CCCC",
+    },
 
-  footer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 20,
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#E3EAED",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 16,
-  },
+    errorText: {
+      flex: 1,
+      color:
+        "#A33E3E",
+      fontSize: 11,
+      fontWeight:
+        "700",
+    },
 
-  footerLabel: {
-    color: "#83969E",
-    fontSize: 10,
-  },
+    footer: {
+      position:
+        "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal:
+        18,
+      paddingTop: 12,
+      paddingBottom:
+        20,
+      backgroundColor:
+        "#FFFFFF",
+      borderTopWidth: 1,
+      borderTopColor:
+        "#E3EAED",
+      flexDirection:
+        "row",
+      justifyContent:
+        "space-between",
+      alignItems:
+        "center",
+      gap: 16,
+    },
 
-  footerAmount: {
-    color: "#17313C",
-    fontSize: 18,
-    fontWeight: "900",
-    marginTop: 2,
-  },
+    footerLabel: {
+      color:
+        "#83969E",
+      fontSize: 10,
+    },
 
-  payButton: {
-    minWidth: 150,
-    height: 52,
-    borderRadius: 15,
-    backgroundColor: "#07869B",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    paddingHorizontal: 18,
-  },
+    footerAmount: {
+      color:
+        "#17313C",
+      fontSize: 18,
+      fontWeight:
+        "900",
+      marginTop: 2,
+    },
 
-  payButtonDisabled: {
-    opacity: 0.65,
-  },
+    payButton: {
+      minWidth: 150,
+      height: 52,
+      borderRadius:
+        15,
+      backgroundColor:
+        "#07869B",
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+      gap: 7,
+      paddingHorizontal:
+        18,
+    },
 
-  payButtonText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "900",
-  },
-});
+    payButtonDisabled: {
+      opacity: 0.65,
+    },
+
+    payButtonText: {
+      color:
+        "#FFFFFF",
+      fontSize: 12,
+      fontWeight:
+        "900",
+    },
+  });

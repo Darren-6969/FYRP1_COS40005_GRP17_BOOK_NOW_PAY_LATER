@@ -13,7 +13,8 @@ import {
   View,
 } from "react-native";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { quotePublicCar } from "../../services/carApi";
 import { createCarBooking, } from "../../services/customerApi";
 
 export default function ReviewBooking() {
@@ -41,7 +42,14 @@ export default function ReviewBooking() {
       termsAccepted?: string;
       rentalTermsAccepted?: string;
       forfeitureAccepted?: string;
+
+      pickupPointId?: string;
+      dropoffPointId?: string;
+
+      cdw?: string;
     }>();
+
+    const cdwSelected = params.cdw === "true";
 
   const driverIsBooker =
     params.driverIsBooker === "true";
@@ -61,6 +69,111 @@ export default function ReviewBooking() {
   const [submitError, setSubmitError] =
   useState("");
 
+  
+  const [bookingQuote, setBookingQuote] =
+  useState<any | null>(null);
+
+  const [quoteLoading, setQuoteLoading] =
+  useState(true);
+
+  const [quoteError, setQuoteError] =
+  useState("");
+
+// Load the backend quote before booking submission.
+useEffect(() => {
+  if (
+    !params.listingId ||
+    !params.from ||
+    !params.to ||
+    !params.pickupPointId ||
+    !params.dropoffPointId ||
+    !params.cdw
+  ) {
+    setQuoteLoading(false);
+    setQuoteError("Booking location or date is missing.");
+    return;
+  }
+
+  let active = true;
+
+  const loadQuote = async () => {
+    try {
+      setQuoteLoading(true);
+      setQuoteError("");
+
+      const response = await quotePublicCar(
+        params.listingId!,
+        {
+          from: params.from,
+          ft: params.ft || "10:00",
+          to: params.to,
+          tt: params.tt || "10:00",
+          pickupPointId: params.pickupPointId,
+          dropoffPointId: params.dropoffPointId,
+          driverDateOfBirth: params.dateOfBirth,
+          cdw: cdwSelected,
+          addOns: {},
+        }
+      );
+
+      if (!active) return;
+
+      if (
+        response.problems?.length ||
+        !response.quote ||
+        response.availability?.available === false
+      ) {
+        throw new Error(
+          response.problems?.[0]?.message ||
+            "The selected car or rental period is unavailable."
+        );
+      }
+
+console.log("BOOKING PRICE DETAILS:", {
+  rentalSen: response.quote.rentalSen,
+  pickupFeeSen: response.quote.pickupFeeSen,
+  dropoffFeeSen: response.quote.dropoffFeeSen,
+  overtimeSen: response.quote.overtimeSen,
+  nightHandovers: response.quote.nightHandovers,
+  youngDriverSurchargeSen:
+    response.quote.youngDriverSurchargeSen,
+  addOnsSen: response.quote.addOnsSen,
+  addOnLines: response.quote.addOnLines,
+  totalSen: response.quote.totalSen,
+});
+
+      setBookingQuote(response.quote);
+    } catch (err: any) {
+      if (active) {
+        setBookingQuote(null);
+        setQuoteError(
+          err?.message || "Unable to calculate booking price."
+        );
+      }
+    } finally {
+      if (active) {
+        setQuoteLoading(false);
+      }
+    }
+  };
+
+  loadQuote();
+
+  return () => {
+    active = false;
+  };
+}, [
+  params.listingId,
+  params.from,
+  params.ft,
+  params.to,
+  params.tt,
+  params.pickupPointId,
+  params.dropoffPointId,
+  params.dateOfBirth,
+]);
+
+
   const finalDriverName =
     driverIsBooker
       ? params.fullName
@@ -78,6 +191,14 @@ export default function ReviewBooking() {
     if (!params.listingId) {
       throw new Error(
         "Missing vehicle information."
+      );
+    }
+
+    // Verify the backend quote before booking submission.
+    if (quoteLoading || quoteError || !bookingQuote) {
+      throw new Error(
+        quoteError ||
+          "Please wait until the booking price is verified."
       );
     }
 
@@ -111,15 +232,18 @@ export default function ReviewBooking() {
         pickupAt,
         returnAt,
 
-        requestedLocation:
-          params.city || null,
+        
+        pickupPointId: params.pickupPointId || null,
 
-        requestedDropoffLocation:
-          params.city || null,
+        dropoffPointId: params.dropoffPointId || null,
 
-        returnToRequested: true,
+        requestedLocation: null,
 
-        cdw: false,
+        requestedDropoffLocation: null,
+
+        returnToRequested: false,
+
+        cdw: cdwSelected,
 
         addOns: [],
 
@@ -407,6 +531,150 @@ export default function ReviewBooking() {
             </Text>
         </View>
         ) : null}
+
+        
+<View
+  style={{
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 18,
+    marginVertical: 18,
+    borderWidth: 1,
+    borderColor: "#E3EAED",
+  }}
+>
+  <Text
+    style={{
+      color: "#17313C",
+      fontSize: 18,
+      fontWeight: "800",
+      marginBottom: 15,
+    }}
+  >
+    Rental Price Breakdown
+  </Text>
+
+  {quoteLoading ? (
+    <Text style={{ color: "#81939C" }}>
+      Calculating final price...
+    </Text>
+  ) : quoteError ? (
+    <Text style={{ color: "#D14343" }}>
+      {quoteError}
+    </Text>
+  ) : bookingQuote ? (
+    <>
+      <Text style={{ marginBottom: 10, color: "#17313C" }}>
+        Pickup: {bookingQuote.pickupPoint?.label || "—"}
+      </Text>
+
+      <Text style={{ marginBottom: 10, color: "#17313C" }}>
+        Drop-off: {bookingQuote.dropoffPoint?.label || "—"}
+      </Text>
+
+      <Text style={{ marginBottom: 10, color: "#17313C" }}>
+        Rental:
+        {" RM "}
+        {(Number(bookingQuote.rentalSen || 0) / 100).toFixed(2)}
+      </Text>
+
+      <Text style={{ marginBottom: 10, color: "#17313C" }}>
+        Pickup Fee:
+        {" RM "}
+        {(Number(bookingQuote.pickupFeeSen || 0) / 100).toFixed(2)}
+      </Text>
+
+      <Text style={{ marginBottom: 10, color: "#17313C" }}>
+        Drop-off Fee:
+        {" RM "}
+        {(Number(bookingQuote.dropoffFeeSen || 0) / 100).toFixed(2)}
+      </Text>
+
+      
+{Number(bookingQuote.overtimeSen || 0) > 0 && (
+  <Text style={{ marginBottom: 10, color: "#17313C" }}>
+    Night Handover Fee
+    {bookingQuote.nightHandovers
+      ? ` (${bookingQuote.nightHandovers} time(s))`
+      : ""}
+    : RM{" "}
+    {(Number(bookingQuote.overtimeSen) / 100).toFixed(2)}
+  </Text>
+)}
+
+{Number(bookingQuote.youngDriverSurchargeSen || 0) > 0 && (
+  <Text style={{ marginBottom: 10, color: "#17313C" }}>
+    Young Driver Surcharge: RM{" "}
+    {(
+      Number(bookingQuote.youngDriverSurchargeSen) / 100
+    ).toFixed(2)}
+  </Text>
+)}
+
+{(bookingQuote.addOnLines || []).map(
+  (item: {
+    id: string;
+    label: string;
+    amountSen: number;
+  }) => (
+    <Text
+      key={item.id}
+      style={{ marginBottom: 10, color: "#17313C" }}
+    >
+      {item.label}: RM{" "}
+      {(Number(item.amountSen) / 100).toFixed(2)}
+    </Text>
+  )
+)}
+
+
+{(() => {
+  const quote = bookingQuote;
+
+  const displayedSum =
+    Number(quote.rentalSen || 0) +
+    Number(quote.pickupFeeSen || 0) +
+    Number(quote.dropoffFeeSen || 0) +
+    Number(quote.overtimeSen || 0) +
+    Number(quote.youngDriverSurchargeSen || 0) +
+    Number(quote.addOnsSen || 0);
+
+  const difference =
+    Number(quote.totalSen || 0) - displayedSum;
+
+  return difference !== 0 ? (
+    <Text style={{ color: "#D14343", marginBottom: 10 }}>
+      Price breakdown mismatch: RM{" "}
+      {(difference / 100).toFixed(2)}
+    </Text>
+  ) : null;
+})()}
+
+      <View
+        style={{
+          height: 1,
+          backgroundColor: "#E3EAED",
+          marginVertical: 13,
+        }}
+      />
+
+      <Text
+        style={{
+          color: "#07869B",
+          fontWeight: "900",
+          fontSize: 20,
+        }}
+      >
+        Total: RM {(Number(bookingQuote.totalSen) / 100).toFixed(2)}
+      </Text>
+
+      <Text style={{ color: "#81939C", marginTop: 7 }}>
+        Final amount calculated by the BNPL backend.
+      </Text>
+    </>
+  ) : null}
+</View>
+
 
       <View style={styles.footer}>
         <Pressable

@@ -33,6 +33,7 @@ const initialForm = {
 
   vehicleMake: "",
   vehicleModel: "",
+  vehicleType: "",
   modelYear: "",
   seats: "",
   transmission: "AUTOMATIC",
@@ -112,6 +113,12 @@ export default function OperatorListingForm() {
 
   const isTour =
     form.category === "TOUR";
+
+  // TEST-ITEM-MISC: the fixed-price test item. Delete this line and every other
+  // TEST-ITEM-MISC block in this file when testing is finished
+  // (search for the tag; see backend/TEST_ITEM_MISCELLANEOUS.md).
+  const isMisc =
+    form.category === "MISCELLANEOUS";
 
   // =========================================================
   // LOAD PAGE
@@ -202,6 +209,9 @@ export default function OperatorListingForm() {
 
         vehicleModel:
           listing.vehicleModel || "",
+
+        vehicleType:
+          listing.vehicleType || "",
 
         modelYear:
           listing.modelYear || "",
@@ -440,7 +450,7 @@ export default function OperatorListingForm() {
       !form.price ||
       Number(form.price) <= 0
     ) {
-      return "Enter a valid daily rate.";
+      return isMisc ? "Enter a valid price." : "Enter a valid daily rate."; // TEST-ITEM-MISC
     }
 
     if (isCar) {
@@ -464,11 +474,15 @@ export default function OperatorListingForm() {
   }
 }
 
+    // TEST-ITEM-MISC: the test item has no quantity (it is always 1)
     if (
-      !Number.isInteger(
-        Number(form.quantity)
-      ) ||
-      Number(form.quantity) < 1
+      !isMisc &&
+      (
+        !Number.isInteger(
+          Number(form.quantity)
+        ) ||
+        Number(form.quantity) < 1
+      )
     ) {
       return "Quantity must be at least 1.";
     }
@@ -480,6 +494,10 @@ export default function OperatorListingForm() {
 
       if (!form.vehicleModel.trim()) {
         return "Vehicle model is required.";
+      }
+
+      if (!form.vehicleType) {
+        return "Vehicle type is required.";
       }
 
       if (!form.transmission) {
@@ -567,6 +585,9 @@ export default function OperatorListingForm() {
         vehicleModel:
           form.vehicleModel.trim(),
 
+        vehicleType:
+          form.vehicleType,
+
         modelYear:
           form.modelYear
             ? Number(form.modelYear)
@@ -651,6 +672,20 @@ export default function OperatorListingForm() {
         pickupRules: null,
         returnRules: null,
         insuranceInfo: null,
+      });
+    }
+
+    // TEST-ITEM-MISC: a fixed price and nothing else. Delete this block when testing is
+    // finished.
+    if (isMisc) {
+      Object.assign(payload, {
+        quantity: 1,
+        hourlyRate: null,
+        weeklyRate: null,
+        monthlyRate: null,
+        cdwDailyPrice: null,
+        refundPolicy: null,
+        termsAndConditions: null,
       });
     }
 
@@ -1059,6 +1094,11 @@ export default function OperatorListingForm() {
                 <option value="TOUR">
                   Tour Package
                 </option>
+
+                {/* TEST-ITEM-MISC: delete this option when testing is finished */}
+                <option value="MISCELLANEOUS">
+                  Miscellaneous (test item)
+                </option>
               </select>
             </label>
 
@@ -1109,7 +1149,9 @@ export default function OperatorListingForm() {
                 placeholder={
                   isCar
                     ? "Example: Perodua Axia 1.0 G Automatic"
-                    : "Example: Kuching Heritage Day Tour"
+                    : isMisc // TEST-ITEM-MISC
+                      ? "Example: Test item"
+                      : "Example: Kuching Heritage Day Tour"
                 }
               />
             </label>
@@ -1184,6 +1226,52 @@ export default function OperatorListingForm() {
                   placeholder="Axia"
                 />
               </label>
+
+              <label className="operator-field">
+              Vehicle Type *
+
+              <select
+                name="vehicleType"
+                value={
+                  form.vehicleType
+                }
+                onChange={
+                  handleChange
+                }
+              >
+                <option value="">
+                  Select vehicle type
+                </option>
+
+                <option value="COMPACT">
+                  Compact
+                </option>
+
+                <option value="HATCHBACK">
+                  Hatchback
+                </option>
+
+                <option value="SEDAN">
+                  Sedan
+                </option>
+
+                <option value="SUV">
+                  SUV
+                </option>
+
+                <option value="MPV">
+                  MPV
+                </option>
+
+                <option value="PICKUP">
+                  Pickup
+                </option>
+
+                <option value="VAN">
+                  Van
+                </option>
+              </select>
+            </label>
 
               <label className="operator-field">
                 Model Year
@@ -1398,7 +1486,9 @@ export default function OperatorListingForm() {
       <p>
         {isCar
           ? "Set rental rates and the number of cars available under this listing."
-          : "Set the package price and available quantity."}
+          : isMisc // TEST-ITEM-MISC
+            ? "Set the fixed price of the item."
+            : "Set the package price and available quantity."}
       </p>
     </div>
   </div>
@@ -1539,8 +1629,37 @@ export default function OperatorListingForm() {
     )}
 
     {/* ===============================================
+        TEST-ITEM-MISC: FIXED PRICE (delete this block when testing is finished)
+    =============================================== */}
+
+    {isMisc && (
+      <label className="operator-field">
+        Fixed Price (RM) *
+
+        <input
+          type="number"
+          name="price"
+          min="0.01"
+          step="0.01"
+          value={form.price}
+          onChange={handleChange}
+          placeholder="Example: 10.00"
+        />
+
+        {rateErrors.price && (
+          <small className="operator-rate-error">
+            {rateErrors.price}
+          </small>
+        )}
+      </label>
+    )}
+
+    {/* ===============================================
         QUANTITY
     =============================================== */}
+
+    {/* TEST-ITEM-MISC: the test item has no quantity, so this field is hidden for it */}
+    {!isMisc && (
 
     <label className="operator-field">
       {isCar
@@ -1556,6 +1675,7 @@ export default function OperatorListingForm() {
         onChange={handleChange}
       />
     </label>
+    )}
   </div>
 
   {/* ===============================================
@@ -1716,6 +1836,8 @@ export default function OperatorListingForm() {
             COMMON POLICIES
         ==================================================== */}
 
+        {/* TEST-ITEM-MISC: the test item has no policies, so this section is hidden for it */}
+        {!isMisc && (
         <section className="operator-card">
           <div className="operator-card-head">
             <div>
@@ -1754,6 +1876,7 @@ export default function OperatorListingForm() {
             </label>
           </div>
         </section>
+        )}
 
         {/* ===================================================
             VEHICLE PHOTOS - CARSXE
@@ -1761,7 +1884,7 @@ export default function OperatorListingForm() {
 
         <div className="operator-field operator-field-full">
           <strong>
-            Upload Your Own Car Photos
+            {isMisc ? "Upload the Item Photo" : "Upload Your Own Car Photos"} {/* TEST-ITEM-MISC */}
           </strong>
 
           <label className="operator-image-upload-box">
@@ -1778,7 +1901,7 @@ export default function OperatorListingForm() {
             </span>
 
             <strong>
-              Choose Car Photos
+              {isMisc ? "Choose a Photo" : "Choose Car Photos"} {/* TEST-ITEM-MISC */}
             </strong>
 
             <small>

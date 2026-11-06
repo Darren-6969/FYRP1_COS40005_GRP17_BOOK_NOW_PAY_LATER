@@ -52,6 +52,75 @@ export async function createStripeCheckoutSession(
   );
 }
 
+export type ManualPaymentType =
+  | "DOWN_PAYMENT"
+  | "FINAL_PAYMENT"
+  | "FULL_PAYMENT";
+
+export type ManualPaymentMethod =
+  | "DUITNOW"
+  | "SPAY"
+  | "BANK_TRANSFER";
+
+export async function getManualPaymentOptions(
+  bookingId: number | string
+) {
+  return apiRequest(
+    `/customer/bookings/${bookingId}/manual-payment`,
+    {
+      method: "GET",
+    }
+  );
+}
+
+export async function getCustomerPayments() {
+  return apiRequest(
+    "/customer/payments",
+    {
+      method: "GET",
+    }
+  );
+}
+
+export async function uploadCustomerReceipt(
+  bookingId: number | string,
+  input: {
+    imageUrl: string;
+    remarks?: string;
+    method: ManualPaymentMethod;
+    paymentType: ManualPaymentType;
+  }
+) {
+  const idempotencyKey =
+    `receipt-${bookingId}-${input.paymentType}-${Date.now()}`;
+
+  return apiRequest(
+    `/customer/bookings/${bookingId}/receipt`,
+    {
+      method: "POST",
+
+      headers: {
+        "Idempotency-Key":
+          idempotencyKey,
+      },
+
+      body: JSON.stringify({
+        imageUrl:
+          input.imageUrl,
+
+        remarks:
+          input.remarks || "",
+
+        method:
+          input.method,
+
+        paymentType:
+          input.paymentType,
+      }),
+    }
+  );
+}
+
 export async function markCustomerNotificationRead(
   id: number | string
 ) {
@@ -139,6 +208,96 @@ export async function createCarBooking(
       },
 
       body: JSON.stringify(input),
+    }
+  );
+}
+
+export async function getSavedListingIds() {
+  return apiRequest(
+    "/customer/saved/ids",
+    {
+      method: "GET",
+    }
+  );
+}
+
+export async function getSavedListings() {
+  return apiRequest(
+    "/customer/saved",
+    {
+      method: "GET",
+    }
+  );
+}
+
+export async function saveListing(
+  listingId: number | string
+) {
+  return apiRequest(
+    `/customer/saved/${listingId}`,
+    {
+      method: "PUT",
+    }
+  );
+}
+
+export async function removeSavedListing(
+  listingId: number | string
+) {
+  return apiRequest(
+    `/customer/saved/${listingId}`,
+    {
+      method: "DELETE",
+    }
+  );
+}
+
+
+export type CustomerCancellationReason =
+  | "PLANS_CHANGED"
+  | "FOUND_ANOTHER_CAR"
+  | "PRICE"
+  | "OTHER";
+
+export type CustomerCancellationQuote = {
+  bookingId: number;
+  bookingCode?: string | null;
+
+  totalPaid: number;
+  depositPaid: number;
+  balancePaid: number;
+
+  depositKept: number;
+  depositRefund: number;
+  depositRefundPercent: number;
+  balanceRefund: number;
+  totalRefund: number;
+
+  explanation?: string;
+  refundVia?: "CARD" | "OPERATOR_TRANSFER" | null;
+  refundDeadline?: string | null;
+};
+
+export async function getCustomerCancellationQuote(
+  bookingId: number | string
+): Promise<CustomerCancellationQuote> {
+  return apiRequest(
+    `/customer/bookings/${bookingId}/cancellation-quote`,
+    { method: "GET" }
+  );
+}
+
+export async function cancelCustomerBooking(
+  bookingId: number | string,
+  reasonCode?: CustomerCancellationReason
+) {
+  return apiRequest(
+    `/customer/bookings/${bookingId}/cancel`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        reasonCode: reasonCode || null,
+      }),
     }
   );
 }

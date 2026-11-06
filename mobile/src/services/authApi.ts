@@ -29,3 +29,66 @@ export async function registerUser(
     }),
   });
 }
+
+export async function getMe() {
+  return apiRequest("/auth/me", {
+    method: "GET",
+  });
+}
+
+export async function updateProfile(input: {
+  name: string;
+  phone: string;
+  profileImageUrl: string;
+}) {
+  return apiRequest("/auth/profile", {
+    method: "PATCH",
+
+    body: JSON.stringify({
+      name: input.name,
+      phone: input.phone,
+      profileImageUrl:
+        input.profileImageUrl,
+    }),
+  });
+}
+
+export async function changePassword(input: {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}) {
+  return apiRequest("/auth/change-password", {
+    method: "PATCH",
+    body: JSON.stringify({
+      currentPassword: input.currentPassword,
+      newPassword: input.newPassword,
+      confirmPassword: input.confirmPassword,
+    }),
+  });
+}
+
+export async function updateNotificationPreferences(input: {
+  notifyBookingUpdates: boolean;
+  notifyPaymentReminders: boolean;
+  notifyInvoices: boolean;
+  notifyPromotions: boolean;
+}) {
+  return apiRequest("/auth/notification-preferences", {
+    method: "PATCH",
+
+    body: JSON.stringify({
+      notifyBookingUpdates:
+        input.notifyBookingUpdates,
+
+      notifyPaymentReminders:
+        input.notifyPaymentReminders,
+
+      notifyInvoices:
+        input.notifyInvoices,
+
+      notifyPromotions:
+        input.notifyPromotions,
+    }),
+  });
+}

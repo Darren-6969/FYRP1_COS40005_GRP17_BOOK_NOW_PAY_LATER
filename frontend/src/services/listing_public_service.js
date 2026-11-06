@@ -56,12 +56,37 @@ export async function getFeaturedCars() {
   return { data: cars };
 }
 
+const VEHICLE_TYPE_ORDER = [
+  "Compact",
+  "Hatchback",
+  "Sedan",
+  "SUV",
+  "MPV",
+  "Pickup",
+  "Van",
+];
+
+function normalizeVehicleType(
+  value
+) {
+  return String(
+    value || ""
+  )
+    .trim()
+    .toLowerCase();
+}
+
 // ── Car search ──────────────────────────────────────────────────────
 // Everything below stands in for the server. The page passes the parsed
 // URL criteria and renders what comes back.
 
 const FACETS = {
-  type: { label: "Vehicle type", values: ["Compact", "Sedan", "SUV", "MPV", "Pickup"].map((v) => ({ value: v, label: v })), get: (l) => l.vehicleType },
+ type: {
+  label: "Vehicle type",
+  values: [],
+  get: (l) =>
+    l.vehicleType,
+},
   seats: {
     label: "Seat count",
     values: [
@@ -88,9 +113,36 @@ const FACETS = {
 
 const TOP_FACETS = ["type", "seats", "trans"];
 
-function facetMatches(listing, group, value) {
-  const f = FACETS[group];
-  return f.test ? f.test(listing, value) : f.get(listing) === value;
+function facetMatches(
+  listing,
+  group,
+  value
+) {
+  const f =
+    FACETS[group];
+
+  if (f.test) {
+    return f.test(
+      listing,
+      value
+    );
+  }
+
+  if (group === "type") {
+    return (
+      normalizeVehicleType(
+        f.get(listing)
+      ) ===
+      normalizeVehicleType(
+        value
+      )
+    );
+  }
+
+  return (
+    f.get(listing) ===
+    value
+  );
 }
 
 export function rentalHoursFor(c) {
@@ -206,6 +258,57 @@ function buildFacets(fleet, c, days) {
   return FACET_GROUPS.map((group) => {
     const f = FACETS[group];
     let values = f.values;
+    if (
+  group === "type"
+) {
+  const availableTypes =
+    Array.from(
+      new Set(
+        fleet
+          .map(
+            (listing) =>
+              listing.vehicleType
+          )
+          .filter(Boolean)
+      )
+    );
+
+  const orderedTypes =
+    VEHICLE_TYPE_ORDER.filter(
+      (type) =>
+        availableTypes.some(
+          (availableType) =>
+            normalizeVehicleType(
+              availableType
+            ) ===
+            normalizeVehicleType(
+              type
+            )
+        )
+    );
+
+  const extraTypes =
+    availableTypes.filter(
+      (type) =>
+        !VEHICLE_TYPE_ORDER.some(
+          (knownType) =>
+            normalizeVehicleType(
+              knownType
+            ) ===
+            normalizeVehicleType(
+              type
+            )
+        )
+    );
+
+  values = [
+    ...orderedTypes,
+    ...extraTypes,
+  ].map((value) => ({
+    value,
+    label: value,
+  }));
+}
     if (group === "brand") {
       const counts = {};
       fleet.forEach((l) => {

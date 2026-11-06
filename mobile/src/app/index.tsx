@@ -35,7 +35,7 @@ export default function WelcomeScreen() {
         {/* Main Content */}
         <View style={styles.content}>
           <Text style={styles.title}>
-            Drive Today.{"\n"}
+            Book Now.{"\n"}
             <Text style={styles.highlight}>Pay Later.</Text>
           </Text>
 
@@ -80,9 +80,13 @@ const styles = StyleSheet.create({
   },
 
   overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(2, 20, 34, 0.60)",
-  },
+  position: "absolute",
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  backgroundColor: "rgba(2, 20, 34, 0.60)",
+},
 
   container: {
     flex: 1,

@@ -28,6 +28,7 @@ import { assertOperatorTakingBookings } from "../services/subscription_admin_ser
 import { carListingSelect, mapCarBooking } from "../services/car_booking_view.js";
 import { quoteAlternative } from "../services/car_requote_service.js";
 import { fromSen } from "../services/car_pricing_service.js";
+import { dynamicQrFor } from "./duitnow_account_controller.js";
 import { trackBookingEvent } from "../services/analytics_service.js";
 import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_service.js";
 
@@ -423,16 +424,33 @@ export async function getCustomerManualPaymentOptions(req, res, next) {
     if (!booking.payment) {
       return res.status(400).json({ message: "Payment schedule has not been created yet" });
     }
-    const config = await prisma.bNPLConfig.findFirst({
-      where: { operatorId: booking.operatorId },
-      select: { manualPaymentNote: true },
-    });
+    const [config, operator] = await Promise.all([
+      prisma.bNPLConfig.findFirst({
+        where: { operatorId: booking.operatorId },
+        orderBy: { createdAt: "desc" },
+        select: {
+          manualPaymentNote: true,
+          duitnowAccount: true,
+          duitnowMerchantName: true,
+          duitnowMerchantCity: true,
+          duitnowMerchantCategory: true,
+        },
+      }),
+      prisma.operator.findUnique({ where: { id: booking.operatorId }, select: { companyName: true } }),
+    ]);
+    const reference = booking.bookingCode || `BNPL-${booking.id}`;
     const { options, defaultPaymentType } = getManualPaymentOptions(booking.payment);
+    // A QR with the amount of that part fixed inside it, for each part that can
+    // be paid now. Null when the operator has no DuitNow account set up.
+    const withQr = options.map((item) => ({
+      ...item,
+      qrPayload: item.available ? dynamicQrFor(config, operator, { amount: item.amount, reference }) : null,
+    }));
     res.json({
       bookingId: booking.id,
-      reference: booking.bookingCode || `BNPL-${booking.id}`,
+      reference,
       currency: "MYR",
-      options,
+      options: withQr,
       defaultPaymentType,
       note: config?.manualPaymentNote || null,
     });

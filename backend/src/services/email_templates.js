@@ -311,6 +311,7 @@ export function bookingStatusTemplate({
   bookingCancelledEmailText,
   bookingCompletedEmailText,
   emailFooterText,
+  reason,
 }) {
   const isRejected = status === "REJECTED";
   const isCancelled = status === "CANCELLED";
@@ -339,6 +340,12 @@ export function bookingStatusTemplate({
             <p>Your booking has been updated to:</p>
             <p style="margin:14px 0;">${badge(titleCase(status), "blue")}</p>
           `
+      }
+
+      ${
+        isRejected && reason
+          ? `<p><strong>Reason:</strong> ${escapeHtml(reason)}</p>`
+          : ""
       }
 
       ${bookingTable(booking)}
