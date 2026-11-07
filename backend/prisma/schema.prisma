@@ -1053,6 +1053,9 @@ model BNPLConfig {
   duitnowMerchantName     String?
   duitnowMerchantCity     String?
   duitnowMerchantCategory String?
+  // The operator's own static QR (no amount), shown under the fixed-amount QR
+  // for banking apps that do not accept a fixed-amount QR.
+  duitnowStaticQr         String?
 
   // Notification settings
   operatorReminderBeforeAutoRejectMinutes Int     @default(30)

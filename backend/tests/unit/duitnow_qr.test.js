@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildDynamicQr,
+  buildStaticQr,
+  staticQrFrom,
   crc16,
   describeAccount,
   formatQrAmount,
@@ -98,6 +100,36 @@ test("odd characters in the reference and name are cleaned out", () => {
   assert.equal(fields.find((item) => item.id === "59").value, "Caf Rentals");
   const reference = parseTlv(fields.find((item) => item.id === "62").value);
   assert.equal(reference[0].value, "BK-9 script");
+});
+
+test("a static QR with no amount is kept exactly as the bank app produced it", () => {
+  assert.equal(staticQrFrom(STATIC_NO_AMOUNT), STATIC_NO_AMOUNT);
+});
+
+test("a QR pasted with an amount in it is made static with the amount removed", () => {
+  const result = staticQrFrom(PAYNET_RETAIL);
+  const fields = parseTlv(result);
+  assert.equal(fields.find((item) => item.id === "01").value, "11");
+  assert.equal(fields.some((item) => item.id === "54"), false);
+  assert.equal(crc16(result.slice(0, -4)), result.slice(-4));
+  assert.equal(parseDuitNowQr(result).qrId, "123456789");
+});
+
+test("a dynamic QR pasted as the account is turned back into a static one", () => {
+  const dynamic = buildDynamicQr({ account: parseDuitNowQr(STATIC_NO_AMOUNT), amount: 50, reference: "BK1" });
+  const fields = parseTlv(staticQrFrom(dynamic));
+  assert.equal(fields.find((item) => item.id === "01").value, "11");
+  assert.equal(fields.some((item) => item.id === "54"), false);
+});
+
+test("a static QR rebuilt from the saved account is static, has no amount or reference and a valid checksum", () => {
+  const payload = buildStaticQr({ account: parseDuitNowQr(PAYNET_RETAIL) });
+  const fields = parseTlv(payload);
+  assert.equal(fields.find((item) => item.id === "01").value, "11");
+  assert.equal(fields.some((item) => item.id === "54" || item.id === "62"), false);
+  assert.equal(fields.find((item) => item.id === "26").value, parseDuitNowQr(PAYNET_RETAIL).account);
+  assert.equal(crc16(payload.slice(0, -4)), payload.slice(-4));
+  assert.throws(() => buildStaticQr({ account: null }), /not set up/);
 });
 
 test("no account means no QR", () => {

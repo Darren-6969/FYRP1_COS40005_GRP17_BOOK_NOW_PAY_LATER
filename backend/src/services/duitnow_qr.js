@@ -147,6 +147,43 @@ export function buildDynamicQr({ account, amount, reference }) {
   return payload + crc16(payload);
 }
 
+function encodeTlv(items) {
+  const body = items.map((item) => field(item.id, item.value)).join("") + "6304";
+  return body + crc16(body);
+}
+
+/**
+ * The operator's own QR as a static code: no amount, marked static (tag 01 = 11).
+ * A QR that is already static and has no amount is returned exactly as pasted,
+ * since that is the text their bank app produced. Otherwise the amount is
+ * removed, and tag 82 (a hash of the original) with it, as it would no longer match.
+ */
+export function staticQrFrom(payload) {
+  const text = String(payload || "").trim();
+  const items = parseTlv(text);
+  const get = (id) => items.find((item) => item.id === id)?.value;
+  if (get("01") === "11" && get("54") === undefined) return text;
+  const kept = items
+    .filter((item) => !["54", "63", "82"].includes(item.id))
+    .map((item) => (item.id === "01" ? { id: "01", value: "11" } : item));
+  return encodeTlv(kept);
+}
+
+/** A static QR rebuilt from the saved account, for operators saved before the original text was kept. */
+export function buildStaticQr({ account }) {
+  if (!account?.account) throw badQr("The operator has not set up a DuitNow account.");
+  return encodeTlv([
+    { id: "00", value: "02" },
+    { id: "01", value: "11" },
+    { id: "26", value: account.account },
+    { id: "52", value: account.merchantCategory || "0000" },
+    { id: "53", value: MALAYSIA_CURRENCY },
+    { id: "58", value: "MY" },
+    { id: "59", value: plain(account.merchantName, 25, "Merchant") },
+    { id: "60", value: plain(account.merchantCity, 15, "MY") },
+  ]);
+}
+
 // What the operator sees after saving: enough to recognise their account,
 // without printing the whole identifier.
 export function describeAccount(stored) {

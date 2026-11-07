@@ -28,7 +28,7 @@ import { assertOperatorTakingBookings } from "../services/subscription_admin_ser
 import { carListingSelect, mapCarBooking } from "../services/car_booking_view.js";
 import { quoteAlternative } from "../services/car_requote_service.js";
 import { fromSen } from "../services/car_pricing_service.js";
-import { dynamicQrFor } from "./duitnow_account_controller.js";
+import { dynamicQrFor, staticQrFor } from "./duitnow_account_controller.js";
 import { trackBookingEvent } from "../services/analytics_service.js";
 import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_service.js";
 
@@ -434,6 +434,7 @@ export async function getCustomerManualPaymentOptions(req, res, next) {
           duitnowMerchantName: true,
           duitnowMerchantCity: true,
           duitnowMerchantCategory: true,
+          duitnowStaticQr: true,
         },
       }),
       prisma.operator.findUnique({ where: { id: booking.operatorId }, select: { companyName: true } }),
@@ -451,6 +452,8 @@ export async function getCustomerManualPaymentOptions(req, res, next) {
       reference,
       currency: "MYR",
       options: withQr,
+      // The operator's own static QR, shown under the fixed-amount QR.
+      staticQrPayload: withQr.some((item) => item.qrPayload) ? staticQrFor(config, operator) : null,
       defaultPaymentType,
       note: config?.manualPaymentNote || null,
     });

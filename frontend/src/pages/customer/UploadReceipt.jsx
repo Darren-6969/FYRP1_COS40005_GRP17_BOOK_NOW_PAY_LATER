@@ -7,6 +7,7 @@ import { useFeatureFlag } from "../../hooks/useFeatureFlag";
 import { getCustomerManualPaymentOptions } from "../../services/customer_service";
 import { formatCustomerDate, formatMoney } from "../../utils/customerUtils";
 import DuitNowQr from "../../components/payment/DuitNowQr";
+import StaticQrFallback from "../../components/payment/StaticQrFallback";
 
 function compressImageToDataUrl(file, maxWidth = 900, quality = 0.72) {
   return new Promise((resolve, reject) => {
@@ -207,6 +208,15 @@ const handleFileChange = async (event) => {
                     already filled in. Check the amount matches before you confirm.
                   </p>
                 </div>
+              )}
+
+              {selected.qrPayload && (
+                <StaticQrFallback
+                  payload={due.staticQrPayload}
+                  amount={selected.amount}
+                  amountText={formatMoney(selected.amount)}
+                  reference={due.reference}
+                />
               )}
 
               <div className="customer-info-list compact">
