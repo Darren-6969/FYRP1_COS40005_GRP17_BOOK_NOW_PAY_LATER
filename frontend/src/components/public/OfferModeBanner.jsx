@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
+import { useStickyBottom } from "../../utils/stickyBottom";
 import styles from "../../assets/styles/public/OfferModeBanner.module.css";
 
 // Shown on a car's public page when the customer opened it from an
@@ -8,10 +10,13 @@ import styles from "../../assets/styles/public/OfferModeBanner.module.css";
 // so the car cannot be booked a second time from here.
 export default function OfferModeBanner({ bookingId, operatorName, placement = "top" }) {
   const href = `/customer/bookings/${bookingId}`;
+  // The bottom banner is fixed; the chat button sits above it.
+  const bottomRef = useRef(null);
+  useStickyBottom(bottomRef);
 
   if (placement === "bottom") {
     return (
-      <div className={styles.bottom}>
+      <div ref={bottomRef} className={styles.bottom}>
         <p className={styles.bottomText}>
           <span className={styles.bottomLabel}>Offered for your booking</span>
           Ready to decide? Accept or decline on your offer.

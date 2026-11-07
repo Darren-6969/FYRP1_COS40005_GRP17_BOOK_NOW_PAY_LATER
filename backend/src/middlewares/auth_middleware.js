@@ -68,6 +68,27 @@ export function attachUserIdIfPresent(req, _res, next) {
   next();
 }
 
+// For the chatbot: the signed-in customer, if any, as req.chatCustomer. It
+// never rejects (a visitor can chat too) and never sets req.user. Only a
+// customer account counts, so booking answers can only ever be about the
+// person in the session.
+export async function attachChatCustomer(req, _res, next) {
+  try {
+    const header = req.headers.authorization;
+    if (header && header.startsWith("Bearer ")) {
+      const decoded = jwt.verify(header.split(" ")[1], process.env.JWT_SECRET, { algorithms: ["HS256"] });
+      if (Number.isInteger(decoded?.id)) {
+        const user = await prisma.user.findUnique({ where: { id: decoded.id }, select: { id: true, name: true, role: true } });
+        if (user?.role === "CUSTOMER") req.chatCustomer = { id: user.id, name: user.name };
+        req.analyticsUserId = decoded.id;
+      }
+    }
+  } catch {
+    // An expired or invalid token: carry on as a visitor.
+  }
+  next();
+}
+
 // Blocks host-provisioned customers who haven't completed OTP step-up from
 // credit-committing actions. Verified customers (customerStatus ACTIVE) pass.
 export function requireVerifiedCustomer(req, res, next) {

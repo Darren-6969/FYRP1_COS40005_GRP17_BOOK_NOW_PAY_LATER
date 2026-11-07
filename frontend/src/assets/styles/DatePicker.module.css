@@ -1,0 +1,470 @@
+/* Date picker (components/common/DatePicker). On public and customer pages
+   it uses the public tokens, so it follows the light and dark themes; on the
+   operator and admin dashboards the fallbacks match their fields.
+
+   Rules sit one class deep (.wrap …, .popover …) because page-level resets
+   such as PublicLayout's `:where(button) { color: inherit }` and
+   `.operator-field input` would otherwise win. */
+
+.wrap,
+.popover {
+  --dp-accent: var(--pub-brand, #2f67ee);
+  --dp-accent-hover: var(--pub-brand-hover, #2456d0);
+  --dp-on-accent: var(--pub-on-brand, #ffffff);
+  --dp-accent-soft: var(--pub-ok-bg, #eef3fe);
+  --dp-accent-ink: var(--pub-link, #2456d0);
+  --dp-surface: var(--pub-surface, #ffffff);
+  --dp-sunk: var(--pub-surface-sunk, #f3f5f9);
+  --dp-ink: var(--pub-ink, #111827);
+  --dp-text: var(--pub-text, #4b5563);
+  --dp-muted: var(--pub-label, #6b7280);
+  --dp-line: var(--pub-line, #d8e1ee);
+  --dp-control-line: var(--pub-control-line, #c7d2e2);
+  --dp-focus: var(--pub-focus, #2f67ee);
+  --dp-ease: var(--pub-ease, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+/* No box of its own: the button sits in the caller's layout as the input did
+   (including fields that overlay it on their own text). */
+.wrap {
+  display: contents;
+}
+
+/* ── The field ───────────────────────────────────────────────────── */
+
+.wrap .trigger {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 12px 0 14px;
+  border: 1px solid var(--dp-line);
+  border-radius: 12px;
+  background: var(--dp-surface);
+  color: var(--dp-ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.wrap .trigger:hover:not(:disabled) {
+  border-color: var(--dp-control-line);
+}
+
+.wrap .trigger:focus-visible,
+.wrap .trigger[aria-expanded="true"] {
+  outline: none;
+  border-color: var(--dp-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dp-accent) 16%, transparent);
+}
+
+.wrap .trigger[aria-invalid="true"] {
+  border-color: var(--pub-error-fg, #b42318);
+}
+
+.wrap .trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* A caller's own field class keeps its look; the text and icon line up in it. */
+.wrap button:not(.trigger) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Field wrappers style their own label spans (`.operator-settings-field span`
+   is bold 13px); the date text keeps the field's look instead. */
+.wrap :is(.trigger, button) > :is(.value, .placeholder) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  color: inherit;
+}
+
+.wrap :is(.trigger, button) > .placeholder {
+  color: var(--dp-muted);
+}
+
+.wrap .icon {
+  flex-shrink: 0;
+  color: var(--dp-muted);
+}
+
+.wrap .hidden {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Date and time side by side, for date-time fields. */
+.dateTime {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7.5rem;
+  gap: 8px;
+}
+
+.dateTime .time {
+  min-height: 44px;
+  height: auto;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--pub-line, #d8e1ee);
+  border-radius: 12px;
+  background: var(--pub-surface, #ffffff);
+  color: var(--pub-ink, #111827);
+  font: inherit;
+  font-size: 14px;
+}
+
+.dateTime .time:disabled {
+  opacity: 0.55;
+}
+
+/* ── The calendar ────────────────────────────────────────────────── */
+
+.popover {
+  position: fixed;
+  /* Above every overlay it can open from: the settings drawers use 9999. */
+  z-index: 10000;
+  box-sizing: border-box;
+  padding: 18px 16px 14px;
+  border-radius: 18px;
+  background: var(--dp-surface);
+  color: var(--dp-ink);
+  font-family: var(--pub-font-body, inherit);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--dp-line) 85%, transparent),
+    0 2px 6px rgba(17, 24, 39, 0.06),
+    0 24px 48px -16px rgba(17, 24, 39, 0.3);
+  animation: popIn 200ms var(--dp-ease);
+  transform-origin: top left;
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+.popover button {
+  font: inherit;
+  margin: 0;
+}
+
+.popover button:focus-visible {
+  outline: 2px solid var(--dp-focus);
+  outline-offset: 2px;
+}
+
+.popover .head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 12px;
+}
+
+.popover .headPickers {
+  display: flex;
+  gap: 2px;
+}
+
+.popover .headButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--dp-ink);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.popover .headButton:hover {
+  background: var(--dp-sunk);
+}
+
+.popover .headButton[aria-expanded="true"] {
+  color: var(--dp-accent-ink);
+}
+
+.popover .headButton svg {
+  color: currentColor;
+  opacity: 0.7;
+}
+
+.popover .headNav {
+  display: flex;
+  gap: 2px;
+}
+
+.popover .navButton {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dp-text);
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.popover .navButton:hover:not(:disabled) {
+  background: var(--dp-sunk);
+}
+
+.popover .navButton:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.popover .body {
+  position: relative;
+}
+
+.popover .grid {
+  display: grid;
+  gap: 2px;
+}
+
+.popover .weekRow {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  justify-items: center;
+}
+
+.popover .weekday {
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dp-muted);
+}
+
+.popover .day {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dp-ink);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.popover .day:hover:not(:disabled) {
+  background: var(--dp-sunk);
+}
+
+.popover .day[data-outside] {
+  color: var(--dp-muted);
+  opacity: 0.6;
+}
+
+.popover .day[data-today] {
+  box-shadow: inset 0 0 0 1.5px var(--dp-accent);
+  font-weight: 700;
+}
+
+.popover .day[data-selected],
+.popover .day[data-selected]:hover {
+  background: var(--dp-accent);
+  color: var(--dp-on-accent);
+  opacity: 1;
+  font-weight: 700;
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--dp-accent) 70%, transparent);
+}
+
+.popover .day:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+/* Month and year lists drop over the days, as in a select. */
+.popover .menu {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  z-index: 1;
+  width: min(220px, 100%);
+  max-height: calc(100% + 4px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 0;
+  border-radius: 14px;
+  background: var(--dp-surface);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--dp-line) 85%, transparent),
+    0 16px 32px -12px rgba(17, 24, 39, 0.3);
+  scrollbar-width: thin;
+  scrollbar-color: var(--dp-control-line) transparent;
+  animation: popIn 160ms var(--dp-ease);
+}
+
+.popover .menuTitle {
+  margin: 0;
+  padding: 6px 18px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dp-muted);
+}
+
+.popover .menuItem {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  border: 0;
+  background: transparent;
+  color: var(--dp-ink);
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.popover .menuItem:hover:not(:disabled) {
+  background: var(--dp-sunk);
+}
+
+.popover .menuItem[aria-selected="true"] {
+  background: var(--dp-accent-soft);
+  color: var(--dp-accent-ink);
+  font-weight: 600;
+}
+
+.popover .menuItem:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.popover .foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--dp-line) 70%, transparent);
+}
+
+.popover .footActions {
+  display: flex;
+  gap: 8px;
+}
+
+.popover .linkButton {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dp-accent-ink);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.popover .linkButton:hover {
+  background: var(--dp-sunk);
+}
+
+.popover .cancel,
+.popover .select {
+  min-height: 40px;
+  min-width: 84px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.popover .cancel {
+  border: 1px solid var(--dp-line);
+  background: var(--dp-surface);
+  color: var(--dp-ink);
+}
+
+.popover .cancel:hover {
+  background: var(--dp-sunk);
+}
+
+.popover .select {
+  border: 0;
+  background: var(--dp-accent);
+  color: var(--dp-on-accent);
+}
+
+.popover .select:hover:not(:disabled) {
+  background: var(--dp-accent-hover);
+}
+
+.popover .select:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (max-width: 380px) {
+  .popover {
+    padding: 14px 10px 12px;
+  }
+
+  .popover .day {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popover,
+  .popover .menu {
+    animation: none;
+  }
+}

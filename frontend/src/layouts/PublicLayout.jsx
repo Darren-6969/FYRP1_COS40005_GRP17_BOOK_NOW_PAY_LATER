@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import "../assets/styles/public/tokens.css";
 import PublicHeader from "../components/public/PublicHeader";
 import PublicFooter from "../components/public/PublicFooter";
+import ChatWidget from "../components/chat/ChatWidget";
 import usePublicTheme from "../hooks/usePublicTheme";
 import { HeaderOverlayContext } from "../hooks/useHeaderOverlay";
 import styles from "../assets/styles/public/PublicLayout.module.css";
@@ -47,6 +48,7 @@ export default function PublicLayout() {
         </HeaderOverlayContext.Provider>
       </main>
       <PublicFooter />
+      <ChatWidget />
     </div>
   );
 }

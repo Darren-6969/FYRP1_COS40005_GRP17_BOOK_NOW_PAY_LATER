@@ -5,6 +5,7 @@ import {
   recordOperatorSubscriptionPayment,
 } from "../../services/admin_service";
 import { FormField, SettingsDrawer, SettingsSection } from "./SettingsParts";
+import DatePicker from "../common/DatePicker";
 
 const MALAYSIA = "Asia/Kuala_Lumpur";
 
@@ -124,11 +125,11 @@ export default function SubscriptionPaymentDrawer({ operator, tier, onClose, onR
             </FormField>
 
             <FormField label="Payment date">
-              <input type="date" max={today} value={form.paidOn} onChange={update("paidOn")} />
+              <DatePicker max={today} value={form.paidOn} onChange={update("paidOn")} />
             </FormField>
 
             <FormField label="Paid until" helper="The last day covered. An unpaid month after this date suspends the account.">
-              <input type="date" min={addOneDay(today)} value={form.paidUntil} onChange={update("paidUntil")} required />
+              <DatePicker min={addOneDay(today)} value={form.paidUntil} onChange={update("paidUntil")} required />
             </FormField>
 
             <FormField label="Reference" helper="Bank transfer or receipt number.">

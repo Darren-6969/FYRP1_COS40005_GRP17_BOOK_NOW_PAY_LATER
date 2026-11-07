@@ -175,7 +175,7 @@ export default function MasterSettlements() {
       <section className="operator-page-head">
         <div>
           <p className="operator-eyebrow">Admin Settlement</p>
-          <h1>BNPL Payment Breakdown</h1>
+          <h2 className="master-page-title">BNPL Payment Breakdown</h2>
           <p>
             View total customer payments, BNPL platform commission, Stripe fee
             absorbed by BNPL, and actual BNPL earnings.

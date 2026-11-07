@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Clock, Info } from "lucide-react";
+import { useStickyBottom } from "../../utils/stickyBottom";
 import styles from "../../assets/styles/public/BookingBar.module.css";
 
 // Sticky bar at the bottom of the car detail page. The page composes the
@@ -18,6 +19,9 @@ export default function BookingBar({
   onRequest,
 }) {
   const blocked = Boolean(reason);
+  // Lets the chat button sit above the bar instead of covering it.
+  const barRef = useRef(null);
+  useStickyBottom(barRef);
 
   // Highlight the figure when the quote changes (not on first render), so the
   // customer notices the total moved. The new value shows at once; only the
@@ -29,7 +33,7 @@ export default function BookingBar({
     setFlash((n) => n + 1);
   }
   return (
-    <aside className={styles.bar} aria-label="Booking summary">
+    <aside ref={barRef} className={styles.bar} aria-label="Booking summary">
       <div className={styles.inner}>
         {reason && (
           <p role="status" id="booking-bar-reason" className={styles.reason}>

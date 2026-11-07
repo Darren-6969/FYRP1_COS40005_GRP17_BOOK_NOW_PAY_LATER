@@ -18,8 +18,10 @@ import {
   UserRound,
   BadgeCheck,
   Store,
+  MessagesSquare,
 } from "lucide-react";
 import { getUser as getStoredUser } from "../../../utils/session";
+import { useSupportCounts } from "../../../hooks/useSupportCounts";
 
 const OWNER_AND_STAFF = ["OWNER", "STAFF"];
 const OWNER_ONLY = ["OWNER"];
@@ -61,6 +63,13 @@ const groups = [
         label: "Return Board",
         icon: <RotateCcw size={20} />,
         allowedAccess: OWNER_AND_STAFF,
+      },
+      {
+        to: "/operator/customer-messages",
+        label: "Customer Messages",
+        icon: <MessagesSquare size={20} />,
+        allowedAccess: OWNER_AND_STAFF,
+        badge: "support",
       },
       {
         to: "/operator/booking-log",
@@ -169,6 +178,8 @@ export default function OperatorSidebar({
 }) {
   const user = getStoredUser();
   const accessLevel = user?.operatorAccessLevel || "STAFF";
+  // Open chat requests waiting for this operator (Step 9).
+  const supportCounts = useSupportCounts();
 
   const visibleGroups = groups
     .map((group) => ({
@@ -242,6 +253,15 @@ export default function OperatorSidebar({
                   >
                     <span className="operator-nav-icon">{link.icon}</span>
                     <span className="operator-nav-label">{link.label}</span>
+                    {link.badge === "support" && supportCounts.open > 0 && (
+                      <span
+                        className="operator-nav-count"
+                        data-overdue={supportCounts.overdue > 0 ? "" : undefined}
+                        aria-label={`${supportCounts.open} open${supportCounts.overdue ? `, ${supportCounts.overdue} overdue` : ""}`}
+                      >
+                        {supportCounts.open}
+                      </span>
+                    )}
                   </NavLink>
                 ))}
               </div>

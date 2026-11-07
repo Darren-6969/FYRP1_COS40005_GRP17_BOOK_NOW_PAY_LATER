@@ -275,6 +275,35 @@
   color: var(--pub-text);
 }
 
+/* Opens the help messenger with this car in view. */
+.askCar {
+  justify-self: start;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--pub-brand);
+  border-radius: 999px;
+  background: var(--pub-ok-bg);
+  color: var(--pub-link);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--pub-dur-fast) var(--pub-ease);
+}
+
+.askCar:hover {
+  background: var(--pub-surface);
+}
+
+.askCar:focus-visible {
+  outline: 2px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
 .chips {
   list-style: none;
   margin: 4px 0 0;

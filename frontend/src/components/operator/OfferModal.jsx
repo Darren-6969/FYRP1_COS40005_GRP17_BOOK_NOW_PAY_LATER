@@ -13,6 +13,7 @@ import {
 } from "../booking/carBookingParts";
 
 import "../../assets/styles/car-alternative-modal.css";
+import { DateTimePicker } from "../common/DatePicker";
 
 // ===========================================================
 // Make an offer (car bookings, Modules 3 and 4)
@@ -732,8 +733,7 @@ export default function OfferModal({ booking, onClose, onDone }) {
       <div className="cam-dates">
         <label className="cam-field">
           <span>Pick-up</span>
-          <input
-            type="datetime-local"
+          <DateTimePicker
             value={pickup}
             onChange={(e) => {
               setPickup(e.target.value);
@@ -744,8 +744,7 @@ export default function OfferModal({ booking, onClose, onDone }) {
 
         <label className="cam-field">
           <span>Return</span>
-          <input
-            type="datetime-local"
+          <DateTimePicker
             value={dropoff}
             onChange={(e) => {
               setDropoff(e.target.value);

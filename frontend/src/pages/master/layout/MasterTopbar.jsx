@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, Menu } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useMasterNotifications } from "../../../hooks/useNotifications";
 import { getUser as getStoredUser } from "../../../utils/session";
+import { masterPageTitle } from "./masterNav";
 
 export default function MasterTopbar({ onOpenMobileMenu }) {
   const dropdownRef = useRef(null);
@@ -12,6 +13,10 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
   const [showMobileTopbar, setShowMobileTopbar] = useState(true);
   const [hasScrolled, setHasScrolled] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+
+  // The page's name is the page's one <h1>; the pages themselves start at <h2>.
+  const { pathname } = useLocation();
+  const pageTitle = masterPageTitle(pathname) || "Admin Dashboard";
 
   const user = getStoredUser();
   const displayName = user?.name || "Administrator";
@@ -144,7 +149,7 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
 
         <div>
           <p className="master-eyebrow">Book Now Pay Later</p>
-          <h1>Admin Dashboard</h1>
+          <h1>{pageTitle}</h1>
         </div>
       </div>
 

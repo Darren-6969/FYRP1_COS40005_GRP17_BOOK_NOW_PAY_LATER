@@ -1,13 +1,24 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BRAND } from "../../constants/brand";
 import { CONTACT, INFO_PAGES, INFO_UPDATED } from "../../constants/infoPages";
 import NotAvailable from "./NotAvailable";
+import PolicyBody from "../../components/common/PolicyBody";
+import { getPublicPolicy } from "../../services/policy_service";
 import styles from "../../assets/styles/public/InfoPage.module.css";
 
-// Terms, privacy, refund rules and contact (/info/:slug). Text lives in
-// constants/infoPages.js; any other /info slug is still "not available yet".
+// Terms, privacy, refund rules and contact (/info/:slug). The section text of
+// terms, privacy and refund rules comes from the policy library, edited on
+// the admin Policies and answers page. constants/infoPages.js holds the
+// title, lead and navigation, and its sections are the fallback if the
+// library cannot be reached. Any other /info slug is "not available yet".
 const ORDER = Object.keys(INFO_PAGES);
+const LIBRARY_PAGES = new Set(["terms", "privacy", "refund-rules"]);
+
+function formatUpdated(sections) {
+  const latest = Math.max(...sections.map((s) => new Date(s.publishedAt).getTime()));
+  return new Date(latest).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+}
 
 function ContactDetails() {
   const rows = [
@@ -44,6 +55,20 @@ export default function InfoPage() {
   const { slug } = useParams();
   const page = INFO_PAGES[slug];
   const navRef = useRef(null);
+  const fromLibrary = LIBRARY_PAGES.has(slug);
+  // { slug, sections } once loaded; sections is null if the library failed.
+  const [library, setLibrary] = useState({ slug: null, sections: null });
+
+  useEffect(() => {
+    if (!fromLibrary) return undefined;
+    let alive = true;
+    getPublicPolicy(slug)
+      .then(({ data }) => alive && setLibrary({ slug, sections: data.sections?.length ? data.sections : null }))
+      .catch(() => alive && setLibrary({ slug, sections: null }));
+    return () => {
+      alive = false;
+    };
+  }, [slug, fromLibrary]);
 
   useEffect(() => {
     if (page) document.title = `${page.title} · ${BRAND.name}${BRAND.suffix}`;
@@ -53,6 +78,9 @@ export default function InfoPage() {
   }, [page]);
 
   if (!page) return <NotAvailable />;
+
+  const loading = fromLibrary && library.slug !== slug;
+  const librarySections = fromLibrary && !loading ? library.sections : null;
 
   return (
     <div className={styles.page}>
@@ -77,27 +105,39 @@ export default function InfoPage() {
           {page.title}
         </h1>
         <p className={styles.lead}>{page.lead}</p>
-        <p className={styles.meta}>Pilot version, updated {INFO_UPDATED}</p>
+        {!loading && (
+          <p className={styles.meta}>
+            Pilot version, updated {librarySections ? formatUpdated(librarySections) : INFO_UPDATED}
+          </p>
+        )}
 
         {page.contact && <ContactDetails />}
 
-        {page.sections.map((section) => (
-          <section key={section.heading} className={styles.section}>
-            <h2 className={styles.heading}>{section.heading}</h2>
-            {section.list && (
-              <ul className={styles.list}>
-                {section.list.map((item) => (
-                  <li key={item}>{item}</li>
+        {librarySections
+          ? librarySections.map((section) => (
+              <section key={section.key} className={styles.section}>
+                <h2 className={styles.heading}>{section.title}</h2>
+                <PolicyBody body={section.body} paragraphClassName={styles.text} listClassName={styles.list} />
+              </section>
+            ))
+          : !loading &&
+            page.sections.map((section) => (
+              <section key={section.heading} className={styles.section}>
+                <h2 className={styles.heading}>{section.heading}</h2>
+                {section.list && (
+                  <ul className={styles.list}>
+                    {section.list.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                )}
+                {section.paragraphs?.map((text) => (
+                  <p key={text} className={styles.text}>
+                    {text}
+                  </p>
                 ))}
-              </ul>
-            )}
-            {section.paragraphs?.map((text) => (
-              <p key={text} className={styles.text}>
-                {text}
-              </p>
+              </section>
             ))}
-          </section>
-        ))}
 
         {!page.contact && (
           <p className={styles.footnote}>

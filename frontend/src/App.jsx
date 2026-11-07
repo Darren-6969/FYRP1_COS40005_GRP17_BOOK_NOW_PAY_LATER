@@ -29,6 +29,9 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import EmailLogs from "./pages/master/EmailLogs";
 import MasterHelp from "./pages/master/MasterHelp";
 import CreditAppeals from "./pages/master/CreditAppeals";
+import Policies from "./pages/master/Policies";
+import MasterSupport from "./pages/master/MasterSupport";
+import AiModels from "./pages/master/AiModels";
 
 // Customer Pages
 import CustomerLayout from "./pages/customer/layout/CustomerLayout";
@@ -65,6 +68,7 @@ import OperatorInvoices from "./pages/operator/OperatorInvoices";
 import OperatorSalesReport from "./pages/operator/OperatorSalesReport";
 import OperatorAnalytics from "./pages/operator/OperatorAnalytics";
 import OperatorNotifications from "./pages/operator/OperatorNotifications";
+import OperatorCustomerMessages from "./pages/operator/OperatorCustomerMessages";
 import OperatorSettlements from "./pages/operator/OperatorSettlements"; /* Operator Settlements for Stripe*/
 import OperatorSettings from "./pages/operator/OperatorSettings";
 import OperatorSellerPage from "./pages/operator/OperatorSellerPage";
@@ -84,6 +88,7 @@ import TestItems from "./pages/public/TestItems"; // TEST-ITEM-MISC: delete with
 import CarBookingForm from "./pages/public/CarBookingForm";
 import NotAvailable from "./pages/public/NotAvailable";
 import InfoPage from "./pages/public/InfoPage";
+import Assistant from "./pages/public/Assistant";
 import ForOperators from "./pages/public/ForOperators";
 
 export default function App() {
@@ -100,6 +105,8 @@ export default function App() {
           <Route path="/cars/:listingId" element={<CarDetail />} />
           {/* Terms, privacy, refund rules and contact; other slugs render NotAvailable. */}
           <Route path="/info/:slug" element={<InfoPage />} />
+          {/* Chatbot (Module 10): the same chat as the floating help panel. */}
+          <Route path="/assistant" element={<Assistant />} />
           {/* Tours are out of scope for now (15 Oct 2026); old links land on car search. */}
           <Route path="/tours" element={<Navigate to="/cars" replace />} />
           <Route path="/tours/*" element={<Navigate to="/cars" replace />} />
@@ -142,6 +149,9 @@ export default function App() {
               <Route path="cron-jobs" element={<CronJobs />} />
               <Route path="system-logs" element={<SystemLogs />} />
               <Route path="system-settings" element={<SystemSettings />} />
+              <Route path="policies" element={<Policies />} />
+              <Route path="support" element={<MasterSupport />} />
+              <Route path="ai-models" element={<AiModels />} />
               <Route path="email-logs" element={<EmailLogs />} />
               <Route path="help" element={<MasterHelp />} />
               <Route path="credit-appeals" element={<CreditAppeals />} />
@@ -229,6 +239,11 @@ export default function App() {
                   <Route
                     path="notifications"
                     element={<OperatorNotifications />}
+                  />
+
+                  <Route
+                    path="customer-messages"
+                    element={<OperatorCustomerMessages />}
                   />
 
                   <Route

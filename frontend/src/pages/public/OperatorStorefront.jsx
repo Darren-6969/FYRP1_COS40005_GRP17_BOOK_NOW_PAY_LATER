@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Check, Clock, MapPin, Phone, Share2, X } from "lucide-react";
-import { getOperatorStorefront, searchFleet } from "../../services/listing_public_service";
+import { getAvailabilityById, getOperatorStorefront, searchFleet } from "../../services/listing_public_service";
 import {
   FACET_GROUPS,
   SORTS,
@@ -398,6 +398,24 @@ export default function OperatorStorefront() {
   const data = state.key === requestKey ? state.data : null;
   const loading = state.key !== requestKey;
 
+  // Stock for the exact trip dates, as on the results page. Refetched only when
+  // the trip changes, so filter taps stay instant. Until it arrives (or if it
+  // fails) the 90-day bookedDates on each car are used.
+  const { from, to, ft, tt } = criteria;
+  const tripKey = dates ? `${from}|${ft}|${to}|${tt}` : "";
+  const [avail, setAvail] = useState({ key: "", map: null });
+  useEffect(() => {
+    if (!tripKey) return undefined;
+    let alive = true;
+    getAvailabilityById({ from, to, ft, tt })
+      .then((map) => alive && setAvail({ key: tripKey, map }))
+      .catch(() => alive && setAvail({ key: tripKey, map: null }));
+    return () => {
+      alive = false;
+    };
+  }, [tripKey, from, to, ft, tt]);
+  const availabilityById = tripKey && avail.key === tripKey ? avail.map : null;
+
   // Old /operators/:id links move to the shareable /o/:slug address.
   useEffect(() => {
     if (handle && data?.operator.slug) {
@@ -412,9 +430,9 @@ export default function OperatorStorefront() {
   const view = useMemo(() => {
     if (!data) return null;
     const fleet = branchFilter ? data.cars.filter((c) => String(c.branch.id) === branchFilter) : data.cars;
-    const found = searchFleet(fleet, criteria, { groupBy: "branch" });
+    const found = searchFleet(fleet, criteria, { groupBy: "branch", availabilityById });
     return { ...found, facets: found.facets.filter((f) => !HIDDEN_FACETS.has(f.group)) };
-  }, [data, criteria, branchFilter]);
+  }, [data, criteria, branchFilter, availabilityById]);
 
   const update = (changes, { replace = false } = {}) => {
     const next = toCarSearchParams({ ...criteria, city: "", ...changes });
@@ -510,7 +528,7 @@ export default function OperatorStorefront() {
   const popularCars = data.mostBookedIds.map((id) => data.cars.find((c) => c.id === id)).filter(Boolean);
   const unfiltered = { ...criteria, sel: Object.fromEntries(FACET_GROUPS.map((g) => [g, []])), pmin: null, pmax: null, dmin: null, dmax: null };
   const popularByID = new Map(
-    searchFleet(popularCars, unfiltered, { groupBy: "branch" })
+    searchFleet(popularCars, unfiltered, { groupBy: "branch", availabilityById })
       .groups.flatMap((g) => g.items)
       .map((r) => [r.listing.id, r])
   );

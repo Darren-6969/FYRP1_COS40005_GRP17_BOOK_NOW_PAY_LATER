@@ -10,6 +10,7 @@ import {
 } from "../../services/operator_service";
 
 import OfferModal from "../../components/operator/OfferModal";
+import { DateTimePicker } from "../../components/common/DatePicker";
 import OperatorCancelDialog from "../../components/operator/OperatorCancelDialog";
 import OperatorRefundCard from "../../components/operator/OperatorRefundCard";
 import { pickupHasPassed } from "../../utils/customerUtils";
@@ -1699,8 +1700,7 @@ const hourlyRate =
         <label className="operator-field">
           Actual Return Time *
 
-          <input
-            type="datetime-local"
+          <DateTimePicker
             value={
               actualReturnedAt
             }
@@ -2118,8 +2118,7 @@ function AlternativeModal({
               }
             />
 
-            <input
-              type="datetime-local"
+            <DateTimePicker
               value={
                 form.alternativePickupDate
               }
@@ -2132,8 +2131,7 @@ function AlternativeModal({
               }
             />
 
-            <input
-              type="datetime-local"
+            <DateTimePicker
               value={
                 form.alternativeReturnDate
               }
@@ -2450,8 +2448,7 @@ function PaymentDeadlineModal({
         <label className="operator-field">
           Payment Deadline
 
-          <input
-            type="datetime-local"
+          <DateTimePicker
             value={paymentDeadline}
             onChange={(e) =>
               setPaymentDeadline(

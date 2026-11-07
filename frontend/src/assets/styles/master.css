@@ -46,7 +46,7 @@
 .master-brand-text span {
   display: block;
   margin-top: 4px;
-  color: #64748b;
+  color: #475569;
   font-size: 0.95rem;
 }
 
@@ -524,7 +524,7 @@
 
 .master-brand span {
   font-size: 14px;
-  color: #64748b;
+  color: #475569;
   margin-top: 2px;
 }
 
@@ -1297,7 +1297,8 @@
     border-radius: 26px !important;
   }
 
-  .operator-page-head h1 {
+  .operator-page-head h1,
+  .operator-page-head h2.master-page-title {
     font-size: 28px !important;
     line-height: 1.15 !important;
   }
@@ -1474,7 +1475,8 @@
     padding: 22px 18px !important;
   }
 
-  .operator-page-head h1 {
+  .operator-page-head h1,
+  .operator-page-head h2.master-page-title {
     font-size: 26px !important;
   }
 
@@ -1786,7 +1788,8 @@
   cursor: pointer;
 }
 
-.master-profile-sidebar h1 {
+.master-profile-sidebar h1,
+.master-profile-sidebar h2.master-page-title {
   margin: 0 0 8px;
   color: #0f172a;
   font-size: 1.55rem;
@@ -2403,7 +2406,8 @@
     height: 112px !important;
   }
 
-  .master-profile-sidebar h1 {
+  .master-profile-sidebar h1,
+  .master-profile-sidebar h2.master-page-title {
     font-size: 1.45rem !important;
   }
 
@@ -2617,7 +2621,8 @@
   overflow: hidden;
 }
 
-.master-analytics-head h1 {
+.master-analytics-head h1,
+.master-analytics-head h2.master-page-title {
   margin: 0;
   font-size: 28px;
   line-height: 1.15;
@@ -2738,7 +2743,8 @@
   overflow: hidden;
 }
 
-.master-analytics-head h1 {
+.master-analytics-head h1,
+.master-analytics-head h2.master-page-title {
   margin: 0 0 18px;
   color: #0f172a;
   font-size: 30px;
@@ -2985,7 +2991,8 @@
     min-width: 0 !important;
   }
 
-  .master-analytics-head-text h1 {
+  .master-analytics-head-text h1,
+  .master-analytics-head-text h2.master-page-title {
     font-size: 32px !important;
     line-height: 1.12 !important;
     white-space: normal !important;
@@ -3606,4 +3613,12 @@
 .master-nav-group .master-nav-icon {
   width: 30px;
   height: 30px;
+}
+
+/* Admin page titles. The top bar holds the page's <h1> (its name), so each
+   page's own title is an <h2> that keeps the look it had as an <h1>. */
+.master-page-title {
+  font-size: 2em;
+  font-weight: 700;
+  margin: 0.67em 0;
 }
