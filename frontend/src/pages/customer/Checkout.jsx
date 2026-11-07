@@ -5,6 +5,7 @@ import { submitCustomerPayment } from "../../hooks/usePayments";
 import { createStripeCheckoutSession, getCustomerManualPaymentOptions } from "../../services/customer_service";
 import { formatCustomerDate, formatMoney } from "../../utils/customerUtils";
 import DuitNowQr from "../../components/payment/DuitNowQr";
+import StaticQrFallback from "../../components/payment/StaticQrFallback";
 import { useFeatureFlag } from "../../hooks/useFeatureFlag";
 
 const PAYMENT_TYPES = {
@@ -110,7 +111,9 @@ const effectiveMethod = paymentOptions.some(([value]) => value === method)
       current = false;
     };
   }, [id, effectiveMethod]);
-  const qrPayload = manualDue?.options.find((item) => item.paymentType === paymentType)?.qrPayload || null;
+  const manualOption = manualDue?.options.find((item) => item.paymentType === paymentType);
+  const qrPayload = manualOption?.qrPayload || null;
+  const staticQrPayload = qrPayload ? manualDue?.staticQrPayload || null : null;
 
   const handlePay = async () => {
     setSubmitError("");
@@ -428,6 +431,13 @@ const effectiveMethod = paymentOptions.some(([value]) => value === method)
                   </p>
                 </div>
               </div>
+
+              <StaticQrFallback
+                payload={staticQrPayload}
+                amount={manualOption?.amount}
+                amountText={formatMoney(manualOption?.amount)}
+                reference={booking.bookingCode || `BNPL-${booking.id}`}
+              />
             </div>
           )}
 

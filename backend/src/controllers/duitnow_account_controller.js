@@ -1,5 +1,11 @@
 import prisma from "../config/db.js";
-import { buildDynamicQr, describeAccount, parseDuitNowQr } from "../services/duitnow_qr.js";
+import {
+  buildDynamicQr,
+  buildStaticQr,
+  describeAccount,
+  parseDuitNowQr,
+  staticQrFrom,
+} from "../services/duitnow_qr.js";
 import { createAuditLog } from "../services/log_service.js";
 
 // The operator's own DuitNow account, taken from the QR code their bank app
@@ -68,6 +74,7 @@ export async function saveDuitnowAccount(req, res, next) {
       duitnowMerchantName: parsed.merchantName,
       duitnowMerchantCity: parsed.merchantCity,
       duitnowMerchantCategory: parsed.merchantCategory,
+      duitnowStaticQr: staticQrFrom(req.body.payload),
     };
 
     const existing = await latestConfig(operatorId);
@@ -106,6 +113,7 @@ export async function clearDuitnowAccount(req, res, next) {
           duitnowMerchantName: null,
           duitnowMerchantCity: null,
           duitnowMerchantCategory: null,
+          duitnowStaticQr: null,
         },
       });
       await createAuditLog({
@@ -121,6 +129,23 @@ export async function clearDuitnowAccount(req, res, next) {
     res.json({ configured: false, account: null, samplePayload: null });
   } catch (err) {
     next(err);
+  }
+}
+
+// The operator's own static QR (no amount), for banking apps that cannot read
+// the fixed-amount QR. Operators saved before the original text was kept get
+// one rebuilt from their saved account.
+export function staticQrFor(config, operator) {
+  if (config?.duitnowStaticQr) return config.duitnowStaticQr;
+  const stored = storedAccount(config);
+  if (!stored) return null;
+  try {
+    return buildStaticQr({
+      account: { ...stored, merchantName: stored.merchantName || operator?.companyName },
+    });
+  } catch (err) {
+    console.warn(`[DuitNow QR] could not build a static QR: ${err.message}`);
+    return null;
   }
 }
 
