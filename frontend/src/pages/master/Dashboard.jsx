@@ -420,7 +420,7 @@ export default function Dashboard() {
   // ========== MAIN RENDER ==========
   return (
     <div style={styles.container}>
-      <h1 style={styles.pageTitle}>Dashboard</h1>
+      <h2 className="master-page-title" style={styles.pageTitle}>Dashboard</h2>
 
       {/* Platform-wide metrics */}
       <div style={styles.metricsGrid}>

@@ -361,7 +361,8 @@
   align-items: flex-start;
 }
 
-.operator-page-head h1 {
+.operator-page-head h1,
+.operator-page-head h2.master-page-title {
   margin: 0;
   font-size: 28px;
 }
@@ -2062,7 +2063,8 @@
     border-radius: 26px;
   }
 
-  .operator-page-head h1 {
+  .operator-page-head h1,
+  .operator-page-head h2.master-page-title {
     font-size: 28px;
     line-height: 1.15;
   }
@@ -2211,7 +2213,8 @@
     padding: 22px 18px;
   }
 
-  .operator-page-head h1 {
+  .operator-page-head h1,
+  .operator-page-head h2.master-page-title {
     font-size: 26px;
   }
 

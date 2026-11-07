@@ -27,6 +27,7 @@ const SPEND_MS = 30 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 
 export const DEFAULT_SETTINGS = {
+  liveCustomerMode: false,
   monthlyCapUsd: null, // no row yet: no overall cap
   alertPercent: 80,
   messagesPerCustomerHour: 20,
@@ -55,6 +56,7 @@ export async function loadAiSettings({ db = prisma, now = Date.now() } = {}) {
   const row = await db.aiSettings.findUnique({ where: { id: 1 } }).catch(() => null);
   const value = row
     ? {
+        liveCustomerMode: Boolean(row.liveCustomerMode),
         monthlyCapUsd: toNumber(row.monthlyCapUsd),
         alertPercent: row.alertPercent ?? DEFAULT_SETTINGS.alertPercent,
         messagesPerCustomerHour: row.messagesPerCustomerHour ?? DEFAULT_SETTINGS.messagesPerCustomerHour,
@@ -134,12 +136,14 @@ export function modelCapReached(model, spend) {
 
 /**
  * The switched-on models minus those that reached their own monthly cap,
- * for the model router. onEvent gets { type: "model_capped", model } once
+ * for the model router. While Live customer mode is on, free-plan models
+ * are left out too (Step 11), even if one was somehow left switched on. onEvent gets { type: "model_capped", model } once
  * per model per month (alert emails come with Step 11).
  */
 const cappedSeen = new Set(); // "modelId:month"
-export async function loadUncappedModels({ load = loadEnabledModels, spendOf = monthSpend, onEvent = () => {} } = {}) {
-  const models = await load();
+export async function loadUncappedModels({ load = loadEnabledModels, spendOf = monthSpend, settingsOf = loadAiSettings, onEvent = () => {} } = {}) {
+  let models = await load();
+  if ((await settingsOf()).liveCustomerMode) models = models.filter((m) => m.plan === "PAID");
   if (!models.some((m) => toNumber(m.monthlyCapUsd) !== null)) return models;
   const spend = await spendOf();
   return models.filter((m) => {

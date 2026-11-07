@@ -145,7 +145,7 @@
   height: 19px;
   padding: 0 5px;
   border-radius: 999px;
-  background: #ef4444;
+  background: #dc2626; /* white text needs 4.5:1; #ef4444 gave 3.8:1 */
   color: white;
   display: grid;
   place-items: center;

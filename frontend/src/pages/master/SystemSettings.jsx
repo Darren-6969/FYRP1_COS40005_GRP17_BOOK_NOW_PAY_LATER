@@ -991,7 +991,7 @@ export default function SystemSettings() {
       <section className="operator-page-head">
         <div>
           <p className="operator-eyebrow">Platform Control Centre</p>
-          <h1>Administrator Settings</h1>
+          <h2 className="master-page-title">Administrator Settings</h2>
           <p>
             Choose a settings category below. Each category opens in a focused
             side panel so the page stays clean and easy to manage. Every change

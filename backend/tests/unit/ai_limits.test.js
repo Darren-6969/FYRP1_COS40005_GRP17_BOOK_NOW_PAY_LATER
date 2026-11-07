@@ -33,7 +33,7 @@ test("settings come from the ai_settings row, with the design's defaults when th
   clearAiSettingsCache();
   const row = { monthlyCapUsd: { toString: () => "25.50", valueOf: () => 25.5 }, alertPercent: 90, messagesPerCustomerHour: 5, messagesPerIpHour: 3, maxMessageChars: 300 };
   const loaded = await loadAiSettings({ db: { aiSettings: { findUnique: async () => row } }, now: 1 });
-  assert.deepEqual(loaded, { monthlyCapUsd: 25.5, alertPercent: 90, messagesPerCustomerHour: 5, messagesPerIpHour: 3, maxMessageChars: 300 });
+  assert.deepEqual(loaded, { liveCustomerMode: false, monthlyCapUsd: 25.5, alertPercent: 90, messagesPerCustomerHour: 5, messagesPerIpHour: 3, maxMessageChars: 300 });
   clearAiSettingsCache();
   const none = await loadAiSettings({ db: { aiSettings: { findUnique: async () => null } }, now: 2 });
   assert.equal(none.monthlyCapUsd, null);
@@ -92,14 +92,21 @@ test("a capped model is left out and the next one answers; the log line is writt
   ];
   const events = [];
   const spendOf = async () => ({ month: 1, total: 5, byModel: new Map([[1, 1.2]]) });
-  const usable = await loadUncappedModels({ load: async () => models, spendOf, onEvent: (e) => events.push(e) });
+  const settingsOf = async () => ({ liveCustomerMode: false });
+  const usable = await loadUncappedModels({ load: async () => models, spendOf, settingsOf, onEvent: (e) => events.push(e) });
   assert.deepEqual(usable.map((m) => m.id), [2]);
-  await loadUncappedModels({ load: async () => models, spendOf, onEvent: (e) => events.push(e) });
+  await loadUncappedModels({ load: async () => models, spendOf, settingsOf, onEvent: (e) => events.push(e) });
   assert.equal(events.length, 1);
   assert.equal(events[0].type, "model_capped");
   // No model has a cap: the spend is never read.
-  const plain = await loadUncappedModels({ load: async () => [{ id: 3, monthlyCapUsd: null }], spendOf: async () => assert.fail("not needed") });
+  const plain = await loadUncappedModels({ load: async () => [{ id: 3, monthlyCapUsd: null }], spendOf: async () => assert.fail("not needed"), settingsOf });
   assert.equal(plain.length, 1);
+  // Live customer mode: free-plan models never answer.
+  const live = await loadUncappedModels({
+    load: async () => [{ id: 4, plan: "FREE", monthlyCapUsd: null }, { id: 5, plan: "PAID", monthlyCapUsd: null }],
+    settingsOf: async () => ({ liveCustomerMode: true }),
+  });
+  assert.deepEqual(live.map((m) => m.id), [5]);
 });
 
 test("a signed-in customer is limited by their AI answers in the last hour, across all their chats", async () => {

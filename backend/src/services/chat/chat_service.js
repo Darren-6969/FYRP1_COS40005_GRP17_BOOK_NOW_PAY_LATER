@@ -23,6 +23,7 @@ import { aiReplyPayload } from "./chat_ai_view.js";
 import { AiUnavailableError, answerWithAi, attemptsSummary } from "../ai/ai_service.js";
 import { HISTORY_MESSAGES } from "../ai/ai_config.js";
 import { countIpMessage, limitReached, loadAiSettings, monthSpend, noteSpend, overallCapReached } from "../ai/ai_limits.js";
+import { checkUsageAlerts } from "../ai/ai_alert_service.js";
 import { toAiHistory } from "../ai/chat_history.js";
 import { advanceGuided, choiceLabel, startGuided } from "./chat_guided_service.js";
 import { FIND_CAR_ACTION, matchMessage, quickActions, ruleAnswer, welcomeMessage } from "./chat_rules_service.js";
@@ -178,7 +179,12 @@ async function aiReply({ text, conversation, customer, listingLoader }) {
     return { reply: payload, ai, lastSearch: searched, handoffDraft: offer?.view.handoff || null };
   } catch (err) {
     if (!(err instanceof AiUnavailableError)) throw err;
-    if (err.reason === "no_models") return { reply: null, ai: null, reason: "unmatched" };
+    if (err.reason === "no_models") {
+      // Models are switched on but all capped (or free in Live customer
+      // mode): say the AI can't answer now, not that the topic is unknown.
+      const switchedOn = await prisma.aiModel.count({ where: { enabled: true } });
+      return { reply: null, ai: null, reason: switchedOn ? "down" : "unmatched" };
+    }
     return {
       reply: null,
       ai: { errorType: attemptsSummary(err.attempts) || err.reason, responseMs: err.attempts.reduce((sum, a) => sum + a.ms, 0) || null },
@@ -206,6 +212,7 @@ function afterAiAttempt({ ai, customer, ip }) {
   if (!ai?.responseMs) return; // no model was called
   if (!customer) countIpMessage(ip);
   noteSpend(ai.aiModelId, ai.estimatedCostUsd);
+  checkUsageAlerts(); // at most once a minute; never throws
 }
 
 /**

@@ -303,7 +303,7 @@ export default function MasterAnalytics() {
       {/* ── Header ── */}
       <section className="master-analytics-head">
         <div className="master-analytics-head-text">
-          <h1>Analytics &amp; Demand Forecast</h1>
+          <h2 className="master-page-title">Analytics &amp; Demand Forecast</h2>
           <p>
             SARIMA demand forecasting across all operators.
             {selectedOperatorId

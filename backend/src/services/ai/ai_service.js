@@ -16,14 +16,16 @@ import { chatBreaker } from "./circuit_breaker.js";
 import { AiUnavailableError, createModelRouter } from "./model_router.js";
 import { recordModelFailure, recordModelSuccess, skipModel } from "./model_store.js";
 import { loadUncappedModels } from "./ai_limits.js";
+import { alertForRouterEvent } from "./ai_alert_service.js";
 import { chatSystemPrompt, PROMPT_VERSION } from "./prompts.js";
 import { checkedAnswer } from "./checked_answer.js";
 import { createToolRunner, TOOL_DEFINITIONS, TOOL_NAMES } from "./tools/chat_tools.js";
 
 export { AiUnavailableError, PROMPT_VERSION };
 
-// Alert emails for these come with the AI models page (Step 11).
+// Logged, and emailed to the admin (Step 11, ai_alert_service.js).
 function logEvent(event) {
+  alertForRouterEvent(event);
   if (event.type === "model_capped") {
     console.warn(`[chat-ai] ${event.model.displayName} skipped: its monthly cap of USD ${Number(event.model.monthlyCapUsd)} is reached`);
   } else if (event.type === "model_skipped") {
