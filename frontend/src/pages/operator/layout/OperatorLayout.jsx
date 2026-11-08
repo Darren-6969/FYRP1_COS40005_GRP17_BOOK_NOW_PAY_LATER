@@ -104,6 +104,11 @@ export default function OperatorLayout() {
   const text = `${item.title || ""} ${item.message || ""}`;
   const type = String(item.type || "").toUpperCase();
 
+  // Chat requests (Step 9)
+  if (type === "SUPPORT") {
+    return "/operator/customer-messages";
+  }
+
   if (
   type.includes("LICENCE") ||
   text

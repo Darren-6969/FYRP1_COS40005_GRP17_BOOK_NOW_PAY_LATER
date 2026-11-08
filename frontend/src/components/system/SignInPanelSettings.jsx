@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Image as ImageIcon } from "lucide-react";
 import { uploadSignInPanelImage } from "../../services/admin_service";
 import { FormField, SettingsSection } from "./SettingsParts";
+import DatePicker from "../common/DatePicker";
 
 const choiceStyle = (active) => ({
   textAlign: "left",
@@ -129,11 +130,11 @@ export default function SignInPanelSettings({ value, onChange, notify }) {
               </FormField>
 
               <FormField label="Show from (optional)">
-                <input type="date" value={value.startsOn} onChange={(e) => set({ startsOn: e.target.value })} />
+                <DatePicker value={value.startsOn} max={value.endsOn || undefined} onChange={(e) => set({ startsOn: e.target.value })} />
               </FormField>
 
               <FormField label="Show until (optional)" helper="Malaysian dates. Outside them the default panel shows.">
-                <input type="date" value={value.endsOn} onChange={(e) => set({ endsOn: e.target.value })} />
+                <DatePicker value={value.endsOn} min={value.startsOn || undefined} onChange={(e) => set({ endsOn: e.target.value })} />
               </FormField>
             </div>
 

@@ -2,6 +2,7 @@
 // back/forward. This module is the only place that knows the format.
 //
 //   city, from, to (YYYY-MM-DD), ft, tt (HH:MM), sort
+//   model (comma list, exact model name; no facet, set by chatbot links)
 //   (No driver age: a valid licence is the only driver requirement.)
 //   type, seats, trans, fuel, drive, brand, refund, operator (comma lists)
 //   pmin, pmax (price per day, whole RM), dmin, dmax (amount payable now, whole RM)
@@ -43,6 +44,7 @@ export function parseCarSearch(params) {
   const sort = p.get("sort");
   return {
     city: p.get("city") || "",
+    model: (p.get("model") || "").split(",").map((m) => m.trim()).filter(Boolean),
     from: p.get("from") || "",
     to: p.get("to") || "",
     ft: p.get("ft") || DEFAULT_TIME,
@@ -59,6 +61,7 @@ export function parseCarSearch(params) {
 export function toCarSearchParams(c) {
   const p = new URLSearchParams();
   if (c.city) p.set("city", c.city);
+  if (c.model?.length) p.set("model", c.model.join(","));
   if (c.from) p.set("from", c.from);
   if (c.to) p.set("to", c.to);
   if (c.from && c.to) {

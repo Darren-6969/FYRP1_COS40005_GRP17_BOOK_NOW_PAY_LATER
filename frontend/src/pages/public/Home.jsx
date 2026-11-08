@@ -9,6 +9,8 @@ import {
 } from "../../services/listing_public_service";
 import { PICKUP_CITIES, PICKUP_SHORTCUTS } from "../../services/mock/listings.mock";
 import { parseCarSearch, toCarSearchParams } from "../../utils/carSearchParams";
+import { openChat } from "../../components/chat/chatStore";
+import DatePicker from "../../components/common/DatePicker";
 import styles from "../../assets/styles/public/Home.module.css";
 import disclosure from "../../assets/styles/public/Disclosure.module.css";
 import useReveal, { prefersReducedMotion } from "../../hooks/useReveal";
@@ -31,7 +33,12 @@ const STEPS = [
   { n: "4", title: "Pay the balance before pickup, then collect", desc: "Staff check your original licence at handover." },
 ];
 
-const PROMPTS = ["Automatic, 7 seats, Kuching", "Cheapest deposit this weekend", "Mulu trip, refundable deposit"];
+// Each opens the help messenger straight into that topic.
+const PROMPTS = [
+  { label: "Find a car step by step", open: { action: { type: "quick", key: "find-car" }, label: "Find a car" } },
+  { label: "Can I cancel?", open: { text: "Can I cancel?" } },
+  { label: "Paying by DuitNow", open: { action: { type: "quick", key: "duitnow" }, label: "Paying by DuitNow" } },
+];
 
 const FAQS = [
   { q: "How does Book Now Pay Later work here?", a: "Every booking starts as a request. Sending it is free and nothing is charged. Once the operator confirms, usually within 2 hours, you pay a deposit to secure the car. Each operator sets its own deposit, and every car shows it before you send a request. The balance is due before pickup, by a deadline the operator sets. You are shown both amounts, the deadline, and what happens if you miss it before you pay anything." },
@@ -207,14 +214,14 @@ function SearchPanel() {
           </label>
           <label className={styles.field}>
             <span className={styles.fieldLabel}>Pick-up date</span>
-            <input type="date" className={styles.fieldControl} min={klToday()} value={car.from} onChange={update("from")} />
+            <DatePicker className={styles.fieldControl} placeholder="Add date" min={klToday()} value={car.from} onChange={update("from")} />
           </label>
           <label className={`${styles.field} ${error ? styles.fieldInvalid : ""}`}>
             <span className={styles.fieldLabel}>Return date</span>
-            <input
+            <DatePicker
               id={`${uid}-to`}
-              type="date"
               className={styles.fieldControl}
+              placeholder="Add date"
               min={car.from || klToday()}
               value={car.to}
               onChange={update("to")}
@@ -282,42 +289,44 @@ function SearchPanel() {
 }
 
 function Assistant() {
-  const navigate = useNavigate();
   const [text, setText] = useState("");
   const onSubmit = (e) => {
     e.preventDefault();
-    navigate(`/assistant?q=${encodeURIComponent(text.trim())}`);
+    if (text.trim()) openChat({ text: text.trim() });
+    else openChat();
+    setText("");
   };
   return (
     <section id="assistant" className={styles.assistant} aria-labelledby="assistant-title">
       <div data-reveal className={styles.assistantInner}>
         <h2 id="assistant-title" className={styles.assistantTitle}>
-          Say it in plain English.
+          Ask in your own words.
         </h2>
         <p className={styles.assistantLead}>
-          The assistant turns your sentence into search filters. It never invents a car. Every result comes from real,
-          available stock.
+          The assistant explains deposits, refunds and the other rules, and walks you through finding a car. Every car and
+          price it shows comes from live listings, never from guesswork.
         </p>
         <form className={styles.assistantForm} onSubmit={onSubmit}>
           <label htmlFor="assistant-input" className={styles.srOnly}>
-            Describe the car you want
+            Your question
           </label>
           <input
             id="assistant-input"
             type="text"
             value={text}
+            maxLength={500}
             onChange={(e) => setText(e.target.value)}
-            placeholder="A 4-seater in Kuching, 17-20 Oct, deposit under RM150"
+            placeholder="How does the deposit work?"
             className={styles.assistantInput}
           />
           <button type="submit" className={styles.assistantButton}>
-            Find it
+            Ask
           </button>
         </form>
         <div className={styles.prompts}>
           {PROMPTS.map((p) => (
-            <button key={p} type="button" className={styles.prompt} onClick={() => setText(p)}>
-              {p}
+            <button key={p.label} type="button" className={styles.prompt} onClick={() => openChat(p.open)}>
+              {p.label}
             </button>
           ))}
         </div>

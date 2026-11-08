@@ -5,13 +5,14 @@ import { getCarListing, quoteCarBooking } from "../../services/listing_public_se
 import { reportClientEvent } from "../../services/analytics";
 import { requestCarBooking } from "../../services/car_booking_service";
 import { parseBookingSelection, toBookingParams, tripParams } from "../../utils/carSearchParams";
-import { formatDateList, formatSen, formatShortDateTime } from "../../utils/formatPublic";
+import { formatDateList, formatSen, formatShortDateTime, klToday } from "../../utils/formatPublic";
 import { getUser } from "../../utils/session";
 import { BRAND } from "../../constants/brand";
 import PaymentSchedule from "../../components/public/PaymentSchedule";
 import RefundBox from "../../components/public/RefundBox";
 import BookingSummary from "../../components/public/BookingSummary";
 import Notice from "../../components/public/Notice";
+import DatePicker from "../../components/common/DatePicker";
 import styles from "../../assets/styles/public/CarBookingForm.module.css";
 
 const FIELD_ID = {
@@ -943,10 +944,9 @@ export default function CarBookingForm() {
                     Driver date of birth
                   </label>
 
-                  <input
+                  <DatePicker
                     id={FIELD_ID.driverDob}
-                    type="date"
-                    autoComplete="bday"
+                    max={klToday()}
                     value={
                       form.driverDateOfBirth
                     }

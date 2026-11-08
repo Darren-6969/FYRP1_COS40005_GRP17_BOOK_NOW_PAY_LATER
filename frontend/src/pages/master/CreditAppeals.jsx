@@ -43,7 +43,7 @@ export default function CreditAppeals() {
   return (
     <main className="master-page">
       <div className="page-header">
-        <div><h1>Credit Appeals</h1><p>Review customer disputes before they affect future terms.</p></div>
+        <div><h2 className="master-page-title">Credit Appeals</h2><p>Review customer disputes before they affect future terms.</p></div>
         <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Appeal status">
           <option value="PENDING">Pending</option><option value="UPHELD">Upheld</option><option value="REJECTED">Rejected</option>
         </select>

@@ -5,6 +5,7 @@ import {
 } from "react";
 
 import { Link } from "react-router-dom";
+import DatePicker from "../../components/common/DatePicker";
 
 import {
   operatorService,
@@ -864,8 +865,7 @@ const totalFleetQuantity =
               <label className="operator-field">
                 Start Date
 
-                <input
-                  type="date"
+                <DatePicker
                   value={
                     servicingFrom
                   }
@@ -881,8 +881,7 @@ const totalFleetQuantity =
               <label className="operator-field">
                 End Date
 
-                <input
-                  type="date"
+                <DatePicker
                   value={
                     servicingTo
                   }

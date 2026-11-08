@@ -4,6 +4,7 @@ import "../../../assets/styles/public/tokens.css";
 import "../../../assets/styles/customer-theme.css";
 import PublicHeader from "../../../components/public/PublicHeader";
 import PublicFooter from "../../../components/public/PublicFooter";
+import ChatWidget from "../../../components/chat/ChatWidget";
 import usePublicTheme from "../../../hooks/usePublicTheme";
 import shell from "../../../assets/styles/public/PublicLayout.module.css";
 import styles from "../../../assets/styles/public/CustomerLayout.module.css";
@@ -62,6 +63,7 @@ export default function CustomerLayout() {
       </main>
 
       <PublicFooter />
+      <ChatWidget />
     </div>
   );
 }

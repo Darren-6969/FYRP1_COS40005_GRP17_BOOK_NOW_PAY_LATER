@@ -7,7 +7,9 @@ import {
   getCar,
   listCars,
   quoteCar,
+  searchCars,
 } from "../controllers/public_car_controller.js";
+import { getPublicPolicy } from "../controllers/policy_controller.js";
 
 import {
   validate,
@@ -24,9 +26,30 @@ import {
 
 import { reportClientEvent } from "../controllers/public_events_controller.js";
 import { getSignInPanel, getSubscriptionPlans } from "../controllers/public_platform_controller.js";
-import { attachUserIdIfPresent } from "../middlewares/auth_middleware.js";
+import { attachChatCustomer, attachUserIdIfPresent } from "../middlewares/auth_middleware.js";
+import { getChatConversation, postChatMessage, putChatFeedback } from "../controllers/chat_controller.js";
+import { chatFeedbackSchema, chatMessageSchema } from "../validators/chat_validator.js";
 
 const router = express.Router();
+
+// Chat window (FR-CHAT): a burst limit against scripted abuse. The per-hour
+// limits on AI messages are separate and editable on the AI models page.
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "You're sending messages very quickly. Please wait a moment.", code: "RATE_LIMITED" },
+});
+
+// Search reads the whole fleet per call, so it gets its own limit.
+const searchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many searches. Please wait a moment and try again.", code: "RATE_LIMITED" },
+});
 
 // Quotes run several queries each;
 // the page requests one per selection change.
@@ -68,7 +91,13 @@ router.get(
 );
 
 // IMPORTANT:
-// Put this before /cars/:id
+// Put these before /cars/:id
+router.get(
+  "/cars/search",
+  searchLimiter,
+  searchCars
+);
+
 router.get(
   "/cars/availability",
   getCarsAvailability
@@ -117,6 +146,24 @@ router.get(
 router.get(
   "/sign-in-panel",
   getSignInPanel
+);
+
+// Chatbot (Layers 1 and 2). The customer comes from the session only.
+router.post("/chat/messages", chatLimiter, attachChatCustomer, validate(chatMessageSchema), postChatMessage);
+router.get("/chat/conversations/:id", chatLimiter, attachChatCustomer, getChatConversation);
+router.put(
+  "/chat/conversations/:id/messages/:messageId/feedback",
+  chatLimiter,
+  attachChatCustomer,
+  validate(chatFeedbackSchema),
+  putChatFeedback
+);
+
+// Policy library wording for the info pages
+// (terms, privacy, refund rules).
+router.get(
+  "/policies/:documentKey",
+  getPublicPolicy
 );
 
 export default router;

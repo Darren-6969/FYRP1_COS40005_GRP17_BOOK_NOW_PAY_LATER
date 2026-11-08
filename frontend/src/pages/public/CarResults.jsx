@@ -115,11 +115,12 @@ export default function CarResults() {
 
   const clearAll = () => {
     const sel = Object.fromEntries(FACET_GROUPS.map((g) => [g, []]));
-    update({ city: "", sel, pmin: null, pmax: null, dmin: null, dmax: null });
+    update({ city: "", model: [], sel, pmin: null, pmax: null, dmin: null, dmax: null });
   };
 
   const clearKey = (k) => {
     if (k === "city") update({ city: "" });
+    else if (k === "model") update({ model: [] });
     else if (k === "price") update({ pmin: null, pmax: null });
     else if (k === "dep") update({ dmin: null, dmax: null });
     else update({ sel: { ...criteria.sel, [k]: [] } });
@@ -147,6 +148,9 @@ export default function CarResults() {
 
   const chips = [];
   if (criteria.city) chips.push({ key: "city", label: criteria.city, clear: () => update({ city: "" }) });
+  criteria.model.forEach((m) =>
+    chips.push({ key: `model-${m}`, label: m, clear: () => update({ model: criteria.model.filter((x) => x !== m) }) })
+  );
   FACET_GROUPS.forEach((g) =>
     criteria.sel[g].forEach((v) =>
       chips.push({

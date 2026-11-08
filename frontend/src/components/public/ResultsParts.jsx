@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { PICKUP_CITIES } from "../../services/mock/listings.mock";
 import { hasDates } from "../../utils/carSearchParams";
 import { klDateTimeToIso, klToday } from "../../utils/formatPublic";
+import DatePicker from "../common/DatePicker";
 import styles from "../../assets/styles/public/CarResults.module.css";
 
 // ── Search widget ────────────────────────────────────────────────────
@@ -93,11 +94,11 @@ export function SearchWidget({ criteria, onApply, fromRef, showCity = true, subm
         {field(
           "from",
           "Pick-up date",
-          <input
+          <DatePicker
             id={`${uid}-from`}
             ref={fromRef}
-            type="date"
             className={styles.control}
+            placeholder="Add date"
             min={klToday()}
             value={draft.from}
             onChange={update("from")}
@@ -112,11 +113,11 @@ export function SearchWidget({ criteria, onApply, fromRef, showCity = true, subm
         {field(
           "to",
           "Return date",
-          <input
+          <DatePicker
             id={`${uid}-to`}
             ref={toRef}
-            type="date"
             className={styles.control}
+            placeholder="Add date"
             min={draft.from || klToday()}
             value={draft.to}
             onChange={update("to")}

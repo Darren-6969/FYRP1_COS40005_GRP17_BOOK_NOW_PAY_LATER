@@ -347,7 +347,7 @@ export default function MasterProfile() {
             </label>
           </div>
 
-          <h1>{displayName}</h1>
+          <h2 className="master-page-title">{displayName}</h2>
           <p>{displayEmail}</p>
 
           <div className="master-profile-meta">

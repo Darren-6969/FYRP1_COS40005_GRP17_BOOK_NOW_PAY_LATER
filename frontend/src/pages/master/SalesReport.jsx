@@ -8,6 +8,7 @@ import {
   Percent, BarChart2, RefreshCw, Download, Info, Landmark,
 } from "lucide-react";
 import { getSalesReport, getOperators } from "../../services/admin_service";
+import DatePicker from "../../components/common/DatePicker";
 
 // ── Formatters ───────────────────────────────────────────
 function fmt(value) {
@@ -220,16 +221,16 @@ export default function SalesReport() {
           </select>
 
           <label style={{ fontSize: 13, color: "#374151" }}>From</label>
-          <input
-            type="date" value={from} max={to}
+          <DatePicker
+            value={from} max={to}
             onChange={(e) => setFrom(e.target.value)}
-            style={{ border: "1px solid #d1d5db", borderRadius: 7, padding: "6px 10px", fontSize: 13 }}
+            style={{ width: 170, minHeight: 34, borderRadius: 7, fontSize: 13 }}
           />
           <label style={{ fontSize: 13, color: "#374151" }}>To</label>
-          <input
-            type="date" value={to} min={from} max={today}
+          <DatePicker
+            value={to} min={from} max={today}
             onChange={(e) => setTo(e.target.value)}
-            style={{ border: "1px solid #d1d5db", borderRadius: 7, padding: "6px 10px", fontSize: 13 }}
+            style={{ width: 170, minHeight: 34, borderRadius: 7, fontSize: 13 }}
           />
           <button className="btn primary" onClick={applyFilter} disabled={loading}>Apply</button>
           <button
