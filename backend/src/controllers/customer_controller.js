@@ -29,6 +29,7 @@ import { carListingSelect, mapCarBooking } from "../services/car_booking_view.js
 import { quoteAlternative } from "../services/car_requote_service.js";
 import { fromSen } from "../services/car_pricing_service.js";
 import { dynamicQrFor, staticQrFor } from "./duitnow_account_controller.js";
+import { mapOperatorForCustomer } from "../services/customer_operator_view.js";
 import { trackBookingEvent } from "../services/analytics_service.js";
 import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_service.js";
 
@@ -89,13 +90,7 @@ function mapBooking(booking) {
     createdAt: booking.createdAt,
     updatedAt: booking.updatedAt,
     customer: booking.customer,
-    operator: booking.operator
-  ? {
-      ...booking.operator,
-      config: booking.operator.configs?.[0] || null,
-      configs: undefined,
-    }
-  : null,
+    operator: mapOperatorForCustomer(booking.operator),
 
     payment: booking.payment
       ? {

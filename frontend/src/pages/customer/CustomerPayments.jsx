@@ -25,6 +25,22 @@ export default function CustomerPayments() {
     const element = document.createElement("div");
     element.className = "pdf-document";
     element.style.cssText = "position:fixed;left:-10000px;top:0;width:760px;padding:32px;background:#fff;color:#111";
+    // The operator's logo and name head the receipt, as on the invoice.
+    const operator = payment.booking?.operator;
+    const logoUrl = operator?.logoUrl || operator?.config?.invoiceLogoUrl;
+    if (logoUrl) {
+      const logo = document.createElement("img");
+      logo.src = logoUrl;
+      logo.alt = "Merchant logo";
+      logo.style.cssText = "display:block;width:72px;height:72px;object-fit:contain;margin-bottom:8px";
+      element.appendChild(logo);
+    }
+    if (operator?.companyName) {
+      const company = document.createElement("strong");
+      company.textContent = operator.companyName;
+      company.style.cssText = "display:block;margin-bottom:12px";
+      element.appendChild(company);
+    }
     const heading = document.createElement("h1");
     heading.textContent = "Payment receipt";
     element.appendChild(heading);

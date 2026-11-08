@@ -122,6 +122,9 @@ if (MEDIA_ROOT) {
     "/media",
     (_req, res, next) => {
       res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      // Public images only, no credentials: allowing any site to read them lets
+      // the web app copy a logo into a downloaded receipt or invoice PDF.
+      res.setHeader("Access-Control-Allow-Origin", "*");
       next();
     },
     express.static(MEDIA_ROOT, {
