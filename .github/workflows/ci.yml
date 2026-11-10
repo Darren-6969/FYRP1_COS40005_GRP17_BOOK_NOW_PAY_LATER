@@ -1,0 +1,143 @@
+# Runs on every pull request (and on main, so main stays green).
+#
+# The backend job starts a real PostgreSQL service, applies the Prisma
+# migrations to it, and runs lint, the unit tests and the integration tests.
+# The integration tests connect as the application role (bnpl_app), never as the
+# database superuser. See backend/CI.md.
+#
+# Merging is blocked by requiring the "All checks passed" job below in the
+# branch protection rule for main (repository settings, not code).
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend lint, unit and integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        # Production runs PostgreSQL 17 on Dokploy.
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bnpl_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d bnpl_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      CI: "true"
+      NODE_ENV: test
+      # The superuser is used only to apply migrations and create the application role.
+      ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bnpl_test
+      # The role the app and the tests run as. The database exists only for this job.
+      APP_DB_PASSWORD: ci-application-role
+      DATABASE_URL: postgresql://bnpl_app:ci-application-role@localhost:5432/bnpl_test
+      INTEGRATION_EXPECT_ROLE: bnpl_app
+      JWT_SECRET: ci-only-jwt-secret-not-used-anywhere-else-0123456789abcdef
+      # The app refuses to load without these (src/config/env.js); the values are placeholders.
+      PORT: "3000"
+      FRONTEND_URL: http://localhost:5173
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Apply migrations (as the database owner)
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ env.ADMIN_DATABASE_URL }}
+
+      - name: Create the application role
+        run: |
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -v app_password="$APP_DB_PASSWORD" \
+            -f scripts/ci/create_app_role.sql
+
+      - name: Integration tests (as the application role)
+        run: npm run test:integration
+
+  frontend:
+    name: Frontend build and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      # The frontend has existing lint errors. Until they are fixed this step
+      # reports them in the log without failing the check. Remove
+      # continue-on-error once `npm run lint` is clean.
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build
+        run: npm run build
+
+  # The one check to require in the branch protection rule. It fails when any
+  # job above failed, was cancelled or was skipped.
+  all-checks-passed:
+    name: All checks passed
+    if: ${{ always() }}
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to have succeeded
+        run: |
+          echo "backend:  ${{ needs.backend.result }}"
+          echo "frontend: ${{ needs.frontend.result }}"
+          if [ "${{ needs.backend.result }}" != "success" ] || [ "${{ needs.frontend.result }}" != "success" ]; then
+            echo "A required job did not succeed."
+            exit 1
+          fi

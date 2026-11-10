@@ -1884,64 +1884,6 @@ export async function getOperatorBookingById(req, res, next) {
   }
 }
 
-async function updateBookingStatus(req, res, next, status, action) {
-  try {
-    const booking = await findOperatorBooking(req, req.params.id);
-
-    if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
-    }
-
-    const updatedBooking = await prisma.booking.update({
-      where: { id: booking.id },
-      data: { status },
-      include: includeBookingRelations(),
-    });
-
-    await createAuditLog({
-      req,
-      action,
-      entityType: "Booking",
-      entityId: booking.id,
-      before: { status: booking.status },
-      after: { status: updatedBooking.status },
-      details: { status },
-    });
-
-    const customerUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`;
-
-    const config = await getOperatorEmailConfig(updatedBooking.operatorId);
-
-    await createCustomerNotification({
-      booking: updatedBooking,
-      title: status === "REJECTED" ? "Booking declined" : `Booking ${status.replace("_", " ").toLowerCase()}`,
-      message:
-        status === "REJECTED"
-          ? `${updatedBooking.operator?.companyName || "The operator"} declined your booking ${booking.bookingCode || booking.id}. Nothing was charged.`
-          : `Your booking ${booking.bookingCode || booking.id} has been updated.`,
-      type: action,
-      emailSubject:
-        status === "REJECTED"
-          ? `Booking Declined - ${booking.bookingCode || booking.id}`
-          : `Booking Update - ${booking.bookingCode || booking.id}`,
-      emailHtml: bookingStatusTemplate({
-        booking: updatedBooking,
-        status,
-        customerUrl,
-        bookingRejectedEmailText:
-          status === "REJECTED" ? config?.bookingRejectedEmailText : null,
-        emailFooterText: config?.emailFooterText,
-      }),
-    });
-
-    res.json({
-      booking: mapBooking(updatedBooking),
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
 export async function acceptBooking(req, res, next) {
   try {
     const booking = await findOperatorBooking(req, req.params.id);
