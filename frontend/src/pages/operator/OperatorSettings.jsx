@@ -123,7 +123,6 @@ const DEFAULT_SETTINGS = {
 
   autoRejectInactiveBooking: true,
 
-  reminderBeforeAutoRejectMinutes: 30,
 
   // Driver rules (off by default)
   driverAgeRulesEnabled: false,
@@ -324,9 +323,6 @@ export default function OperatorSettings() {
           autoRejectInactiveBooking:
             config?.autoRejectInactiveBooking ?? prev.autoRejectInactiveBooking,
             
-          reminderBeforeAutoRejectMinutes:
-            config?.reminderBeforeAutoRejectMinutes ?? prev.reminderBeforeAutoRejectMinutes,
-
           acceptedPaymentMethods:
             config?.acceptedPaymentMethods ?? prev.acceptedPaymentMethods,
 
@@ -592,7 +588,6 @@ const handleSave = async () => {
 
       bookingResponseDeadlineMinutes: form.bookingResponseDeadlineMinutes,
       autoRejectInactiveBooking: form.autoRejectInactiveBooking,
-      reminderBeforeAutoRejectMinutes: form.reminderBeforeAutoRejectMinutes,
       acceptedPaymentMethods: form.acceptedPaymentMethods,
       manualPaymentNote: form.manualPaymentInstructions,
       operatorReminderBeforeAutoRejectMinutes:
@@ -736,33 +731,13 @@ const activeMenu = SETTINGS_MENU.find(
 
               <ToggleField
                 label="Auto-reject inactive booking"
-                helper="Automatically reject the booking if no operator action is taken before the response deadline."
+                helper="Automatically reject the booking if no operator action is taken before the response deadline. Set when you are reminded under Notification Settings."
                 checked={form.autoRejectInactiveBooking}
                 onChange={(checked) =>
                   updateField("autoRejectInactiveBooking", checked)
                 }
               />
 
-              <FormField
-                label="Reminder before auto-reject"
-                helper="Send reminder before the inactive booking is automatically rejected."
-              >
-                <select
-                  value={form.reminderBeforeAutoRejectMinutes}
-                  onChange={(event) =>
-                    updateField(
-                      "reminderBeforeAutoRejectMinutes",
-                      Number(event.target.value)
-                    )
-                  }
-                  disabled={!form.autoRejectInactiveBooking}
-                >
-                  <option value={10}>10 minutes before</option>
-                  <option value={15}>15 minutes before</option>
-                  <option value={30}>30 minutes before</option>
-                  <option value={60}>1 hour before</option>
-                </select>
-              </FormField>
             </div>
           </SettingsSection>
         );
@@ -1024,7 +999,7 @@ const activeMenu = SETTINGS_MENU.find(
             <div className="operator-settings-form-grid">
               <FormField
                 label="Operator reminder before auto-reject"
-                helper="This reminder is for operators only, not customer payment deadline reminders."
+                helper="When to remind you before an unanswered booking request is automatically rejected. Applies only while auto-reject is on."
               >
                 <select
                   value={form.operatorReminderBeforeAutoRejectMinutes}

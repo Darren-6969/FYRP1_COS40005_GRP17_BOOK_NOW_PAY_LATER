@@ -221,6 +221,7 @@ export default function CronJobs() {
             <option value="OVERDUE_CHECK">Overdue Check</option>
             <option value="PAYMENT_REMINDER_CHECK">Payment Reminder Check</option>
             <option value="NO_RESPONSE_CHECK">No Response Check</option>
+            <option value="OPERATOR_RESPONSE_REMINDER">Operator Response Reminder</option>
             <option value="COMPLETION_CHECK">Completion Check</option>
           </select>
 

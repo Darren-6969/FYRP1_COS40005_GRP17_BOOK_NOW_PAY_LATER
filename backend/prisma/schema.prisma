@@ -1031,7 +1031,8 @@ model BNPLConfig {
   // Operator booking action settings
   bookingResponseDeadlineMinutes  Int     @default(120)
   autoRejectInactiveBooking       Boolean @default(true)
-  reminderBeforeAutoRejectMinutes Int     @default(30)
+  // The reminder before an automatic rejection is
+  // operatorReminderBeforeAutoRejectMinutes, under notification settings.
 
   // Overtime (SRS 4.3.5): a flat charge for each pickup or return between
   // 21:00 and 09:00, or block night handovers entirely. Set per operator in

@@ -4347,7 +4347,6 @@ async function getOrCreateOperatorConfig(operatorId) {
         autoCancelOverdue: true,
         bookingResponseDeadlineMinutes: 120,
         autoRejectInactiveBooking: true,
-        reminderBeforeAutoRejectMinutes: 30,
         acceptedPaymentMethods: getDefaultAcceptedPaymentMethods(),
         manualPaymentNote:
           "Please upload your DuitNow/SPay receipt after payment.",
@@ -4574,7 +4573,6 @@ export async function updateOperatorSettings(req, res, next) {
     const {
       bookingResponseDeadlineMinutes,
       autoRejectInactiveBooking,
-      reminderBeforeAutoRejectMinutes,
       acceptedPaymentMethods,
       manualPaymentNote,
       operatorReminderBeforeAutoRejectMinutes,
@@ -4607,7 +4605,6 @@ export async function updateOperatorSettings(req, res, next) {
       } = req.body || {};
 
     const parsedBookingDeadline = Number(bookingResponseDeadlineMinutes);
-    const parsedReminderBeforeReject = Number(reminderBeforeAutoRejectMinutes);
     const parsedOperatorReminder = Number(operatorReminderBeforeAutoRejectMinutes);
     const configForValidation = await getOrCreateOperatorConfig(operatorId);
     const deadlinePolicy = await getPlatformDeadlinePolicy();
@@ -4628,17 +4625,6 @@ export async function updateOperatorSettings(req, res, next) {
     ) {
       return res.status(400).json({
         message: "Booking response deadline must be between 10 and 1440 minutes.",
-      });
-    }
-
-    if (
-      !Number.isInteger(parsedReminderBeforeReject) ||
-      parsedReminderBeforeReject < 5 ||
-      parsedReminderBeforeReject > parsedBookingDeadline
-    ) {
-      return res.status(400).json({
-        message:
-          "Reminder before auto-reject must be at least 5 minutes and cannot exceed the booking response deadline.",
       });
     }
 
@@ -4667,7 +4653,6 @@ export async function updateOperatorSettings(req, res, next) {
     const configData = {
       bookingResponseDeadlineMinutes: parsedBookingDeadline,
       autoRejectInactiveBooking: Boolean(autoRejectInactiveBooking),
-      reminderBeforeAutoRejectMinutes: parsedReminderBeforeReject,
       acceptedPaymentMethods:
         acceptedPaymentMethods || getDefaultAcceptedPaymentMethods(),
       operatorReminderBeforeAutoRejectMinutes: parsedOperatorReminder,

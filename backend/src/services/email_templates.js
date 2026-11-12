@@ -855,6 +855,37 @@ export function autoRejectedBookingTemplate({
   });
 }
 
+// BNPLB-122 (FR-OP-002): sent to the operator's users once, at the reminder
+// time they chose in Shop settings, before a request they have not answered
+// is automatically rejected.
+export function autoRejectReminderTemplate({
+  booking,
+  operatorUrl,
+  responseDeadline,
+  minutesLeft,
+}) {
+  const left = minutesLeft >= 60
+    ? `${Math.floor(minutesLeft / 60)} hour${Math.floor(minutesLeft / 60) === 1 ? "" : "s"}${minutesLeft % 60 ? ` ${minutesLeft % 60} minutes` : ""}`
+    : `${minutesLeft} minute${minutesLeft === 1 ? "" : "s"}`;
+
+  return baseTemplate({
+    title: "Booking Request About to Expire",
+    buttonText: "Review Booking",
+    buttonUrl: operatorUrl,
+    operator: booking?.operator,
+    body: `
+      <p style="margin-top:0;">Dear Operator,</p>
+      <p>
+        This booking request is still waiting for your answer. If you do not
+        accept, reject or make an offer within about ${escapeHtml(left)}
+        (by ${escapeHtml(formatDateTime(responseDeadline))}), it will be
+        rejected automatically and the customer will be told.
+      </p>
+      ${bookingTable(booking)}
+    `,
+  });
+}
+
 // Sent to the customer as soon as a booking request is recorded. No payment
 // is taken at this point; the operator accepts, suggests an alternative or
 // declines, and each of those sends its own email.

@@ -8,7 +8,13 @@ import {
   notifyOperatorUsersByBooking,
   notifyMasterUsers,
 } from "./notification_email_service.js";
-import { bookingStatusTemplate, autoRejectedBookingTemplate } from "./email_templates.js";
+import {
+  bookingStatusTemplate,
+  autoRejectedBookingTemplate,
+  autoRejectReminderTemplate,
+} from "./email_templates.js";
+import { transitionBookingStatus } from "./booking_status_service.js";
+import { operatorBookingUrl } from "../utils/frontendUrls.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
 import { withDbRetry, ensureDbConnection } from "../utils/dbRetry.js"; // <-- add
 import { runLoggedCronJob } from "./cron_job_service.js";
@@ -791,6 +797,163 @@ export function runPaymentReminderCheck(options = {}) {
  * → REJECTED
  * → notify customer, operator, and master
  */
+// FR-OP-002: an operator with automatic rejection on must answer a booking
+// request within their response deadline, counted from when it was sent.
+function responseDeadlineFor(booking, config) {
+  const minutes = config.bookingResponseDeadlineMinutes || 120;
+  return {
+    minutes,
+    deadline: new Date(new Date(booking.createdAt).getTime() + minutes * 60 * 1000),
+  };
+}
+
+// The newest settings row, as the shop settings page and the booking form use.
+function latestOperatorConfig(operatorId) {
+  return prisma.bNPLConfig.findFirst({
+    where: { operatorId },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+/**
+ * BNPLB-122 (FR-OP-002, FR-OP-005): remind the operator once, at the time they
+ * chose in Shop settings (operatorReminderBeforeAutoRejectMinutes), before an
+ * unanswered request is automatically rejected. Only operators with automatic
+ * rejection and reminder alerts both on are reminded. Runs before the
+ * rejection pass, every 5 minutes.
+ */
+async function performOperatorResponseReminderCheck({
+  triggeredByUserId = null,
+  triggerSource = "MANUAL",
+  saveHistory = true,
+} = {}) {
+  let cronRun = null;
+
+  try {
+    // saveHistory: true records every run; "whenActive" (the 5-minute
+    // schedule) records only a run that reminded someone, so the admin's
+    // scheduled task history is not filled with empty runs.
+    if (saveHistory === true) {
+      cronRun = await createCronRun({
+        jobType: "OPERATOR_RESPONSE_REMINDER",
+        triggeredByUserId,
+        triggerSource,
+      });
+    }
+
+    const now = new Date();
+
+    const candidates = await prisma.booking.findMany({
+      where: {
+        status: "PENDING",
+        operator: {
+          configs: {
+            some: {
+              autoRejectInactiveBooking: true,
+              enableOperatorReminderAlerts: true,
+            },
+          },
+        },
+      },
+      include: includeBookingRelations(),
+    });
+
+    const reminded = [];
+
+    for (const booking of candidates) {
+      const config = await latestOperatorConfig(booking.operatorId);
+
+      if (!config?.autoRejectInactiveBooking || !config.enableOperatorReminderAlerts) {
+        continue;
+      }
+
+      const { deadline } = responseDeadlineFor(booking, config);
+      const reminderMinutes = config.operatorReminderBeforeAutoRejectMinutes || 30;
+      const remindFrom = new Date(deadline.getTime() - reminderMinutes * 60 * 1000);
+
+      // Inside the reminder window only: not yet due, or already past the
+      // deadline (the rejection pass takes it from there).
+      if (now < remindFrom || now >= deadline) {
+        continue;
+      }
+
+      if (await hasAuditLog(booking.id, "BOOKING_AUTO_REJECT_REMINDER_SENT")) {
+        continue;
+      }
+
+      const minutesLeft = Math.max(1, Math.ceil((deadline.getTime() - now.getTime()) / 60000));
+      const code = booking.bookingCode || booking.id;
+
+      await notifyOperatorUsersByBooking({
+        booking,
+        title: "Booking request about to expire",
+        message: `Booking ${code} will be rejected automatically in about ${minutesLeft} minutes unless you accept, reject or make an offer.`,
+        type: "BOOKING_AUTO_REJECT_REMINDER",
+        emailSubject: `Action needed - Booking ${code} expires soon`,
+        emailHtml: autoRejectReminderTemplate({
+          booking,
+          operatorUrl: operatorBookingUrl(booking.id),
+          responseDeadline: deadline,
+          minutesLeft,
+        }),
+        // The reminder is the operator's to act on; platform admins are not
+        // notified.
+        notifyMaster: false,
+      });
+
+      // Recorded after sending, so a failed send is retried on the next run.
+      await prisma.auditLog.create({
+        data: {
+          userId: triggeredByUserId,
+          action: "BOOKING_AUTO_REJECT_REMINDER_SENT",
+          entityType: "Booking",
+          entityId: String(booking.id),
+          details: {
+            bookingCode: booking.bookingCode,
+            responseDeadline: deadline,
+            reminderMinutes,
+            minutesLeft,
+            cronRunId: cronRun?.id || null,
+          },
+        },
+      });
+
+      reminded.push({ id: booking.id, bookingCode: booking.bookingCode, responseDeadline: deadline });
+    }
+
+    const result = {
+      checkedAt: now,
+      remindedCount: reminded.length,
+      remindedBookings: reminded,
+    };
+
+    if (!cronRun && saveHistory === "whenActive" && reminded.length) {
+      cronRun = await createCronRun({
+        jobType: "OPERATOR_RESPONSE_REMINDER",
+        triggeredByUserId,
+        triggerSource,
+      });
+    }
+
+    await finishCronRunSuccess(cronRun?.id, {
+      affectedCount: reminded.length,
+      result,
+    });
+
+    return result;
+  } catch (err) {
+    await finishCronRunFailed(cronRun?.id, err);
+    throw err;
+  }
+}
+
+export function runOperatorResponseReminderCheck(options = {}) {
+  return runLoggedCronJob(
+    "OPERATOR_RESPONSE_REMINDER",
+    () => performOperatorResponseReminderCheck(options)
+  );
+}
+
 async function performNoMerchantResponseCheck({
   triggeredByUserId = null,
   triggerSource = "MANUAL",
@@ -799,7 +962,8 @@ async function performNoMerchantResponseCheck({
   let cronRun = null;
 
   try {
-    if (saveHistory) {
+    // See the reminder check for saveHistory: "whenActive".
+    if (saveHistory === true) {
       cronRun = await createCronRun({
         jobType: "NO_RESPONSE_CHECK",
         triggeredByUserId,
@@ -826,26 +990,16 @@ async function performNoMerchantResponseCheck({
     const rejected = [];
 
     for (const booking of noResponseCandidates) {
-      const config = await prisma.bNPLConfig.findFirst({
-        where: {
-          operatorId: booking.operatorId,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
+      const config = await latestOperatorConfig(booking.operatorId);
 
       if (!config?.autoRejectInactiveBooking) {
         continue;
       }
 
-      const responseDeadlineMinutes =
-        config.bookingResponseDeadlineMinutes || 120;
-
-      const responseDeadline = new Date(
-        new Date(booking.createdAt).getTime() +
-          responseDeadlineMinutes * 60 * 1000
-      );
+      const {
+        minutes: responseDeadlineMinutes,
+        deadline: responseDeadline,
+      } = responseDeadlineFor(booking, config);
 
       if (responseDeadline > now) {
         continue;
@@ -860,33 +1014,52 @@ async function performNoMerchantResponseCheck({
         continue;
       }
 
-      const updatedBooking = await prisma.booking.update({
-        where: {
-          id: booking.id,
-        },
-        data: {
-          status: "REJECTED",
-        },
-        include: includeBookingRelations(),
+      // The operator may have answered since the list was read. Re-check
+      // inside the transaction so an accepted booking is never rejected, and
+      // move the status through transitionBookingStatus so the rejection is
+      // checked and written to the status history.
+      const updatedBooking = await prisma.$transaction(async (tx) => {
+        const current = await tx.booking.findUnique({
+          where: { id: booking.id },
+          select: { status: true },
+        });
+        if (current?.status !== "PENDING") return null;
+
+        await transitionBookingStatus({
+          bookingId: booking.id,
+          newStatus: "REJECTED",
+          actorId: triggeredByUserId,
+          remark: `Rejected automatically: the operator did not respond within ${responseDeadlineMinutes} minutes.`,
+          database: tx,
+        });
+
+        await tx.auditLog.create({
+          data: {
+            userId: triggeredByUserId,
+            action: "BOOKING_AUTO_REJECTED_NO_MERCHANT_RESPONSE",
+            entityType: "Booking",
+            entityId: String(booking.id),
+            details: {
+              bookingCode: booking.bookingCode,
+              createdAt: booking.createdAt,
+              responseDeadline,
+              responseDeadlineMinutes,
+              reason:
+                "Merchant/operator did not respond before the configured booking response deadline.",
+              cronRunId: cronRun?.id || null,
+            },
+          },
+        });
+
+        return tx.booking.findUnique({
+          where: { id: booking.id },
+          include: includeBookingRelations(),
+        });
       });
 
-      await prisma.auditLog.create({
-        data: {
-          userId: triggeredByUserId,
-          action: "BOOKING_AUTO_REJECTED_NO_MERCHANT_RESPONSE",
-          entityType: "Booking",
-          entityId: String(booking.id),
-          details: {
-            bookingCode: booking.bookingCode,
-            createdAt: booking.createdAt,
-            responseDeadline,
-            responseDeadlineMinutes,
-            reason:
-              "Merchant/operator did not respond before the configured booking response deadline.",
-            cronRunId: cronRun?.id || null,
-          },
-        },
-      });
+      if (!updatedBooking) {
+        continue;
+      }
 
       await notifyCustomerByBooking({
         booking: updatedBooking,
@@ -926,6 +1099,14 @@ async function performNoMerchantResponseCheck({
       });
 
       rejected.push(updatedBooking);
+    }
+
+    if (!cronRun && saveHistory === "whenActive" && rejected.length) {
+      cronRun = await createCronRun({
+        jobType: "NO_RESPONSE_CHECK",
+        triggeredByUserId,
+        triggerSource,
+      });
     }
 
     lastNoResponseRun = new Date();
@@ -977,6 +1158,14 @@ async function performBookingMaintenanceChecks({
       triggerSource,
     });
 
+    // Remind first, then reject: a request in its last minutes gets its
+    // reminder before the rejection pass looks at it.
+    const responseReminderResult = await runOperatorResponseReminderCheck({
+      triggeredByUserId,
+      triggerSource,
+      saveHistory: false,
+    });
+
     const noResponseResult = await runNoMerchantResponseCheck({
       triggeredByUserId,
       triggerSource,
@@ -1015,6 +1204,7 @@ async function performBookingMaintenanceChecks({
 
     const result = {
       checkedAt: new Date(),
+      responseReminders: responseReminderResult,
       noResponse: noResponseResult,
       paymentReconciliation: reconciliationResult,
       reminders: reminderResult,
@@ -1023,6 +1213,7 @@ async function performBookingMaintenanceChecks({
     };
 
     const affectedCount =
+      Number(responseReminderResult?.remindedCount || 0) +
       Number(noResponseResult?.rejectedCount || 0) +
       Number(reconciliationResult?.reconciledCount || 0) +
       Number(reminderResult?.remindedCount || 0) +
@@ -1058,7 +1249,7 @@ export function getCronStatus() {
     lastCompletionResult,
 
     schedule:
-      "Every 30 minutes via cron-job.org (Vercel Hobby cron runs daily as a fallback)",
+      "Operator response reminders and automatic rejections every 5 minutes; other booking maintenance every 30 minutes (cron-job.org or the server's own schedule).",
   };
 }
 
@@ -1076,6 +1267,19 @@ export function startOverdueBookingCron() {
     }
   });
 
+  // BNPLB-122: reminders and automatic rejections run every 5 minutes, so
+  // each lands within 5 minutes of its time. The 30-minute maintenance run
+  // still calls both as a fallback; they share the same advisory locks, so
+  // the two schedules never run a job twice at once.
+  cron.schedule("*/5 * * * *", async () => {
+    try {
+      await runOperatorResponseReminderCheck({ triggerSource: "LOCAL_CRON", saveHistory: "whenActive" });
+      await runNoMerchantResponseCheck({ triggerSource: "LOCAL_CRON", saveHistory: "whenActive" });
+    } catch (err) {
+      console.error("[CRON] Response reminder / auto-reject check failed:", err.message);
+    }
+  });
+
   cronStarted = true;
   console.log("[CRON] Booking maintenance cron started.");
 }
@@ -1087,6 +1291,7 @@ export function runBookingMaintenanceChecks(options = {}) {
     {
       summarize: (result) => ({
         processedCount:
+          Number(result?.responseReminders?.remindedCount || 0) +
           Number(result?.noResponse?.rejectedCount || 0) +
           Number(result?.paymentReconciliation?.reconciledCount || 0) +
           Number(result?.reminders?.remindedCount || 0) +
