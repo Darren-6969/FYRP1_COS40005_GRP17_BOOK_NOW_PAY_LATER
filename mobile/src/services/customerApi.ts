@@ -172,7 +172,8 @@ export type CreateCarBookingInput = {
     driver: {
       isBooker: boolean;
       fullName: string;
-      dateOfBirth: string;
+      // Only when the operator has driver age rules on.
+      dateOfBirth?: string;
       licenceIssuedIn: string;
     };
 

@@ -54,21 +54,21 @@ const STANDARD_ADDONS = [
 
 const car = (o) => ({
   quantity: 3, powertrain: "PETROL", drivetrain: "TWO_WD", fuelPolicy: "FULL_TO_FULL", mileagePolicy: "UNLIMITED",
-  minDriverAge: 21, youngDriverMaxAge: 24, youngDriverSurcharge: "20.00", ...o,
+  ...o,
 });
 
 const CARS = [
   car({ branch: "kchAirport", name: "Perodua Bezza 1.3 AV", make: "Perodua", model: "Bezza", year: 2023, type: "SEDAN", seats: 5, transmission: "AUTOMATIC", luggage: 2, price: "120.00", weekend: "140.00", peak: "155.00", description: "Economical sedan for city runs and the coastal road to Santubong." }),
   car({ branch: "kchCity", name: "Perodua Axia 1.0 G", make: "Perodua", model: "Axia", year: 2022, type: "COMPACT", seats: 4, transmission: "AUTOMATIC", luggage: 1, price: "90.00", weekend: "105.00", peak: "115.00", description: "Small and easy to park around the Waterfront and Carpenter Street." }),
-  car({ branch: "kchAirport", name: "Proton X70 1.5 TGDi", make: "Proton", model: "X70", year: 2024, type: "SUV", seats: 5, transmission: "AUTOMATIC", luggage: 3, price: "220.00", weekend: "255.00", peak: "285.00", quantity: 2, minDriverAge: 23, youngDriverMaxAge: 25, mileagePolicy: "LIMITED", mileageLimitKm: 250, mileageExcessRate: "0.50", description: "Comfortable SUV for the drive to Bako, Semenggoh or Annah Rais." }),
+  car({ branch: "kchAirport", name: "Proton X70 1.5 TGDi", make: "Proton", model: "X70", year: 2024, type: "SUV", seats: 5, transmission: "AUTOMATIC", luggage: 3, price: "220.00", weekend: "255.00", peak: "285.00", quantity: 2, mileagePolicy: "LIMITED", mileageLimitKm: 250, mileageExcessRate: "0.50", description: "Comfortable SUV for the drive to Bako, Semenggoh or Annah Rais." }),
   car({ branch: "miriAirport", name: "Proton X90 1.5 TGDi 7-seater", make: "Proton", model: "X90", year: 2024, type: "SUV", seats: 7, transmission: "AUTOMATIC", luggage: 3, price: "260.00", weekend: "300.00", peak: "340.00", quantity: 1, description: "Seven seats for families heading to Niah or Lambir Hills." }),
   car({ branch: "miriAirport", name: "Perodua Alza 1.5 AV", make: "Perodua", model: "Alza", year: 2023, type: "MPV", seats: 7, transmission: "AUTOMATIC", luggage: 2, price: "160.00", weekend: "185.00", peak: "210.00", description: "Practical people carrier with flexible seating." }),
-  car({ branch: "bintulu", name: "Toyota Hilux 2.4 4x4", make: "Toyota", model: "Hilux", year: 2022, type: "PICKUP", seats: 5, transmission: "MANUAL", luggage: 4, powertrain: "DIESEL", drivetrain: "FOUR_WD", price: "280.00", weekend: "320.00", peak: "365.00", minDriverAge: 25, youngDriverMaxAge: null, youngDriverSurcharge: null, description: "Four-wheel drive for logging roads and longhouse visits." }),
+  car({ branch: "bintulu", name: "Toyota Hilux 2.4 4x4", make: "Toyota", model: "Hilux", year: 2022, type: "PICKUP", seats: 5, transmission: "MANUAL", luggage: 4, powertrain: "DIESEL", drivetrain: "FOUR_WD", price: "280.00", weekend: "320.00", peak: "365.00", description: "Four-wheel drive for logging roads and longhouse visits." }),
   car({ branch: "sibu", name: "Honda City 1.5 V", make: "Honda", model: "City", year: 2023, type: "SEDAN", seats: 5, transmission: "AUTOMATIC", luggage: 2, price: "150.00", weekend: "175.00", peak: "195.00", quantity: 2, mileagePolicy: "LIMITED", mileageLimitKm: 250, mileageExcessRate: "0.50", description: "Quiet, roomy sedan for business trips around Sibu." }),
   car({ branch: "sibu", name: "Perodua Myvi 1.5 AV", make: "Perodua", model: "Myvi", year: 2024, type: "COMPACT", seats: 5, transmission: "AUTOMATIC", luggage: 2, price: "100.00", weekend: "115.00", peak: "130.00", description: "Malaysia's favourite hatchback." }),
   car({ branch: "kchCity", name: "Toyota Innova 2.0 G", make: "Toyota", model: "Innova", year: 2022, type: "MPV", seats: 7, transmission: "AUTOMATIC", luggage: 3, price: "230.00", weekend: "265.00", peak: "300.00", description: "Spacious MPV for groups and airport runs." }),
   car({ branch: "bintulu", name: "Proton Saga 1.3 Standard", make: "Proton", model: "Saga", year: 2021, type: "SEDAN", seats: 5, transmission: "MANUAL", luggage: 2, price: "85.00", weekend: "100.00", peak: "110.00", description: "No-frills sedan at the lowest daily rate in Bintulu." }),
-  car({ branch: "miriAirport", name: "Mitsubishi Triton 2.4 4x4", make: "Mitsubishi", model: "Triton", year: 2023, type: "PICKUP", seats: 5, transmission: "MANUAL", luggage: 4, powertrain: "DIESEL", drivetrain: "FOUR_WD", price: "270.00", weekend: "310.00", peak: "350.00", minDriverAge: 25, youngDriverMaxAge: null, youngDriverSurcharge: null, mileagePolicy: "LIMITED", mileageLimitKm: 300, mileageExcessRate: "0.60", description: "Rugged pickup for the road to Mulu's river jetties." }),
+  car({ branch: "miriAirport", name: "Mitsubishi Triton 2.4 4x4", make: "Mitsubishi", model: "Triton", year: 2023, type: "PICKUP", seats: 5, transmission: "MANUAL", luggage: 4, powertrain: "DIESEL", drivetrain: "FOUR_WD", price: "270.00", weekend: "310.00", peak: "350.00", mileagePolicy: "LIMITED", mileageLimitKm: 300, mileageExcessRate: "0.60", description: "Rugged pickup for the road to Mulu's river jetties." }),
   car({ branch: "kchCity", name: "Proton X50 1.5T Premium", make: "Proton", model: "X50", year: 2024, type: "SUV", seats: 5, transmission: "AUTOMATIC", luggage: 2, price: "180.00", weekend: "205.00", peak: "235.00", quantity: 1, description: "Compact SUV with a strong turbo engine." }),
 ];
 
@@ -141,9 +141,8 @@ async function upsertListing(c, operatorId, branchId) {
     mileagePolicy: c.mileagePolicy,
     mileageLimitKm: c.mileageLimitKm ?? null,
     mileageExcessRate: c.mileageExcessRate ?? null,
-    minDriverAge: c.minDriverAge,
-    youngDriverMaxAge: c.youngDriverMaxAge,
-    youngDriverSurcharge: c.youngDriverSurcharge,
+    // Driver age rules are the operator's shop settings (BNPLConfig), off by
+    // default; listings no longer carry their own copy.
     travelArea: "Sarawak only. Cross-border travel to Brunei or Kalimantan voids the rental.",
     pickupRules: "Bring the booking reference and your original driving licence. Staff inspect the licence at handover.",
     returnRules: "Return to the same point by the agreed time. The vehicle stays held until the operator confirms it is back and ready.",

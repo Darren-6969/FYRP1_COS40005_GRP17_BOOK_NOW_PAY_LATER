@@ -303,6 +303,10 @@ export function toCarDto(listing, facts, availability, faqs = []) {
       cdw: cdwFor(listing),
       downPaymentPct: config?.downPaymentPercent ?? DEFAULT_DOWN_PAYMENT_PCT,
       driverRules: {
+        // Off by default: while off, the booking form asks no date of birth
+        // and no age rule or surcharge applies.
+        enabled: Boolean(config?.driverAgeRulesEnabled),
+
         minAge:
           config?.minDriverAge ?? 21,
 
@@ -534,11 +538,14 @@ export async function getPublicCarsAvailability(
  * again inside its transaction rather than trusting a stored quote.
  *
  * sel: { from, to, ft, tt, pickupPointId, dropoffPointId, requestedLocation,
- *        requestedDropoffLocation, returnToRequested,
+ *        requestedDropoffLocation, returnToRequested, driverDateOfBirth,
  *        cdw, addOns: {id: qty} }
  *
- * No driver age is asked (client decision, Oct 2026): a valid driving
- * licence is the only driver requirement.
+ * Driver age rules apply only when the operator switched them on
+ * (config.driverAgeRulesEnabled, off by default: client decision, Oct 2026,
+ * a valid licence is enough). While off, any date of birth sent is ignored.
+ * While on, opts.requireDriverDob (booking creation only) makes a missing
+ * date of birth a problem; a quote may be asked before the form is filled.
  *
  * Returns problems[] instead of throwing, so the quote endpoint can show them
  * and booking creation can refuse with the first one.
@@ -658,17 +665,23 @@ export function priceSelection(listing, config, sel, peakDates, opts = {}) {
   if (!days) return { days: 0, downPaymentPct, problems: [] };
 
   const problems = [];
+  const driverAgeRulesEnabled = Boolean(config?.driverAgeRulesEnabled);
   const driverDateOfBirth =
-  typeof sel.driverDateOfBirth ===
-  "string"
-    ? sel.driverDateOfBirth.trim()
-    : "";
+    driverAgeRulesEnabled && typeof sel.driverDateOfBirth === "string"
+      ? sel.driverDateOfBirth.trim()
+      : "";
 
   let driverAge = null;
 
   let youngDriverDailySurchargeSen =
     0;
 
+  if (driverAgeRulesEnabled && !driverDateOfBirth && opts.requireDriverDob) {
+    problems.push({
+      code: "DRIVER_DOB_REQUIRED",
+      message: "Enter the driver's date of birth.",
+    });
+  }
 
   if (driverDateOfBirth) {
     driverAge =

@@ -71,7 +71,9 @@ function phoneDigits(phone) {
   return phone.replace(/[\s-]/g, "").replace(/^\+?60/, "").replace(/^0/, "");
 }
 
-function validate(key, f, agreed, forfeitAgreed) {
+// opts.ageRulesOn: the operator has driver age rules on, so the driver's
+// date of birth is asked (off by default).
+function validate(key, f, agreed, forfeitAgreed, opts = {}) {
   if (key === "name") return f.name.trim() ? "" : "Enter your full name.";
   if (key === "phone") {
     const n = phoneDigits(f.phone);
@@ -80,6 +82,7 @@ function validate(key, f, agreed, forfeitAgreed) {
   }
   if (key === "driverName") return f.isDriver || f.driverName.trim() ? "" : "Enter the driver's full name.";
   if (key === "driverDob") {
+  if (!opts.ageRulesOn) return "";
   if (!f.driverDateOfBirth) {
     return "Enter the driver's date of birth.";
   }
@@ -108,10 +111,10 @@ function validate(key, f, agreed, forfeitAgreed) {
   return "";
 }
 
-function validateAll(f, agreed, forfeitAgreed) {
+function validateAll(f, agreed, forfeitAgreed, opts = {}) {
   const errors = {};
   ORDER.forEach((k) => {
-    const msg = validate(k, f, agreed, forfeitAgreed);
+    const msg = validate(k, f, agreed, forfeitAgreed, opts);
     if (msg) errors[k] = msg;
   });
   return errors;
@@ -309,8 +312,12 @@ export default function CarBookingForm() {
   // Requested places are quoted once they are complete, not on every keystroke.
   const [quotedPlaces, setQuotedPlaces] = useState(() => requestedPlaces(form));
   const quotedPlacesKey = `${quotedPlaces.pickup}|${quotedPlaces.dropoff}|${quotedPlaces.returnToRequested}`;
-  const quotedDriverDob =
-  form.driverDateOfBirth || "";
+  // Driver age rules are the operator's choice, off by default. While off the
+  // date of birth is neither asked, quoted nor sent.
+  const ageRulesOn = Boolean(listingRes.data?.booking?.driverRules?.enabled);
+  const quotedDriverDob = ageRulesOn
+    ? form.driverDateOfBirth || ""
+    : "";
 
   const quoteKey =`${listingId}?${key}` + `&rl=${quotedPlacesKey}` + `&dob=${quotedDriverDob}`;
 
@@ -484,10 +491,10 @@ export default function CarBookingForm() {
   const change = (field, errKey, value) => {
     const next = { ...form, [field]: value };
     setForm(next);
-    if (errors[errKey]) setErrors((e) => ({ ...e, [errKey]: validate(errKey, next, agreed, forfeitAgreed) }));
+    if (errors[errKey]) setErrors((e) => ({ ...e, [errKey]: validate(errKey, next, agreed, forfeitAgreed, { ageRulesOn }) }));
   };
 
-  const blur = (k) => setErrors((e) => ({ ...e, [k]: validate(k, form, agreed, forfeitAgreed) }));
+  const blur = (k) => setErrors((e) => ({ ...e, [k]: validate(k, form, agreed, forfeitAgreed, { ageRulesOn }) }));
 
   const commitLocation = (f = form) => {
     setQuotedPlaces(requestedPlaces(f));
@@ -552,8 +559,10 @@ export default function CarBookingForm() {
               ? form.name.trim()
               : form.driverName.trim(),
 
-          dateOfBirth:
-            form.driverDateOfBirth,
+          // Sent only when the operator's age rules ask for it.
+          ...(ageRulesOn
+            ? { dateOfBirth: form.driverDateOfBirth }
+            : {}),
 
           licenceIssuedIn:
             form.licence,
@@ -623,7 +632,7 @@ export default function CarBookingForm() {
   const onSubmit = (e) => {
     e.preventDefault();
     if (sending) return;
-    const found = validateAll(form, agreed, forfeitAgreed);
+    const found = validateAll(form, agreed, forfeitAgreed, { ageRulesOn });
     if (Object.keys(found).length) {
       setErrors(found);
       setStatus({ kind: "idle" });
@@ -654,8 +663,9 @@ export default function CarBookingForm() {
     },
     {
       k: "Driver age",
-      v:
-        b.driverRules?.youngDriver
+      v: !b.driverRules?.enabled
+        ? "No age limit. A valid driving licence is enough."
+        : b.driverRules?.youngDriver
           ?.enabled
           ? `Minimum age ${
               b.driverRules.minAge
@@ -935,6 +945,7 @@ export default function CarBookingForm() {
                 </div>
               )}
 
+              {ageRulesOn && (
               <div className={styles.group}>
                 <div className={styles.field}>
                   <label
@@ -1039,6 +1050,7 @@ export default function CarBookingForm() {
                   )}
 
               </div>
+              )}
 
               <fieldset className={styles.group}>
                 <legend className={styles.label}>Licence issued in</legend>

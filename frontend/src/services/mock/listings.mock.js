@@ -113,8 +113,13 @@ function car(o) {
       refundRule: o.refund,
       pickupPoints: pickupSets[city],
       addOns: o.addOns ?? standardAddOns,
-      minDriverAge: o.minAge ?? 21,
-      youngDriver: { maxAge: 24, surchargeSen: o.youngSurchargeSen ?? 2000, unit: "per_day" },
+      // Same shape as the API: driver age rules are off unless an operator
+      // switches them on.
+      driverRules: {
+        enabled: false,
+        minAge: o.minAge ?? 21,
+        youngDriver: { enabled: false, maxAge: 24, surchargeSen: 0, unit: "per_day" },
+      },
       additionalDriverSen: 1000,
       // Rolling return hold: the vehicle is still out with a customer and is
       // not bookable before this plain date (operator local time).

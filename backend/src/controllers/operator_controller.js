@@ -4594,6 +4594,7 @@ export async function updateOperatorSettings(req, res, next) {
       blockNightHandover,
 
       // BNPLB-85 - Driver rules
+      driverAgeRulesEnabled,
       minDriverAge,
       youngDriverSurchargeEnabled,
       youngDriverMaxAge,
@@ -4801,6 +4802,14 @@ export async function updateOperatorSettings(req, res, next) {
     // BNPLB-85 - Driver rules
     // =========================================================
 
+    // Master switch, off by default. While off, no date of birth is asked
+    // and the age fields below are kept but not applied.
+    if (driverAgeRulesEnabled !== undefined) {
+      configData.driverAgeRulesEnabled =
+        driverAgeRulesEnabled === true ||
+        driverAgeRulesEnabled === "true";
+    }
+
     if (minDriverAge !== undefined) {
       const value = Number(minDriverAge);
 
@@ -4896,8 +4905,16 @@ export async function updateOperatorSettings(req, res, next) {
       configData.youngDriverSurcharge ??
       configForValidation.youngDriverSurcharge;
 
+    // The surcharge fields are hidden while driver age rules are off, so
+    // they are only checked when the rules are on.
+    const effectiveDriverAgeRulesEnabled =
+      configData.driverAgeRulesEnabled ??
+      configForValidation.driverAgeRulesEnabled ??
+      false;
+
 
     if (
+      effectiveDriverAgeRulesEnabled &&
       effectiveYoungDriverEnabled &&
       effectiveYoungDriverMaxAge <
         effectiveMinDriverAge
@@ -4910,6 +4927,7 @@ export async function updateOperatorSettings(req, res, next) {
 
 
     if (
+      effectiveDriverAgeRulesEnabled &&
       effectiveYoungDriverEnabled &&
       (
         effectiveYoungDriverSurcharge ===

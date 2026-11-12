@@ -406,12 +406,15 @@ export default function CarDetail() {
       {
       k: "Driver age",
 
-      value: `Minimum ${
-        b.driverRules?.minAge ?? 21
-      } years old`,
+      // Off by default: only an operator who switched driver age rules on
+      // has a minimum age or a young driver surcharge.
+      value: b.driverRules?.enabled
+        ? `Minimum ${b.driverRules.minAge ?? 21} years old`
+        : "No age limit",
 
-      note:
-        b.driverRules?.youngDriver
+      note: !b.driverRules?.enabled
+        ? "A valid driving licence is enough."
+        : b.driverRules?.youngDriver
           ?.enabled &&
         b.driverRules.youngDriver
           .surchargeSen > 0

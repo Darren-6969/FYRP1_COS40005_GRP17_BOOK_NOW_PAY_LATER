@@ -125,7 +125,8 @@ const DEFAULT_SETTINGS = {
 
   reminderBeforeAutoRejectMinutes: 30,
 
-  // Driver rules
+  // Driver rules (off by default)
+  driverAgeRulesEnabled: false,
   minDriverAge: 21,
   youngDriverSurchargeEnabled: false,
   youngDriverMaxAge: 24,
@@ -275,6 +276,10 @@ export default function OperatorSettings() {
         paymentDeadlineDays:
           config?.paymentDeadlineDays ??
           prev.paymentDeadlineDays,
+
+        driverAgeRulesEnabled:
+          config?.driverAgeRulesEnabled ??
+          prev.driverAgeRulesEnabled,
 
         minDriverAge:
           config?.minDriverAge ??
@@ -546,6 +551,9 @@ const handleSave = async () => {
 
       paymentDeadlineDays: Number(form.paymentDeadlineDays),
 
+      driverAgeRulesEnabled:
+        form.driverAgeRulesEnabled,
+
       minDriverAge:
         Number(form.minDriverAge),
 
@@ -765,10 +773,24 @@ const activeMenu = SETTINGS_MENU.find(
                     id="driver-rules"
                     icon={<ShieldCheck size={20} />}
                     title="Driver Rules"
-                    description="Configure the minimum driver age and optional young driver surcharge."
+                    description="Choose whether to ask for the driver's age. When off, a valid driving licence is enough."
                   >
                     <div className="operator-settings-form-grid">
 
+                      <ToggleField
+                        label="Ask for the driver's age"
+                        helper="When on, customers enter the driver's date of birth, and your minimum age and young driver surcharge apply."
+                        checked={form.driverAgeRulesEnabled}
+                        onChange={(checked) =>
+                          updateField(
+                            "driverAgeRulesEnabled",
+                            checked
+                          )
+                        }
+                      />
+
+                      {form.driverAgeRulesEnabled && (
+                      <>
                       <FormField
                         label="Minimum driver age"
                         helper="The minimum permitted driver age. This cannot be lower than 17."
@@ -844,6 +866,8 @@ const activeMenu = SETTINGS_MENU.find(
                             />
                           </FormField>
                         </>
+                      )}
+                      </>
                       )}
 
                     </div>

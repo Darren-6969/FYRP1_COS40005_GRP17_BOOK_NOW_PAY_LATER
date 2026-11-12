@@ -65,6 +65,15 @@ function selectionFrom(body) {
   };
 }
 
+// Keep the driver's date of birth only when the operator's driver age rules
+// use it, so the platform holds no personal data a booking does not need.
+function bookingDetailsToStore(bookingDetails, config) {
+  if (config?.driverAgeRulesEnabled) return bookingDetails;
+  // eslint-disable-next-line no-unused-vars
+  const { dateOfBirth, ...driver } = bookingDetails.driver;
+  return { ...bookingDetails, driver };
+}
+
 function validateSelection(listing, body, pickupAt, returnAt) {
   if (pickupAt.getTime() < Date.now() + MIN_LEAD_MINUTES * 60000) {
     throw fail(400, "PICKUP_TOO_SOON", `Pick-up must be at least ${MIN_LEAD_MINUTES} minutes from now`);
@@ -106,7 +115,9 @@ export async function createCarBooking(req, res, next) {
 
     const facts = (await loadOperatorFacts([listing.operatorId])).get(listing.operatorId);
     const peakDates = await loadPeakDates(sel.from, addDays(sel.from, MAX_RENTAL_DAYS + 1));
-    const r = priceSelection(listing, facts.config, sel, peakDates);
+    // A booking, unlike a quote, must carry the date of birth when the
+    // operator has driver age rules on.
+    const r = priceSelection(listing, facts.config, sel, peakDates, { requireDriverDob: true });
 
     if (r.problems.length) {
       const [first] = r.problems;
@@ -131,7 +142,7 @@ export async function createCarBooking(req, res, next) {
       pricing: { ...p, dates: r.dates, refundRule: r.refundRule, point: r.point, dropoff: r.dropoff, requestedLocation: r.requestedLocation, requestedDropoffLocation: r.requestedDropoffLocation },
       selection: sel,
       location,
-      bookingDetails: body.bookingDetails,
+      bookingDetails: bookingDetailsToStore(body.bookingDetails, facts.config),
       cdwId: CDW_ID,
       platformSettings,
       customerTier,

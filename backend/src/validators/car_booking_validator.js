@@ -53,8 +53,10 @@ export const carBookingSchema = z.object({
       .min(2)
       .max(120),
 
+  // Required only when the operator has driver age rules on; the booking
+  // endpoint checks that against the operator's shop settings.
   dateOfBirth:
-    plainDate,
+    plainDate.optional().nullable(),
 
   licenceIssuedIn:
     z.string()

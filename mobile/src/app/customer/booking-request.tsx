@@ -95,6 +95,10 @@ useEffect(() => {
 
 const availableCdw = car?.booking?.cdw ?? null;
 
+// Driver age rules are the operator's choice, off by default. While off
+// the date of birth is not asked.
+setAgeRulesOn(Boolean(car?.booking?.driverRules?.enabled));
+
 setCdw(availableCdw);
 setCdwSelected(false);
 
@@ -145,6 +149,9 @@ setCdwSelected(false);
 
   const [dateOfBirth, setDateOfBirth] =
     useState("");
+
+  const [ageRulesOn, setAgeRulesOn] =
+    useState(false);
 
   const [showDobPicker, setShowDobPicker] =
   useState(false);
@@ -214,7 +221,7 @@ setCdwSelected(false);
       driverName:
         finalDriverName || "",
 
-      dateOfBirth,
+      dateOfBirth: ageRulesOn ? dateOfBirth : "",
 
       licenceIssuedIn:
         licenceIssuedIn.trim(),
@@ -238,7 +245,7 @@ setCdwSelected(false);
   const canContinue =
     fullName.trim().length >= 2 &&
     phone.trim().length > 0 &&
-    dateOfBirth.trim().length > 0 &&
+    (!ageRulesOn || dateOfBirth.trim().length > 0) &&
     licenceIssuedIn.trim().length > 0 &&
     termsAccepted &&
     rentalTermsAccepted &&
@@ -782,6 +789,8 @@ setCdwSelected(false);
               </>
             ) : null}
 
+            {ageRulesOn && (
+            <>
             <Text style={styles.inputLabel}>
             Date of Birth
             </Text>
@@ -827,6 +836,8 @@ setCdwSelected(false);
                 color="#9AABB2"
             />
             </Pressable>
+            </>
+            )}
 
             <Text
               style={
@@ -848,7 +859,7 @@ setCdwSelected(false);
             />
           </View>
 
-          {showDobPicker && (
+          {ageRulesOn && showDobPicker && (
             <View style={styles.dobPickerWrapper}>
                 <DateTimePicker
                 value={

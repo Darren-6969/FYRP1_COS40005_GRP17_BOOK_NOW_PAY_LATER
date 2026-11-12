@@ -110,7 +110,7 @@ useEffect(() => {
           tt: params.tt || "10:00",
           pickupPointId: params.pickupPointId,
           dropoffPointId: params.dropoffPointId,
-          driverDateOfBirth: params.dateOfBirth,
+          driverDateOfBirth: params.dateOfBirth || undefined,
           cdw: cdwSelected,
           addOns: {},
         }
@@ -266,8 +266,11 @@ console.log("BOOKING PRICE DETAILS:", {
             fullName:
               finalDriverName || "",
 
-            dateOfBirth:
-              params.dateOfBirth || "",
+            // Sent only when the operator's age rules asked for it; an
+            // empty string would fail the server's date check.
+            ...(params.dateOfBirth
+              ? { dateOfBirth: params.dateOfBirth }
+              : {}),
 
             licenceIssuedIn:
               params.licenceIssuedIn ||
@@ -450,12 +453,12 @@ console.log("BOOKING PRICE DETAILS:", {
             }
           />
 
-          <DetailRow
-            label="Date of Birth"
-            value={
-              params.dateOfBirth || "—"
-            }
-          />
+          {params.dateOfBirth ? (
+            <DetailRow
+              label="Date of Birth"
+              value={params.dateOfBirth}
+            />
+          ) : null}
 
           <DetailRow
             label="Licence Issued In"

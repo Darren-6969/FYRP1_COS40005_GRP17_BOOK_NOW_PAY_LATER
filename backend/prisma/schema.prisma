@@ -1040,6 +1040,11 @@ model BNPLConfig {
   blockNightHandover Boolean  @default(false)
 
   // Driver rules (BNPLB-85)
+  // Master switch, off by default (client decision, Oct 2026: a valid licence
+  // is enough unless the operator opts in). While off, no date of birth is
+  // asked and the minimum age and young-driver surcharge below do not apply.
+  driverAgeRulesEnabled Boolean @default(false)
+
   // Minimum allowed driver age. Operator cannot set below 17.
   minDriverAge Int @default(21)
 
@@ -1275,10 +1280,6 @@ model Listing {
 
   mileageLimitKm    Int?
   mileageExcessRate Decimal? @db.Decimal(10, 2)
-
-  minDriverAge         Int      @default(21)
-  youngDriverMaxAge    Int?
-  youngDriverSurcharge Decimal? @db.Decimal(10, 2) // per day
 
   travelArea String? @db.Text
 
