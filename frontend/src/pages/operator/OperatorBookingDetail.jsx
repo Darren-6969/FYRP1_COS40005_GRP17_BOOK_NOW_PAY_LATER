@@ -255,11 +255,6 @@ export default function OperatorBookingDetail() {
     booking.payment?.status || ""
   ).toUpperCase();
 
-  const isPaid =
-    bookingStatus === "PAID" ||
-    bookingStatus === "COMPLETED" ||
-    paymentStatus === "PAID";
-
   const isClosed = [
     "COMPLETED",
     "CANCELLED",
@@ -312,12 +307,17 @@ export default function OperatorBookingDetail() {
   // =========================================================
   // Handover
   //
-  // A paid booking is ready for customer collection.
+  // FR-OP-002: handover needs the balance paid and the driving
+  // licence verified, which the backend records as
+  // READY_FOR_PICKUP. A PAID booking is still waiting for the
+  // licence, so the page says so instead of offering a button
+  // the backend would refuse.
   // =========================================================
   const canHandover =
-  isPaid &&
-  !isClosed &&
-  bookingStatus !== "IN_PROGRESS";
+    bookingStatus === "READY_FOR_PICKUP";
+
+  const awaitingLicenceForHandover =
+    bookingStatus === "PAID";
 
   // =========================================================
   // Return
@@ -424,6 +424,7 @@ export default function OperatorBookingDetail() {
     canAcceptReject ||
     canSuggestAlternative ||
     canHandover ||
+    awaitingLicenceForHandover ||
     canReturn ||
     canEditDeadline ||
     canCancel ||
@@ -1345,6 +1346,12 @@ export default function OperatorBookingDetail() {
               ? "Processing Handover..."
               : "Handover Booking"}
           </button>
+        )}
+
+        {awaitingLicenceForHandover && (
+          <p className="operator-muted">
+            Verify the driving licence before handover.
+          </p>
         )}
 
         {canReturn && (

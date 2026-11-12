@@ -156,7 +156,7 @@ function PaymentSchedulePanel({ booking }) {
     );
   }
 
-  const open = ["PENDING_PAYMENT", "ACCEPTED"].includes(booking.status);
+  const open = ["PENDING_PAYMENT", "ACCEPTED", "OVERDUE"].includes(booking.status);
   const depositNeeded = Number(payment.downPaymentAmount) > 0;
   const balanceNeeded = Number(payment.finalPaymentAmount) > 0;
 

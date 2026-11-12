@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { sendEmail } from "../services/email_service.js";
 import { generateForecast, generateAnalytics } from "../services/sarima_service.js";
 import { generateInvoiceForBooking } from "../services/invoice_service.js";
+import { isSchedulePaymentEntryPaid } from "../services/payment_schedule_entry_service.js";
 import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
 import {
   notifyCustomerByBooking,
@@ -39,7 +40,11 @@ import {
   validatePublishedDeadline,
 } from "../services/platform_policy_service.js";
 import { createAuditLog as writeAuditLog } from "../services/log_service.js";
-import { transitionBookingStatus } from "../services/booking_status_service.js";
+import {
+  transitionBookingStatus,
+  promoteToReadyForPickup,
+  TERMINAL_BOOKING_STATUSES,
+} from "../services/booking_status_service.js";
 import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_service.js";
 import {
   carListingSelect,
@@ -3371,24 +3376,13 @@ export async function approvePayment(req, res, next) {
           ? PAYMENT_TYPES.DOWN_PAYMENT
           : PAYMENT_TYPES.FINAL_PAYMENT;
 
-    const updatedPayment = await prisma.payment.update({
-      where: { id: payment.id },
-      data: getPaymentConfirmationData(
-        payment,
-        paymentType,
-        `MANUAL-${payment.id}-${Date.now()}`
-      ),
-    });
-
-    await recordSuccessfulPaymentEvents({
-      customerId: payment.booking.customerId,
-      bookingId: payment.bookingId,
-      payment: updatedPayment,
-      previousPayment: payment,
-    });
-
-    // FR-ANL-002: a manually verified payment is a product event too.
-    trackPaymentSuccess({ bookingId: payment.bookingId, payment: updatedPayment, previousPayment: payment });
+    // A payment cannot be approved on a booking that has already ended; the
+    // operator rejects the receipt and refunds the customer instead.
+    if (TERMINAL_BOOKING_STATUSES.has(payment.booking.status)) {
+      return res.status(409).json({
+        message: `This booking is ${payment.booking.status.toLowerCase().replace(/_/g, " ")}, so its payment cannot be approved. Reject the receipt and refund the customer instead.`,
+      });
+    }
 
     const existingReceipt = await prisma.receipt.findUnique({
       where: {
@@ -3396,29 +3390,113 @@ export async function approvePayment(req, res, next) {
       },
     });
 
-    if (existingReceipt) {
-      await prisma.receipt.update({
-        where: {
+    // FR-OP-002: a DuitNow approval leaves the booking exactly where a Stripe
+    // payment does: CONFIRMED after the down payment, PAID after the balance,
+    // then READY_FOR_PICKUP once the licence is verified. Every write commits
+    // together, and the status moves through transitionBookingStatus so the
+    // transition is checked and written to the status history.
+    const { updatedPayment, invoice, updatedBooking } = await prisma.$transaction(
+      async (tx) => {
+        const confirmedPayment = await tx.payment.update({
+          where: { id: payment.id },
+          data: getPaymentConfirmationData(
+            payment,
+            paymentType,
+            `MANUAL-${payment.id}-${Date.now()}`
+          ),
+        });
+
+        await recordSuccessfulPaymentEvents({
+          customerId: payment.booking.customerId,
           bookingId: payment.bookingId,
-        },
-        data: {
-          status: "APPROVED",
-          verifiedAt: new Date(),
-        },
-      });
-    }
+          payment: confirmedPayment,
+          previousPayment: payment,
+          database: tx,
+        });
 
-    const invoice = updatedPayment.status === "PAID"
-      ? await generateInvoiceForBooking(payment.bookingId, payment.amount, prisma, { status: "PAID" })
-      : null;
+        // Mark the schedule's payment entries paid, as the Stripe webhook
+        // does, so the customer gets no reminder for money already paid.
+        const dueEntries = await tx.paymentScheduleEntry.findMany({
+          where: { bookingId: payment.bookingId, type: "PAYMENT", status: "DUE" },
+        });
+        const paidEntryIds = dueEntries
+          .filter((entry) => isSchedulePaymentEntryPaid(entry, confirmedPayment))
+          .map((entry) => entry.id);
+        if (paidEntryIds.length) {
+          await tx.paymentScheduleEntry.updateMany({
+            where: { id: { in: paidEntryIds }, status: "DUE" },
+            data: { status: "PAID", paidAt: new Date() },
+          });
+        }
 
-    const updatedBooking = await prisma.booking.update({
-      where: { id: payment.bookingId },
-      data: {
-        status: updatedPayment.status === "PAID" ? "PAID" : "PENDING_PAYMENT",
+        if (existingReceipt) {
+          await tx.receipt.update({
+            where: {
+              bookingId: payment.bookingId,
+            },
+            data: {
+              status: "APPROVED",
+              verifiedAt: new Date(),
+            },
+          });
+        }
+
+        const paidInvoice = confirmedPayment.status === "PAID"
+          ? await generateInvoiceForBooking(payment.bookingId, payment.amount, tx, { status: "PAID" })
+          : null;
+
+        // PAID once everything is paid, CONFIRMED once the down payment is.
+        // Any other approval leaves the status alone: a booking never moves
+        // backwards (the old code could send CONFIRMED back to
+        // PENDING_PAYMENT).
+        const nextStatus = confirmedPayment.status === "PAID"
+          ? "PAID"
+          : confirmedPayment.downPaymentStatus === "PAID" &&
+              paymentType === PAYMENT_TYPES.DOWN_PAYMENT
+            ? "CONFIRMED"
+            : null;
+
+        if (nextStatus && payment.booking.status !== nextStatus) {
+          await transitionBookingStatus({
+            bookingId: payment.bookingId,
+            newStatus: nextStatus,
+            actorId: req.user.id,
+            remark: paymentType === PAYMENT_TYPES.DOWN_PAYMENT
+              ? "Down payment receipt verified by the operator."
+              : paymentType === PAYMENT_TYPES.FULL_PAYMENT
+                ? "Full payment receipt verified by the operator."
+                : "Balance payment receipt verified by the operator.",
+            database: tx,
+          });
+        }
+
+        if (nextStatus === "PAID") {
+          await promoteToReadyForPickup({
+            bookingId: payment.bookingId,
+            actorId: req.user.id,
+            database: tx,
+          });
+        }
+
+        const bookingAfter = await tx.booking.findUnique({
+          where: { id: payment.bookingId },
+          include: includeBookingRelations(),
+        });
+
+        return {
+          updatedPayment: confirmedPayment,
+          invoice: paidInvoice,
+          updatedBooking: bookingAfter,
+        };
       },
-      include: includeBookingRelations(),
-    });
+      // Same limits as the Stripe webhook: over a remote or cold database the
+      // 5 s default can roll back a payment the operator has verified.
+      { maxWait: 10000, timeout: 20000 }
+    );
+
+    // FR-ANL-002: a manually verified payment is a product event too. Raised
+    // after commit, so a rolled-back approval records nothing.
+    trackPaymentSuccess({ bookingId: payment.bookingId, payment: updatedPayment, previousPayment: payment });
 
     await createAuditLog({
       req,

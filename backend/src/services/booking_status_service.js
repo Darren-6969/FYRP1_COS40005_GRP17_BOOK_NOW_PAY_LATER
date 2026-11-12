@@ -19,8 +19,10 @@ const TRANSITIONS = {
   PAID: ["READY_FOR_PICKUP", "IN_PROGRESS", "COMPLETED", "CANCELLED", "EXPIRED", "NO_SHOW", "NO_SHOW_UNPAID"],
   READY_FOR_PICKUP: ["IN_PROGRESS", "CANCELLED", "NO_SHOW", "NO_SHOW_UNPAID"],
   IN_PROGRESS: ["COMPLETED", "NO_SHOW", "NO_SHOW_UNPAID"],
-  // Overdue waits for the operator when automatic cancellation is off.
-  OVERDUE: ["CANCELLED", "EXPIRED"],
+  // Overdue waits for the operator when automatic cancellation is off. V2.13
+  // 3.5 keeps it so the operator can chase a late customer, so a late down
+  // payment or balance must still be accepted, by DuitNow or by Stripe.
+  OVERDUE: ["CONFIRMED", "PAID", "CANCELLED", "EXPIRED"],
   EXPIRED: [],
   COMPLETED: [],
   CANCELLED: [],
@@ -110,12 +112,52 @@ export async function getBookingStatusHistory(bookingId, database = prisma) {
   });
 }
 
-export async function canReachReadyForPickup(booking, database = prisma) {
-  if (!booking?.payment || !["PAID", "PARTIALLY_PAID"].includes(booking.payment.status)) return false;
-  if (booking.payment.status !== "PAID") return false;
+// FR-OP-002, FR-COMP-003: a booking is ready for pickup once the balance is
+// paid and, for a car rental, the driving licence is verified. Only car
+// rentals need a licence, the same rule the expiry sweep applies.
+//
+// Until the per-booking licence check exists (development plan Task 5), an
+// APPROVED licence on the customer's account counts. That was the rule the
+// Stripe webhook already used; Task 5 changes it here, in one place.
+export async function isLicenceSatisfied(booking, database = prisma) {
+  if (booking.serviceType !== "CAR_RENTAL") return true;
   const licence = await database.customerLicenceDocument.findFirst({
     where: { customerId: booking.customerId, status: "APPROVED" },
-    orderBy: { reviewedAt: "desc" },
+    select: { id: true },
   });
   return Boolean(licence);
+}
+
+// Moves a booking from PAID to READY_FOR_PICKUP when both conditions hold, and
+// does nothing otherwise. Every path that can complete either condition calls
+// it: the Stripe webhook, DuitNow payment approval and licence approval. The
+// handover bug came from three separate copies of this rule drifting apart.
+// Returns true when the booking moved.
+export async function promoteToReadyForPickup({
+  bookingId,
+  actorId = null,
+  remark = "Balance paid and driving licence verified.",
+  database = prisma,
+}) {
+  const booking = await database.booking.findUnique({
+    where: { id: bookingId },
+    select: {
+      id: true,
+      status: true,
+      customerId: true,
+      serviceType: true,
+      payment: { select: { status: true } },
+    },
+  });
+  if (!booking || booking.status !== "PAID" || booking.payment?.status !== "PAID") return false;
+  if (!(await isLicenceSatisfied(booking, database))) return false;
+
+  await transitionBookingStatus({
+    bookingId,
+    newStatus: "READY_FOR_PICKUP",
+    actorId,
+    remark,
+    database,
+  });
+  return true;
 }

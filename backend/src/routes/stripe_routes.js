@@ -27,7 +27,12 @@ import { requireIdempotencyKey, runIdempotent } from "../services/idempotency_se
 import { createAuditLog } from "../services/log_service.js";
 import { createCommissionLedgerSnapshot } from "../services/commission_ledger_service.js";
 import { getPlatformSettings } from "../services/platform_settings_service.js";
-import { transitionBookingStatus, isValidBookingTransition } from "../services/booking_status_service.js";
+import {
+  transitionBookingStatus,
+  isValidBookingTransition,
+  promoteToReadyForPickup,
+  TERMINAL_BOOKING_STATUSES,
+} from "../services/booking_status_service.js";
 import {
   createExpressOnboardingLink,
   getStripeAccountState,
@@ -106,12 +111,13 @@ export async function applyPaidState(
     return { alreadyPaid: true };
   }
 
-  // F6 fix: the booking may have been cancelled/rejected/completed after the
-  // Stripe session was created. The charge is already captured, so we must not
-  // silently mark it PAID (inconsistent state) nor silently drop it (lost money).
-  // Instead: record the anomaly, auto-refund, and leave the booking untouched.
-  const TERMINAL = ["CANCELLED", "REJECTED", "COMPLETED", "NO_SHOW", "OVERDUE"];
-  if (TERMINAL.includes(booking.status)) {
+  // F6 fix: the booking may have ended after the Stripe session was created.
+  // The charge is already captured, so we must not silently mark it PAID nor
+  // silently drop it. Instead: record the anomaly, auto-refund, and leave the
+  // booking untouched. Uses the same ended-booking list as DuitNow approval,
+  // so EXPIRED and NO_SHOW_UNPAID are refunded too. OVERDUE is not ended:
+  // a late payment is accepted (V2.13 3.5).
+  if (TERMINAL_BOOKING_STATUSES.has(booking.status)) {
     console.error(
       `[Stripe] Paid webhook for terminal booking ${bookingId} (${booking.status}). Flagging for refund.`
     );
@@ -227,34 +233,28 @@ export async function applyPaidState(
       update: {},
     });
 
+    // PAID once everything is paid, CONFIRMED once the down payment is. Any
+    // other payment leaves the status alone: a booking never moves backwards,
+    // and a refused transition here would roll back money Stripe already took.
     const paidStatus = paidPayment.status === "PAID"
       ? "PAID"
-      : paymentType === PAYMENT_TYPES.DOWN_PAYMENT
+      : paidPayment.downPaymentStatus === "PAID" &&
+          paymentType === PAYMENT_TYPES.DOWN_PAYMENT
         ? "CONFIRMED"
-        : "PENDING_PAYMENT";
-    await transitionBookingStatus({
-      bookingId,
-      newStatus: paidStatus,
-      actorId: null,
-      remark: paymentType === PAYMENT_TYPES.DOWN_PAYMENT
-        ? "Down payment captured."
-        : "Balance payment captured.",
-      database: tx,
-    });
-    if (paidStatus === "PAID") {
-      const approvedLicence = await tx.customerLicenceDocument.findFirst({
-        where: { customerId: booking.customerId, status: "APPROVED" },
-        select: { id: true },
+        : null;
+    if (paidStatus && booking.status !== paidStatus) {
+      await transitionBookingStatus({
+        bookingId,
+        newStatus: paidStatus,
+        actorId: null,
+        remark: paymentType === PAYMENT_TYPES.DOWN_PAYMENT
+          ? "Down payment captured."
+          : "Balance payment captured.",
+        database: tx,
       });
-      if (approvedLicence) {
-        await transitionBookingStatus({
-          bookingId,
-          newStatus: "READY_FOR_PICKUP",
-          actorId: null,
-          remark: "Balance paid and driving licence verified.",
-          database: tx,
-        });
-      }
+    }
+    if (paidStatus === "PAID") {
+      await promoteToReadyForPickup({ bookingId, database: tx });
     }
     const paidBooking = await tx.booking.findUnique({
       where: { id: bookingId },
@@ -993,13 +993,18 @@ router.post(
         return { status: 400, body: { message: "This booking is already paid" } };
       }
 
-      if (!["ACCEPTED", "PENDING_PAYMENT", "CONFIRMED"].includes(booking.status)) {
+      // OVERDUE stays payable: the operator kept the booking open (automatic
+      // cancellation off) to chase a late payment (V2.13 3.5).
+      const isOverdue = booking.status === "OVERDUE";
+      if (!["ACCEPTED", "PENDING_PAYMENT", "CONFIRMED", "OVERDUE"].includes(booking.status)) {
         return { status: 400, body: { message: "Payment is not available for this booking." } };
       }
 
       // F6 fix: refuse to start a checkout once the payment deadline has passed.
       // Prevents a customer paying an expired booking before the overdue cron runs.
+      // An OVERDUE booking is past its deadline by definition, so it is exempt.
       if (
+        !isOverdue &&
         booking.paymentDeadline &&
         new Date(booking.paymentDeadline) <= new Date()
       ) {

@@ -1,7 +1,7 @@
 import multer from "multer";
 import {validateSecureDocument,} from "../utils/secure_upload.js";
 import prisma from "../config/db.js";
-import { transitionBookingStatus } from "../services/booking_status_service.js";
+import { promoteToReadyForPickup } from "../services/booking_status_service.js";
 import { createInAppNotification, notifyOperatorUsersByBooking, } from "../services/notification_email_service.js";
 import { sendEmail } from "../services/email_service.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
@@ -592,94 +592,32 @@ export async function reviewLicenceDocument(
         });
     }
 
-    const updated =
-      await prisma.customerLicenceDocument.update({
-        where: {
-          id:
-            documentId,
-        },
-
+    // The review and any move to ready-for-pickup commit together, so an
+    // approved licence can never leave a paid booking stuck at PAID.
+    const updated = await prisma.$transaction(async (tx) => {
+      const reviewed = await tx.customerLicenceDocument.update({
+        where: { id: documentId },
         data: {
-          status:
-            decision ===
-            "APPROVED"
-              ? "APPROVED"
-              : "REUPLOAD_REQUIRED",
-
-          rejectionReason:
-            decision ===
-            "REJECTED"
-              ? reason
-              : null,
-
-          reviewedAt:
-            new Date(),
-
-          reviewedById:
-            req.user.id,
+          status: decision === "APPROVED" ? "APPROVED" : "REUPLOAD_REQUIRED",
+          rejectionReason: decision === "REJECTED" ? reason : null,
+          reviewedAt: new Date(),
+          reviewedById: req.user.id,
         },
       });
 
-    /*
-     * If approved, only move bookings
-     * belonging to this operator.
-     *
-     * Master Seller retains the existing
-     * platform-wide behaviour.
-     */
-    if (
-      decision ===
-      "APPROVED"
-    ) {
-      await prisma.$transaction(
-        async (tx) => {
-          const readyBookings =
-            await tx.booking.findMany({
-              where: {
-                id: document.bookingId,
+      if (decision === "APPROVED") {
+        // The review query only finds documents linked to a booking, so the
+        // booking whose licence this is moves on if its balance is paid.
+        await promoteToReadyForPickup({
+          bookingId: document.bookingId,
+          actorId: req.user.id,
+          remark: "Driving licence verified after balance payment.",
+          database: tx,
+        });
+      }
 
-                status:
-                  "PAID",
-
-                payment: {
-                  is: {
-                    status:
-                      "PAID",
-                  },
-                },
-
-              },
-
-              select: {
-                id: true,
-              },
-            });
-
-          for (
-            const booking of
-            readyBookings
-          ) {
-            await transitionBookingStatus({
-              bookingId:
-                booking.id,
-
-              newStatus:
-                "READY_FOR_PICKUP",
-
-              actorId:
-                req.user.id,
-
-              remark:
-                "Driving licence verified after balance payment.",
-
-              database:
-                tx,
-            });
-          }
-        }
-      );
-    }
-
+      return reviewed;
+    });
     await prisma.auditLog.create({
       data: {
         userId:
