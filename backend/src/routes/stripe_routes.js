@@ -993,18 +993,13 @@ router.post(
         return { status: 400, body: { message: "This booking is already paid" } };
       }
 
-      // OVERDUE stays payable: the operator kept the booking open (automatic
-      // cancellation off) to chase a late payment (V2.13 3.5).
-      const isOverdue = booking.status === "OVERDUE";
-      if (!["ACCEPTED", "PENDING_PAYMENT", "CONFIRMED", "OVERDUE"].includes(booking.status)) {
+      if (!["ACCEPTED", "PENDING_PAYMENT", "CONFIRMED"].includes(booking.status)) {
         return { status: 400, body: { message: "Payment is not available for this booking." } };
       }
 
       // F6 fix: refuse to start a checkout once the payment deadline has passed.
       // Prevents a customer paying an expired booking before the overdue cron runs.
-      // An OVERDUE booking is past its deadline by definition, so it is exempt.
       if (
-        !isOverdue &&
         booking.paymentDeadline &&
         new Date(booking.paymentDeadline) <= new Date()
       ) {
