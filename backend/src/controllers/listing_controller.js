@@ -1,4 +1,5 @@
 import prisma from "../config/db.js";
+import { writeImageOrder } from "../services/listing_image_order_service.js";
 import { deletePublicFile } from "../services/media_storage.js";
 import { parseId } from "../utils/parseId.js";
 
@@ -1211,30 +1212,9 @@ async function removeImageFileIfUnused(imageUrl) {
         },
       });
 
-      // If deleted image was primary,
-      // make the next available image primary.
-      if (image.isPrimary) {
-        const nextImage =
-          await tx.listingImage.findFirst({
-            where: {
-              listingId,
-            },
-            orderBy: {
-              sortOrder: "asc",
-            },
-          });
-
-        if (nextImage) {
-          await tx.listingImage.update({
-            where: {
-              id: nextImage.id,
-            },
-            data: {
-              isPrimary: true,
-            },
-          });
-        }
-      }
+      // Close the gap the deleted photo leaves; if it was the primary
+      // photo, the next one becomes primary.
+      await writeImageOrder(listingId, [], tx);
     });
 
     await removeImageFileIfUnused(image.imageUrl);
@@ -1308,26 +1288,11 @@ export async function setPrimaryListingImage(
       });
     }
 
-    await prisma.$transaction([
-      prisma.listingImage.updateMany({
-        where: {
-          listingId,
-        },
-        data: {
-          isPrimary: false,
-        },
-      }),
-
-      prisma.listingImage.update({
-        where: {
-          id: imageId,
-        },
-        data: {
-          isPrimary: true,
-          sortOrder: 0,
-        },
-      }),
-    ]);
+    // The chosen photo moves to the front; the others keep their order
+    // behind it, so no two photos share a position.
+    await prisma.$transaction((tx) =>
+      writeImageOrder(listingId, [imageId], tx)
+    );
 
     const updatedListing =
       await prisma.listing.findFirst({
@@ -1407,18 +1372,13 @@ export async function reorderListingImages(
       }
     }
 
-    await prisma.$transaction(
-      images.map((item, index) =>
-        prisma.listingImage.update({
-          where: {
-            id: Number(item.id),
-          },
-          data: {
-            sortOrder: index,
-            isPrimary:
-              index === 0,
-          },
-        })
+    // Photos missing from the request keep their order after the ones
+    // sent, so a partial list cannot leave two photos at one position.
+    await prisma.$transaction((tx) =>
+      writeImageOrder(
+        listingId,
+        images.map((item) => item.id),
+        tx
       )
     );
 
@@ -1641,19 +1601,12 @@ export async function updateListing(
         data,
         });
 
+        // A photo added while editing becomes the primary photo, in front
+        // of the existing ones (it used to share position 0 with the old
+        // first photo).
         if (carsxeImageUrl) {
-        await prisma.$transaction([
-            prisma.listingImage.updateMany({
-            where: {
-                listingId: id,
-            },
-
-            data: {
-                isPrimary: false,
-            },
-            }),
-
-            prisma.listingImage.create({
+        await prisma.$transaction(async (tx) => {
+            const added = await tx.listingImage.create({
             data: {
                 listingId: id,
 
@@ -1665,10 +1618,12 @@ export async function updateListing(
 
                 sortOrder: 0,
 
-                isPrimary: true,
+                isPrimary: false,
             },
-            }),
-        ]);
+            });
+
+            await writeImageOrder(id, [added.id], tx);
+        });
         }
 
         const listing =
