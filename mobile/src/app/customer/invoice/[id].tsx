@@ -24,6 +24,7 @@ import {
 import {
   getCustomerBookingById,
 } from "../../../services/customerApi";
+import { logger } from "@/utils/logger";
 
 function money(value?: number) {
   return `RM ${Number(
@@ -108,7 +109,7 @@ export default function InvoiceDetailScreen() {
       } catch (
         err: any
       ) {
-        console.log(
+        logger.debug(
           "Failed to load invoice:",
           err
         );

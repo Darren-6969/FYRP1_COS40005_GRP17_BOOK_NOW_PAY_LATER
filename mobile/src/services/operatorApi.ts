@@ -1,8 +1,12 @@
 import { File, Paths} from "expo-file-system";
 import { fetch as expoFetch } from "expo/fetch";
 
-import { apiRequest, API_URL } from "./api";
-import { getToken } from "./session";
+import {
+  apiRequest,
+  authorizedFetch,
+  errorFromResponse,
+  UPLOAD_TIMEOUT_MS,
+} from "./api";
 
 export type OperatorDashboard = {
   summary: {
@@ -501,12 +505,6 @@ export async function uploadOperatorListingImage(
   url: string;
   pathname?: string;
 }> {
-  const token = await getToken();
-
-  if (!token) {
-    throw new Error("Please log in again.");
-  }
-
   // Expo SDK 58: use a real File object.
   const file = new File(asset.uri);
 
@@ -515,25 +513,24 @@ export async function uploadOperatorListingImage(
   // Backend Multer expects the field name "image".
   formData.append("image", file as unknown as Blob);
 
-  const response = await expoFetch(
-    `${API_URL}/uploads/listing-image`,
+  // No Content-Type here: fetch sets the multipart boundary itself.
+  const response = await authorizedFetch(
+    "/uploads/listing-image",
     {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
       body: formData,
-    }
+    },
+    { fetcher: expoFetch, timeoutMs: UPLOAD_TIMEOUT_MS }
   );
 
-  const data = await response.json().catch(() => null);
-
   if (!response.ok) {
-    throw new Error(
-      data?.message ||
-        `Image upload failed (${response.status})`
+    throw await errorFromResponse(
+      response,
+      `Image upload failed (${response.status})`
     );
   }
+
+  const data = await response.json().catch(() => null);
 
   if (!data?.url) {
     throw new Error(
@@ -761,21 +758,15 @@ export async function downloadOperatorLicenceDocument(
     throw new Error("Invalid licence document ID.");
   }
 
-  const token = await getToken();
-
-  if (!token) {
-    throw new Error("Please log in again.");
-  }
-
-  const response = await expoFetch(
-    `${API_URL}/licence-verification/queue/${documentId}/document`,
+  const response = await authorizedFetch(
+    `/licence-verification/queue/${documentId}/document`,
     {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${token}`,
         Accept: "application/pdf, image/png, image/jpeg",
       },
-    }
+    },
+    { fetcher: expoFetch, timeoutMs: UPLOAD_TIMEOUT_MS }
   );
 
   if (!response.ok) {

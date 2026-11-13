@@ -25,6 +25,7 @@ import {
 import {
   getCustomerPayments,
 } from "../../../services/customerApi";
+import { logger } from "@/utils/logger";
 
 type Payment = {
   id: number;
@@ -441,7 +442,7 @@ export default function PaymentsScreen() {
       } catch (
         err: any
       ) {
-        console.log(
+        logger.debug(
           "Failed to load payments:",
           err
         );

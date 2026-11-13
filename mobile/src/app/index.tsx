@@ -1,4 +1,5 @@
-import { useRouter } from "expo-router";
+import { Redirect, useRouter, type Href } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   ImageBackground,
   Pressable,
@@ -8,8 +9,58 @@ import {
   View,
 } from "react-native";
 
+import { homeForRole } from "@/hooks/use-role-guard";
+import { getStoredUser, getToken } from "@/services/session";
+import { logger } from "@/utils/logger";
+
+// Same colour as the expo-splash-screen background in app.json, so the
+// hand-over from the splash screen is invisible.
+const SPLASH_BACKGROUND = "#208AEF";
+
+type Launch =
+  | { state: "checking" }
+  | { state: "welcome" }
+  | { state: "home"; href: Href };
+
 export default function WelcomeScreen() {
   const router = useRouter();
+  const [launch, setLaunch] = useState<Launch>({ state: "checking" });
+
+  // F18: a saved login goes straight to its home. This only reads the
+  // device, so it is instant and works offline; the section's role guard
+  // then confirms the session with the server (and refreshes it if needed).
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      let next: Launch = { state: "welcome" };
+      try {
+        const [token, user] = await Promise.all([
+          getToken(),
+          getStoredUser(),
+        ]);
+        const home = token ? homeForRole(user?.role) : null;
+        if (home) next = { state: "home", href: home };
+      } catch (err) {
+        logger.warn("[launch] could not read the saved session", err);
+      }
+      if (active) setLaunch(next);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (launch.state === "checking") {
+    return (
+      <View style={{ flex: 1, backgroundColor: SPLASH_BACKGROUND }} />
+    );
+  }
+
+  if (launch.state === "home") {
+    return <Redirect href={launch.href} />;
+  }
 
   return (
     <ImageBackground

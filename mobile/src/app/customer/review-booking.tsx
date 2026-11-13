@@ -16,6 +16,8 @@ import {
 import { useEffect, useState } from "react";
 import { quotePublicCar } from "../../services/carApi";
 import { createCarBooking, } from "../../services/customerApi";
+import { logger } from "@/utils/logger";
+import { useIdempotentAttempt } from "@/hooks/use-idempotent-attempt";
 
 export default function ReviewBooking() {
   const router = useRouter();
@@ -65,6 +67,8 @@ export default function ReviewBooking() {
 
   const [submitting, setSubmitting] =
   useState(false);
+
+  const bookingAttempt = useIdempotentAttempt();
 
   const [submitError, setSubmitError] =
   useState("");
@@ -129,7 +133,7 @@ useEffect(() => {
         );
       }
 
-console.log("BOOKING PRICE DETAILS:", {
+logger.debug("BOOKING PRICE DETAILS:", {
   rentalSen: response.quote.rentalSen,
   pickupFeeSen: response.quote.pickupFeeSen,
   dropoffFeeSen: response.quote.dropoffFeeSen,
@@ -179,11 +183,10 @@ console.log("BOOKING PRICE DETAILS:", {
       ? params.fullName
       : params.driverName;
 
-  const handleSubmit = async () => {
-  if (submitting) {
-    return;
-  }
+  const handleSubmit = () =>
+    bookingAttempt.run(submitBooking);
 
+  const submitBooking = async () => {
   try {
     setSubmitting(true);
     setSubmitError("");
@@ -220,11 +223,9 @@ console.log("BOOKING PRICE DETAILS:", {
       );
     }
 
-    const acceptedAt =
-      new Date().toISOString();
-
-    const data =
-      await createCarBooking({
+    // Everything the request sends except the acceptance timestamps.
+    // Same details -> same attempt and key; changed details -> new key.
+    const request = {
         listingId: Number(
           params.listingId
         ),
@@ -281,21 +282,41 @@ console.log("BOOKING PRICE DETAILS:", {
             requested: false,
             note: null,
           },
+        },
+      };
 
-          agreements: {
-            termsOfServiceAcceptedAt:
-              acceptedAt,
+    const attempt =
+      bookingAttempt.attemptFor(
+        JSON.stringify(request)
+      );
 
-            rentalTermsAcceptedAt:
-              acceptedAt,
+    // Fixed per attempt, so a retry sends the identical body.
+    const acceptedAt = attempt.startedAt;
 
-            forfeitureAcceptedAt:
-              acceptedAt,
+    const data =
+      await createCarBooking(
+        {
+          ...request,
+          bookingDetails: {
+            ...request.bookingDetails,
+            agreements: {
+              termsOfServiceAcceptedAt:
+                acceptedAt,
+
+              rentalTermsAcceptedAt:
+                acceptedAt,
+
+              forfeitureAcceptedAt:
+                acceptedAt,
+            },
           },
         },
-      });
+        attempt.key
+      );
 
-    console.log(
+    bookingAttempt.finish();
+
+    logger.debug(
       "Booking created:",
       data
     );
@@ -304,7 +325,7 @@ console.log("BOOKING PRICE DETAILS:", {
       `/customer/booking/${data.id}`
     );
   } catch (error: any) {
-    console.error(
+    logger.error(
       "Booking submission failed:",
       error
     );

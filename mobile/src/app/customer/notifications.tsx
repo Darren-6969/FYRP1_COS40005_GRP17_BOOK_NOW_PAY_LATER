@@ -26,6 +26,7 @@ import {
   markAllCustomerNotificationsRead,
   markCustomerNotificationRead,
 } from "../../services/customerApi";
+import { logger } from "@/utils/logger";
 
 type Notification = {
   id: number;
@@ -170,7 +171,7 @@ const handleNotificationPress =
           )
         );
       } catch (error) {
-        console.log(
+        logger.debug(
           "Failed to mark notification as read:",
           error
         );
@@ -224,7 +225,7 @@ const handleNotificationPress =
           }
         }
       } catch (error) {
-        console.log(
+        logger.debug(
           "Failed to resolve notification booking:",
           error
         );
@@ -272,7 +273,7 @@ const handleNotificationPress =
         }))
       );
     } catch (err) {
-      console.log(err);
+      logger.debug(err);
     }
   };
 

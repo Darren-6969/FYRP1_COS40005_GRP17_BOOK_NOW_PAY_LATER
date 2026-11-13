@@ -25,6 +25,7 @@ import {
   getSavedListings,
   removeSavedListing,
 } from "../../services/customerApi";
+import { logger } from "@/utils/logger";
 
 type SavedCar = {
   listingId: number;
@@ -91,7 +92,7 @@ export default function SavedCarsScreen() {
             : []
         );
       } catch (error) {
-        console.log(
+        logger.debug(
           "Failed to load saved cars:",
           error
         );
@@ -138,7 +139,7 @@ export default function SavedCarsScreen() {
             )
         );
       } catch (error) {
-        console.log(
+        logger.debug(
           "Failed to remove saved car:",
           error
         );

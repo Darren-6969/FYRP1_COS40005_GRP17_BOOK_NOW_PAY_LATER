@@ -33,6 +33,8 @@ import {
   type ManualPaymentMethod,
   type ManualPaymentType,
 } from "../../services/customerApi";
+import { logger } from "@/utils/logger";
+import { useIdempotentAttempt } from "@/hooks/use-idempotent-attempt";
 
 type PaymentOption = {
   paymentType: ManualPaymentType;
@@ -165,6 +167,9 @@ export default function UploadReceiptScreen() {
     setSubmitting,
   ] = useState(false);
 
+  const receiptAttempt =
+    useIdempotentAttempt();
+
   const [
     error,
     setError,
@@ -265,7 +270,7 @@ export default function UploadReceiptScreen() {
       } catch (
         err: any
       ) {
-        console.log(
+        logger.debug(
           "Failed to load manual payment:",
           err
         );
@@ -400,7 +405,7 @@ export default function UploadReceiptScreen() {
     } catch (
       err: any
     ) {
-      console.log(
+      logger.debug(
         "Receipt image picker failed:",
         err
       );
@@ -412,7 +417,13 @@ export default function UploadReceiptScreen() {
     }
   }
 
-  async function submitReceipt() {
+  function submitReceipt() {
+    return receiptAttempt.run(
+      sendReceipt
+    );
+  }
+
+  async function sendReceipt() {
     if (
       !bookingId
     ) {
@@ -447,21 +458,36 @@ export default function UploadReceiptScreen() {
 
       setError("");
 
+      const receipt = {
+        imageUrl:
+          receiptImage,
+
+        remarks:
+          remarks.trim(),
+
+        method:
+          paymentMethod,
+
+        paymentType,
+      };
+
+      // Same booking and receipt details -> same key, so a retry after
+      // a timeout can't submit the receipt twice.
+      const attempt =
+        receiptAttempt.attemptFor(
+          JSON.stringify({
+            bookingId,
+            ...receipt,
+          })
+        );
+
       await uploadCustomerReceipt(
         bookingId,
-        {
-          imageUrl:
-            receiptImage,
-
-          remarks:
-            remarks.trim(),
-
-          method:
-            paymentMethod,
-
-          paymentType,
-        }
+        receipt,
+        attempt.key
       );
+
+      receiptAttempt.finish();
 
       Alert.alert(
         "Receipt Submitted",
@@ -488,7 +514,7 @@ export default function UploadReceiptScreen() {
     } catch (
       err: any
     ) {
-      console.log(
+      logger.debug(
         "Receipt upload failed:",
         err
       );

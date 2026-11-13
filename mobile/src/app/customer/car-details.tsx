@@ -24,6 +24,7 @@ import {
   getPublicCarById,
   quotePublicCar,
 } from "../../services/carApi";
+import { logger } from "@/utils/logger";
 
 export default function CarDetails() {
   const router = useRouter();
@@ -152,7 +153,7 @@ export default function CarDetails() {
 
         setQuote(data);
       } catch (err) {
-        console.log(
+        logger.debug(
           "Failed to load car quote:",
           err
         );

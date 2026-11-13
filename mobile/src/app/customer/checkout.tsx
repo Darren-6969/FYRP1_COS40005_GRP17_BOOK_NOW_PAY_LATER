@@ -3,13 +3,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import {
   useLocalSearchParams,
+  useNavigation,
   useRouter,
+  type Href,
 } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as WebBrowser from "expo-web-browser";
 
 import {
-  AppState,
-  Linking,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -21,7 +22,6 @@ import {
 import {
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 
@@ -29,6 +29,14 @@ import {
   createStripeCheckoutSession,
   getCustomerBookingById,
 } from "../../services/customerApi";
+import { logger } from "@/utils/logger";
+import { useIdempotentAttempt } from "@/hooks/use-idempotent-attempt";
+import {
+  STRIPE_RETURN_PREFIX,
+  appPathFromReturnUrl,
+  isPartPaid,
+  rememberStripePayment,
+} from "@/utils/stripe-payment";
 
 const PAYMENT_TYPES = {
   DOWN_PAYMENT: "DOWN_PAYMENT",
@@ -67,11 +75,11 @@ export default function CheckoutScreen() {
   const [submitting, setSubmitting] =
     useState(false);
 
-  const appState =
-    useRef(AppState.currentState);
+  const checkoutAttempt =
+    useIdempotentAttempt();
 
-  const waitingForStripe =
-    useRef(false);
+  const navigation =
+    useNavigation();
 
   const initialPaymentType:
     PaymentType =
@@ -114,223 +122,6 @@ export default function CheckoutScreen() {
   }, [bookingId]);
 
   // =========================================================
-  // CHECK PAYMENT AFTER RETURNING FROM SAFARI / STRIPE
-  // =========================================================
-
-  useEffect(() => {
-    const subscription =
-      AppState.addEventListener(
-        "change",
-        async (
-          nextAppState
-        ) => {
-          const wasBackground =
-            appState.current.match(
-              /inactive|background/
-            );
-
-          const isActive =
-            nextAppState ===
-            "active";
-
-          appState.current =
-            nextAppState;
-
-          if (
-            !wasBackground ||
-            !isActive ||
-            !waitingForStripe.current ||
-            !bookingId
-          ) {
-            return;
-          }
-
-          try {
-            console.log(
-              "Returned from Stripe. Checking payment..."
-            );
-
-            const refreshed =
-              await getCustomerBookingById(
-                bookingId
-              );
-
-            setBooking(
-              refreshed
-            );
-
-            const payment =
-              refreshed?.payment ||
-              {};
-
-            const paymentStatus =
-              payment?.status;
-
-            const downPaymentStatus =
-              payment?.downPaymentStatus;
-
-            const finalPaymentStatus =
-              payment?.finalPaymentStatus;
-
-            console.log(
-              "Payment type:",
-              paymentType
-            );
-
-            console.log(
-              "Payment status:",
-              paymentStatus
-            );
-
-            console.log(
-              "Down payment status:",
-              downPaymentStatus
-            );
-
-            console.log(
-              "Final payment status:",
-              finalPaymentStatus
-            );
-
-            // =============================================
-            // IMPORTANT:
-            // Check the payment that the customer
-            // was actually trying to make.
-            // =============================================
-
-            let paymentSucceeded =
-              false;
-
-            if (
-              paymentType ===
-              PAYMENT_TYPES.DOWN_PAYMENT
-            ) {
-              paymentSucceeded =
-                downPaymentStatus ===
-                  "PAID" ||
-                paymentStatus ===
-                  "PAID";
-            }
-
-            if (
-              paymentType ===
-              PAYMENT_TYPES.FINAL_PAYMENT
-            ) {
-              paymentSucceeded =
-                finalPaymentStatus ===
-                  "PAID" ||
-                paymentStatus ===
-                  "PAID";
-            }
-
-            if (
-              paymentType ===
-              PAYMENT_TYPES.FULL_PAYMENT
-            ) {
-              paymentSucceeded =
-                paymentStatus ===
-                "PAID";
-            }
-
-            if (paymentSucceeded) {
-            waitingForStripe.current = false;
-
-            const refreshedPayment =
-                refreshed?.payment || {};
-
-            let paidAmount = 0;
-
-            if (
-                paymentType ===
-                PAYMENT_TYPES.DOWN_PAYMENT
-            ) {
-                paidAmount =
-                Number(
-                    refreshedPayment
-                    ?.downPaymentAmount ||
-                    0
-                );
-            }
-
-            if (
-                paymentType ===
-                PAYMENT_TYPES.FINAL_PAYMENT
-            ) {
-                paidAmount =
-                Number(
-                    refreshedPayment
-                    ?.finalPaymentAmount ||
-                    0
-                );
-            }
-
-            if (
-                paymentType ===
-                PAYMENT_TYPES.FULL_PAYMENT
-            ) {
-                paidAmount =
-                Number(
-                    refreshedPayment?.amount ||
-                    refreshed?.totalAmount ||
-                    0
-                );
-            }
-
-            console.log(
-                "Paid amount:",
-                paidAmount
-            );
-
-            router.dismissAll();
-
-            router.replace({
-                pathname:
-                "/customer/payment-success",
-
-                params: {
-                bookingId:
-                    String(
-                    refreshed.id
-                    ),
-
-                bookingCode:
-                    refreshed.bookingCode ||
-                    "",
-
-                paymentType,
-
-                amount:
-                    String(
-                    paidAmount
-                    ),
-                },
-            });
-
-            return;
-            }
-
-            console.log(
-              "Payment has not been confirmed yet."
-            );
-          } catch (err) {
-            console.log(
-              "Failed to refresh payment status:",
-              err
-            );
-          }
-        }
-      );
-
-    return () => {
-      subscription.remove();
-    };
-  }, [
-    bookingId,
-    paymentType,
-    router,
-  ]);
-
-  // =========================================================
   // LOAD BOOKING FUNCTION
   // =========================================================
 
@@ -370,7 +161,7 @@ export default function CheckoutScreen() {
       } catch (
         err: any
       ) {
-        console.log(
+        logger.debug(
           "Failed to load booking:",
           err
         );
@@ -470,7 +261,10 @@ export default function CheckoutScreen() {
   // CONTINUE PAYMENT
   // =========================================================
 
-  const handleContinuePayment =
+  const handleContinuePayment = () =>
+    checkoutAttempt.run(continuePayment);
+
+  const continuePayment =
     async () => {
       if (
         submitting ||
@@ -512,18 +306,30 @@ export default function CheckoutScreen() {
         setSubmitting(true);
         setError("");
 
-        console.log(
+        logger.debug(
           "Starting Stripe payment:",
           paymentType
         );
 
+        // Same booking and payment part -> same key until a session
+        // comes back, so a retry after a timeout replays it.
+        const attempt =
+          checkoutAttempt.attemptFor(
+            `${booking.id}:${paymentType}`
+          );
+
         const result =
           await createStripeCheckoutSession(
             booking.id,
-            paymentType
+            paymentType,
+            attempt.key
           );
 
-        console.log(
+        // Got a session: the next tap (e.g. after cancelling on Stripe)
+        // asks for a new one, as before.
+        checkoutAttempt.finish();
+
+        logger.debug(
           "Stripe checkout response:",
           result
         );
@@ -538,37 +344,80 @@ export default function CheckoutScreen() {
           );
         }
 
-        const supported =
-          await Linking.canOpenURL(
-            checkoutUrl
+        // F2: the payment-status screen needs to know which part
+        // is being paid; the return URL doesn't say.
+        rememberStripePayment(
+          booking.id,
+          paymentType
+        );
+
+        // In-app browser that closes itself when Stripe redirects to
+        // mobile://customer/... (success or cancel).
+        const browserResult =
+          await WebBrowser.openAuthSessionAsync(
+            checkoutUrl,
+            STRIPE_RETURN_PREFIX
           );
 
-        if (!supported) {
-          throw new Error(
-            "Unable to open Stripe checkout."
-          );
+        if (
+          browserResult.type ===
+          "success"
+        ) {
+          const returnPath =
+            appPathFromReturnUrl(
+              browserResult.url
+            );
+
+          // On Android the router also receives this link and opens
+          // the screen itself; on iOS it doesn't. Navigate only if we
+          // are still on checkout, so the screen never opens twice.
+          setTimeout(() => {
+            if (
+              returnPath &&
+              navigation.isFocused()
+            ) {
+              router.replace(
+                returnPath as Href
+              );
+            }
+          }, 800);
+
+          return;
         }
 
-        // Important:
-        // AppState will know that we are
-        // waiting for the customer to
-        // return from Stripe.
-        waitingForStripe.current =
-          true;
+        // Browser closed without returning. If the payment went
+        // through anyway, show its status; otherwise stay here.
+        try {
+          const refreshed =
+            await getCustomerBookingById(
+              booking.id
+            );
 
-        await Linking.openURL(
-          checkoutUrl
-        );
+          setBooking(refreshed);
+
+          if (
+            isPartPaid(
+              refreshed,
+              paymentType
+            )
+          ) {
+            router.replace(
+              `/customer/payment-status/${booking.id}` as Href
+            );
+          }
+        } catch (refreshErr) {
+          logger.debug(
+            "Could not refresh after closing Stripe:",
+            refreshErr
+          );
+        }
       } catch (
         err: any
       ) {
-        console.log(
+        logger.debug(
           "Stripe payment failed:",
           err
         );
-
-        waitingForStripe.current =
-          false;
 
         setError(
           err?.message ||

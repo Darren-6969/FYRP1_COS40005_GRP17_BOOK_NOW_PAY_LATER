@@ -37,6 +37,7 @@ import {
   removeSavedListing,
   saveListing,
 } from "../../services/customerApi";
+import { logger } from "@/utils/logger";
 
 const VEHICLE_TYPE_ORDER = [
   "Compact",
@@ -136,7 +137,7 @@ const [
               : []
           );
         } catch (error) {
-          console.log(
+          logger.debug(
             "Failed to load cars:",
             error
           );
@@ -166,7 +167,7 @@ const [
           new Set(ids)
         );
       } catch (error) {
-        console.log(
+        logger.debug(
           "Failed to load saved listings:",
           error
         );
@@ -455,7 +456,7 @@ const filteredCars = useMemo(() => {
         );
       }
     } catch (error) {
-      console.log(
+      logger.debug(
         "Failed to update saved listing:",
         error
       );

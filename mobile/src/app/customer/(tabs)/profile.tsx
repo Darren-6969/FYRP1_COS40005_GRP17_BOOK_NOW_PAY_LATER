@@ -37,6 +37,7 @@ import {
   updateNotificationPreferences,
   updateProfile,
 } from "../../../services/authApi";
+import { logger } from "@/utils/logger";
 
 type UserProfile = {
   id?: number;
@@ -196,7 +197,7 @@ export default function ProfileScreen() {
       return;
     }
   } catch (error) {
-    console.log(
+    logger.debug(
       "Failed to refresh profile:",
       error
     );
@@ -404,7 +405,7 @@ export default function ProfileScreen() {
         "Your profile has been updated successfully."
       );
     } catch (error: any) {
-      console.log(
+      logger.debug(
         "Failed to update profile:",
         error
       );
@@ -543,7 +544,7 @@ export default function ProfileScreen() {
         "Your password has been changed successfully."
       );
     } catch (error: any) {
-      console.log(
+      logger.debug(
         "Failed to change password:",
         error
       );
@@ -644,7 +645,7 @@ export default function ProfileScreen() {
         "Your notification preferences have been saved successfully."
       );
     } catch (error: any) {
-      console.log(
+      logger.debug(
         "Failed to update notification preferences:",
         error
       );

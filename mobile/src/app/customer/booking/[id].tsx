@@ -33,6 +33,7 @@ import {
   type CustomerCancellationQuote,
   type CustomerCancellationReason,
 } from "../../../services/customerApi";
+import { logger } from "@/utils/logger";
 
 type Payment = {
   id?: number;
@@ -228,9 +229,13 @@ export default function BookingDetailScreen() {
   const router = useRouter();
 
   const params =
-    useLocalSearchParams<{ id: string }>();
+    useLocalSearchParams<{ id: string; payment?: string }>();
 
   const bookingId = params.id;
+
+  // F2: Stripe's cancel link lands here with ?payment=cancelled.
+  const [paymentCancelled, setPaymentCancelled] =
+    useState(params.payment === "cancelled");
 
   const [booking, setBooking] =
     useState<Booking | null>(null);
@@ -546,7 +551,7 @@ function canCancelBooking(booking: Booking): boolean {
         );
 
         if (!supported) {
-        console.log(
+        logger.debug(
             "Unable to open document:",
             url
         );
@@ -558,7 +563,7 @@ function canCancelBooking(booking: Booking): boolean {
         url
         );
     } catch (err) {
-        console.log(
+        logger.debug(
         "Failed to open document:",
         err
         );
@@ -616,6 +621,35 @@ function canCancelBooking(booking: Booking): boolean {
             />
           </Pressable>
         </View>
+
+        {paymentCancelled && (
+          <View style={styles.cancelledBanner}>
+            <Ionicons
+              name="information-circle-outline"
+              size={20}
+              color="#6B4A15"
+            />
+
+            <Text style={styles.cancelledBannerText}>
+              Payment cancelled. You haven't been charged, and you can pay again from this booking.
+            </Text>
+
+            <Pressable
+              onPress={() =>
+                setPaymentCancelled(false)
+              }
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss"
+            >
+              <Ionicons
+                name="close"
+                size={18}
+                color="#6B4A15"
+              />
+            </Pressable>
+          </View>
+        )}
 
         {/* HERO */}
         <View style={styles.heroCard}>
@@ -1533,7 +1567,7 @@ function canCancelBooking(booking: Booking): boolean {
             const nextPaymentType =
                 getNextPaymentType();
 
-            console.log(
+            logger.debug(
                 "Next payment type:",
                 nextPaymentType
             );
@@ -1846,6 +1880,26 @@ function canCancelBooking(booking: Booking): boolean {
 }
 
 const styles = StyleSheet.create({
+  cancelledBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FDF3E3",
+    borderColor: "#E8D9B8",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 14,
+  },
+
+  cancelledBannerText: {
+    flex: 1,
+    color: "#6B4A15",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+
   safeArea: {
     flex: 1,
     backgroundColor: "#F5F8F9",

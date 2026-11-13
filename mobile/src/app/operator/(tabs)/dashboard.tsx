@@ -32,6 +32,7 @@ import {
   clearSession,
   getStoredUser,
 } from "../../../services/session";
+import { logger } from "@/utils/logger";
 
 export default function OperatorDashboardScreen() {
   const router = useRouter();
@@ -84,7 +85,7 @@ try {
 
   setUnreadCount(unread);
 } catch (notificationError) {
-  console.log(
+  logger.debug(
     "Unable to load notification count:",
     notificationError
   );

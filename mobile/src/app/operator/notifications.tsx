@@ -25,6 +25,7 @@ import {
   markOperatorNotificationRead,
   OperatorNotification,
 } from "../../services/operatorApi";
+import { logger } from "@/utils/logger";
 
 type NotificationFilter = "ALL" | "UNREAD";
 
@@ -172,7 +173,7 @@ export default function OperatorNotificationsScreen() {
             return;
           }
         } catch (lookupError) {
-          console.log(
+          logger.debug(
             "Notification booking lookup failed:",
             lookupError
           );

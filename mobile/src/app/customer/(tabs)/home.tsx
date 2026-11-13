@@ -39,6 +39,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { logger } from "@/utils/logger";
 
 export default function CustomerHome() {
   const router = useRouter();
@@ -93,7 +94,7 @@ export default function CustomerHome() {
         );
       }
     } catch (error) {
-      console.log(
+      logger.debug(
         "Failed to update saved listing:",
         error
       );
@@ -218,7 +219,7 @@ export default function CustomerHome() {
             : []
         );
       } catch (error) {
-        console.log(
+        logger.debug(
           "Failed to load cars:",
           error
         );
@@ -248,7 +249,7 @@ export default function CustomerHome() {
           new Set(ids)
         );
       } catch (error) {
-        console.log(
+        logger.debug(
           "Failed to load saved listings:",
           error
         );
@@ -275,7 +276,7 @@ export default function CustomerHome() {
           setLatestBooking(null);
         }
       } catch (error) {
-        console.log(
+        logger.debug(
           "Failed to load latest booking:",
           error
         );

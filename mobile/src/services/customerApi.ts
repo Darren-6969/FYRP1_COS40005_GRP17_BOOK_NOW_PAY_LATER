@@ -20,15 +20,38 @@ export async function getCustomerNotifications() {
   });
 }
 
+// F2: asks the server to check the Stripe session and record the payment
+// (same call the website makes). One key per session: a retry replays the
+// stored result, and a "not paid yet" answer releases the key.
+export async function confirmStripeCheckoutSession(
+  sessionId: string
+) {
+  return apiRequest(
+    "/stripe/confirm-session",
+    {
+      method: "POST",
+
+      headers: {
+        "Idempotency-Key":
+          `stripe-confirm-${sessionId}`,
+      },
+
+      body: JSON.stringify({
+        sessionId,
+      }),
+    }
+  );
+}
+
 export async function createStripeCheckoutSession(
   bookingId: number | string,
   paymentType:
     | "DOWN_PAYMENT"
     | "FINAL_PAYMENT"
-    | "FULL_PAYMENT"
+    | "FULL_PAYMENT",
+  // From useIdempotentAttempt: fixed per attempt, reused on retry (F1).
+  idempotencyKey: string
 ) {
-  const idempotencyKey =
-    `stripe-${bookingId}-${paymentType}-${Date.now()}`;
 
   return apiRequest(
     "/stripe/checkout",
@@ -89,10 +112,10 @@ export async function uploadCustomerReceipt(
     remarks?: string;
     method: ManualPaymentMethod;
     paymentType: ManualPaymentType;
-  }
+  },
+  // From useIdempotentAttempt: fixed per attempt, reused on retry (F1).
+  idempotencyKey: string
 ) {
-  const idempotencyKey =
-    `receipt-${bookingId}-${input.paymentType}-${Date.now()}`;
 
   return apiRequest(
     `/customer/bookings/${bookingId}/receipt`,
@@ -191,12 +214,10 @@ export type CreateCarBookingInput = {
 };
 
 export async function createCarBooking(
-  input: CreateCarBookingInput
+  input: CreateCarBookingInput,
+  // From useIdempotentAttempt: fixed per attempt, reused on retry (F1).
+  idempotencyKey: string
 ) {
-  const idempotencyKey =
-    `mobile-${Date.now()}-${Math.random()
-      .toString(36)
-      .substring(2, 10)}`;
 
   return apiRequest(
     "/customer/car-bookings",

@@ -1,6 +1,27 @@
 import { Stack } from "expo-router";
+import { ActivityIndicator, View } from "react-native";
+
+import { useRoleGuard } from "@/hooks/use-role-guard";
 
 export default function CustomerLayout() {
+  // F4: only signed-in customers get past here, deep links included.
+  const allowed = useRoleGuard("CUSTOMER");
+
+  if (!allowed) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#F7FAFB",
+        }}
+      >
+        <ActivityIndicator size="large" color="#07869B" />
+      </View>
+    );
+  }
+
   return (
     <Stack
       screenOptions={{
