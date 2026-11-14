@@ -1,1452 +1,497 @@
-// mobile/src/app/customer/checkout.tsx
-
 import { Ionicons } from "@expo/vector-icons";
-import {
-  useLocalSearchParams,
-  useNavigation,
-  useRouter,
-  type Href,
-} from "expo-router";
-import { StatusBar } from "expo-status-bar";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
+import { useCallback, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-
-import {
-  createStripeCheckoutSession,
-  getCustomerBookingById,
-} from "../../services/customerApi";
-import { logger } from "@/utils/logger";
+  AppText,
+  Button,
+  ErrorState,
+  FLOATING_BAR_CLEARANCE,
+  FloatingActionBar,
+  GlassCard,
+  IconButton,
+  Money,
+  SkeletonText,
+  StatusPill,
+} from "@/components/ui";
 import { useIdempotentAttempt } from "@/hooks/use-idempotent-attempt";
+import { useTheme } from "@/hooks/use-theme";
+import { createStripeCheckoutSession, getCustomerBookingById } from "@/services/customerApi";
+import { formatMYT } from "@/utils/datetime";
+import { logger } from "@/utils/logger";
+import { OWED, PAYABLE_STATUSES } from "@/utils/next-payment";
 import {
   STRIPE_RETURN_PREFIX,
   appPathFromReturnUrl,
   isPartPaid,
   rememberStripePayment,
+  type StripePaymentType,
 } from "@/utils/stripe-payment";
 
-const PAYMENT_TYPES = {
-  DOWN_PAYMENT: "DOWN_PAYMENT",
-  FINAL_PAYMENT: "FINAL_PAYMENT",
-  FULL_PAYMENT: "FULL_PAYMENT",
-} as const;
+type PaymentMethod = "STRIPE" | "DUITNOW_SPAY";
 
-type PaymentType =
-  (typeof PAYMENT_TYPES)[keyof typeof PAYMENT_TYPES];
+/** Which parts can be paid now, from the server's part statuses. */
+function payableParts(booking: any) {
+  const p = booking?.payment || {};
+  const downOwed = OWED.has(p.downPaymentStatus);
+  const finalOwed = OWED.has(p.finalPaymentStatus);
+  return {
+    DOWN_PAYMENT: downOwed,
+    FINAL_PAYMENT: p.downPaymentStatus === "PAID" && finalOwed,
+    FULL_PAYMENT: downOwed && finalOwed,
+  } as Record<StripePaymentType, boolean>;
+}
 
-type PaymentMethod =
-  | "STRIPE"
-  | "DUITNOW_SPAY";
+/** Keeps the chosen part if it's still payable, otherwise moves to the next one. */
+function settlePart(booking: any, current: StripePaymentType): StripePaymentType {
+  const parts = payableParts(booking);
+  if (parts[current]) return current;
+  if (parts.DOWN_PAYMENT) return "DOWN_PAYMENT";
+  if (parts.FINAL_PAYMENT) return "FINAL_PAYMENT";
+  return current;
+}
 
+function partAmount(booking: any, part: StripePaymentType) {
+  const p = booking?.payment || {};
+  if (part === "DOWN_PAYMENT") return p.downPaymentAmount;
+  if (part === "FINAL_PAYMENT") return p.finalPaymentAmount;
+  return p.amount ?? booking?.totalAmount;
+}
+
+/**
+ * Pay the down payment, the balance, or both at once, by card (Stripe in an
+ * in-app browser, F2) or by DuitNow/SPay receipt. Reloads the booking every
+ * time it comes into view, so a screen left open can't offer a part that is
+ * already paid.
+ */
 export default function CheckoutScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const params = useLocalSearchParams<{ bookingId?: string; type?: string }>();
+  const insets = useSafeAreaInsets();
+  const { tokens } = useTheme();
+  const bookingId = params.bookingId;
 
-  const params =
-    useLocalSearchParams<{
-      bookingId?: string;
-      type?: string;
-    }>();
+  const [booking, setBooking] = useState<any | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [payError, setPayError] = useState<unknown>(null);
+  const [method, setMethod] = useState<PaymentMethod>("STRIPE");
+  const [part, setPart] = useState<StripePaymentType>(
+    params.type === "FINAL_PAYMENT" || params.type === "FULL_PAYMENT" ? params.type : "DOWN_PAYMENT"
+  );
+  const partRef = useRef(part);
+  partRef.current = part;
 
-  const bookingId =
-    params.bookingId;
+  const checkoutAttempt = useIdempotentAttempt();
 
-  const [booking, setBooking] =
-    useState<any>(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
-  const [submitting, setSubmitting] =
-    useState(false);
-
-  const checkoutAttempt =
-    useIdempotentAttempt();
-
-  const navigation =
-    useNavigation();
-
-  const initialPaymentType:
-    PaymentType =
-    params.type ===
-    PAYMENT_TYPES.FINAL_PAYMENT
-      ? PAYMENT_TYPES.FINAL_PAYMENT
-      : params.type ===
-          PAYMENT_TYPES.FULL_PAYMENT
-        ? PAYMENT_TYPES.FULL_PAYMENT
-        : PAYMENT_TYPES.DOWN_PAYMENT;
-
-  const [
-    paymentType,
-    setPaymentType,
-  ] =
-    useState<PaymentType>(
-      initialPaymentType
-    );
-
-  const [method, setMethod] =
-    useState<PaymentMethod>(
-      "STRIPE"
-    );
-
-  // =========================================================
-  // LOAD BOOKING
-  // =========================================================
-
-  useEffect(() => {
+  const loadBooking = useCallback(async () => {
     if (!bookingId) {
-      setError(
-        "Booking information is missing."
-      );
+      setLoadError(new Error("This payment link is missing the booking."));
+      return;
+    }
+    setLoadError(null);
+    try {
+      const data = await getCustomerBookingById(bookingId);
+      setBooking(data);
+      setPart(settlePart(data, partRef.current));
+    } catch (err) {
+      logger.debug("Failed to load booking:", err);
+      setLoadError(err);
+    }
+  }, [bookingId]);
 
-      setLoading(false);
+  // Reload whenever checkout comes back into view (stale-screen fix).
+  useFocusEffect(
+    useCallback(() => {
+      loadBooking();
+    }, [loadBooking])
+  );
+
+  const payWithStripe = async () => {
+    // Same booking and payment part -> same key until a session comes back,
+    // so a retry after a timeout replays it (F1).
+    const attempt = checkoutAttempt.attemptFor(`${booking.id}:${part}`);
+    const result = await createStripeCheckoutSession(booking.id, part, attempt.key);
+    // Got a session: the next tap (e.g. after cancelling on Stripe) asks for a new one.
+    checkoutAttempt.finish();
+
+    const checkoutUrl = result?.url || result?.checkoutUrl;
+    if (!checkoutUrl) throw new Error("Stripe didn't return a payment page. Try again.");
+
+    // F2: payment-status needs to know which part is being paid.
+    rememberStripePayment(booking.id, part);
+
+    // In-app browser that closes itself when Stripe redirects to
+    // mobile://customer/... (success or cancel).
+    const browserResult = await WebBrowser.openAuthSessionAsync(checkoutUrl, STRIPE_RETURN_PREFIX);
+
+    if (browserResult.type === "success") {
+      const returnPath = appPathFromReturnUrl(browserResult.url);
+      // Android also delivers this link to the router; iOS doesn't. Navigate
+      // only if we're still on checkout, so the screen never opens twice.
+      setTimeout(() => {
+        if (returnPath && navigation.isFocused()) router.replace(returnPath as unknown as Href);
+      }, 800);
       return;
     }
 
-    loadBooking();
-  }, [bookingId]);
-
-  // =========================================================
-  // LOAD BOOKING FUNCTION
-  // =========================================================
-
-  const loadBooking =
-    async () => {
-      try {
-        setLoading(true);
-        setError("");
-
-        const data =
-          await getCustomerBookingById(
-            bookingId as string
-          );
-
-        setBooking(data);
-
-        // Safety:
-        // if down payment already paid,
-        // automatically switch to final payment.
-        const payment =
-          data?.payment || {};
-
-        if (
-          payment
-            ?.downPaymentStatus ===
-            "PAID" &&
-          payment
-            ?.finalPaymentStatus !==
-            "PAID" &&
-          params.type !==
-            PAYMENT_TYPES.FULL_PAYMENT
-        ) {
-          setPaymentType(
-            PAYMENT_TYPES.FINAL_PAYMENT
-          );
-        }
-      } catch (
-        err: any
-      ) {
-        logger.debug(
-          "Failed to load booking:",
-          err
-        );
-
-        setError(
-          err?.message ||
-            "Unable to load booking."
-        );
-      } finally {
-        setLoading(false);
+    // Browser closed without returning: if it went through anyway, show the status.
+    try {
+      const refreshed = await getCustomerBookingById(booking.id);
+      setBooking(refreshed);
+      if (isPartPaid(refreshed, part)) {
+        router.replace(`/customer/payment-status/${booking.id}` as unknown as Href);
+      } else {
+        setPart(settlePart(refreshed, part));
       }
-    };
-
-  // =========================================================
-  // PAYMENT DATA
-  // =========================================================
-
-  const payment =
-    booking?.payment || {};
-
-  const downPaymentPaid =
-    payment
-      ?.downPaymentStatus ===
-    "PAID";
-
-  const finalPaymentPaid =
-    payment
-      ?.finalPaymentStatus ===
-    "PAID";
-
-  const totalAmount =
-    Number(
-      booking?.totalAmount ??
-        booking?.total ??
-        0
-    );
-
-  const downPaymentAmount =
-    Number(
-      payment
-        ?.downPaymentAmount ??
-        booking
-          ?.downPaymentAmount ??
-        0
-    );
-
-  const finalPaymentAmount =
-    Number(
-      payment
-        ?.finalPaymentAmount ??
-        booking
-          ?.finalPaymentAmount ??
-        0
-    );
-
-  // =========================================================
-  // AMOUNT TO PAY
-  // =========================================================
-
-  const amountToPay =
-    useMemo(() => {
-      if (
-        paymentType ===
-        PAYMENT_TYPES.DOWN_PAYMENT
-      ) {
-        return downPaymentAmount;
-      }
-
-      if (
-        paymentType ===
-        PAYMENT_TYPES.FINAL_PAYMENT
-      ) {
-        return finalPaymentAmount;
-      }
-
-      return totalAmount;
-    }, [
-      paymentType,
-      downPaymentAmount,
-      finalPaymentAmount,
-      totalAmount,
-    ]);
-
-  // =========================================================
-  // FORMAT MONEY
-  // =========================================================
-
-  const formatMoney = (
-    value: number
-  ) => {
-    return `RM ${Number(
-      value || 0
-    ).toFixed(2)}`;
+    } catch (err) {
+      logger.debug("Could not refresh after closing Stripe:", err);
+    }
   };
 
-  // =========================================================
-  // CONTINUE PAYMENT
-  // =========================================================
+  const continuePayment = async () => {
+    if (!booking?.id) return;
+    setPayError(null);
 
-  const handleContinuePayment = () =>
-    checkoutAttempt.run(continuePayment);
+    if (method === "DUITNOW_SPAY") {
+      router.push({
+        pathname: "/customer/upload-receipt",
+        params: { bookingId: String(booking.id), paymentType: part },
+      } as unknown as Href);
+      return;
+    }
 
-  const continuePayment =
-    async () => {
-      if (
-        submitting ||
-        !booking?.id
-      ) {
-        return;
-      }
+    try {
+      await payWithStripe();
+    } catch (err) {
+      logger.debug("Stripe payment failed:", err);
+      setPayError(err);
+    }
+  };
 
-      // =============================================
-      // DUITNOW / SPAY
-      // =============================================
+  const handlePay = () => checkoutAttempt.run(continuePayment);
 
-      if (
-        method ===
-        "DUITNOW_SPAY"
-      ) {
-        router.push({
-          pathname:
-            "/customer/upload-receipt",
-
-          params: {
-            bookingId:
-              String(
-                booking.id
-              ),
-
-            paymentType,
-          },
-        });
-
-        return;
-      }
-
-      // =============================================
-      // STRIPE
-      // =============================================
-
-      try {
-        setSubmitting(true);
-        setError("");
-
-        logger.debug(
-          "Starting Stripe payment:",
-          paymentType
-        );
-
-        // Same booking and payment part -> same key until a session
-        // comes back, so a retry after a timeout replays it.
-        const attempt =
-          checkoutAttempt.attemptFor(
-            `${booking.id}:${paymentType}`
-          );
-
-        const result =
-          await createStripeCheckoutSession(
-            booking.id,
-            paymentType,
-            attempt.key
-          );
-
-        // Got a session: the next tap (e.g. after cancelling on Stripe)
-        // asks for a new one, as before.
-        checkoutAttempt.finish();
-
-        logger.debug(
-          "Stripe checkout response:",
-          result
-        );
-
-        const checkoutUrl =
-          result?.url ||
-          result?.checkoutUrl;
-
-        if (!checkoutUrl) {
-          throw new Error(
-            "Stripe checkout URL was not returned."
-          );
-        }
-
-        // F2: the payment-status screen needs to know which part
-        // is being paid; the return URL doesn't say.
-        rememberStripePayment(
-          booking.id,
-          paymentType
-        );
-
-        // In-app browser that closes itself when Stripe redirects to
-        // mobile://customer/... (success or cancel).
-        const browserResult =
-          await WebBrowser.openAuthSessionAsync(
-            checkoutUrl,
-            STRIPE_RETURN_PREFIX
-          );
-
-        if (
-          browserResult.type ===
-          "success"
-        ) {
-          const returnPath =
-            appPathFromReturnUrl(
-              browserResult.url
-            );
-
-          // On Android the router also receives this link and opens
-          // the screen itself; on iOS it doesn't. Navigate only if we
-          // are still on checkout, so the screen never opens twice.
-          setTimeout(() => {
-            if (
-              returnPath &&
-              navigation.isFocused()
-            ) {
-              router.replace(
-                returnPath as Href
-              );
-            }
-          }, 800);
-
-          return;
-        }
-
-        // Browser closed without returning. If the payment went
-        // through anyway, show its status; otherwise stay here.
-        try {
-          const refreshed =
-            await getCustomerBookingById(
-              booking.id
-            );
-
-          setBooking(refreshed);
-
-          if (
-            isPartPaid(
-              refreshed,
-              paymentType
-            )
-          ) {
-            router.replace(
-              `/customer/payment-status/${booking.id}` as Href
-            );
-          }
-        } catch (refreshErr) {
-          logger.debug(
-            "Could not refresh after closing Stripe:",
-            refreshErr
-          );
-        }
-      } catch (
-        err: any
-      ) {
-        logger.debug(
-          "Stripe payment failed:",
-          err
-        );
-
-        setError(
-          err?.message ||
-            "Unable to start Stripe payment."
-        );
-      } finally {
-        setSubmitting(false);
-      }
-    };
-
-  // =========================================================
-  // LOADING
-  // =========================================================
-
-  if (loading) {
+  if (loadError && !booking) {
     return (
-      <SafeAreaView
-        style={styles.center}
-      >
-        <StatusBar
-          style="dark"
-        />
-
-        <Text
-          style={
-            styles.loadingText
-          }
-        >
-          Loading checkout...
-        </Text>
-      </SafeAreaView>
+      <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.pad}>
+          <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+        </View>
+        <ErrorState error={loadError} onRetry={loadBooking} />
+      </View>
     );
   }
 
-  // =========================================================
-  // LOAD ERROR
-  // =========================================================
+  const parts = booking ? payableParts(booking) : null;
+  const open = booking && PAYABLE_STATUSES.has(booking.status);
+  const anythingOwed = parts ? parts.DOWN_PAYMENT || parts.FINAL_PAYMENT : false;
+  const canPay = Boolean(open && parts?.[part]);
+  const p = booking?.payment || {};
+  const dueAt =
+    part === "FINAL_PAYMENT" ? p.finalPaymentDueDate : part === "DOWN_PAYMENT" ? p.downPaymentDueDate : p.downPaymentDueDate;
 
-  if (
-    error &&
-    !booking
-  ) {
-    return (
-      <SafeAreaView
-        style={styles.center}
-      >
-        <StatusBar
-          style="dark"
-        />
-
-        <Ionicons
-          name="alert-circle-outline"
-          size={38}
-          color="#B94747"
-        />
-
-        <Text
-          style={
-            styles.errorTitle
-          }
-        >
-          Unable to open checkout
-        </Text>
-
-        <Text
-          style={
-            styles.errorMessage
-          }
-        >
-          {error}
-        </Text>
-
-        <Pressable
-          style={
-            styles.retryButton
-          }
-          onPress={loadBooking}
-        >
-          <Text
-            style={
-              styles.retryText
-            }
-          >
-            Try Again
-          </Text>
-        </Pressable>
-      </SafeAreaView>
-    );
-  }
-
-  // =========================================================
-  // MAIN UI
-  // =========================================================
+  const options: { part: StripePaymentType; title: string; note: string }[] = [
+    {
+      part: "DOWN_PAYMENT",
+      title: "Down payment",
+      note: p.downPaymentStatus === "PAID" ? "Paid" : OWED.has(p.downPaymentStatus) ? "Secures your booking" : "In review",
+    },
+    {
+      part: "FINAL_PAYMENT",
+      title: "Balance",
+      note:
+        p.finalPaymentStatus === "PAID"
+          ? "Paid"
+          : p.downPaymentStatus !== "PAID"
+            ? "After the down payment"
+            : OWED.has(p.finalPaymentStatus)
+              ? "Due before pick-up"
+              : "In review",
+    },
+    {
+      part: "FULL_PAYMENT",
+      title: "Pay in full",
+      note: OWED.has(p.downPaymentStatus) && OWED.has(p.finalPaymentStatus) ? "Both parts now" : "Not available",
+    },
+  ];
 
   return (
-    <SafeAreaView
-      style={
-        styles.safeArea
-      }
-    >
-      <StatusBar
-        style="dark"
-      />
-
-      {/* HEADER */}
-      <View
-        style={
-          styles.header
-        }
-      >
-        <Pressable
-          style={
-            styles.headerButton
-          }
-          onPress={() =>
-            router.back()
-          }
-        >
-          <Ionicons
-            name="chevron-back"
-            size={22}
-            color="#17313C"
-          />
-        </Pressable>
-
-        <View
-          style={{
-            flex: 1,
-          }}
-        >
-          <Text
-            style={
-              styles.headerTitle
-            }
-          >
-            Complete Payment
-          </Text>
-
-          <Text
-            style={
-              styles.headerSubtitle
-            }
-          >
-            Secure booking payment
-          </Text>
-        </View>
-      </View>
-
+    <View style={styles.screen}>
       <ScrollView
-        showsVerticalScrollIndicator={
-          false
-        }
-        contentContainerStyle={
-          styles.content
-        }
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 8, paddingBottom: FLOATING_BAR_CLEARANCE + insets.bottom + 12 },
+        ]}
+        showsVerticalScrollIndicator={false}
       >
-        {/* BOOKING SUMMARY */}
-        <View
-          style={
-            styles.card
-          }
-        >
-          <Text
-            style={
-              styles.eyebrow
-            }
-          >
-            Booking
-          </Text>
-
-          <Text
-            style={
-              styles.bookingCode
-            }
-          >
-            {booking
-              ?.bookingCode ||
-              `Booking #${booking?.id}`}
-          </Text>
-
-          <InfoRow
-            label="Service"
-            value={
-              booking
-                ?.serviceName ||
-              booking?.listing
-                ?.title ||
-              booking?.listing
-                ?.name ||
-              "Car Rental"
-            }
-          />
-
-          <InfoRow
-            label="Status"
-            value={
-              booking?.status ||
-              "—"
-            }
-          />
-
-          <View
-            style={
-              styles.divider
-            }
-          />
-
-          <View
-            style={
-              styles.amountRow
-            }
-          >
-            <Text
-              style={
-                styles.amountLabel
-              }
-            >
-              Amount to Pay
-            </Text>
-
-            <Text
-              style={
-                styles.amountValue
-              }
-            >
-              {formatMoney(
-                amountToPay
-              )}
-            </Text>
-          </View>
+        <View style={styles.topRow}>
+          <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+          <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
+            Payment
+          </AppText>
         </View>
 
-        {/* PAYMENT TYPE */}
-        <View
-          style={
-            styles.card
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Payment Type
-          </Text>
+        {!booking ? (
+          <GlassCard>
+            <SkeletonText lines={4} />
+          </GlassCard>
+        ) : (
+          <>
+            <GlassCard>
+              <View style={styles.between}>
+                <View style={styles.flex}>
+                  <AppText variant="headline">{booking.serviceName || "Your booking"}</AppText>
+                  <AppText variant="mono" color="label">
+                    {booking.bookingCode || `#${booking.id}`}
+                  </AppText>
+                </View>
+                <StatusPill status={booking.status} />
+              </View>
+              {booking.pickupDate ? (
+                <AppText variant="caption" style={styles.mt8}>
+                  {formatMYT(booking.pickupDate, "dayDateTime")} → {formatMYT(booking.returnDate, "dayDateTime")}
+                </AppText>
+              ) : null}
+            </GlassCard>
 
-          <PaymentChoice
-            selected={
-              paymentType ===
-              PAYMENT_TYPES.DOWN_PAYMENT
-            }
-            disabled={
-              downPaymentPaid
-            }
-            label="Down Payment"
-            description={
-              downPaymentPaid
-                ? "Already paid"
-                : formatMoney(
-                    downPaymentAmount
-                  )
-            }
-            onPress={() =>
-              setPaymentType(
-                PAYMENT_TYPES.DOWN_PAYMENT
-              )
-            }
-          />
+            {!open ? (
+              <GlassCard>
+                <AppText variant="bodyStrong">Payment isn't open for this booking</AppText>
+                <AppText variant="caption">
+                  It's {booking.status ? booking.status.toLowerCase().replace(/_/g, " ") : "not ready"}. Check the booking for details.
+                </AppText>
+              </GlassCard>
+            ) : !anythingOwed ? (
+              <GlassCard>
+                <View style={[styles.row, styles.alignStart]}>
+                  <Ionicons name="checkmark-circle" size={22} color={tokens.okFg} />
+                  <View style={styles.flex}>
+                    <AppText variant="bodyStrong">Nothing to pay right now</AppText>
+                    <AppText variant="caption">
+                      {p.status === "PAID" ? "This booking is paid in full." : "A payment is being reviewed by the operator."}
+                    </AppText>
+                  </View>
+                </View>
+              </GlassCard>
+            ) : (
+              <>
+                <Section title="What are you paying?">
+                  <GlassCard padding={4}>
+                    <View accessibilityRole="radiogroup">
+                      {options.map((option, i) => {
+                        const enabled = Boolean(parts?.[option.part]);
+                        const selected = option.part === part;
+                        return (
+                          <Pressable
+                            key={option.part}
+                            onPress={() => enabled && setPart(option.part)}
+                            disabled={!enabled}
+                            accessibilityRole="radio"
+                            accessibilityState={{ checked: selected, disabled: !enabled }}
+                            style={[
+                              styles.option,
+                              i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.line },
+                              !enabled && styles.dim,
+                            ]}
+                          >
+                            <View style={[styles.radio, { borderColor: selected ? tokens.brand : tokens.label }]}>
+                              {selected ? <View style={[styles.radioDot, { backgroundColor: tokens.brand }]} /> : null}
+                            </View>
+                            <View style={styles.flex}>
+                              <AppText variant="bodyStrong">{option.title}</AppText>
+                              <AppText variant="caption">{option.note}</AppText>
+                            </View>
+                            <Money value={partAmount(booking, option.part)} color={enabled ? "ink" : "label"} />
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </GlassCard>
+                  {dueAt && part !== "FULL_PAYMENT" ? (
+                    <AppText variant="caption">Due {formatMYT(dueAt, "dayDateTime")}</AppText>
+                  ) : null}
+                </Section>
 
-          <PaymentChoice
-            selected={
-              paymentType ===
-              PAYMENT_TYPES.FINAL_PAYMENT
-            }
-            disabled={
-              !downPaymentPaid ||
-              finalPaymentPaid
-            }
-            label="Final Payment"
-            description={
-              finalPaymentPaid
-                ? "Already paid"
-                : formatMoney(
-                    finalPaymentAmount
-                  )
-            }
-            onPress={() =>
-              setPaymentType(
-                PAYMENT_TYPES.FINAL_PAYMENT
-              )
-            }
-          />
+                <Section title="How do you want to pay?">
+                  <View style={styles.methods}>
+                    <MethodCard
+                      icon="card-outline"
+                      title="Card"
+                      body="Secure payment by Stripe"
+                      selected={method === "STRIPE"}
+                      onPress={() => setMethod("STRIPE")}
+                    />
+                    <MethodCard
+                      icon="qr-code-outline"
+                      title="DuitNow / SPay"
+                      body="Pay, then upload the receipt"
+                      selected={method === "DUITNOW_SPAY"}
+                      onPress={() => setMethod("DUITNOW_SPAY")}
+                    />
+                  </View>
+                </Section>
+              </>
+            )}
 
-          <PaymentChoice
-            selected={
-              paymentType ===
-              PAYMENT_TYPES.FULL_PAYMENT
-            }
-            disabled={
-              downPaymentPaid ||
-              finalPaymentPaid
-            }
-            label="Full Payment"
-            description={
-              formatMoney(
-                totalAmount
-              )
-            }
-            onPress={() =>
-              setPaymentType(
-                PAYMENT_TYPES.FULL_PAYMENT
-              )
-            }
-          />
-        </View>
-
-        {/* PAYMENT METHOD */}
-        <View
-          style={
-            styles.card
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Payment Method
-          </Text>
-
-          <PaymentMethodChoice
-            selected={
-              method ===
-              "STRIPE"
-            }
-            icon="card-outline"
-            label="Stripe"
-            description="Secure card payment"
-            onPress={() =>
-              setMethod(
-                "STRIPE"
-              )
-            }
-          />
-
-          <PaymentMethodChoice
-            selected={
-              method ===
-              "DUITNOW_SPAY"
-            }
-            icon="qr-code-outline"
-            label="DuitNow / SPay"
-            description="Manual payment with receipt upload"
-            onPress={() =>
-              setMethod(
-                "DUITNOW_SPAY"
-              )
-            }
-          />
-        </View>
-
-        {/* ERROR */}
-        {error ? (
-          <View
-            style={
-              styles.errorCard
-            }
-          >
-            <Ionicons
-              name="alert-circle-outline"
-              size={19}
-              color="#B94747"
-            />
-
-            <Text
-              style={
-                styles.errorText
-              }
-            >
-              {error}
-            </Text>
-          </View>
-        ) : null}
+            {payError ? <ErrorState error={payError} compact /> : null}
+            {loadError ? <ErrorState error={loadError} onRetry={loadBooking} compact /> : null}
+          </>
+        )}
       </ScrollView>
 
-      {/* FOOTER */}
-      <View
-        style={
-          styles.footer
-        }
-      >
-        <View>
-          <Text
-            style={
-              styles.footerLabel
-            }
-          >
-            Total
-          </Text>
-
-          <Text
-            style={
-              styles.footerAmount
-            }
-          >
-            {formatMoney(
-              amountToPay
-            )}
-          </Text>
-        </View>
-
-        <Pressable
-          disabled={
-            submitting
-          }
-          style={[
-            styles.payButton,
-
-            submitting &&
-              styles.payButtonDisabled,
-          ]}
-          onPress={
-            handleContinuePayment
+      {booking && open && anythingOwed ? (
+        <FloatingActionBar
+          action={
+            <Button
+              label={method === "STRIPE" ? "Pay now" : "Continue"}
+              variant="cta"
+              grow
+              disabled={!canPay}
+              onPress={handlePay}
+            />
           }
         >
-          <Text
-            style={
-              styles.payButtonText
-            }
-          >
-            {submitting
-              ? "Processing..."
-              : method ===
-                  "DUITNOW_SPAY"
-                ? "Continue"
-                : "Pay Now"}
-          </Text>
-
-          {!submitting && (
-            <Ionicons
-              name="arrow-forward"
-              size={18}
-              color="#FFFFFF"
+          <Money value={partAmount(booking, part)} variant="headline" />
+          <AppText variant="caption">{options.find((o) => o.part === part)?.title}</AppText>
+        </FloatingActionBar>
+      ) : booking ? (
+        <FloatingActionBar
+          action={
+            <Button
+              label="View booking"
+              variant="brand"
+              grow
+              onPress={() => router.replace(`/customer/booking/${booking.id}` as unknown as Href)}
             />
-          )}
-        </Pressable>
-      </View>
-    </SafeAreaView>
-  );
-}
-
-// =========================================================
-// INFO ROW
-// =========================================================
-
-function InfoRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <View
-      style={
-        styles.infoRow
-      }
-    >
-      <Text
-        style={
-          styles.infoLabel
-        }
-      >
-        {label}
-      </Text>
-
-      <Text
-        style={
-          styles.infoValue
-        }
-      >
-        {value}
-      </Text>
+          }
+        />
+      ) : null}
     </View>
   );
 }
 
-// =========================================================
-// PAYMENT CHOICE
-// =========================================================
-
-function PaymentChoice({
-  selected,
-  disabled,
-  label,
-  description,
-  onPress,
-}: {
-  selected: boolean;
-  disabled: boolean;
-  label: string;
-  description: string;
-  onPress: () => void;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Pressable
-      disabled={
-        disabled
-      }
-      onPress={
-        onPress
-      }
-      style={[
-        styles.choice,
-
-        selected &&
-          styles.choiceSelected,
-
-        disabled &&
-          styles.choiceDisabled,
-      ]}
-    >
-      <View
-        style={[
-          styles.radio,
-
-          selected &&
-            styles.radioSelected,
-        ]}
-      >
-        {selected ? (
-          <View
-            style={
-              styles.radioInner
-            }
-          />
-        ) : null}
-      </View>
-
-      <View
-        style={{
-          flex: 1,
-        }}
-      >
-        <Text
-          style={
-            styles.choiceTitle
-          }
-        >
-          {label}
-        </Text>
-
-        <Text
-          style={
-            styles.choiceDescription
-          }
-        >
-          {description}
-        </Text>
-      </View>
-    </Pressable>
+    <View style={styles.section}>
+      <AppText variant="headline" accessibilityRole="header">
+        {title}
+      </AppText>
+      {children}
+    </View>
   );
 }
 
-// =========================================================
-// PAYMENT METHOD CHOICE
-// =========================================================
-
-function PaymentMethodChoice({
-  selected,
+function MethodCard({
   icon,
-  label,
-  description,
+  title,
+  body,
+  selected,
   onPress,
 }: {
-  selected: boolean;
   icon: any;
-  label: string;
-  description: string;
+  title: string;
+  body: string;
+  selected: boolean;
   onPress: () => void;
 }) {
+  const { tokens } = useTheme();
   return (
     <Pressable
-      onPress={
-        onPress
-      }
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      accessibilityLabel={`${title}. ${body}`}
       style={[
-        styles.choice,
-
-        selected &&
-          styles.choiceSelected,
+        styles.method,
+        {
+          backgroundColor: tokens.glass,
+          borderColor: selected ? tokens.leafInk : tokens.glassLine,
+          borderWidth: selected ? 2 : StyleSheet.hairlineWidth,
+        },
       ]}
     >
-      <Ionicons
-        name={icon}
-        size={21}
-        color="#07869B"
-      />
-
-      <View
-        style={{
-          flex: 1,
-        }}
-      >
-        <Text
-          style={
-            styles.choiceTitle
-          }
-        >
-          {label}
-        </Text>
-
-        <Text
-          style={
-            styles.choiceDescription
-          }
-        >
-          {description}
-        </Text>
-      </View>
-
-      <View
-        style={[
-          styles.radio,
-
-          selected &&
-            styles.radioSelected,
-        ]}
-      >
-        {selected ? (
-          <View
-            style={
-              styles.radioInner
-            }
-          />
-        ) : null}
-      </View>
+      <Ionicons name={icon} size={22} color={selected ? tokens.leafInk : tokens.label} />
+      <AppText variant="bodyStrong">{title}</AppText>
+      <AppText variant="caption">{body}</AppText>
     </Pressable>
   );
 }
 
-// =========================================================
-// STYLES
-// =========================================================
-
-const styles =
-  StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor:
-        "#F7FAFB",
-    },
-
-    center: {
-      flex: 1,
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      padding: 24,
-      backgroundColor:
-        "#F7FAFB",
-    },
-
-    loadingText: {
-      color:
-        "#70858E",
-      fontWeight:
-        "700",
-    },
-
-    errorTitle: {
-      color:
-        "#17313C",
-      fontSize: 17,
-      fontWeight:
-        "900",
-      marginTop: 12,
-    },
-
-    errorMessage: {
-      color:
-        "#7A8E96",
-      fontSize: 12,
-      textAlign:
-        "center",
-      marginTop: 6,
-    },
-
-    retryButton: {
-      marginTop: 18,
-      paddingHorizontal:
-        20,
-      height: 46,
-      borderRadius:
-        14,
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      backgroundColor:
-        "#07869B",
-    },
-
-    retryText: {
-      color:
-        "#FFFFFF",
-      fontWeight:
-        "900",
-    },
-
-    header: {
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      gap: 12,
-      paddingHorizontal:
-        18,
-      paddingVertical:
-        14,
-      backgroundColor:
-        "#FFFFFF",
-      borderBottomWidth:
-        1,
-      borderBottomColor:
-        "#E5ECEF",
-    },
-
-    headerButton: {
-      width: 42,
-      height: 42,
-      borderRadius:
-        14,
-      backgroundColor:
-        "#F3F7F8",
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-    },
-
-    headerTitle: {
-      color:
-        "#17313C",
-      fontSize: 18,
-      fontWeight:
-        "900",
-    },
-
-    headerSubtitle: {
-      color:
-        "#83969E",
-      fontSize: 10,
-      marginTop: 2,
-    },
-
-    content: {
-      padding: 18,
-      paddingBottom:
-        125,
-    },
-
-    card: {
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E3EAED",
-      borderRadius:
-        18,
-      padding: 16,
-      marginBottom:
-        16,
-    },
-
-    eyebrow: {
-      color:
-        "#07869B",
-      fontSize: 10,
-      fontWeight:
-        "900",
-      textTransform:
-        "uppercase",
-    },
-
-    bookingCode: {
-      color:
-        "#17313C",
-      fontSize: 21,
-      fontWeight:
-        "900",
-      marginTop: 5,
-      marginBottom:
-        15,
-    },
-
-    infoRow: {
-      flexDirection:
-        "row",
-      justifyContent:
-        "space-between",
-      gap: 20,
-      paddingVertical:
-        8,
-    },
-
-    infoLabel: {
-      color:
-        "#82949C",
-      fontSize: 10,
-    },
-
-    infoValue: {
-      flex: 1,
-      textAlign:
-        "right",
-      color:
-        "#17313C",
-      fontSize: 11,
-      fontWeight:
-        "800",
-    },
-
-    divider: {
-      height: 1,
-      backgroundColor:
-        "#E7ECEF",
-      marginVertical:
-        13,
-    },
-
-    amountRow: {
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      justifyContent:
-        "space-between",
-    },
-
-    amountLabel: {
-      color:
-        "#17313C",
-      fontSize: 13,
-      fontWeight:
-        "800",
-    },
-
-    amountValue: {
-      color:
-        "#07869B",
-      fontSize: 22,
-      fontWeight:
-        "900",
-    },
-
-    sectionTitle: {
-      color:
-        "#17313C",
-      fontSize: 14,
-      fontWeight:
-        "900",
-      marginBottom:
-        12,
-    },
-
-    choice: {
-      minHeight: 67,
-      borderWidth: 1,
-      borderColor:
-        "#E1E9EC",
-      borderRadius:
-        15,
-      padding: 13,
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      gap: 11,
-      marginBottom:
-        10,
-      backgroundColor:
-        "#FAFCFD",
-    },
-
-    choiceSelected: {
-      borderColor:
-        "#07869B",
-      backgroundColor:
-        "#EAF8FA",
-    },
-
-    choiceDisabled: {
-      opacity: 0.42,
-    },
-
-    choiceTitle: {
-      color:
-        "#17313C",
-      fontSize: 12,
-      fontWeight:
-        "900",
-    },
-
-    choiceDescription: {
-      color:
-        "#83969E",
-      fontSize: 10,
-      marginTop: 3,
-    },
-
-    radio: {
-      width: 21,
-      height: 21,
-      borderRadius:
-        11,
-      borderWidth: 2,
-      borderColor:
-        "#BAC9CE",
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-    },
-
-    radioSelected: {
-      borderColor:
-        "#07869B",
-    },
-
-    radioInner: {
-      width: 9,
-      height: 9,
-      borderRadius: 5,
-      backgroundColor:
-        "#07869B",
-    },
-
-    errorCard: {
-      flexDirection:
-        "row",
-      gap: 8,
-      padding: 13,
-      borderRadius:
-        14,
-      backgroundColor:
-        "#FFF1F1",
-      borderWidth: 1,
-      borderColor:
-        "#F0CCCC",
-    },
-
-    errorText: {
-      flex: 1,
-      color:
-        "#A33E3E",
-      fontSize: 11,
-      fontWeight:
-        "700",
-    },
-
-    footer: {
-      position:
-        "absolute",
-      left: 0,
-      right: 0,
-      bottom: 0,
-      paddingHorizontal:
-        18,
-      paddingTop: 12,
-      paddingBottom:
-        20,
-      backgroundColor:
-        "#FFFFFF",
-      borderTopWidth: 1,
-      borderTopColor:
-        "#E3EAED",
-      flexDirection:
-        "row",
-      justifyContent:
-        "space-between",
-      alignItems:
-        "center",
-      gap: 16,
-    },
-
-    footerLabel: {
-      color:
-        "#83969E",
-      fontSize: 10,
-    },
-
-    footerAmount: {
-      color:
-        "#17313C",
-      fontSize: 18,
-      fontWeight:
-        "900",
-      marginTop: 2,
-    },
-
-    payButton: {
-      minWidth: 150,
-      height: 52,
-      borderRadius:
-        15,
-      backgroundColor:
-        "#07869B",
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      gap: 7,
-      paddingHorizontal:
-        18,
-    },
-
-    payButtonDisabled: {
-      opacity: 0.65,
-    },
-
-    payButtonText: {
-      color:
-        "#FFFFFF",
-      fontSize: 12,
-      fontWeight:
-        "900",
-    },
-  });
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  pad: {
+    paddingHorizontal: 18,
+  },
+  content: {
+    paddingHorizontal: 18,
+    gap: 16,
+  },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  flex: {
+    flex: 1,
+  },
+  between: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  alignStart: {
+    alignItems: "flex-start",
+  },
+  mt8: {
+    marginTop: 8,
+  },
+  section: {
+    gap: 10,
+  },
+  option: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 56,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  dim: {
+    opacity: 0.5,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  methods: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  method: {
+    flex: 1,
+    gap: 4,
+    padding: 14,
+    borderRadius: 18,
+    minHeight: 96,
+  },
+});

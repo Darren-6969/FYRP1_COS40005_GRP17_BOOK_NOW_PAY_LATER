@@ -16,8 +16,10 @@ export type ScheduleStep = {
   title: string;
   /** "Paid 14 Nov" or "Due Sat, 21 Nov, 10:00 am" (use formatMYT). */
   caption?: string;
-  /** Server amount; omit for steps without money (pick-up). */
+  /** Server amount in ringgit; omit for steps without money (pick-up). */
   amount?: MoneyInput;
+  /** Or the server amount in integer sen (quotes). */
+  amountSen?: number | null;
   state: ScheduleStepState;
 };
 
@@ -72,7 +74,9 @@ export function PaymentSchedule({ steps }: PaymentScheduleProps) {
               {step.caption ? <AppText variant="caption">{step.caption}</AppText> : null}
             </View>
 
-            {step.amount !== undefined ? (
+            {step.amountSen !== undefined ? (
+              <Money sen={step.amountSen} color={done ? 'label' : 'ink'} />
+            ) : step.amount !== undefined ? (
               <Money value={step.amount} color={done ? 'label' : 'ink'} />
             ) : null}
           </View>

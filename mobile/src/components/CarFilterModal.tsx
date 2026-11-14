@@ -1,15 +1,9 @@
-import { Ionicons } from "@expo/vector-icons";
-import {
-  Modal,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
+
+import { AppText, BottomSheet, Button, Chip, GlassCard } from "@/components/ui";
+import { FontFamily, Radius } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 
 export type CarFilters = {
   vehicleTypes: string[];
@@ -47,813 +41,218 @@ type Props = {
   onApply: (filters: CarFilters) => void;
 };
 
-const VEHICLE_TYPES = [
-  "Compact",
-  "Sedan",
-  "SUV",
-  "MPV",
-  "Pickup",
-];
+type ListKey = Exclude<keyof CarFilters, "priceMin" | "priceMax" | "sort">;
 
+const VEHICLE_TYPES = ["Compact", "Sedan", "SUV", "MPV", "Pickup"].map((v) => ({ value: v, label: v }));
 const SEATS = [
   { value: "4", label: "4+ seats" },
   { value: "5", label: "5+ seats" },
   { value: "7", label: "7+ seats" },
 ];
-
 const TRANSMISSIONS = [
-  {
-    value: "AUTOMATIC",
-    label: "Automatic",
-  },
-  {
-    value: "MANUAL",
-    label: "Manual",
-  },
+  { value: "AUTOMATIC", label: "Automatic" },
+  { value: "MANUAL", label: "Manual" },
 ];
-
-const FUELS = [
-  "Petrol",
-  "Diesel",
-  "Hybrid",
-  "Electric",
+const FUELS = ["Petrol", "Diesel", "Hybrid", "Electric"].map((v) => ({ value: v, label: v }));
+const DRIVES = [
+  { value: "2WD", label: "2WD" },
+  { value: "4WD", label: "4WD or AWD" },
 ];
-
-const DRIVES = ["2WD", "4WD"];
-
 const REFUNDS = [
-  {
-    value: "partial",
-    label: "Partial refund available",
-  },
-  {
-    value: "none",
-    label: "No refund on deposit",
-  },
+  { value: "partial", label: "Partial refund available" },
+  { value: "none", label: "No refund on deposit" },
 ];
-
 const SORTS = [
-  {
-    value: "recommended",
-    label: "Recommended",
-  },
-  {
-    value: "daily",
-    label: "Price per day: Low to High",
-  },
-  {
-    value: "payable",
-    label: "Amount payable now: Low to High",
-  },
-  {
-    value: "seats",
-    label: "Smallest that fits",
-  },
-  {
-    value: "recent",
-    label: "Most recently listed",
-  },
+  { value: "recommended", label: "Recommended" },
+  { value: "daily", label: "Price per day: low to high" },
+  { value: "payable", label: "Amount payable now: low to high" },
+  { value: "seats", label: "Smallest that fits" },
+  { value: "recent", label: "Most recently listed" },
 ];
 
-export default function CarFilterModal({
-  visible,
-  cars,
-  filters,
-  onClose,
-  onApply,
-}: Props) {
-  const [draft, setDraft] =
-    useState<CarFilters>(filters);
-
-  useEffect(() => {
-    if (visible) {
-      setDraft(filters);
-    }
-  }, [visible, filters]);
-
-  const brands = useMemo(() => {
-    return Array.from(
-      new Set(
-        cars
-          .map((car) => car.vehicleMake)
-          .filter(Boolean)
-      )
-    ).sort();
-  }, [cars]);
-
-  const operators = useMemo(() => {
-    const map = new Map<
-      string,
-      string
-    >();
-
-    cars.forEach((car) => {
-      if (
-        car.operator?.id &&
-        car.operator?.companyName
-      ) {
-        map.set(
-          String(car.operator.id),
-          car.operator.companyName
-        );
-      }
-    });
-
-    return Array.from(map.entries()).map(
-      ([value, label]) => ({
-        value,
-        label,
-      })
-    );
-  }, [cars]);
-
-  const toggle = (
-    key:
-      | "vehicleTypes"
-      | "seats"
-      | "transmissions"
-      | "fuels"
-      | "drives"
-      | "brands"
-      | "refunds"
-      | "operators",
-    value: string
-  ) => {
-    setDraft((current) => {
-      const list = current[key];
-
-      return {
-        ...current,
-        [key]: list.includes(value)
-          ? list.filter(
-              (item) => item !== value
-            )
-          : [...list, value],
-      };
-    });
-  };
-
-  const renderPill = (
-    key:
-      | "vehicleTypes"
-      | "seats"
-      | "transmissions"
-      | "fuels"
-      | "drives"
-      | "brands"
-      | "refunds"
-      | "operators",
-    value: string,
-    label: string
-  ) => {
-    const selected =
-      draft[key].includes(value);
-
-    return (
-      <Pressable
-        key={value}
-        style={[
-          styles.pill,
-          selected &&
-            styles.pillSelected,
-        ]}
-        onPress={() =>
-          toggle(key, value)
-        }
-      >
-        {selected && (
-          <Ionicons
-            name="checkmark"
-            size={15}
-            color="#FFFFFF"
-          />
-        )}
-
-        <Text
-          style={[
-            styles.pillText,
-            selected &&
-              styles.pillTextSelected,
-          ]}
-        >
-          {label}
-        </Text>
-      </Pressable>
-    );
-  };
-
-  const reset = () => {
-    setDraft(DEFAULT_CAR_FILTERS);
-  };
-
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
-          <Pressable
-            style={styles.headerButton}
-            onPress={onClose}
-          >
-            <Ionicons
-              name="close"
-              size={23}
-              color="#17313C"
-            />
-          </Pressable>
-
-          <View style={styles.headerText}>
-            <Text style={styles.title}>
-              Filters
-            </Text>
-
-            <Text style={styles.subtitle}>
-              Find the right car for your trip
-            </Text>
-          </View>
-
-          <Pressable onPress={reset}>
-            <Text style={styles.reset}>
-              Reset
-            </Text>
-          </Pressable>
-        </View>
-
-        <ScrollView
-          showsVerticalScrollIndicator={
-            false
-          }
-          contentContainerStyle={
-            styles.content
-          }
-        >
-          {/* Vehicle type */}
-          <FilterSection title="Vehicle type">
-            <View style={styles.pills}>
-              {VEHICLE_TYPES.map(
-                (value) =>
-                  renderPill(
-                    "vehicleTypes",
-                    value,
-                    value
-                  )
-              )}
-            </View>
-          </FilterSection>
-
-          {/* Seats */}
-          <FilterSection title="Seat count">
-            <View style={styles.pills}>
-              {SEATS.map((item) =>
-                renderPill(
-                  "seats",
-                  item.value,
-                  item.label
-                )
-              )}
-            </View>
-          </FilterSection>
-
-          {/* Transmission */}
-          <FilterSection title="Transmission">
-            <View style={styles.pills}>
-              {TRANSMISSIONS.map(
-                (item) =>
-                  renderPill(
-                    "transmissions",
-                    item.value,
-                    item.label
-                  )
-              )}
-            </View>
-          </FilterSection>
-
-          {/* Fuel */}
-          <FilterSection title="Powertrain">
-            <View style={styles.pills}>
-              {FUELS.map((value) =>
-                renderPill(
-                  "fuels",
-                  value,
-                  value
-                )
-              )}
-            </View>
-          </FilterSection>
-
-          {/* Drive */}
-          <FilterSection title="Drivetrain">
-            <View style={styles.pills}>
-              {DRIVES.map((value) =>
-                renderPill(
-                  "drives",
-                  value,
-                  value === "4WD"
-                    ? "4WD or AWD"
-                    : value
-                )
-              )}
-            </View>
-          </FilterSection>
-
-          {/* Brand */}
-          {brands.length > 0 && (
-            <FilterSection title="Brand">
-              <View style={styles.pills}>
-                {brands.map((brand) =>
-                  renderPill(
-                    "brands",
-                    brand,
-                    brand
-                  )
-                )}
-              </View>
-            </FilterSection>
-          )}
-
-          {/* Refund */}
-          <FilterSection title="Refund treatment">
-            <View style={styles.pills}>
-              {REFUNDS.map((item) =>
-                renderPill(
-                  "refunds",
-                  item.value,
-                  item.label
-                )
-              )}
-            </View>
-          </FilterSection>
-
-          {/* Operator */}
-          {operators.length > 0 && (
-            <FilterSection title="Operator">
-              <View style={styles.pills}>
-                {operators.map(
-                  (operator) =>
-                    renderPill(
-                      "operators",
-                      operator.value,
-                      operator.label
-                    )
-                )}
-              </View>
-            </FilterSection>
-          )}
-
-          {/* Price */}
-          <FilterSection title="Price per day">
-            <View style={styles.priceRow}>
-              <View
-                style={styles.priceInput}
-              >
-                <Text
-                  style={
-                    styles.currency
-                  }
-                >
-                  RM
-                </Text>
-
-                <TextInput
-                  value={
-                    draft.priceMin
-                  }
-                  onChangeText={(value) =>
-                    setDraft(
-                      (current) => ({
-                        ...current,
-                        priceMin:
-                          value.replace(
-                            /[^0-9.]/g,
-                            ""
-                          ),
-                      })
-                    )
-                  }
-                  placeholder="Min"
-                  keyboardType="decimal-pad"
-                  style={styles.input}
-                />
-              </View>
-
-              <Text style={styles.to}>
-                to
-              </Text>
-
-              <View
-                style={styles.priceInput}
-              >
-                <Text
-                  style={
-                    styles.currency
-                  }
-                >
-                  RM
-                </Text>
-
-                <TextInput
-                  value={
-                    draft.priceMax
-                  }
-                  onChangeText={(value) =>
-                    setDraft(
-                      (current) => ({
-                        ...current,
-                        priceMax:
-                          value.replace(
-                            /[^0-9.]/g,
-                            ""
-                          ),
-                      })
-                    )
-                  }
-                  placeholder="Max"
-                  keyboardType="decimal-pad"
-                  style={styles.input}
-                />
-              </View>
-            </View>
-          </FilterSection>
-
-          {/* Amount Payable Now */}
-          <FilterSection title="Amount payable now">
-            <View style={styles.disabledCard}>
-              <Ionicons
-                name="calendar-outline"
-                size={21}
-                color="#8698A1"
-              />
-
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={
-                    styles.disabledTitle
-                  }
-                >
-                  Set your rental dates first
-                </Text>
-
-                <Text
-                  style={
-                    styles.disabledText
-                  }
-                >
-                  The exact deposit depends on
-                  your selected rental dates.
-                </Text>
-              </View>
-            </View>
-          </FilterSection>
-
-          {/* Sort */}
-          <FilterSection title="Sort by">
-            {SORTS.map((item) => {
-              const selected =
-                draft.sort === item.value;
-
-              return (
-                <Pressable
-                  key={item.value}
-                  style={
-                    styles.sortRow
-                  }
-                  onPress={() =>
-                    setDraft(
-                      (current) => ({
-                        ...current,
-                        sort:
-                          item.value,
-                      })
-                    )
-                  }
-                >
-                  <View
-                    style={[
-                      styles.radio,
-                      selected &&
-                        styles.radioSelected,
-                    ]}
-                  >
-                    {selected && (
-                      <View
-                        style={
-                          styles.radioInner
-                        }
-                      />
-                    )}
-                  </View>
-
-                  <Text
-                    style={
-                      styles.sortText
-                    }
-                  >
-                    {item.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </FilterSection>
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <Pressable
-            style={styles.clearButton}
-            onPress={reset}
-          >
-            <Text
-              style={
-                styles.clearButtonText
-              }
-            >
-              Reset Filters
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.applyButton}
-            onPress={() => {
-              onApply(draft);
-              onClose();
-            }}
-          >
-            <Text
-              style={
-                styles.applyButtonText
-              }
-            >
-              Show Cars
-            </Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  );
-}
-
-function FilterSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        {title}
-      </Text>
-
+      <AppText variant="headline">{title}</AppText>
       {children}
     </View>
   );
 }
 
+/** Filters for Home and the car list, as a bottom panel with Apply. */
+export default function CarFilterModal({ visible, cars, filters, onClose, onApply }: Props) {
+  const { tokens } = useTheme();
+  const [draft, setDraft] = useState<CarFilters>(filters);
+
+  useEffect(() => {
+    if (visible) setDraft(filters);
+  }, [visible, filters]);
+
+  // Brand and operator options come from the cars on offer.
+  const brands = useMemo(
+    () =>
+      Array.from(new Set(cars.map((car) => car.vehicleMake).filter(Boolean)))
+        .sort()
+        .map((v) => ({ value: String(v), label: String(v) })),
+    [cars]
+  );
+
+  const operators = useMemo(() => {
+    const map = new Map<string, string>();
+    cars.forEach((car) => {
+      if (car.operator?.id && car.operator?.companyName) {
+        map.set(String(car.operator.id), car.operator.companyName);
+      }
+    });
+    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+  }, [cars]);
+
+  const toggle = (key: ListKey, value: string) =>
+    setDraft((current) => ({
+      ...current,
+      [key]: current[key].includes(value) ? current[key].filter((v) => v !== value) : [...current[key], value],
+    }));
+
+  const chips = (key: ListKey, options: { value: string; label: string }[]) => (
+    <View style={styles.chips}>
+      {options.map((option) => (
+        <Chip
+          key={option.value}
+          label={option.label}
+          selected={draft[key].includes(option.value)}
+          onPress={() => toggle(key, option.value)}
+          check
+        />
+      ))}
+    </View>
+  );
+
+  const priceInput = (field: "priceMin" | "priceMax", placeholder: string) => (
+    <View style={[styles.price, { backgroundColor: tokens.glass, borderColor: tokens.glassLine }]}>
+      <AppText variant="label">RM</AppText>
+      <TextInput
+        value={draft[field]}
+        onChangeText={(text) => setDraft((current) => ({ ...current, [field]: text.replace(/[^0-9.]/g, "") }))}
+        placeholder={placeholder}
+        placeholderTextColor={tokens.label}
+        keyboardType="decimal-pad"
+        accessibilityLabel={`${placeholder} price per day`}
+        style={[styles.priceInput, { color: tokens.ink }]}
+      />
+    </View>
+  );
+
+  return (
+    <BottomSheet
+      visible={visible}
+      title="Filters"
+      subtitle="Find the right car for your trip"
+      onClose={onClose}
+      headerAction={
+        <Button label="Reset" variant="text" size="sm" onPress={() => setDraft(DEFAULT_CAR_FILTERS)} />
+      }
+      footer={
+        <Button
+          label="Apply filters"
+          onPress={() => {
+            onApply(draft);
+            onClose();
+          }}
+        />
+      }
+    >
+      <Section title="Vehicle type">{chips("vehicleTypes", VEHICLE_TYPES)}</Section>
+      <Section title="Seats">{chips("seats", SEATS)}</Section>
+      <Section title="Transmission">{chips("transmissions", TRANSMISSIONS)}</Section>
+      <Section title="Powertrain">{chips("fuels", FUELS)}</Section>
+      <Section title="Drivetrain">{chips("drives", DRIVES)}</Section>
+      {brands.length ? <Section title="Brand">{chips("brands", brands)}</Section> : null}
+      <Section title="Refund if cancelled">{chips("refunds", REFUNDS)}</Section>
+      {operators.length ? <Section title="Operator">{chips("operators", operators)}</Section> : null}
+
+      <Section title="Price per day">
+        <View style={styles.priceRow}>
+          {priceInput("priceMin", "Min")}
+          <AppText variant="caption">to</AppText>
+          {priceInput("priceMax", "Max")}
+        </View>
+      </Section>
+
+      <Section title="Sort by">
+        <GlassCard padding={4}>
+          <View accessibilityRole="radiogroup">
+            {SORTS.map((option) => {
+              const selected = draft.sort === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setDraft((current) => ({ ...current, sort: option.value }))}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected }}
+                  style={styles.sortRow}
+                >
+                  <View style={[styles.radio, { borderColor: selected ? tokens.brand : tokens.label }]}>
+                    {selected ? <View style={[styles.radioDot, { backgroundColor: tokens.brand }]} /> : null}
+                  </View>
+                  <AppText variant={selected ? "bodyStrong" : "body"}>{option.label}</AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+        </GlassCard>
+      </Section>
+    </BottomSheet>
+  );
+}
+
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F7FAFB",
-  },
-
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5ECEF",
-    backgroundColor: "#FFFFFF",
-  },
-
-  headerButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F4F8F9",
-  },
-
-  headerText: {
-    flex: 1,
-    marginLeft: 13,
-  },
-
-  title: {
-    fontSize: 19,
-    fontWeight: "900",
-    color: "#17313C",
-  },
-
-  subtitle: {
-    fontSize: 10,
-    color: "#8798A1",
-    marginTop: 2,
-  },
-
-  reset: {
-    color: "#07869B",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-
-  content: {
-    padding: 18,
-    paddingBottom: 120,
-  },
-
   section: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 17,
-    marginBottom: 13,
-    borderWidth: 1,
-    borderColor: "#E6ECEF",
+    gap: 10,
   },
-
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#17313C",
-    marginBottom: 13,
-  },
-
-  pills: {
+  chips: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
   },
-
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 13,
-    paddingVertical: 9,
-    borderRadius: 14,
-    backgroundColor: "#F4F8F9",
-    borderWidth: 1,
-    borderColor: "#DFE8EB",
-  },
-
-  pillSelected: {
-    backgroundColor: "#07869B",
-    borderColor: "#07869B",
-  },
-
-  pillText: {
-    color: "#526871",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-
-  pillTextSelected: {
-    color: "#FFFFFF",
-  },
-
   priceRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
-
+  price: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 48,
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   priceInput: {
     flex: 1,
-    height: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#DFE8EB",
-    backgroundColor: "#F8FAFB",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
+    fontFamily: FontFamily.medium,
+    fontSize: 15,
+    paddingVertical: 0,
   },
-
-  currency: {
-    fontSize: 11,
-    fontWeight: "900",
-    color: "#60747C",
-    marginRight: 5,
-  },
-
-  input: {
-    flex: 1,
-    color: "#17313C",
-    fontSize: 13,
-  },
-
-  to: {
-    color: "#92A1A7",
-    fontSize: 11,
-  },
-
-  disabledCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: "#F3F6F7",
-    borderRadius: 14,
-    padding: 14,
-  },
-
-  disabledTitle: {
-    color: "#657980",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-
-  disabledText: {
-    color: "#95A4AA",
-    fontSize: 9,
-    marginTop: 3,
-    lineHeight: 14,
-  },
-
   sortRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
+    gap: 12,
+    minHeight: 48,
+    paddingHorizontal: 12,
   },
-
   radio: {
     width: 20,
     height: 20,
-    borderRadius: 20,
+    borderRadius: 10,
     borderWidth: 2,
-    borderColor: "#BAC7CC",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 11,
   },
-
-  radioSelected: {
-    borderColor: "#07869B",
-  },
-
-  radioInner: {
+  radioDot: {
     width: 10,
     height: 10,
-    borderRadius: 10,
-    backgroundColor: "#07869B",
-  },
-
-  sortText: {
-    color: "#3D535C",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-
-    flexDirection: "row",
-    gap: 10,
-
-    backgroundColor: "#FFFFFF",
-
-    paddingHorizontal: 18,
-    paddingTop: 13,
-    paddingBottom: 20,
-
-    borderTopWidth: 1,
-    borderTopColor: "#E4EBEE",
-  },
-
-  clearButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#DCE5E8",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  clearButtonText: {
-    color: "#536871",
-    fontWeight: "800",
-    fontSize: 12,
-  },
-
-  applyButton: {
-    flex: 1.4,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: "#07869B",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  applyButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-    fontSize: 13,
+    borderRadius: 5,
   },
 });

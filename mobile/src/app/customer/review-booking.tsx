@@ -1,955 +1,357 @@
 import { Ionicons } from "@expo/vector-icons";
-import {
-  useLocalSearchParams,
-  useRouter,
-} from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import {
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useEffect, useState } from "react";
-import { quotePublicCar } from "../../services/carApi";
-import { createCarBooking, } from "../../services/customerApi";
-import { logger } from "@/utils/logger";
+import { paymentStepsFromQuote, QuoteBreakdown } from "@/components/booking/QuoteBreakdown";
+import { TripCard } from "@/components/booking/TripCard";
+import {
+  AppText,
+  Button,
+  ErrorState,
+  FLOATING_BAR_CLEARANCE,
+  FloatingActionBar,
+  GlassCard,
+  IconButton,
+  Money,
+  PaymentSchedule,
+  SkeletonText,
+} from "@/components/ui";
 import { useIdempotentAttempt } from "@/hooks/use-idempotent-attempt";
+import { useTheme } from "@/hooks/use-theme";
+import { getPublicCarById, quotePublicCar } from "@/services/carApi";
+import { createCarBooking } from "@/services/customerApi";
+import { formatMYT, mytToIso } from "@/utils/datetime";
+import { logger } from "@/utils/logger";
 
+type Params = {
+  listingId?: string;
+  city?: string;
+  from?: string;
+  ft?: string;
+  to?: string;
+  tt?: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  driverIsBooker?: string;
+  driverName?: string;
+  dateOfBirth?: string;
+  licenceIssuedIn?: string;
+  termsAccepted?: string;
+  rentalTermsAccepted?: string;
+  forfeitureAccepted?: string;
+  pickupPointId?: string;
+  dropoffPointId?: string;
+  cdw?: string;
+};
+
+/**
+ * Step 2 of 2: everything the customer entered plus the server's final
+ * quote, then "Send request". The amounts are the server's quote as-is;
+ * the old "Price breakdown mismatch" check that re-added them is gone (F16).
+ */
 export default function ReviewBooking() {
   const router = useRouter();
+  const params = useLocalSearchParams<Params>();
+  const insets = useSafeAreaInsets();
+  const { tokens } = useTheme();
 
-  const params =
-    useLocalSearchParams<{
-      listingId?: string;
-
-      city?: string;
-      from?: string;
-      ft?: string;
-      to?: string;
-      tt?: string;
-
-      fullName?: string;
-      email?: string;
-      phone?: string;
-
-      driverIsBooker?: string;
-      driverName?: string;
-      dateOfBirth?: string;
-      licenceIssuedIn?: string;
-
-      termsAccepted?: string;
-      rentalTermsAccepted?: string;
-      forfeitureAccepted?: string;
-
-      pickupPointId?: string;
-      dropoffPointId?: string;
-
-      cdw?: string;
-    }>();
-
-    const cdwSelected = params.cdw === "true";
-
-  const driverIsBooker =
-    params.driverIsBooker === "true";
-
-  const termsAccepted =
-  params.termsAccepted === "true";
-
-  const rentalTermsAccepted =
-  params.rentalTermsAccepted === "true";
-
-  const forfeitureAccepted =
-  params.forfeitureAccepted === "true";
-
-  const [submitting, setSubmitting] =
-  useState(false);
+  const cdwSelected = params.cdw === "true";
+  const driverIsBooker = params.driverIsBooker === "true";
+  const finalDriverName = driverIsBooker ? params.fullName : params.driverName;
 
   const bookingAttempt = useIdempotentAttempt();
+  const [submitError, setSubmitError] = useState<unknown>(null);
 
-  const [submitError, setSubmitError] =
-  useState("");
+  const [car, setCar] = useState<any | null>(null);
+  const [quote, setQuote] = useState<any | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(true);
+  const [quoteError, setQuoteError] = useState<unknown>(null);
 
-  
-  const [bookingQuote, setBookingQuote] =
-  useState<any | null>(null);
-
-  const [quoteLoading, setQuoteLoading] =
-  useState(true);
-
-  const [quoteError, setQuoteError] =
-  useState("");
-
-// Load the backend quote before booking submission.
-useEffect(() => {
-  if (
-    !params.listingId ||
-    !params.from ||
-    !params.to ||
-    !params.pickupPointId ||
-    !params.dropoffPointId ||
-    !params.cdw
-  ) {
-    setQuoteLoading(false);
-    setQuoteError("Booking location or date is missing.");
-    return;
-  }
-
-  let active = true;
-
-  const loadQuote = async () => {
-    try {
-      setQuoteLoading(true);
-      setQuoteError("");
-
-      const response = await quotePublicCar(
-        params.listingId!,
-        {
-          from: params.from,
-          ft: params.ft || "10:00",
-          to: params.to,
-          tt: params.tt || "10:00",
-          pickupPointId: params.pickupPointId,
-          dropoffPointId: params.dropoffPointId,
-          driverDateOfBirth: params.dateOfBirth || undefined,
-          cdw: cdwSelected,
-          addOns: {},
-        }
-      );
-
-      if (!active) return;
-
-      if (
-        response.problems?.length ||
-        !response.quote ||
-        response.availability?.available === false
-      ) {
-        throw new Error(
-          response.problems?.[0]?.message ||
-            "The selected car or rental period is unavailable."
-        );
-      }
-
-logger.debug("BOOKING PRICE DETAILS:", {
-  rentalSen: response.quote.rentalSen,
-  pickupFeeSen: response.quote.pickupFeeSen,
-  dropoffFeeSen: response.quote.dropoffFeeSen,
-  overtimeSen: response.quote.overtimeSen,
-  nightHandovers: response.quote.nightHandovers,
-  youngDriverSurchargeSen:
-    response.quote.youngDriverSurchargeSen,
-  addOnsSen: response.quote.addOnsSen,
-  addOnLines: response.quote.addOnLines,
-  totalSen: response.quote.totalSen,
-});
-
-      setBookingQuote(response.quote);
-    } catch (err: any) {
-      if (active) {
-        setBookingQuote(null);
-        setQuoteError(
-          err?.message || "Unable to calculate booking price."
-        );
-      }
-    } finally {
-      if (active) {
-        setQuoteLoading(false);
-      }
+  const loadQuote = useCallback(async () => {
+    if (!params.listingId || !params.from || !params.to || !params.pickupPointId || !params.dropoffPointId) {
+      setQuoteLoading(false);
+      setQuoteError(new Error("The pick-up, drop-off or dates are missing. Go back and check them."));
+      return;
     }
-  };
+    setQuoteLoading(true);
+    setQuoteError(null);
+    try {
+      const response = await quotePublicCar(params.listingId, {
+        from: params.from,
+        ft: params.ft || "10:00",
+        to: params.to,
+        tt: params.tt || "10:00",
+        pickupPointId: params.pickupPointId,
+        dropoffPointId: params.dropoffPointId,
+        driverDateOfBirth: params.dateOfBirth || undefined,
+        cdw: cdwSelected,
+        addOns: {},
+      });
+      if (response.problems?.length || !response.quote || response.availability?.available === false) {
+        throw new Error(response.problems?.[0]?.message || "This car isn't available for these dates any more.");
+      }
+      setQuote(response.quote);
+    } catch (err) {
+      setQuote(null);
+      setQuoteError(err);
+    } finally {
+      setQuoteLoading(false);
+    }
+  }, [
+    params.listingId,
+    params.from,
+    params.ft,
+    params.to,
+    params.tt,
+    params.pickupPointId,
+    params.dropoffPointId,
+    params.dateOfBirth,
+    cdwSelected,
+  ]);
 
-  loadQuote();
-
-  return () => {
-    active = false;
-  };
-}, [
-  params.listingId,
-  params.from,
-  params.ft,
-  params.to,
-  params.tt,
-  params.pickupPointId,
-  params.dropoffPointId,
-  params.dateOfBirth,
-]);
-
-
-  const finalDriverName =
-    driverIsBooker
-      ? params.fullName
-      : params.driverName;
-
-  const handleSubmit = () =>
-    bookingAttempt.run(submitBooking);
+  useEffect(() => {
+    loadQuote();
+    if (params.listingId) {
+      getPublicCarById(params.listingId)
+        .then(setCar)
+        .catch((err) => logger.debug("Failed to load car for review:", err));
+    }
+  }, [loadQuote, params.listingId]);
 
   const submitBooking = async () => {
-  try {
-    setSubmitting(true);
-    setSubmitError("");
+    setSubmitError(null);
+    try {
+      if (!params.listingId) throw new Error("Missing vehicle information.");
+      // Only the server's verified quote can be submitted.
+      if (quoteLoading || quoteError || !quote) {
+        throw new Error("Please wait until the price is confirmed.");
+      }
+      if (!params.from || !params.to) throw new Error("Pick-up or return date is missing.");
 
-    if (!params.listingId) {
-      throw new Error(
-        "Missing vehicle information."
-      );
-    }
-
-    // Verify the backend quote before booking submission.
-    if (quoteLoading || quoteError || !bookingQuote) {
-      throw new Error(
-        quoteError ||
-          "Please wait until the booking price is verified."
-      );
-    }
-
-    const pickupAt =
-      buildMalaysiaDateTime(
-        params.from,
-        params.ft
-      );
-
-    const returnAt =
-      buildMalaysiaDateTime(
-        params.to,
-        params.tt
-      );
-
-    if (!pickupAt || !returnAt) {
-      throw new Error(
-        "Pick-up or return date is missing."
-      );
-    }
-
-    // Everything the request sends except the acceptance timestamps.
-    // Same details -> same attempt and key; changed details -> new key.
-    const request = {
-        listingId: Number(
-          params.listingId
-        ),
-
-        pickupAt,
-        returnAt,
-
-        
+      // Everything the request sends except the acceptance timestamps.
+      // Same details -> same attempt and key; changed details -> new key (F1).
+      const request = {
+        listingId: Number(params.listingId),
+        pickupAt: mytToIso(params.from, params.ft || "10:00"),
+        returnAt: mytToIso(params.to, params.tt || "10:00"),
         pickupPointId: params.pickupPointId || null,
-
         dropoffPointId: params.dropoffPointId || null,
-
         requestedLocation: null,
-
         requestedDropoffLocation: null,
-
         returnToRequested: false,
-
         cdw: cdwSelected,
-
         addOns: [],
-
         bookingDetails: {
           contact: {
-            fullName:
-              params.fullName || "",
-
-            email:
-              params.email || null,
-
-            phone:
-              params.phone || "",
+            fullName: params.fullName || "",
+            email: params.email || null,
+            phone: params.phone || "",
           },
-
           driver: {
-            isBooker:
-              driverIsBooker,
-
-            fullName:
-              finalDriverName || "",
-
+            isBooker: driverIsBooker,
+            fullName: finalDriverName || "",
             // Sent only when the operator's age rules asked for it; an
             // empty string would fail the server's date check.
-            ...(params.dateOfBirth
-              ? { dateOfBirth: params.dateOfBirth }
-              : {}),
-
-            licenceIssuedIn:
-              params.licenceIssuedIn ||
-              "Malaysia",
+            ...(params.dateOfBirth ? { dateOfBirth: params.dateOfBirth } : {}),
+            licenceIssuedIn: params.licenceIssuedIn || "Malaysia",
           },
-
-          chauffeur: {
-            requested: false,
-            note: null,
-          },
+          chauffeur: { requested: false, note: null },
         },
       };
 
-    const attempt =
-      bookingAttempt.attemptFor(
-        JSON.stringify(request)
-      );
+      const attempt = bookingAttempt.attemptFor(JSON.stringify(request));
+      // Fixed per attempt, so a retry sends the identical body.
+      const acceptedAt = attempt.startedAt;
 
-    // Fixed per attempt, so a retry sends the identical body.
-    const acceptedAt = attempt.startedAt;
-
-    const data =
-      await createCarBooking(
+      const data = await createCarBooking(
         {
           ...request,
           bookingDetails: {
             ...request.bookingDetails,
             agreements: {
-              termsOfServiceAcceptedAt:
-                acceptedAt,
-
-              rentalTermsAcceptedAt:
-                acceptedAt,
-
-              forfeitureAcceptedAt:
-                acceptedAt,
+              termsOfServiceAcceptedAt: acceptedAt,
+              rentalTermsAcceptedAt: acceptedAt,
+              forfeitureAcceptedAt: acceptedAt,
             },
           },
         },
         attempt.key
       );
 
-    bookingAttempt.finish();
+      bookingAttempt.finish();
+      router.replace(`/customer/booking/${data.id}` as unknown as Href);
+    } catch (err) {
+      logger.error("Booking submission failed:", err);
+      setSubmitError(err);
+    }
+  };
 
-    logger.debug(
-      "Booking created:",
-      data
-    );
+  const handleSubmit = () => bookingAttempt.run(submitBooking);
 
-    router.replace(
-      `/customer/booking/${data.id}`
-    );
-  } catch (error: any) {
-    logger.error(
-      "Booking submission failed:",
-      error
-    );
-
-    setSubmitError(
-      error?.message ||
-        "Unable to submit booking."
-    );
-  } finally {
-    setSubmitting(false);
-  }
-};
-
-  function buildMalaysiaDateTime(
-  date?: string,
-  time?: string
-) {
-  if (!date) {
-    return "";
-  }
-
-  const safeTime =
-    time && time.length >= 5
-      ? time
-      : "10:00";
-
-  return `${date}T${safeTime}:00+08:00`;
-}
+  const carName = car?.name || [car?.vehicleMake, car?.vehicleModel].filter(Boolean).join(" ");
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
-
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons
-            name="chevron-back"
-            size={22}
-            color="#17313C"
-          />
-        </Pressable>
-
-        <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>
-            Review Booking
-          </Text>
-
-          <Text style={styles.headerSubtitle}>
-            Check your details before submitting
-          </Text>
-        </View>
-      </View>
-
+    <View style={styles.screen}>
       <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 8, paddingBottom: FLOATING_BAR_CLEARANCE + insets.bottom + 12 },
+        ]}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
       >
-        {/* Rental */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons
-              name="car-sport-outline"
-              size={20}
-              color="#07869B"
-            />
-
-            <Text style={styles.sectionTitle}>
-              Rental Details
-            </Text>
+        <View style={styles.topRow}>
+          <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+          <View style={styles.flex}>
+            <AppText variant="caption">Step 2 of 2</AppText>
+            <AppText variant="largeTitle" accessibilityRole="header">
+              Review
+            </AppText>
           </View>
-
-          <DetailRow
-            label="Location"
-            value={
-              params.city ||
-              "Selected branch"
-            }
-          />
-
-          <DetailRow
-            label="Pick-up"
-            value={`${params.from || "—"} · ${
-              params.ft || "10:00"
-            }`}
-          />
-
-          <DetailRow
-            label="Return"
-            value={`${params.to || "—"} · ${
-              params.tt || "10:00"
-            }`}
-          />
         </View>
 
-        {/* Contact */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons
-              name="person-outline"
-              size={20}
-              color="#07869B"
-            />
+        {carName ? <AppText variant="headline">{carName}</AppText> : null}
+        <TripCard fromDate={params.from} fromTime={params.ft} toDate={params.to} toTime={params.tt} />
 
-            <Text style={styles.sectionTitle}>
-              Contact Information
-            </Text>
-          </View>
-
-          <DetailRow
-            label="Full Name"
-            value={params.fullName || "—"}
-          />
-
-          <DetailRow
-            label="Email"
-            value={params.email || "—"}
-          />
-
-          <DetailRow
-            label="Phone"
-            value={params.phone || "—"}
-          />
-        </View>
-
-        {/* Driver */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons
-              name="card-outline"
-              size={20}
-              color="#07869B"
-            />
-
-            <Text style={styles.sectionTitle}>
-              Driver Information
-            </Text>
-          </View>
-
-          <DetailRow
-            label="Driver"
-            value={
-              finalDriverName || "—"
-            }
-          />
-
-          {params.dateOfBirth ? (
-            <DetailRow
-              label="Date of Birth"
-              value={params.dateOfBirth}
-            />
+        <GlassCard>
+          {quoteLoading ? (
+            <SkeletonText lines={4} />
+          ) : quoteError ? (
+            <ErrorState error={quoteError} onRetry={loadQuote} compact />
+          ) : quote ? (
+            <View style={styles.gap10}>
+              <Row icon="navigate-outline" label="Pick-up" value={quote.pickupPoint?.label} sub={quote.pickupPoint?.address} />
+              <Row icon="flag-outline" label="Drop-off" value={quote.dropoffPoint?.label} sub={quote.dropoffPoint?.address} />
+            </View>
           ) : null}
+        </GlassCard>
 
-          <DetailRow
-            label="Licence Issued In"
-            value={
-              params.licenceIssuedIn ||
-              "—"
-            }
-          />
-        </View>
-
-        <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-            <Ionicons
-            name="document-text-outline"
-            size={20}
-            color="#07869B"
-            />
-
-            <Text style={styles.sectionTitle}>
-            Agreements
-            </Text>
-        </View>
-
-        <AgreementReviewRow
-            label="Terms of Service"
-            accepted={termsAccepted}
-        />
-
-        <AgreementReviewRow
-            label="Rental Terms"
-            accepted={rentalTermsAccepted}
-        />
-
-        <AgreementReviewRow
-            label="Deposit Forfeiture"
-            accepted={forfeitureAccepted}
-        />
-        </View>
-
-        {/* Flow Notice */}
-        <View style={styles.noticeCard}>
-          <Ionicons
-            name="information-circle-outline"
-            size={21}
-            color="#07869B"
-          />
-
-          <View style={{ flex: 1 }}>
-            <Text style={styles.noticeTitle}>
-              Booking request
-            </Text>
-
-            <Text style={styles.noticeText}>
-              Your request will be sent to the
-              rental operator for approval.
-              Payment is only required after the
-              operator accepts your booking.
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-
-      {submitError ? (
-        <View style={styles.errorCard}>
-            <Ionicons
-            name="alert-circle-outline"
-            size={18}
-            color="#B94747"
-            />
-
-            <Text style={styles.errorText}>
-            {submitError}
-            </Text>
-        </View>
+        {quote ? (
+          <GlassCard>
+            <QuoteBreakdown quote={quote} />
+          </GlassCard>
         ) : null}
 
-        
-<View
-  style={{
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 18,
-    marginVertical: 18,
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-  }}
->
-  <Text
-    style={{
-      color: "#17313C",
-      fontSize: 18,
-      fontWeight: "800",
-      marginBottom: 15,
-    }}
-  >
-    Rental Price Breakdown
-  </Text>
+        {quote ? (
+          <GlassCard>
+            <AppText variant="headline" style={styles.cardTitle}>
+              How you'll pay
+            </AppText>
+            <PaymentSchedule steps={paymentStepsFromQuote(quote, car)} />
+          </GlassCard>
+        ) : null}
 
-  {quoteLoading ? (
-    <Text style={{ color: "#81939C" }}>
-      Calculating final price...
-    </Text>
-  ) : quoteError ? (
-    <Text style={{ color: "#D14343" }}>
-      {quoteError}
-    </Text>
-  ) : bookingQuote ? (
-    <>
-      <Text style={{ marginBottom: 10, color: "#17313C" }}>
-        Pickup: {bookingQuote.pickupPoint?.label || "—"}
-      </Text>
+        <Card title="Contact">
+          <Row icon="person-outline" label="Name" value={params.fullName} />
+          <Row icon="call-outline" label="Phone" value={params.phone} />
+          {params.email ? <Row icon="mail-outline" label="Email" value={params.email} /> : null}
+        </Card>
 
-      <Text style={{ marginBottom: 10, color: "#17313C" }}>
-        Drop-off: {bookingQuote.dropoffPoint?.label || "—"}
-      </Text>
+        <Card title="Driver">
+          <Row icon="id-card-outline" label="Driver" value={driverIsBooker ? `${finalDriverName} (you)` : finalDriverName} />
+          {params.dateOfBirth ? (
+            <Row icon="calendar-outline" label="Date of birth" value={formatMYT(mytToIso(params.dateOfBirth, "12:00"), "date")} />
+          ) : null}
+          <Row icon="globe-outline" label="Licence issued in" value={params.licenceIssuedIn || "Malaysia"} />
+          {cdwSelected ? <Row icon="shield-checkmark-outline" label="Collision damage waiver" value="Included" /> : null}
+        </Card>
 
-      <Text style={{ marginBottom: 10, color: "#17313C" }}>
-        Rental:
-        {" RM "}
-        {(Number(bookingQuote.rentalSen || 0) / 100).toFixed(2)}
-      </Text>
+        <View style={[styles.notice, { backgroundColor: tokens.infoBg }]}>
+          <Ionicons name="information-circle-outline" size={20} color={tokens.infoFg} />
+          <AppText variant="caption" style={[styles.flex, { color: tokens.infoFg }]}>
+            This sends a request to the operator. You pay nothing until they accept.
+          </AppText>
+        </View>
 
-      <Text style={{ marginBottom: 10, color: "#17313C" }}>
-        Pickup Fee:
-        {" RM "}
-        {(Number(bookingQuote.pickupFeeSen || 0) / 100).toFixed(2)}
-      </Text>
+        {submitError ? <ErrorState error={submitError} compact /> : null}
+      </ScrollView>
 
-      <Text style={{ marginBottom: 10, color: "#17313C" }}>
-        Drop-off Fee:
-        {" RM "}
-        {(Number(bookingQuote.dropoffFeeSen || 0) / 100).toFixed(2)}
-      </Text>
-
-      
-{Number(bookingQuote.overtimeSen || 0) > 0 && (
-  <Text style={{ marginBottom: 10, color: "#17313C" }}>
-    Night Handover Fee
-    {bookingQuote.nightHandovers
-      ? ` (${bookingQuote.nightHandovers} time(s))`
-      : ""}
-    : RM{" "}
-    {(Number(bookingQuote.overtimeSen) / 100).toFixed(2)}
-  </Text>
-)}
-
-{Number(bookingQuote.youngDriverSurchargeSen || 0) > 0 && (
-  <Text style={{ marginBottom: 10, color: "#17313C" }}>
-    Young Driver Surcharge: RM{" "}
-    {(
-      Number(bookingQuote.youngDriverSurchargeSen) / 100
-    ).toFixed(2)}
-  </Text>
-)}
-
-{(bookingQuote.addOnLines || []).map(
-  (item: {
-    id: string;
-    label: string;
-    amountSen: number;
-  }) => (
-    <Text
-      key={item.id}
-      style={{ marginBottom: 10, color: "#17313C" }}
-    >
-      {item.label}: RM{" "}
-      {(Number(item.amountSen) / 100).toFixed(2)}
-    </Text>
-  )
-)}
-
-
-{(() => {
-  const quote = bookingQuote;
-
-  const displayedSum =
-    Number(quote.rentalSen || 0) +
-    Number(quote.pickupFeeSen || 0) +
-    Number(quote.dropoffFeeSen || 0) +
-    Number(quote.overtimeSen || 0) +
-    Number(quote.youngDriverSurchargeSen || 0) +
-    Number(quote.addOnsSen || 0);
-
-  const difference =
-    Number(quote.totalSen || 0) - displayedSum;
-
-  return difference !== 0 ? (
-    <Text style={{ color: "#D14343", marginBottom: 10 }}>
-      Price breakdown mismatch: RM{" "}
-      {(difference / 100).toFixed(2)}
-    </Text>
-  ) : null;
-})()}
-
-      <View
-        style={{
-          height: 1,
-          backgroundColor: "#E3EAED",
-          marginVertical: 13,
-        }}
-      />
-
-      <Text
-        style={{
-          color: "#07869B",
-          fontWeight: "900",
-          fontSize: 20,
-        }}
-      >
-        Total: RM {(Number(bookingQuote.totalSen) / 100).toFixed(2)}
-      </Text>
-
-      <Text style={{ color: "#81939C", marginTop: 7 }}>
-        Final amount calculated by the BNPL backend.
-      </Text>
-    </>
-  ) : null}
-</View>
-
-
-      <View style={styles.footer}>
-        <Pressable
-            disabled={submitting}
-            style={[
-                styles.submitButton,
-                submitting &&
-                styles.submitButtonDisabled,
-            ]}
+      <FloatingActionBar
+        action={
+          <Button
+            label="Send request"
+            variant="cta"
+            grow
+            disabled={!quote || quoteLoading}
             onPress={handleSubmit}
-            >
-          <Text style={styles.submitText}>
-          {submitting
-            ? "Submitting..."
-            : "Confirm & Submit"}
-          </Text>
-            
-          {!submitting && (
-            <Ionicons
-            name="checkmark-circle-outline"
-            size={19}
-            color="#FFFFFF"
-            />
+          />
+        }
+      >
+        {quote ? (
+          <>
+            <Money sen={quote.totalSen} variant="headline" />
+            <AppText variant="caption">RM 0 today</AppText>
+          </>
+        ) : (
+          <AppText variant="caption">Confirming the price…</AppText>
         )}
-        </Pressable>
-      </View>
-    </SafeAreaView>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>
-        {label}
-      </Text>
-
-      <Text style={styles.detailValue}>
-        {value}
-      </Text>
+      </FloatingActionBar>
     </View>
   );
 }
 
-function AgreementReviewRow({
-  label,
-  accepted,
-}: {
-  label: string;
-  accepted: boolean;
-}) {
+function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>
-        {label}
-      </Text>
+    <GlassCard>
+      <AppText variant="headline" style={styles.cardTitle}>
+        {title}
+      </AppText>
+      <View style={styles.gap10}>{children}</View>
+    </GlassCard>
+  );
+}
 
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 5,
-        }}
-      >
-        <Ionicons
-          name={
-            accepted
-              ? "checkmark-circle"
-              : "close-circle"
-          }
-          size={17}
-          color={
-            accepted
-              ? "#07869B"
-              : "#C45A5A"
-          }
-        />
-
-        <Text style={styles.detailValue}>
-          {accepted
-            ? "Accepted"
-            : "Not Accepted"}
-        </Text>
+function Row({ icon, label, value, sub }: { icon: any; label: string; value?: string | null; sub?: string | null }) {
+  const { tokens } = useTheme();
+  return (
+    <View style={styles.row}>
+      <Ionicons name={icon} size={18} color={tokens.leafInk} style={styles.rowIcon} />
+      <View style={styles.flex}>
+        <AppText variant="caption">{label}</AppText>
+        <AppText variant="bodyStrong">{value || "—"}</AppText>
+        {sub ? <AppText variant="caption">{sub}</AppText> : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  screen: {
     flex: 1,
-    backgroundColor: "#F7FAFB",
   },
-
-  header: {
+  content: {
+    paddingHorizontal: 18,
+    gap: 16,
+  },
+  topRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5ECEF",
   },
-
-  headerButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "#F3F7F8",
-    alignItems: "center",
-    justifyContent: "center",
+  flex: {
+    flex: 1,
   },
-
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#17313C",
+  gap10: {
+    gap: 10,
   },
-
-  headerSubtitle: {
-    fontSize: 10,
-    color: "#83969E",
+  cardTitle: {
+    marginBottom: 6,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  rowIcon: {
     marginTop: 2,
   },
-
-  content: {
-    padding: 18,
-    paddingBottom: 125,
-  },
-
-  section: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    padding: 16,
-    marginBottom: 16,
-  },
-
-  sectionHeader: {
+  notice: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 13,
-  },
-
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#17313C",
-  },
-
-  detailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 20,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EEF2F3",
-  },
-
-  detailLabel: {
-    color: "#82949C",
-    fontSize: 10,
-  },
-
-  detailValue: {
-    flex: 1,
-    textAlign: "right",
-    color: "#17313C",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-
-  noticeCard: {
-    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 10,
-    backgroundColor: "#EAF8FA",
-    padding: 15,
-    borderRadius: 17,
-  },
-
-  noticeTitle: {
-    color: "#17313C",
-    fontSize: 12,
-    fontWeight: "900",
-  },
-
-  noticeText: {
-    color: "#58757D",
-    fontSize: 10,
-    lineHeight: 16,
-    marginTop: 3,
-  },
-
-  footer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#E3EAED",
-    paddingHorizontal: 18,
-    paddingTop: 13,
-    paddingBottom: 20,
-  },
-
-  submitButton: {
-    height: 54,
+    padding: 14,
     borderRadius: 16,
-    backgroundColor: "#07869B",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
   },
-
-  submitText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-
-  errorCard: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 8,
-  backgroundColor: "#FFF1F1",
-  borderWidth: 1,
-  borderColor: "#F3CCCC",
-  padding: 12,
-  borderRadius: 14,
-  marginTop: 14,
-},
-
-errorText: {
-  flex: 1,
-  color: "#A33E3E",
-  fontSize: 11,
-  fontWeight: "700",
-},
-
-submitButtonDisabled: {
-  opacity: 0.65,
-},
 });

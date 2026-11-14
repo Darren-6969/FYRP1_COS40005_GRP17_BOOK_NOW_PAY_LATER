@@ -10,7 +10,9 @@
 //   - Photo and camera permission requests stay the phone's own prompt.
 export { AmbientBackground } from './AmbientBackground';
 export { AppText, type AppTextProps, type ColorToken } from './AppText';
+export { BottomSheet } from './BottomSheet';
 export { Button, type ButtonVariant } from './Button';
+export { Chip } from './Chip';
 export { ConfirmSheet } from './ConfirmSheet';
 export { EmptyState } from './EmptyState';
 export { ErrorState } from './ErrorState';
@@ -25,4 +27,5 @@ export { PaymentSchedule, type ScheduleStep, type ScheduleStepState } from './Pa
 export { SegmentedControl, type SegmentOption } from './SegmentedControl';
 export { Skeleton, SkeletonText } from './Skeleton';
 export { StatusPill } from './StatusPill';
+export { TextField } from './TextField';
 export { ToastProvider, useToast, type ToastTone } from './Toast';

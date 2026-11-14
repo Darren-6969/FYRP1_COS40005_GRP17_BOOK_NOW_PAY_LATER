@@ -1,1386 +1,537 @@
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { TripCard } from "@/components/booking/TripCard";
 import {
-  useLocalSearchParams,
-  useRouter,
-} from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+  AppText,
+  Button,
+  ErrorState,
+  FieldError,
+  FLOATING_BAR_CLEARANCE,
+  FloatingActionBar,
+  GlassCard,
+  IconButton,
+  SkeletonText,
+  TextField,
+} from "@/components/ui";
+import { useTheme } from "@/hooks/use-theme";
+import { getPublicCarById } from "@/services/carApi";
+import { getStoredUser } from "@/services/session";
+import { formatMYT, mytToIso } from "@/utils/datetime";
+import { formatSen } from "@/utils/money";
+import { normaliseMalaysianPhone } from "@/utils/phone";
 
-import { useEffect, useState } from "react";
-import { getPublicCarById } from "../../services/carApi";
-
-import DateTimePicker from "@react-native-community/datetimepicker";
-
-
-type BookingPoint = {
+type Point = {
   id: string;
   label: string;
   address?: string;
   note?: string;
-  usage?: "PICKUP" | "DROPOFF" | "BOTH";
   pickupFeeSen?: number;
   dropoffFeeSen?: number;
 };
 
-type BookingCDW = {
-  id: string;
-  label: string;
-  description?: string;
-  priceSen: number;
-  unit: string;
+type Params = {
+  listingId?: string;
+  city?: string;
+  from?: string;
+  ft?: string;
+  to?: string;
+  tt?: string;
+  /** "true" when CDW was switched on in car details. */
+  cdw?: string;
 };
 
-function formatFee(sen: number | undefined) {
-  return `RM ${(Number(sen || 0) / 100).toFixed(2)}`;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
 }
 
-
+/**
+ * Step 1 of 2: where to collect and return the car, who is booking and
+ * driving, and the three agreements. Nothing is sent to the server here;
+ * the review screen submits the request.
+ */
 export default function BookingRequest() {
   const router = useRouter();
+  const params = useLocalSearchParams<Params>();
+  const insets = useSafeAreaInsets();
+  const { scheme, tokens } = useTheme();
+  const switchColors = { trackColor: { true: tokens.brand, false: tokens.neutralBg }, thumbColor: "#FFFFFF" };
 
-  const params =
-    useLocalSearchParams<{
-      listingId?: string;
-      city?: string;
-      from?: string;
-      ft?: string;
-      to?: string;
-      tt?: string;
-    }>();
+  const [car, setCar] = useState<any | null>(null);
+  const [carError, setCarError] = useState<unknown>(null);
 
-const [cdw, setCdw] = useState<BookingCDW | null>(null);
+  const [pickupPointId, setPickupPointId] = useState("");
+  const [dropoffPointId, setDropoffPointId] = useState("");
+  const [cdwSelected, setCdwSelected] = useState(params.cdw === "true");
 
-const [cdwSelected, setCdwSelected] = useState(false);
-  
-const [pickupPoints, setPickupPoints] =
-  useState<BookingPoint[]>([]);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [driverIsBooker, setDriverIsBooker] = useState(true);
+  const [driverName, setDriverName] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [dobOpen, setDobOpen] = useState(false);
+  const [licenceIssuedIn, setLicenceIssuedIn] = useState("Malaysia");
 
-const [dropoffPoints, setDropoffPoints] =
-  useState<BookingPoint[]>([]);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [rentalTermsAccepted, setRentalTermsAccepted] = useState(false);
+  const [forfeitureAccepted, setForfeitureAccepted] = useState(false);
 
-const [pickupPointId, setPickupPointId] = useState("");
-const [dropoffPointId, setDropoffPointId] = useState("");
+  // Errors only show after Continue is tried, not while typing.
+  const [showErrors, setShowErrors] = useState(false);
 
-const [pointsLoading, setPointsLoading] = useState(true);
-const [pointsError, setPointsError] = useState("");
-
-useEffect(() => {
-  if (!params.listingId) {
-    setPointsError("Vehicle listing is missing.");
-    setPointsLoading(false);
-    return;
-  }
-
-  let active = true;
-
-  const loadPoints = async () => {
+  const loadCar = useCallback(async () => {
+    if (!params.listingId) return setCarError(new Error("This booking link is missing the car."));
+    setCarError(null);
     try {
-      setPointsLoading(true);
-      setPointsError("");
-
-      const car = await getPublicCarById(params.listingId!);
-
-      if (!active) return;
-
-const availableCdw = car?.booking?.cdw ?? null;
-
-// Driver age rules are the operator's choice, off by default. While off
-// the date of birth is not asked.
-setAgeRulesOn(Boolean(car?.booking?.driverRules?.enabled));
-
-setCdw(availableCdw);
-setCdwSelected(false);
-
-      const pickup: BookingPoint[] =
-        car?.booking?.pickupPoints || [];
-
-      const dropoff: BookingPoint[] =
-        car?.booking?.dropoffPoints || [];
-
-      setPickupPoints(pickup);
-      setDropoffPoints(dropoff);
-
-      setPickupPointId(pickup[0]?.id || "");
-      setDropoffPointId(dropoff[0]?.id || "");
-    } catch (err: any) {
-      if (active) {
-        setPointsError(
-          err?.message || "Unable to load pickup locations."
-        );
-      }
-    } finally {
-      if (active) setPointsLoading(false);
+      const data = await getPublicCarById(params.listingId);
+      setCar(data);
+      setPickupPointId((current) => current || data?.booking?.pickupPoints?.[0]?.id || "");
+      setDropoffPointId((current) => current || data?.booking?.dropoffPoints?.[0]?.id || "");
+    } catch (err) {
+      setCarError(err);
     }
+  }, [params.listingId]);
+
+  useEffect(() => {
+    loadCar();
+    // Start from the signed-in profile; the customer can change anything.
+    getStoredUser()
+      .then((user) => {
+        if (!user) return;
+        setFullName((v) => v || user.name || "");
+        setEmail((v) => v || user.email || "");
+        setPhone((v) => v || user.phone || "");
+      })
+      .catch(() => {});
+  }, [loadCar]);
+
+  const ageRulesOn = Boolean(car?.booking?.driverRules?.enabled);
+  const cdw = car?.booking?.cdw ?? null;
+  const pickupPoints: Point[] = car?.booking?.pickupPoints || [];
+  const dropoffPoints: Point[] = car?.booking?.dropoffPoints || [];
+
+  const normalisedPhone = normaliseMalaysianPhone(phone);
+  const errors = {
+    fullName: fullName.trim().length < 2 ? "Enter your full name." : null,
+    email: email.trim() && !EMAIL.test(email.trim()) ? "Enter a valid email, or leave it empty." : null,
+    phone: !phone.trim()
+      ? "Enter a phone number the operator can call."
+      : !normalisedPhone
+        ? "Enter a Malaysian number, e.g. 012-345 6789."
+        : null,
+    driverName: !driverIsBooker && driverName.trim().length < 2 ? "Enter the driver's full name." : null,
+    dateOfBirth: ageRulesOn && !dateOfBirth ? "This operator asks for the driver's date of birth." : null,
+    licence: !licenceIssuedIn.trim() ? "Enter the country that issued the licence." : null,
+    points: !pickupPointId || !dropoffPointId ? "Choose a pick-up and a drop-off point." : null,
+    agreements:
+      !termsAccepted || !rentalTermsAccepted || !forfeitureAccepted ? "Accept all three to send a request." : null,
   };
-
-  loadPoints();
-
-  return () => {
-    active = false;
-  };
-}, [params.listingId]);
-
-
-  const [fullName, setFullName] =
-    useState("");
-
-  const [email, setEmail] =
-    useState("");
-
-  const [phone, setPhone] =
-    useState("");
-
-  const [driverIsBooker, setDriverIsBooker] =
-    useState(true);
-
-  const [driverName, setDriverName] =
-    useState("");
-
-  const [dateOfBirth, setDateOfBirth] =
-    useState("");
-
-  const [ageRulesOn, setAgeRulesOn] =
-    useState(false);
-
-  const [showDobPicker, setShowDobPicker] =
-  useState(false);
-
-  const [licenceIssuedIn, setLicenceIssuedIn] =
-    useState("Malaysia");
-
-  const [termsAccepted, setTermsAccepted] =
-    useState(false);
-
-  const [
-    rentalTermsAccepted,
-    setRentalTermsAccepted,
-  ] = useState(false);
-
-  const [
-    forfeitureAccepted,
-    setForfeitureAccepted,
-  ] = useState(false);
+  const valid = Object.values(errors).every((e) => !e) && Boolean(car);
+  const shown = (message: string | null) => (showErrors ? message : null);
 
   const handleContinue = () => {
-  const finalDriverName =
-    driverIsBooker
-      ? fullName
-      : driverName;
+    if (!valid) {
+      setShowErrors(true);
+      return;
+    }
+    router.push({
+      pathname: "/customer/review-booking",
+      params: {
+        listingId: params.listingId || "",
+        city: params.city || "",
+        from: params.from || "",
+        ft: params.ft || "10:00",
+        to: params.to || "",
+        tt: params.tt || "10:00",
+        pickupPointId,
+        dropoffPointId,
+        cdw: String(Boolean(cdw && cdwSelected)),
+        fullName: fullName.trim(),
+        email: email.trim(),
+        phone: normalisedPhone || "",
+        driverIsBooker: String(driverIsBooker),
+        driverName: (driverIsBooker ? fullName : driverName).trim(),
+        dateOfBirth: ageRulesOn ? dateOfBirth : "",
+        licenceIssuedIn: licenceIssuedIn.trim(),
+        termsAccepted: String(termsAccepted),
+        rentalTermsAccepted: String(rentalTermsAccepted),
+        forfeitureAccepted: String(forfeitureAccepted),
+      },
+    } as unknown as Href);
+  };
 
-  router.push({
-    pathname:
-      "/customer/review-booking",
+  const onDob = (event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") setDobOpen(false);
+    if (event.type === "dismissed" || !selected) return;
+    setDateOfBirth(`${selected.getFullYear()}-${pad2(selected.getMonth() + 1)}-${pad2(selected.getDate())}`);
+  };
 
-    params: {
-      listingId:
-        params.listingId || "",
+  if (carError) {
+    return (
+      <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.pad}>
+          <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+        </View>
+        <ErrorState error={carError} onRetry={loadCar} />
+      </View>
+    );
+  }
 
-      city:
-        params.city || "",
-
-      from:
-        params.from || "",
-
-      ft:
-        params.ft || "10:00",
-
-      to:
-        params.to || "",
-
-      tt:
-        params.tt || "10:00",
-
-      pickupPointId,
-      dropoffPointId,
-
-      cdw: String(Boolean(cdw && cdwSelected)),
-
-      fullName:
-        fullName.trim(),
-
-      email:
-        email.trim(),
-
-      phone:
-        phone.trim(),
-
-      driverIsBooker:
-        String(driverIsBooker),
-
-      driverName:
-        finalDriverName || "",
-
-      dateOfBirth: ageRulesOn ? dateOfBirth : "",
-
-      licenceIssuedIn:
-        licenceIssuedIn.trim(),
-
-      termsAccepted:
-        String(termsAccepted),
-
-      rentalTermsAccepted:
-        String(
-          rentalTermsAccepted
-        ),
-
-      forfeitureAccepted:
-        String(
-          forfeitureAccepted
-        ),
-    },
-  });
-};
-
-  const canContinue =
-    fullName.trim().length >= 2 &&
-    phone.trim().length > 0 &&
-    (!ageRulesOn || dateOfBirth.trim().length > 0) &&
-    licenceIssuedIn.trim().length > 0 &&
-    termsAccepted &&
-    rentalTermsAccepted &&
-    forfeitureAccepted &&
-    (driverIsBooker ||
-    driverName.trim().length >= 2) &&
-    !pointsLoading &&
-    !pointsError &&
-    pickupPointId.length > 0 &&
-    dropoffPointId.length > 0;
+  const carName = car?.name || [car?.vehicleMake, car?.vehicleModel].filter(Boolean).join(" ");
 
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-    >
-      <StatusBar style="dark" />
-
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={
-          Platform.OS === "ios"
-            ? "padding"
-            : undefined
-        }
-      >
-        <View style={styles.header}>
-          <Pressable
-            style={styles.headerButton}
-            onPress={() =>
-              router.back()
-            }
-          >
-            <Ionicons
-              name="chevron-back"
-              size={22}
-              color="#17313C"
-            />
-          </Pressable>
-
-          <View style={{ flex: 1 }}>
-            <Text
-              style={styles.headerTitle}
-            >
-              Booking Request
-            </Text>
-
-            <Text
-              style={
-                styles.headerSubtitle
-              }
-            >
-              Complete your rental
-              information
-            </Text>
-          </View>
-        </View>
-
+    <View style={styles.screen}>
+      <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView
-          showsVerticalScrollIndicator={
-            false
-          }
-          contentContainerStyle={
-            styles.content
-          }
+          contentContainerStyle={[
+            styles.content,
+            { paddingTop: insets.top + 8, paddingBottom: FLOATING_BAR_CLEARANCE + insets.bottom + 12 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <View
-            style={styles.tripCard}
-          >
-            <View
-              style={
-                styles.tripHeader
-              }
-            >
-              <Ionicons
-                name="car-sport-outline"
-                size={21}
-                color="#07869B"
-              />
-
-              <Text
-                style={
-                  styles.tripTitle
-                }
-              >
-                Your Rental
-              </Text>
-            </View>
-
-            <View
-              style={styles.tripRow}
-            >
-              <Text
-                style={
-                  styles.tripLabel
-                }
-              >
-                Location
-              </Text>
-
-              <Text
-                style={
-                  styles.tripValue
-                }
-              >
-                {params.city ||
-                  "Selected branch"}
-              </Text>
-            </View>
-
-            <View
-              style={styles.tripRow}
-            >
-              <Text
-                style={
-                  styles.tripLabel
-                }
-              >
-                Pick-up
-              </Text>
-
-              <Text
-                style={
-                  styles.tripValue
-                }
-              >
-                {params.from ||
-                  "—"}{" "}
-                ·{" "}
-                {params.ft ||
-                  "10:00"}
-              </Text>
-            </View>
-
-            <View
-              style={styles.tripRow}
-            >
-              <Text
-                style={
-                  styles.tripLabel
-                }
-              >
-                Return
-              </Text>
-
-              <Text
-                style={
-                  styles.tripValue
-                }
-              >
-                {params.to ||
-                  "—"}{" "}
-                ·{" "}
-                {params.tt ||
-                  "10:00"}
-              </Text>
+          <View style={styles.topRow}>
+            <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+            <View style={styles.flex}>
+              <AppText variant="caption">Step 1 of 2</AppText>
+              <AppText variant="largeTitle" accessibilityRole="header">
+                Your details
+              </AppText>
             </View>
           </View>
 
-          
-<View style={{ marginBottom: 24 }}>
-  <Text
-    style={{
-      fontSize: 19,
-      fontWeight: "800",
-      color: "#17313C",
-      marginBottom: 12,
-    }}
-  >
-    Pickup & Drop-off Locations
-  </Text>
+          {carName ? <AppText variant="headline">{carName}</AppText> : null}
+          <TripCard fromDate={params.from} fromTime={params.ft} toDate={params.to} toTime={params.tt} />
 
-  {pointsLoading ? (
-    <Text style={{ color: "#81939C" }}>
-      Loading available locations...
-    </Text>
-  ) : pointsError ? (
-    <Text style={{ color: "#D14343" }}>
-      {pointsError}
-    </Text>
-  ) : (
-    <>
-      <Text
-        style={{
-          fontSize: 14,
-          fontWeight: "800",
-          color: "#17313C",
-          marginBottom: 10,
-        }}
-      >
-        Select Pickup Location *
-      </Text>
+          {!car ? (
+            <GlassCard>
+              <SkeletonText lines={4} />
+            </GlassCard>
+          ) : (
+            <>
+              <Section title="Pick-up point">
+                <PointList points={pickupPoints} selected={pickupPointId} onSelect={setPickupPointId} kind="pickup" />
+              </Section>
+              <Section title="Drop-off point">
+                <PointList points={dropoffPoints} selected={dropoffPointId} onSelect={setDropoffPointId} kind="dropoff" />
+                <FieldError message={shown(errors.points)} />
+              </Section>
 
-      {pickupPoints.map((point) => (
-        <Pressable
-          key={point.id}
-          onPress={() => setPickupPointId(point.id)}
-          style={{
-            backgroundColor:
-              pickupPointId === point.id
-                ? "#E6F7F9"
-                : "#FFFFFF",
-            borderColor:
-              pickupPointId === point.id
-                ? "#07869B"
-                : "#E3EAED",
-            borderWidth: 1,
-            borderRadius: 14,
-            padding: 15,
-            marginBottom: 9,
-          }}
-        >
-          <Text
-            style={{
-              color: "#17313C",
-              fontWeight: "800",
-            }}
-          >
-            {pickupPointId === point.id ? "◉ " : "○ "}
-            {point.label}
-          </Text>
-
-          {!!point.address && (
-            <Text style={{ color: "#81939C", marginTop: 5 }}>
-              {point.address}
-            </Text>
+              {cdw ? (
+                <GlassCard>
+                  <View style={styles.between}>
+                    <View style={[styles.row, styles.flex, styles.alignStart]}>
+                      <Ionicons name="shield-checkmark-outline" size={21} color={tokens.leafInk} />
+                      <View style={styles.flex}>
+                        <AppText variant="bodyStrong">{cdw.label || "Collision damage waiver"}</AppText>
+                        <AppText variant="caption">
+                          {formatSen(cdw.priceSen)}
+                          {cdw.unit === "per_day" ? "/day" : ""}, paid with the balance. Optional.
+                        </AppText>
+                      </View>
+                    </View>
+                    <Switch
+                      value={cdwSelected}
+                      onValueChange={setCdwSelected}
+                      {...switchColors}
+                      accessibilityLabel={cdw.label || "Collision damage waiver"}
+                    />
+                  </View>
+                </GlassCard>
+              ) : null}
+            </>
           )}
 
-          <Text
-            style={{
-              color: "#07869B",
-              fontWeight: "700",
-              marginTop: 7,
-            }}
-          >
-            Pickup Fee: {formatFee(point.pickupFeeSen)}
-          </Text>
-        </Pressable>
-      ))}
-
-      <Text
-        style={{
-          fontSize: 14,
-          fontWeight: "800",
-          color: "#17313C",
-          marginTop: 16,
-          marginBottom: 10,
-        }}
-      >
-        Select Drop-off Location *
-      </Text>
-
-      {dropoffPoints.map((point) => (
-        <Pressable
-          key={point.id}
-          onPress={() => setDropoffPointId(point.id)}
-          style={{
-            backgroundColor:
-              dropoffPointId === point.id
-                ? "#E6F7F9"
-                : "#FFFFFF",
-            borderColor:
-              dropoffPointId === point.id
-                ? "#07869B"
-                : "#E3EAED",
-            borderWidth: 1,
-            borderRadius: 14,
-            padding: 15,
-            marginBottom: 9,
-          }}
-        >
-          <Text
-            style={{
-              color: "#17313C",
-              fontWeight: "800",
-            }}
-          >
-            {dropoffPointId === point.id ? "◉ " : "○ "}
-            {point.label}
-          </Text>
-
-          {!!point.address && (
-            <Text style={{ color: "#81939C", marginTop: 5 }}>
-              {point.address}
-            </Text>
-          )}
-
-          <Text
-            style={{
-              color: "#07869B",
-              fontWeight: "700",
-              marginTop: 7,
-            }}
-          >
-            Drop-off Fee: {formatFee(point.dropoffFeeSen)}
-          </Text>
-        </Pressable>
-      ))}
-    </>
-  )}
-</View>
-
-
-{cdw && (
-  <View
-    style={{
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
-      borderColor: "#E3EAED",
-      borderRadius: 18,
-      padding: 18,
-      marginBottom: 22,
-    }}
-  >
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        marginBottom: 13,
-      }}
-    >
-      <Ionicons
-        name="shield-checkmark-outline"
-        size={25}
-        color="#07869B"
-      />
-
-      <View style={{ flex: 1 }}>
-        <Text
-          style={{
-            fontSize: 16,
-            fontWeight: "900",
-            color: "#17313C",
-          }}
-        >
-          {cdw.label}
-        </Text>
-
-        <Text
-          style={{
-            color: "#81939C",
-            fontSize: 11,
-            marginTop: 4,
-          }}
-        >
-          Optional Protection
-        </Text>
-      </View>
-    </View>
-
-    <Text
-      style={{
-        fontSize: 12,
-        color: "#617780",
-        lineHeight: 19,
-        marginBottom: 15,
-      }}
-    >
-      {cdw.description ||
-        "Optional collision damage waiver subject to rental terms."}
-    </Text>
-
-    <Pressable
-      onPress={() => setCdwSelected((previous) => !previous)}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        borderWidth: 1,
-        borderColor: cdwSelected ? "#07869B" : "#E3EAED",
-        backgroundColor: cdwSelected ? "#E6F7F9" : "#F7FAFB",
-        borderRadius: 13,
-        padding: 14,
-      }}
-    >
-      <View>
-        <Text
-          style={{
-            fontSize: 16,
-            color: "#17313C",
-            fontWeight: "900",
-          }}
-        >
-          RM {(Number(cdw.priceSen) / 100).toFixed(2)}
-          {" / day"}
-        </Text>
-
-        <Text
-          style={{
-            color: "#81939C",
-            fontSize: 11,
-            marginTop: 4,
-          }}
-        >
-          {cdwSelected ? "CDW included" : "Not selected"}
-        </Text>
-      </View>
-
-      <Ionicons
-        name={cdwSelected ? "checkbox" : "square-outline"}
-        size={26}
-        color="#07869B"
-      />
-    </Pressable>
-  </View>
-)}
-
-
-
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Contact Information
-          </Text>
-
-          <View
-            style={styles.section}
-          >
-            <Text
-              style={
-                styles.inputLabel
-              }
-            >
-              Full Name
-            </Text>
-
-            <TextInput
+          <Section title="Contact">
+            <TextField
+              label="Full name"
               value={fullName}
-              onChangeText={
-                setFullName
-              }
-              placeholder="Enter your full name"
-              style={styles.input}
+              onChangeText={setFullName}
+              autoComplete="name"
+              textContentType="name"
+              error={shown(errors.fullName)}
             />
-
-            <Text
-              style={
-                styles.inputLabel
-              }
-            >
-              Email
-            </Text>
-
-            <TextInput
+            <TextField
+              label="Email (optional)"
               value={email}
               onChangeText={setEmail}
-              placeholder="example@email.com"
               keyboardType="email-address"
               autoCapitalize="none"
-              style={styles.input}
+              autoComplete="email"
+              error={shown(errors.email)}
             />
-
-            <Text
-              style={
-                styles.inputLabel
-              }
-            >
-              Malaysian Phone Number
-            </Text>
-
-            <TextInput
+            <TextField
+              label="Phone"
               value={phone}
               onChangeText={setPhone}
-              placeholder="+60123456789"
               keyboardType="phone-pad"
-              style={styles.input}
+              autoComplete="tel"
+              placeholder="012-345 6789"
+              hint="The operator calls this number about your booking."
+              error={shown(errors.phone)}
             />
-          </View>
+          </Section>
 
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Driver Information
-          </Text>
-
-          <View
-            style={styles.section}
-          >
-            <View
-              style={
-                styles.switchRow
-              }
-            >
-              <View
-                style={{ flex: 1 }}
-              >
-                <Text
-                  style={
-                    styles.switchTitle
-                  }
-                >
-                  I am the driver
-                </Text>
-
-                <Text
-                  style={
-                    styles.switchDescription
-                  }
-                >
-                  Use the contact
-                  name as the driver
-                  name.
-                </Text>
+          <Section title="Driver">
+            <GlassCard>
+              <View style={styles.between}>
+                <AppText variant="bodyStrong" style={styles.flex}>
+                  I'm the driver
+                </AppText>
+                <Switch value={driverIsBooker} onValueChange={setDriverIsBooker} {...switchColors} accessibilityLabel="I'm the driver" />
               </View>
-
-              <Switch
-                value={
-                  driverIsBooker
-                }
-                onValueChange={
-                  setDriverIsBooker
-                }
-                trackColor={{
-                  true: "#07869B",
-                }}
-              />
-            </View>
-
+            </GlassCard>
             {!driverIsBooker ? (
-              <>
-                <Text
-                  style={
-                    styles.inputLabel
-                  }
-                >
-                  Driver Full Name
-                </Text>
-
-                <TextInput
-                  value={driverName}
-                  onChangeText={
-                    setDriverName
-                  }
-                  placeholder="Enter driver's full name"
-                  style={styles.input}
-                />
-              </>
+              <TextField
+                label="Driver's full name"
+                value={driverName}
+                onChangeText={setDriverName}
+                error={shown(errors.driverName)}
+              />
             ) : null}
-
-            {ageRulesOn && (
-            <>
-            <Text style={styles.inputLabel}>
-            Date of Birth
-            </Text>
-
-            <Pressable
-            style={styles.datePickerButton}
-            onPress={() =>
-                setShowDobPicker(true)
-            }
-            >
-            <View style={styles.datePickerLeft}>
-                <Ionicons
-                name="calendar-outline"
-                size={19}
-                color="#07869B"
-                />
-
-                <Text
-                style={[
-                    styles.datePickerText,
-                    !dateOfBirth &&
-                    styles.datePickerPlaceholder,
-                ]}
-                >
-                {dateOfBirth
-                    ? new Date(
-                        `${dateOfBirth}T12:00:00`
-                    ).toLocaleDateString(
-                        "en-MY",
-                        {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                        }
-                    )
-                    : "Select date of birth"}
-                </Text>
-            </View>
-
-            <Ionicons
-                name="chevron-forward"
-                size={18}
-                color="#9AABB2"
-            />
-            </Pressable>
-            </>
-            )}
-
-            <Text
-              style={
-                styles.inputLabel
-              }
-            >
-              Licence Issued In
-            </Text>
-
-            <TextInput
-              value={
-                licenceIssuedIn
-              }
-              onChangeText={
-                setLicenceIssuedIn
-              }
-              placeholder="Malaysia"
-              style={styles.input}
-            />
-          </View>
-
-          {ageRulesOn && showDobPicker && (
-            <View style={styles.dobPickerWrapper}>
-                <DateTimePicker
-                value={
-                    dateOfBirth
-                    ? new Date(
-                        `${dateOfBirth}T12:00:00`
-                        )
-                    : new Date(
-                        2000,
-                        0,
-                        1
-                        )
-                }
-                mode="date"
-                display={
-                    Platform.OS === "ios"
-                    ? "spinner"
-                    : "default"
-                }
-                themeVariant="light"
-                textColor="#17313C"
-                maximumDate={new Date()}
-                onChange={(
-                    event,
-                    selectedDate
-                ) => {
-                    if (!selectedDate) {
-                    if (
-                        Platform.OS !== "ios"
-                    ) {
-                        setShowDobPicker(false);
-                    }
-
-                    return;
-                    }
-
-                    const year =
-                    selectedDate.getFullYear();
-
-                    const month =
-                    String(
-                        selectedDate.getMonth() +
-                        1
-                    ).padStart(2, "0");
-
-                    const day =
-                    String(
-                        selectedDate.getDate()
-                    ).padStart(2, "0");
-
-                    setDateOfBirth(
-                    `${year}-${month}-${day}`
-                    );
-
-                    if (
-                    Platform.OS !== "ios"
-                    ) {
-                    setShowDobPicker(false);
-                    }
-                }}
-                />
-
-                {Platform.OS === "ios" && (
+            {ageRulesOn ? (
+              <View style={styles.gap6}>
+                <AppText variant="label" color="ink">
+                  Driver's date of birth
+                </AppText>
                 <Pressable
-                    style={
-                    styles.dobDoneButton
-                    }
-                    onPress={() =>
-                    setShowDobPicker(false)
-                    }
+                  onPress={() => setDobOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Driver's date of birth, ${dateOfBirth ? formatMYT(mytToIso(dateOfBirth, "12:00"), "date") : "not set"}`}
                 >
-                    <Text
-                    style={
-                        styles.dobDoneText
-                    }
-                    >
-                    Done
-                    </Text>
+                  <GlassCard padding={14}>
+                    <View style={styles.between}>
+                      <AppText variant={dateOfBirth ? "bodyStrong" : "body"} color={dateOfBirth ? "ink" : "label"}>
+                        {dateOfBirth ? formatMYT(mytToIso(dateOfBirth, "12:00"), "date") : "Choose date"}
+                      </AppText>
+                      <Ionicons name="calendar-outline" size={18} color={tokens.leafInk} />
+                    </View>
+                  </GlassCard>
                 </Pressable>
-                )}
-            </View>
-            )}
-
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Agreements
-          </Text>
-
-          <View
-            style={styles.section}
-          >
-            <AgreementRow
-              value={termsAccepted}
-              onChange={
-                setTermsAccepted
-              }
-              title="Terms of Service"
-              description="I agree to the platform Terms of Service."
+                <FieldError message={shown(errors.dateOfBirth)} />
+                {dobOpen ? (
+                  <View>
+                    <DateTimePicker
+                      value={dateOfBirth ? new Date(`${dateOfBirth}T12:00:00`) : new Date(2000, 0, 1)}
+                      mode="date"
+                      display={Platform.OS === "ios" ? "spinner" : "default"}
+                      themeVariant={scheme}
+                      maximumDate={new Date()}
+                      onChange={onDob}
+                    />
+                    {Platform.OS === "ios" ? (
+                      <Button label="Done" variant="text" size="sm" onPress={() => setDobOpen(false)} />
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+            <TextField
+              label="Licence issued in"
+              value={licenceIssuedIn}
+              onChangeText={setLicenceIssuedIn}
+              error={shown(errors.licence)}
             />
+          </Section>
 
-            <AgreementRow
-              value={
-                rentalTermsAccepted
-              }
-              onChange={
-                setRentalTermsAccepted
-              }
-              title="Rental Terms"
-              description="I agree to the rental terms for this booking."
-            />
+          <Section title="Agreements">
+            <GlassCard padding={4}>
+              <Agreement
+                checked={termsAccepted}
+                onChange={setTermsAccepted}
+                title="Terms of Service"
+                body="I agree to the platform Terms of Service."
+              />
+              <Agreement
+                checked={rentalTermsAccepted}
+                onChange={setRentalTermsAccepted}
+                title="Rental terms"
+                body="I agree to the rental terms for this booking."
+              />
+              <Agreement
+                checked={forfeitureAccepted}
+                onChange={setForfeitureAccepted}
+                title="Down payment forfeiture"
+                body="I understand the down payment may be kept if I cancel or miss the balance."
+              />
+            </GlassCard>
+            <FieldError message={shown(errors.agreements)} />
+          </Section>
 
-            <AgreementRow
-              value={
-                forfeitureAccepted
-              }
-              onChange={
-                setForfeitureAccepted
-              }
-              title="Deposit Forfeiture"
-              description="I acknowledge the applicable deposit forfeiture rule."
-            />
-          </View>
-
-          <View
-            style={
-              styles.infoCard
-            }
-          >
-            <Ionicons
-              name="information-circle-outline"
-              size={20}
-              color="#07869B"
-            />
-
-            <Text
-              style={styles.infoText}
-            >
-              Submitting this form
-              sends a booking request
-              to the rental operator.
-              Payment is only required
-              after the operator
-              accepts the request.
-            </Text>
-          </View>
+          <AppText variant="caption">
+            This sends a request. Nothing is charged until the operator accepts.
+          </AppText>
         </ScrollView>
-
-        <View style={styles.footer}>
-          <Pressable
-            disabled={!canContinue}
-            style={[
-              styles.continueButton,
-              !canContinue &&
-                styles.continueButtonDisabled,
-            ]}
-            onPress={
-              handleContinue
-            }
-          >
-            <Text
-              style={
-                styles.continueText
-              }
-            >
-              Review Booking
-            </Text>
-
-            <Ionicons
-              name="arrow-forward"
-              size={18}
-              color="#FFFFFF"
-            />
-          </Pressable>
-        </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+
+      <FloatingActionBar action={<Button label="Review" variant="brand" grow icon="arrow-forward" iconPosition="end" onPress={handleContinue} />}>
+        <AppText variant="bodyStrong">Step 1 of 2</AppText>
+        <AppText variant="caption">Check everything next</AppText>
+      </FloatingActionBar>
+    </View>
   );
 }
 
-function AgreementRow({
-  value,
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <AppText variant="headline" accessibilityRole="header">
+        {title}
+      </AppText>
+      {children}
+    </View>
+  );
+}
+
+function PointList({
+  points,
+  selected,
+  onSelect,
+  kind,
+}: {
+  points: Point[];
+  selected: string;
+  onSelect: (id: string) => void;
+  kind: "pickup" | "dropoff";
+}) {
+  const { tokens } = useTheme();
+
+  if (!points.length) {
+    return (
+      <GlassCard>
+        <AppText variant="caption">This car has no {kind === "pickup" ? "pick-up" : "drop-off"} points. Contact the operator.</AppText>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <GlassCard padding={4}>
+      <View accessibilityRole="radiogroup">
+        {points.map((point, i) => {
+          const isOn = point.id === selected;
+          const fee = kind === "pickup" ? point.pickupFeeSen : point.dropoffFeeSen;
+          return (
+            <Pressable
+              key={point.id}
+              onPress={() => onSelect(point.id)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: isOn }}
+              style={[styles.option, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.line }]}
+            >
+              <View style={[styles.radio, { borderColor: isOn ? tokens.brand : tokens.label }]}>
+                {isOn ? <View style={[styles.radioDot, { backgroundColor: tokens.brand }]} /> : null}
+              </View>
+              <View style={styles.flex}>
+                <AppText variant="bodyStrong">{point.label}</AppText>
+                {point.address ? <AppText variant="caption">{point.address}</AppText> : null}
+                {point.note ? <AppText variant="caption">{point.note}</AppText> : null}
+              </View>
+              <AppText variant="label" color={fee ? "ink" : "label"}>
+                {fee ? `+${formatSen(fee)}` : "Free"}
+              </AppText>
+            </Pressable>
+          );
+        })}
+      </View>
+    </GlassCard>
+  );
+}
+
+function Agreement({
+  checked,
   onChange,
   title,
-  description,
+  body,
 }: {
-  value: boolean;
-  onChange: (value: boolean) => void;
+  checked: boolean;
+  onChange: (v: boolean) => void;
   title: string;
-  description: string;
+  body: string;
 }) {
+  const { tokens } = useTheme();
   return (
     <Pressable
-      style={styles.agreementRow}
-      onPress={() =>
-        onChange(!value)
-      }
+      onPress={() => onChange(!checked)}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      accessibilityLabel={`${title}. ${body}`}
+      style={styles.option}
     >
-      <View
-        style={[
-          styles.checkbox,
-          value &&
-            styles.checkboxActive,
-        ]}
-      >
-        {value ? (
-          <Ionicons
-            name="checkmark"
-            size={16}
-            color="#FFFFFF"
-          />
-        ) : null}
-      </View>
-
-      <View style={{ flex: 1 }}>
-        <Text
-          style={
-            styles.agreementTitle
-          }
-        >
-          {title}
-        </Text>
-
-        <Text
-          style={
-            styles.agreementDescription
-          }
-        >
-          {description}
-        </Text>
+      <Ionicons name={checked ? "checkbox" : "square-outline"} size={22} color={checked ? tokens.brand : tokens.label} />
+      <View style={styles.flex}>
+        <AppText variant="bodyStrong">{title}</AppText>
+        <AppText variant="caption">{body}</AppText>
       </View>
     </Pressable>
   );
 }
 
-const styles =
-  StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor:
-        "#F7FAFB",
-    },
-
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      paddingHorizontal: 18,
-      paddingVertical: 14,
-      backgroundColor:
-        "#FFFFFF",
-      borderBottomWidth: 1,
-      borderBottomColor:
-        "#E5ECEF",
-    },
-
-    headerButton: {
-      width: 42,
-      height: 42,
-      borderRadius: 14,
-      backgroundColor:
-        "#F3F7F8",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-
-    headerTitle: {
-      color: "#17313C",
-      fontSize: 18,
-      fontWeight: "900",
-    },
-
-    headerSubtitle: {
-      color: "#83969E",
-      fontSize: 10,
-      marginTop: 2,
-    },
-
-    content: {
-      padding: 18,
-      paddingBottom: 130,
-    },
-
-    tripCard: {
-      backgroundColor:
-        "#EAF8FA",
-      borderRadius: 18,
-      padding: 16,
-      marginBottom: 20,
-    },
-
-    tripHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      marginBottom: 12,
-    },
-
-    tripTitle: {
-      color: "#17313C",
-      fontSize: 14,
-      fontWeight: "900",
-    },
-
-    tripRow: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between",
-      marginTop: 8,
-      gap: 20,
-    },
-
-    tripLabel: {
-      color: "#749099",
-      fontSize: 10,
-    },
-
-    tripValue: {
-      flex: 1,
-      textAlign: "right",
-      color: "#17313C",
-      fontSize: 11,
-      fontWeight: "800",
-    },
-
-    sectionTitle: {
-      color: "#17313C",
-      fontSize: 15,
-      fontWeight: "900",
-      marginTop: 7,
-      marginBottom: 10,
-    },
-
-    section: {
-      backgroundColor:
-        "#FFFFFF",
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: "#E3EAED",
-      padding: 15,
-      marginBottom: 20,
-    },
-
-    inputLabel: {
-      color: "#70858E",
-      fontSize: 10,
-      fontWeight: "700",
-      marginBottom: 6,
-      marginTop: 9,
-    },
-
-    input: {
-      minHeight: 50,
-      borderWidth: 1,
-      borderColor: "#DDE7EA",
-      borderRadius: 14,
-      paddingHorizontal: 13,
-      color: "#17313C",
-      fontSize: 13,
-      backgroundColor:
-        "#FAFCFD",
-    },
-
-    switchRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 10,
-    },
-
-    switchTitle: {
-      color: "#17313C",
-      fontSize: 13,
-      fontWeight: "800",
-    },
-
-    switchDescription: {
-      color: "#84969E",
-      fontSize: 10,
-      marginTop: 3,
-    },
-
-    agreementRow: {
-      flexDirection: "row",
-      gap: 11,
-      paddingVertical: 10,
-      alignItems: "flex-start",
-    },
-
-    checkbox: {
-      width: 23,
-      height: 23,
-      borderRadius: 7,
-      borderWidth: 1,
-      borderColor: "#C8D6DA",
-      alignItems: "center",
-      justifyContent: "center",
-      marginTop: 1,
-    },
-
-    checkboxActive: {
-      backgroundColor:
-        "#07869B",
-      borderColor: "#07869B",
-    },
-
-    agreementTitle: {
-      color: "#17313C",
-      fontSize: 12,
-      fontWeight: "800",
-    },
-
-    agreementDescription: {
-      color: "#83969E",
-      fontSize: 10,
-      lineHeight: 15,
-      marginTop: 3,
-    },
-
-    infoCard: {
-      flexDirection: "row",
-      gap: 10,
-      padding: 14,
-      borderRadius: 16,
-      backgroundColor:
-        "#EAF8FA",
-    },
-
-    infoText: {
-      flex: 1,
-      color: "#52727B",
-      fontSize: 10,
-      lineHeight: 16,
-    },
-
-    footer: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor:
-        "#FFFFFF",
-      borderTopWidth: 1,
-      borderTopColor: "#E4EBEE",
-      paddingHorizontal: 18,
-      paddingTop: 13,
-      paddingBottom: 20,
-    },
-
-    continueButton: {
-      height: 54,
-      borderRadius: 16,
-      backgroundColor:
-        "#07869B",
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
-    },
-
-    continueButtonDisabled: {
-      backgroundColor:
-        "#A9BEC3",
-    },
-
-    continueText: {
-      color: "#FFFFFF",
-      fontSize: 13,
-      fontWeight: "900",
-    },
-
-    datePickerButton: {
-    minHeight: 50,
-    borderWidth: 1,
-    borderColor: "#DDE7EA",
-    borderRadius: 14,
-    paddingHorizontal: 13,
-    backgroundColor: "#FAFCFD",
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  pad: {
+    paddingHorizontal: 18,
+  },
+  content: {
+    paddingHorizontal: 18,
+    gap: 18,
+  },
+  topRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    },
-
-    datePickerLeft: {
+    gap: 12,
+  },
+  section: {
+    gap: 10,
+  },
+  row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    },
-
-    datePickerText: {
-    color: "#17313C",
-    fontSize: 13,
-    fontWeight: "800",
-    },
-
-    datePickerPlaceholder: {
-    color: "#9AA9AF",
-    fontWeight: "600",
-    },
-
-    dobPickerWrapper: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    borderRadius: 18,
-    marginBottom: 20,
-    overflow: "hidden",
-    },
-
-    dobDoneButton: {
-    height: 46,
+  },
+  alignStart: {
+    alignItems: "flex-start",
+  },
+  between: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  flex: {
+    flex: 1,
+  },
+  gap6: {
+    gap: 6,
+  },
+  option: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    minHeight: 52,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
-    borderTopWidth: 1,
-    borderTopColor: "#E7ECEF",
-    },
-
-    dobDoneText: {
-    color: "#07869B",
-    fontSize: 13,
-    fontWeight: "900",
-    },
-  });
+    marginTop: 2,
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+});
