@@ -323,3 +323,27 @@ export async function cancelCustomerBooking(
     }
   );
 }
+
+// F5: the customer's answer to an operator's suggested alternative (another
+// car, new dates or a location charge). Accepting re-quotes the offer on the
+// server; it answers 409 ALTERNATIVE_PRICE_CHANGED (with the new price saved
+// on the booking) or LISTING_UNAVAILABLE instead of charging a stale price.
+// Returns the updated booking.
+export async function acceptAlternative(
+  bookingId: number | string
+) {
+  return apiRequest(
+    `/customer/bookings/${bookingId}/accept-alternative`,
+    { method: "PATCH" }
+  );
+}
+
+// Declining closes the booking (status REJECTED).
+export async function rejectAlternative(
+  bookingId: number | string
+) {
+  return apiRequest(
+    `/customer/bookings/${bookingId}/reject-alternative`,
+    { method: "PATCH" }
+  );
+}

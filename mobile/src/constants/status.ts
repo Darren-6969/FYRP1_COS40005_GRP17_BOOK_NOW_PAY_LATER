@@ -2,7 +2,7 @@
  * F10: one place that turns server statuses into what the app shows.
  *
  * Covers exactly the values in backend/prisma/schema.prisma
- * (BookingStatus: 14, PaymentStatus: 8). Anything else, for example a value
+ * (BookingStatus: 15, PaymentStatus: 8). Anything else, for example a value
  * added on the server before the app is updated, gets a neutral pill with a
  * readable label instead of a crash or a raw enum.
  */
@@ -31,6 +31,9 @@ export const BOOKING_STATUS: Record<string, StatusInfo> = {
   CANCELLED: { label: 'Cancelled', tone: 'neutral' },
   EXPIRED: { label: 'Expired', tone: 'neutral' },
   NO_SHOW: { label: 'No-show', tone: 'err' },
+  // Down payment paid, balance not, car not collected. Still a no-show to
+  // the customer; the server voids the rest of the schedule.
+  NO_SHOW_UNPAID: { label: 'No-show', tone: 'err' },
 };
 
 export const PAYMENT_STATUS: Record<string, StatusInfo> = {

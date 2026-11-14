@@ -1,379 +1,58 @@
-import {
-  useFocusEffect,
-  useLocalSearchParams,
-  useRouter,
-} 
-from "expo-router";
-
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CancelSheet } from "@/components/booking/CancelSheet";
+import { offerSummary } from "@/components/booking/BookingCard";
+import { OfferSheet } from "@/components/booking/OfferSheet";
+import { ReceiptViewer, isViewableReceipt } from "@/components/booking/ReceiptViewer";
 import {
-  ActivityIndicator,
-  Linking,
-  Pressable,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  Alert,
-  Modal,
-} from "react-native";
-
+  AppText,
+  Button,
+  ErrorState,
+  FLOATING_BAR_CLEARANCE,
+  FloatingActionBar,
+  Figure,
+  GlassCard,
+  HeroCard,
+  IconButton,
+  Money,
+  PaymentSchedule,
+  SkeletonText,
+  StatusPill,
+  useToast,
+  type ScheduleStep,
+} from "@/components/ui";
+import { bookingStatus } from "@/constants/status";
+import { Radius } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import {
-  useCallback,
-  useState,
-} from "react";
-
-import {
-  getCustomerBookingById,
-  getCustomerCancellationQuote,
+  acceptAlternative,
   cancelCustomerBooking,
-  type CustomerCancellationQuote,
+  getCustomerBookingById,
+  rejectAlternative,
   type CustomerCancellationReason,
-} from "../../../services/customerApi";
+} from "@/services/customerApi";
+import {
+  bookingRef,
+  bookingTitle,
+  isActiveBooking,
+  owedPart,
+  paidInFull,
+  partName,
+  receiptInReview,
+  timeLeft,
+} from "@/utils/booking-view";
+import { formatMYT } from "@/utils/datetime";
 import { logger } from "@/utils/logger";
 
-type Payment = {
-  id?: number;
-  status?: string;
-  amount?: number;
+type IconName = ComponentProps<typeof Ionicons>["name"];
 
-  downPaymentAmount?: number;
-  finalPaymentAmount?: number;
-
-  downPaymentStatus?: string;
-  finalPaymentStatus?: string;
-
-  downPaymentDueDate?: string;
-  finalPaymentDueDate?: string;
-
-  paidAmount?: number;
-};
-
-type PaymentSchedule = {
-  id: number;
-  type?: string;
-  paymentPart?: string;
-  amount?: number;
-  dueAt?: string;
-  status?: string;
-};
-
-type Operator = {
-  id?: number;
-  companyName?: string;
-  email?: string;
-  phone?: string;
-};
-
-type Booking = {
-  id: number;
-
-  bookingCode?: string;
-  serviceName?: string;
-  serviceType?: string;
-
-  bookingDate?: string;
-  pickupDate?: string;
-  returnDate?: string;
-
-  location?: string;
-
-  totalAmount?: number;
-
-  status?: string;
-
-  createdAt?: string;
-
-  operator?: Operator | null;
-
-  payment?: Payment | null;
-
-  paymentSchedule?: PaymentSchedule[];
-
-  invoice?: any;
-  receipt?: any;
-};
-
-function money(value?: number) {
-  return `RM ${Number(value || 0).toFixed(2)}`;
-}
-
-function date(value?: string) {
-  if (!value) return "-";
-
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "-";
-  }
-
-  return parsed.toLocaleDateString("en-MY", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function dateTime(value?: string) {
-  if (!value) return "-";
-
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "-";
-  }
-
-  return parsed.toLocaleString("en-MY", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function readableStatus(value?: string) {
-  if (!value) return "UNKNOWN";
-
-  return value.replaceAll("_", " ");
-}
-
-function getStatusAppearance(status?: string) {
-  switch (status) {
-    case "PENDING":
-      return {
-        background: "#FFF4D6",
-        color: "#A86D00",
-        icon: "time-outline" as const,
-      };
-
-    case "ACCEPTED":
-    case "CONFIRMED":
-    case "PENDING_PAYMENT":
-      return {
-        background: "#E6F7FA",
-        color: "#07869B",
-        icon: "checkmark-circle-outline" as const,
-      };
-
-    case "PAID":
-    case "READY_FOR_PICKUP":
-      return {
-        background: "#E9F8EF",
-        color: "#258552",
-        icon: "checkmark-done-circle-outline" as const,
-      };
-
-    case "COMPLETED":
-      return {
-        background: "#EEF2F4",
-        color: "#526973",
-        icon: "flag-outline" as const,
-      };
-
-    case "REJECTED":
-    case "CANCELLED":
-    case "OVERDUE":
-    case "EXPIRED":
-      return {
-        background: "#FDEDED",
-        color: "#D14343",
-        icon: "close-circle-outline" as const,
-      };
-
-    default:
-      return {
-        background: "#EEF2F4",
-        color: "#657983",
-        icon: "information-circle-outline" as const,
-      };
-  }
-}
-
-function InfoRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.infoRow}>
-      <View style={styles.infoIcon}>
-        <Ionicons
-          name={icon}
-          size={18}
-          color="#07869B"
-        />
-      </View>
-
-      <View style={styles.infoContent}>
-        <Text style={styles.infoLabel}>
-          {label}
-        </Text>
-
-        <Text style={styles.infoValue}>
-          {value}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-export default function BookingDetailScreen() {
-  const router = useRouter();
-
-  const params =
-    useLocalSearchParams<{ id: string; payment?: string }>();
-
-  const bookingId = params.id;
-
-  // F2: Stripe's cancel link lands here with ?payment=cancelled.
-  const [paymentCancelled, setPaymentCancelled] =
-    useState(params.payment === "cancelled");
-
-  const [booking, setBooking] =
-    useState<Booking | null>(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [refreshing, setRefreshing] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  const [cancelVisible, setCancelVisible] = useState(false);
-
-  const [cancelQuote, setCancelQuote] =
-  useState<CustomerCancellationQuote | null>(null);
-
-  const [cancelLoading, setCancelLoading] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
-  const [cancelError, setCancelError] = useState("");
-
-  const [cancelReason, setCancelReason] =
-  useState<CustomerCancellationReason | null>(null);
-
-  const loadBooking = async (
-    refresh = false
-  ) => {
-    if (!bookingId) return;
-
-    try {
-      setError("");
-
-      if (refresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      const data =
-        await getCustomerBookingById(
-          bookingId
-        );
-
-      setBooking(data);
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          "Failed to load booking."
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  
-const openCancelDialog = async () => {
-  if (!booking || !canCancelBooking(booking)) return;
-
-  setCancelVisible(true);
-  setCancelQuote(null);
-  setCancelError("");
-  setCancelReason(null);
-  setCancelLoading(true);
-
-  try {
-    const quote = await getCustomerCancellationQuote(booking.id);
-    setCancelQuote(quote);
-  } catch (err: any) {
-    setCancelError(
-      err?.message || "Unable to calculate cancellation refund."
-    );
-  } finally {
-    setCancelLoading(false);
-  }
-};
-
-const closeCancelDialog = () => {
-  if (cancelling) return;
-
-  setCancelVisible(false);
-  setCancelQuote(null);
-  setCancelReason(null);
-  setCancelError("");
-};
-
-const confirmCancellation = () => {
-  if (!booking || !cancelQuote || cancelling) return;
-
-  const id = booking.id;
-  const reason = cancelReason;
-
-  Alert.alert(
-    "Confirm Cancellation",
-    "Are you sure you want to cancel this booking? This action cannot be undone.",
-    [
-      { text: "Keep Booking", style: "cancel" },
-      {
-        text: "Cancel Booking",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setCancelling(true);
-            setCancelError("");
-
-            await cancelCustomerBooking(
-              id,
-              reason || undefined
-            );
-
-            setCancelVisible(false);
-            setCancelQuote(null);
-
-            // Reload booking from the same backend.
-            await loadBooking(true);
-
-            Alert.alert(
-              "Booking Cancelled",
-              "Your booking has been cancelled. Any applicable refund will be processed according to the cancellation policy."
-            );
-          } catch (err: any) {
-            const message =
-              err?.message || "Unable to cancel booking.";
-
-            setCancelError(message);
-            Alert.alert("Cancellation Failed", message);
-          } finally {
-            setCancelling(false);
-          }
-        },
-      },
-    ]
-  );
-};
-
-
-  const CANCELLABLE_STATUSES = [
+/** Statuses a customer can still cancel from, before pick-up time. */
+const CANCELLABLE = new Set([
   "PENDING",
   "ALTERNATIVE_SUGGESTED",
   "ACCEPTED",
@@ -381,2128 +60,638 @@ const confirmCancellation = () => {
   "CONFIRMED",
   "PAID",
   "READY_FOR_PICKUP",
-];
+]);
 
-function canCancelBooking(booking: Booking): boolean {
-  if (!CANCELLABLE_STATUSES.includes(booking.status || "")) {
-    return false;
-  }
-
-  if (
-    booking.pickupDate &&
-    new Date(booking.pickupDate).getTime() <= Date.now()
-  ) {
-    return false;
-  }
-
+function canCancel(booking: any) {
+  if (!CANCELLABLE.has(booking?.status)) return false;
+  if (booking?.pickupDate && new Date(booking.pickupDate).getTime() <= Date.now()) return false;
   return true;
 }
 
+function scheduleTitle(entry: any) {
+  if (entry.type === "LICENCE") return "Driving licence";
+  if (entry.paymentPart === "DOWN_PAYMENT") return "Down payment";
+  if (entry.paymentPart === "FINAL_PAYMENT") return "Balance";
+  if (entry.paymentPart === "FULL_PAYMENT") return "Payment in full";
+  return "Payment";
+}
+
+/**
+ * The steps after acceptance, from the server's schedule entries. Older
+ * bookings without entries fall back to the two payment parts.
+ */
+function scheduleSteps(booking: any): ScheduleStep[] {
+  const entries = (booking?.paymentSchedule ?? [])
+    .filter((e: any) => e.status !== "VOID")
+    .sort((a: any, b: any) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+
+  let nowSet = false;
+  const stateOf = (paid: boolean, due: boolean) => {
+    if (paid) return "done" as const;
+    if (due && !nowSet) {
+      nowSet = true;
+      return "now" as const;
+    }
+    return "upcoming" as const;
+  };
+
+  if (entries.length > 0) {
+    return entries.map((entry: any) => {
+      const paid = entry.status === "PAID";
+      const caption = paid
+        ? entry.paidAt
+          ? `Done ${formatMYT(entry.paidAt, "dayDate")}`
+          : "Done"
+        : entry.status === "EXPIRED"
+          ? `Missed · was due ${formatMYT(entry.dueAt, "dayDateTime")}`
+          : `Due ${formatMYT(entry.dueAt, "dayDateTime")}`;
+      return {
+        key: String(entry.id),
+        title: scheduleTitle(entry),
+        caption,
+        amount: entry.type === "LICENCE" ? undefined : entry.amount,
+        state: stateOf(paid, entry.status === "DUE"),
+      };
+    });
+  }
+
+  const p = booking?.payment;
+  if (!p) return [];
+  const steps: ScheduleStep[] = [];
+  const part = (key: string, title: string, amount: any, status: string, dueAt: string | null) => {
+    if (!amount && status !== "PAID") return;
+    const paid = status === "PAID";
+    steps.push({
+      key,
+      title,
+      caption: paid ? "Paid" : dueAt ? `Due ${formatMYT(dueAt, "dayDateTime")}` : undefined,
+      amount,
+      state: stateOf(paid, true),
+    });
+  };
+  part("down", "Down payment", p.downPaymentAmount, p.downPaymentStatus, p.downPaymentDueDate ?? null);
+  part("final", "Balance", p.finalPaymentAmount, p.finalPaymentStatus, p.finalPaymentDueDate ?? null);
+  return steps;
+}
+
+/** One line on what happens next, for bookings with nothing to pay. */
+function nextStepText(booking: any) {
+  const status = booking?.status;
+  const pickup = booking?.pickupDate ? formatMYT(booking.pickupDate, "dayDateTime") : null;
+  switch (status) {
+    case "IN_PROGRESS":
+      return booking?.returnDate ? `Return the car by ${formatMYT(booking.returnDate, "dayDateTime")}.` : "Enjoy your trip.";
+    case "OVERDUE":
+      return "The balance wasn't paid by its deadline. Contact the operator about this booking.";
+    case "COMPLETED":
+      return "This trip is complete. Thanks for renting with us.";
+    case "CANCELLED":
+      return booking?.cancelledAt ? `Cancelled ${formatMYT(booking.cancelledAt, "dayDateTime")}.` : "This booking was cancelled.";
+    case "REJECTED":
+      return "The operator couldn't take this booking. Nothing was charged.";
+    case "EXPIRED":
+      return "This request expired without a reply. Nothing was charged.";
+    case "NO_SHOW":
+    case "NO_SHOW_UNPAID":
+      return "The car wasn't collected at pick-up time.";
+    default:
+      if (receiptInReview(booking)) return "Your receipt is with the operator for review.";
+      if (paidInFull(booking)) return pickup ? `Paid in full. Pick up ${pickup}.` : "Paid in full.";
+      return pickup ? `Pick up ${pickup}.` : "";
+  }
+}
+
+/**
+ * Customer booking detail (plan phase 3, booking and payment mock). When
+ * something is owed, the time left to pay is the largest thing on screen.
+ * Amounts are the server's per-part figures (F16); the app no longer works
+ * out "total minus paid".
+ */
+export default function BookingDetailScreen() {
+  const router = useRouter();
+  const toast = useToast();
+  const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ id: string; payment?: string; offer?: string }>();
+  const bookingId = params.id;
+
+  const [booking, setBooking] = useState<any | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  // F2: Stripe's cancel link lands here with ?payment=cancelled.
+  const [paymentCancelled, setPaymentCancelled] = useState(params.payment === "cancelled");
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const offerParamUsed = useRef(false);
+
+  // Re-render each minute so the countdown stays current.
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const load = useCallback(
+    async (refresh = false) => {
+      if (!bookingId) return;
+      if (refresh) setRefreshing(true);
+      setError(null);
+      try {
+        const data = await getCustomerBookingById(bookingId);
+        setBooking(data);
+        setNow(Date.now());
+        // "Review offer" on the Bookings list opens the sheet straight away.
+        if (params.offer === "1" && !offerParamUsed.current && data?.status === "ALTERNATIVE_SUGGESTED") {
+          offerParamUsed.current = true;
+          setOfferOpen(true);
+        }
+      } catch (err) {
+        logger.debug("Failed to load booking:", err);
+        setError(err);
+      } finally {
+        setRefreshing(false);
+      }
+    },
+    [bookingId, params.offer]
+  );
+
   useFocusEffect(
     useCallback(() => {
-      loadBooking();
-    }, [bookingId])
+      load();
+    }, [load])
   );
 
-  if (loading) {
+  // ---- Error and loading --------------------------------------------------
+  if (error && !booking) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator
-            size="large"
-            color="#07869B"
-          />
-
-          <Text style={styles.loadingText}>
-            Loading booking...
-          </Text>
+      <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.pad}>
+          <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
         </View>
-      </SafeAreaView>
+        <ErrorState error={error} onRetry={() => load()} />
+      </View>
     );
   }
 
-  if (!booking || error) {
+  if (!booking) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.errorContainer}>
-          <Ionicons
-            name="alert-circle-outline"
-            size={48}
-            color="#D14343"
-          />
-
-          <Text style={styles.errorTitle}>
-            Booking unavailable
-          </Text>
-
-          <Text style={styles.errorText}>
-            {error ||
-              "Booking could not be found."}
-          </Text>
-
-          <Pressable
-            style={styles.retryButton}
-            onPress={() =>
-              loadBooking()
-            }
-          >
-            <Text
-              style={
-                styles.retryButtonText
-              }
-            >
-              Try Again
-            </Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+      <View style={[styles.screen, styles.pad, { paddingTop: insets.top + 8, gap: 16 }]}>
+        <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+        <GlassCard>
+          <SkeletonText lines={3} />
+        </GlassCard>
+        <GlassCard>
+          <SkeletonText lines={5} />
+        </GlassCard>
+      </View>
     );
   }
 
-  const appearance =
-    getStatusAppearance(
-      booking.status
+  // ---- What the booking means now -----------------------------------------
+  const owed = owedPart(booking);
+  const left = owed ? timeLeft(owed.dueAt, now) : null;
+  const operatorName = booking.operator?.companyName || "The operator";
+  const offer = booking.status === "ALTERNATIVE_SUGGESTED";
+  const steps = scheduleSteps(booking);
+  const car = booking.car;
+  const listing = car?.listing;
+  const place = car?.pickupPoint?.label || car?.requestedLocation || booking.location || listing?.branch?.name || null;
+  const specs = [listing?.transmission, listing?.seats ? `${listing.seats} seats` : null].filter(Boolean).join(" · ");
+  // https links and older base64 data URLs both open in the in-app viewer.
+  const receiptUrl: string | null = isViewableReceipt(booking.receipt?.imageUrl) ? booking.receipt.imageUrl : null;
+
+  const pay = () =>
+    router.push({
+      pathname: "/customer/checkout",
+      params: { bookingId: String(booking.id), ...(owed ? { type: owed.part } : {}) },
+    } as unknown as Href);
+
+  const acceptOffer = async () => {
+    await acceptAlternative(booking.id);
+    setOfferOpen(false);
+    toast.show("Offer accepted. Your payment schedule is ready.", { tone: "ok" });
+    await load();
+  };
+
+  const declineOffer = async () => {
+    await rejectAlternative(booking.id);
+    setOfferOpen(false);
+    toast.show("Offer declined. The booking is closed.", { tone: "info" });
+    await load();
+  };
+
+  const cancel = async (reason: CustomerCancellationReason | null) => {
+    await cancelCustomerBooking(booking.id, reason ?? undefined);
+    setCancelOpen(false);
+    toast.show("Booking cancelled.", { tone: "info" });
+    await load();
+  };
+
+  const openUrl = (url: string) => Linking.openURL(url).catch((err) => logger.debug("Failed to open link:", err));
+
+  // ---- Hero ---------------------------------------------------------------
+  let hero;
+  if (owed) {
+    const due = owed.dueAt ? formatMYT(owed.dueAt, "dayDateTime") : null;
+    hero = (
+      <HeroCard tag={left ? "Time left to pay" : "Payment due"}>
+        <Figure size="xl" style={{ color: tokens.onHero }} accessibilityLabel={left ? `${left} left` : "Due now"}>
+          {left ?? "Due now"}
+        </Figure>
+        <AppText variant="caption" style={{ color: tokens.onHeroSoft }}>
+          {partName(owed.part)}
+          {due ? ` due ${due}` : " due"}. {operatorName} accepted your request.
+        </AppText>
+      </HeroCard>
     );
-
-  const payment =
-    booking.payment;
-
-  const paidAmount =
-    Number(
-      payment?.paidAmount || 0
+  } else if (booking.status === "PENDING") {
+    const replyBy = car?.responseDueAt ? formatMYT(car.responseDueAt, "dayDateTime") : null;
+    hero = (
+      <HeroCard tag="Waiting for operator">
+        <AppText variant="title" style={{ color: tokens.onHero }}>
+          Request sent
+        </AppText>
+        <AppText variant="caption" style={{ color: tokens.onHeroSoft }}>
+          {replyBy ? `${operatorName} replies by ${replyBy}.` : `${operatorName} will reply soon.`}
+          {replyBy && car?.autoRejectOnTimeout ? " If there's no reply by then, the request closes and nothing is charged." : ""}
+          {" "}You don't pay anything until it's accepted.
+        </AppText>
+      </HeroCard>
     );
-
-  const total =
-    Number(
-      booking.totalAmount || 0
+  } else if (offer) {
+    hero = (
+      <HeroCard tag="Your answer needed">
+        <AppText variant="title" style={{ color: tokens.onHero }}>
+          {offerSummary(booking)}
+        </AppText>
+        <AppText variant="caption" style={{ color: tokens.onHeroSoft }}>
+          Review the offer to see what changes before you decide.
+        </AppText>
+      </HeroCard>
     );
-
-  const remainingAmount =
-  Math.max(
-    total - paidAmount,
-    0
-  );
-
-  const overallPaymentStatus =
-  payment?.status ||
-  "UNPAID";
-
-  const progress =
-    total > 0
-      ? Math.min(
-          (paidAmount / total) * 100,
-          100
-        )
-      : 0;
-
-  const canPay = [
-    "ACCEPTED",
-    "CONFIRMED",
-    "PENDING_PAYMENT",
-  ].includes(
-    booking.status || ""
-  );
-
-  const getNextPaymentType = () => {
-  const payment = booking?.payment;
-
-  if (!payment) {
-    return "FULL_PAYMENT";
+  } else {
+    hero = (
+      <HeroCard tag={bookingStatus(booking.status).label}>
+        <AppText variant="title" style={{ color: tokens.onHero }}>
+          {bookingTitle(booking)}
+        </AppText>
+        {nextStepText(booking) ? (
+          <AppText variant="caption" style={{ color: tokens.onHeroSoft }}>
+            {nextStepText(booking)}
+          </AppText>
+        ) : null}
+      </HeroCard>
+    );
   }
-
-  if (
-    payment.downPaymentStatus === "PAID" &&
-    payment.finalPaymentStatus !== "PAID"
-  ) {
-    return "FINAL_PAYMENT";
-  }
-
-  if (
-    payment.downPaymentStatus !== "PAID"
-  ) {
-    return "DOWN_PAYMENT";
-  }
-
-  return "FULL_PAYMENT";
-};
-
-  const waitingForOperator =
-    booking.status === "PENDING";
-
-  const paymentComplete = [
-    "PAID",
-    "READY_FOR_PICKUP",
-    "COMPLETED",
-  ].includes(
-    booking.status || ""
-  );
-
-  const openDocument = async (
-    url?: string
-    ) => {
-    if (!url) {
-        return;
-    }
-
-    try {
-        const supported =
-        await Linking.canOpenURL(
-            url
-        );
-
-        if (!supported) {
-        logger.debug(
-            "Unable to open document:",
-            url
-        );
-
-        return;
-        }
-
-        await Linking.openURL(
-        url
-        );
-    } catch (err) {
-        logger.debug(
-        "Failed to open document:",
-        err
-        );
-    }
-    };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.screen}>
       <ScrollView
-        style={styles.screen}
-        contentContainerStyle={
-          styles.container
-        }
-        showsVerticalScrollIndicator={
-          false
-        }
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 8, paddingBottom: (owed ? FLOATING_BAR_CLEARANCE : 24) + insets.bottom + 12 },
+        ]}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() =>
-              loadBooking(true)
-            }
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={tokens.label} colors={[tokens.brand]} />
         }
       >
-        {/* HEADER */}
-        <View style={styles.header}>
-          <Pressable
-            style={styles.headerButton}
-            onPress={() =>
-              router.back()
-            }
-          >
-            <Ionicons
-              name="chevron-back"
-              size={22}
-              color="#17313C"
-            />
-          </Pressable>
-
-          <Text style={styles.headerTitle}>
-            Booking Details
-          </Text>
-
-          <Pressable
-            style={styles.headerButton}
-            onPress={() =>
-              loadBooking(true)
-            }
-          >
-            <Ionicons
-              name="refresh-outline"
-              size={20}
-              color="#17313C"
-            />
-          </Pressable>
+        <View style={styles.topRow}>
+          <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+          <View style={styles.flex}>
+            <AppText variant="mono" color="label">
+              {bookingRef(booking)}
+            </AppText>
+          </View>
+          <StatusPill status={booking.status} />
         </View>
 
-        {paymentCancelled && (
-          <View style={styles.cancelledBanner}>
-            <Ionicons
-              name="information-circle-outline"
-              size={20}
-              color="#6B4A15"
-            />
-
-            <Text style={styles.cancelledBannerText}>
+        {paymentCancelled ? (
+          <View style={[styles.banner, { backgroundColor: tokens.noticeBg }]} accessibilityRole="alert">
+            <Ionicons name="information-circle-outline" size={20} color={tokens.noticeFg} />
+            <AppText variant="caption" style={[styles.flex, { color: tokens.noticeFg }]}>
               Payment cancelled. You haven't been charged, and you can pay again from this booking.
-            </Text>
-
-            <Pressable
-              onPress={() =>
-                setPaymentCancelled(false)
-              }
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss"
-            >
-              <Ionicons
-                name="close"
-                size={18}
-                color="#6B4A15"
-              />
+            </AppText>
+            <Pressable onPress={() => setPaymentCancelled(false)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Dismiss">
+              <Ionicons name="close" size={18} color={tokens.noticeFg} />
             </Pressable>
-          </View>
-        )}
-
-        {/* HERO */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroTop}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.heroLabel}>
-                BOOKING REFERENCE
-              </Text>
-
-              <Text
-                style={styles.bookingCode}
-              >
-                {booking.bookingCode ||
-                  `BNPL-${booking.id}`}
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    appearance.background,
-                },
-              ]}
-            >
-              <Ionicons
-                name={appearance.icon}
-                size={15}
-                color={
-                  appearance.color
-                }
-              />
-
-              <Text
-                style={[
-                  styles.statusText,
-                  {
-                    color:
-                      appearance.color,
-                  },
-                ]}
-              >
-                {readableStatus(
-                  booking.status
-                )}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.heroDivider} />
-
-          <Text style={styles.carName}>
-            {booking.serviceName ||
-              "Car Rental"}
-          </Text>
-
-          <Text style={styles.carType}>
-            {booking.serviceType ||
-              "Vehicle Rental"}
-          </Text>
-
-          <View style={styles.priceRow}>
-            <View>
-              <Text style={styles.priceLabel}>
-                Total Booking
-              </Text>
-
-              <Text style={styles.price}>
-                {money(
-                  booking.totalAmount
-                )}
-              </Text>
-            </View>
-
-            <View style={styles.createdArea}>
-              <Text
-                style={styles.priceLabel}
-              >
-                Booked On
-              </Text>
-
-              <Text
-                style={styles.createdText}
-              >
-                {date(
-                  booking.createdAt
-                )}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* STATUS MESSAGE */}
-        {waitingForOperator && (
-          <View style={styles.pendingBanner}>
-            <View
-              style={
-                styles.bannerIconCircle
-              }
-            >
-              <Ionicons
-                name="time-outline"
-                size={22}
-                color="#B37400"
-              />
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <Text
-                style={
-                  styles.bannerTitle
-                }
-              >
-                Waiting for operator
-              </Text>
-
-              <Text
-                style={
-                  styles.bannerText
-                }
-              >
-                Your booking request has
-                been submitted. Payment
-                will become available after
-                the operator accepts it.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {paymentComplete && (
-          <View style={styles.successBanner}>
-            <View
-              style={
-                styles.successIconCircle
-              }
-            >
-              <Ionicons
-                name="checkmark"
-                size={21}
-                color="#21804D"
-              />
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <Text
-                style={
-                  styles.successTitle
-                }
-              >
-                Payment completed
-              </Text>
-
-              <Text
-                style={
-                  styles.successText
-                }
-              >
-                Your payment has been
-                recorded successfully.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* RENTAL */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <View
-              style={
-                styles.sectionIconBox
-              }
-            >
-              <Ionicons
-                name="car-sport-outline"
-                size={20}
-                color="#07869B"
-              />
-            </View>
-
-            <Text
-              style={styles.sectionTitle}
-            >
-              Rental Information
-            </Text>
-          </View>
-
-          <InfoRow
-            icon="calendar-outline"
-            label="Pick-up"
-            value={dateTime(
-              booking.pickupDate
-            )}
-          />
-
-          <InfoRow
-            icon="calendar-number-outline"
-            label="Return"
-            value={dateTime(
-              booking.returnDate
-            )}
-          />
-
-          <InfoRow
-            icon="location-outline"
-            label="Location"
-            value={
-              booking.location || "-"
-            }
-          />
-        </View>
-
-        {/* PAYMENT */}
-<View style={styles.sectionCard}>
-  <View style={styles.sectionHeader}>
-    <View
-      style={
-        styles.sectionIconBox
-      }
-    >
-      <Ionicons
-        name="wallet-outline"
-        size={20}
-        color="#07869B"
-      />
-    </View>
-
-    <Text
-      style={styles.sectionTitle}
-    >
-      Payment Overview
-    </Text>
-  </View>
-
-  {payment ? (
-    <>
-      {/* TOTAL SUMMARY */}
-      <View
-        style={
-          styles.paymentSummary
-        }
-      >
-        <View>
-          <Text
-            style={
-              styles.paymentLabel
-            }
-          >
-            Paid
-          </Text>
-
-          <Text
-            style={
-              styles.paymentPaid
-            }
-          >
-            {money(paidAmount)}
-          </Text>
-        </View>
-
-        <View
-          style={{
-            alignItems: "flex-end",
-          }}
-        >
-          <Text
-            style={
-              styles.paymentLabel
-            }
-          >
-            Total
-          </Text>
-
-          <Text
-            style={
-              styles.paymentTotal
-            }
-          >
-            {money(total)}
-          </Text>
-        </View>
-      </View>
-
-      {/* PROGRESS */}
-      <View
-        style={
-          styles.progressBackground
-        }
-      >
-        <View
-          style={[
-            styles.progressBar,
-            {
-              width: `${progress}%`,
-            },
-          ]}
-        />
-      </View>
-
-      <Text
-        style={
-          styles.progressText
-        }
-      >
-        {Math.round(progress)}% paid
-      </Text>
-
-      {/* PAYMENT BREAKDOWN */}
-      <View
-        style={
-          styles.paymentBreakdown
-        }
-      >
-        <View
-          style={
-            styles.paymentPart
-          }
-        >
-          <Text
-            style={
-              styles.paymentPartLabel
-            }
-          >
-            Down Payment
-          </Text>
-
-          <Text
-            style={
-              styles.paymentPartAmount
-            }
-          >
-            {money(
-              payment.downPaymentAmount
-            )}
-          </Text>
-
-          <Text
-            style={[
-              styles.paymentPartStatus,
-              payment.downPaymentStatus ===
-                "PAID" && {
-                color: "#258552",
-              },
-            ]}
-          >
-            {readableStatus(
-              payment.downPaymentStatus
-            )}
-          </Text>
-        </View>
-
-        <View
-          style={
-            styles.paymentPart
-          }
-        >
-          <Text
-            style={
-              styles.paymentPartLabel
-            }
-          >
-            Final Payment
-          </Text>
-
-          <Text
-            style={
-              styles.paymentPartAmount
-            }
-          >
-            {money(
-              payment.finalPaymentAmount
-            )}
-          </Text>
-
-          <Text
-            style={[
-              styles.paymentPartStatus,
-              payment.finalPaymentStatus ===
-                "PAID" && {
-                color: "#258552",
-              },
-            ]}
-          >
-            {readableStatus(
-              payment.finalPaymentStatus
-            )}
-          </Text>
-        </View>
-      </View>
-
-      {/* FINANCIAL SUMMARY */}
-      <View
-        style={
-          styles.paymentFinancialSummary
-        }
-      >
-        <View
-          style={
-            styles.financialRow
-          }
-        >
-          <Text
-            style={
-              styles.financialLabel
-            }
-          >
-            Total Paid
-          </Text>
-
-          <Text
-            style={
-              styles.financialValue
-            }
-          >
-            {money(paidAmount)}
-          </Text>
-        </View>
-
-        <View
-          style={
-            styles.financialRow
-          }
-        >
-          <Text
-            style={
-              styles.financialLabel
-            }
-          >
-            Remaining
-          </Text>
-
-          <Text
-            style={[
-              styles.financialValue,
-              remainingAmount === 0 && {
-                color: "#258552",
-              },
-            ]}
-          >
-            {money(
-              remainingAmount
-            )}
-          </Text>
-        </View>
-
-        <View
-          style={
-            styles.financialDivider
-          }
-        />
-
-        <View
-          style={
-            styles.financialRow
-          }
-        >
-          <Text
-            style={
-              styles.financialStatusLabel
-            }
-          >
-            Overall Payment
-          </Text>
-
-          <View
-            style={[
-              styles.paymentStatusBadge,
-
-              overallPaymentStatus ===
-                "PAID" && {
-                backgroundColor:
-                  "#E9F8EF",
-              },
-            ]}
-          >
-            <Ionicons
-              name={
-                overallPaymentStatus ===
-                "PAID"
-                  ? "checkmark-circle-outline"
-                  : "time-outline"
-              }
-              size={15}
-              color={
-                overallPaymentStatus ===
-                "PAID"
-                  ? "#258552"
-                  : "#A86D00"
-              }
-            />
-
-            <Text
-              style={[
-                styles.paymentStatusText,
-
-                {
-                  color:
-                    overallPaymentStatus ===
-                    "PAID"
-                      ? "#258552"
-                      : "#A86D00",
-                },
-              ]}
-            >
-              {readableStatus(
-                overallPaymentStatus
-              )}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* INVOICE / RECEIPT */}
-      {(booking.invoice ||
-        booking.receipt) && (
-        <View
-          style={
-            styles.documentSection
-          }
-        >
-          <Text
-            style={
-              styles.documentSectionTitle
-            }
-          >
-            Payment Documents
-          </Text>
-
-          {booking.invoice ? (
-            <Pressable
-            style={({ pressed }) => [
-                styles.documentRow,
-                pressed && {
-                opacity: 0.7,
-                },
-            ]}
-            onPress={() =>
-                router.push({
-                pathname:
-                    "/customer/invoice/[id]",
-                params: {
-                    id: String(
-                    booking.id
-                    ),
-                },
-                })
-            }
-            >
-              <View
-                style={
-                  styles.documentIcon
-                }
-              >
-                <Ionicons
-                  name="document-text-outline"
-                  size={20}
-                  color="#07869B"
-                />
-              </View>
-
-              <View
-                style={{
-                  flex: 1,
-                }}
-              >
-                <Text
-                  style={
-                    styles.documentTitle
-                  }
-                >
-                  Invoice
-                </Text>
-
-                <Text
-                  style={
-                    styles.documentSubtitle
-                  }
-                >
-                  {booking.invoice
-                    ?.invoiceNo ||
-                    "Invoice available"}
-                </Text>
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color="#07869B"
-                />
-            </Pressable>
-          ) : null}
-
-          {booking.receipt ? (
-            <Pressable
-                style={({ pressed }) => [
-                styles.documentRow,
-
-                pressed && {
-                    opacity: 0.7,
-                },
-                ]}
-                disabled={
-                !booking.receipt
-                    ?.imageUrl
-                }
-                onPress={() =>
-                openDocument(
-                    booking.receipt
-                    ?.imageUrl
-                )
-                }
-            >
-              <View
-                style={
-                  styles.documentIcon
-                }
-              >
-                <Ionicons
-                  name="receipt-outline"
-                  size={20}
-                  color="#07869B"
-                />
-              </View>
-
-              <View
-                style={{
-                  flex: 1,
-                }}
-              >
-                <Text
-                  style={
-                    styles.documentTitle
-                  }
-                >
-                  Payment Receipt
-                </Text>
-
-                <Text
-                  style={
-                    styles.documentSubtitle
-                  }
-                >
-                  Receipt available
-                </Text>
-              </View>
-
-              <Ionicons
-                name={
-                    booking.receipt?.imageUrl
-                    ? "open-outline"
-                    : "checkmark-circle"
-                }
-                size={20}
-                color={
-                    booking.receipt?.imageUrl
-                    ? "#07869B"
-                    : "#258552"
-                }
-                />
-            </Pressable>
-          ) : null}
-        </View>
-      )}
-    </>
-  ) : (
-    <View
-      style={
-        styles.noPaymentBox
-      }
-    >
-      <Ionicons
-        name="hourglass-outline"
-        size={22}
-        color="#B27A00"
-      />
-
-      <Text
-        style={
-          styles.noPaymentText
-        }
-      >
-        Payment schedule will be
-        created after operator approval.
-      </Text>
-    </View>
-  )}
-</View>
-
-        {/* PAYMENT SCHEDULE */}
-        {booking.paymentSchedule &&
-          booking.paymentSchedule
-            .length > 0 && (
-            <View
-              style={styles.sectionCard}
-            >
-              <View
-                style={
-                  styles.sectionHeader
-                }
-              >
-                <View
-                  style={
-                    styles.sectionIconBox
-                  }
-                >
-                  <Ionicons
-                    name="list-outline"
-                    size={20}
-                    color="#07869B"
-                  />
-                </View>
-
-                <Text
-                  style={
-                    styles.sectionTitle
-                  }
-                >
-                  Payment Schedule
-                </Text>
-              </View>
-
-              {booking.paymentSchedule.map(
-                (item, index) => (
-                  <View
-                    key={item.id}
-                    style={
-                      styles.scheduleRow
-                    }
-                  >
-                    <View
-                      style={
-                        styles.scheduleIndex
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.scheduleIndexText
-                        }
-                      >
-                        {index + 1}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={{
-                        flex: 1,
-                      }}
-                    >
-                      <Text
-                        style={
-                          styles.scheduleName
-                        }
-                      >
-                        {item.paymentPart ===
-                        "DOWN_PAYMENT"
-                          ? "Down Payment"
-                          : item.paymentPart ===
-                            "FINAL_PAYMENT"
-                          ? "Final Payment"
-                          : item.type ===
-                            "LICENCE"
-                          ? "Driving Licence"
-                          : "Payment"}
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.scheduleDate
-                        }
-                      >
-                        Due{" "}
-                        {date(item.dueAt)}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={{
-                        alignItems:
-                          "flex-end",
-                      }}
-                    >
-                      {item.amount ? (
-                        <Text
-                          style={
-                            styles.scheduleAmount
-                          }
-                        >
-                          {money(
-                            item.amount
-                          )}
-                        </Text>
-                      ) : null}
-
-                      <Text
-                        style={
-                          styles.scheduleStatus
-                        }
-                      >
-                        {readableStatus(
-                          item.status
-                        )}
-                      </Text>
-                    </View>
-                  </View>
-                )
-              )}
-            </View>
-          )}
-
-        {/* OPERATOR */}
-        {booking.operator && (
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <View
-                style={
-                  styles.sectionIconBox
-                }
-              >
-                <Ionicons
-                  name="business-outline"
-                  size={20}
-                  color="#07869B"
-                />
-              </View>
-
-              <Text
-                style={styles.sectionTitle}
-              >
-                Rental Operator
-              </Text>
-            </View>
-
-            <Text
-              style={
-                styles.operatorName
-              }
-            >
-              {booking.operator
-                .companyName ||
-                "Rental Operator"}
-            </Text>
-
-            {booking.operator.email ? (
-              <InfoRow
-                icon="mail-outline"
-                label="Email"
-                value={
-                  booking.operator.email
-                }
-              />
-            ) : null}
-
-            {booking.operator.phone ? (
-              <InfoRow
-                icon="call-outline"
-                label="Phone"
-                value={
-                  booking.operator.phone
-                }
-              />
-            ) : null}
-          </View>
-        )}
-
-        
-{canCancelBooking(booking) && (
-  <Pressable
-    onPress={openCancelDialog}
-    style={{
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
-      borderColor: "#E6B5B5",
-      borderRadius: 15,
-      minHeight: 52,
-      flexDirection: "row",
-      justifyContent: "center",
-      alignItems: "center",
-      gap: 9,
-      marginTop: 14,
-    }}
-  >
-    <Ionicons
-      name="close-circle-outline"
-      size={20}
-      color="#C64F4F"
-    />
-    <Text
-      style={{
-        color: "#C64F4F",
-        fontSize: 14,
-        fontWeight: "900",
-      }}
-    >
-      Cancel Booking
-    </Text>
-  </Pressable>
-)}
-
-
-        <View style={{ height: 120 }} />
-      </ScrollView>
-
-      {/* BOTTOM ACTION */}
-      <View style={styles.bottomBar}>
-        {canPay ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && {
-                opacity: 0.85,
-              },
-            ]}
-            onPress={() => {
-            const nextPaymentType =
-                getNextPaymentType();
-
-            logger.debug(
-                "Next payment type:",
-                nextPaymentType
-            );
-
-            router.push({
-                pathname:
-                "/customer/checkout",
-
-                params: {
-                bookingId:
-                    String(
-                    booking.id
-                    ),
-
-                type:
-                    nextPaymentType,
-                },
-            });
-            }}
-          >
-            <View>
-              <Text
-                style={
-                  styles.primarySmall
-                }
-              >
-                PAYMENT AVAILABLE
-              </Text>
-
-              <Text
-                style={
-                  styles.primaryText
-                }
-              >
-                Continue to Payment
-              </Text>
-            </View>
-
-            <Ionicons
-              name="arrow-forward"
-              size={21}
-              color="#FFFFFF"
-            />
-          </Pressable>
-        ) : (
-          <View
-            style={
-              styles.bottomStatus
-            }
-          >
-            <Ionicons
-              name={
-                waitingForOperator
-                  ? "time-outline"
-                  : paymentComplete
-                  ? "checkmark-circle-outline"
-                  : "information-circle-outline"
-              }
-              size={21}
-              color="#07869B"
-            />
-
-            <Text
-              style={
-                styles.bottomStatusText
-              }
-            >
-              {waitingForOperator
-                ? "Waiting for operator approval"
-                : paymentComplete
-                ? "Booking payment completed"
-                : readableStatus(
-                    booking.status
-                  )}
-            </Text>
-          </View>
-        )}
-      </View>
-
-    
-<Modal
-  visible={cancelVisible}
-  transparent
-  animationType="slide"
-  onRequestClose={closeCancelDialog}
->
-  <View
-    style={{
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      justifyContent: "flex-end",
-    }}
-  >
-    <View
-      style={{
-        backgroundColor: "#FFFFFF",
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        padding: 22,
-        maxHeight: "85%",
-      }}
-    >
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <Text
-          style={{
-            fontSize: 21,
-            fontWeight: "900",
-            color: "#17313C",
-            marginBottom: 8,
-          }}
-        >
-          Cancel Booking
-        </Text>
-
-        <Text
-          style={{
-            fontSize: 12,
-            color: "#81939C",
-            marginBottom: 20,
-          }}
-        >
-          Review the refund details before cancelling.
-        </Text>
-
-        {cancelLoading ? (
-          <ActivityIndicator
-            size="large"
-            color="#07869B"
-          />
-        ) : cancelError ? (
-          <Text style={{ color: "#C64F4F", marginBottom: 15 }}>
-            {cancelError}
-          </Text>
-        ) : cancelQuote ? (
-          <View
-            style={{
-              backgroundColor: "#F7FAFB",
-              padding: 16,
-              borderRadius: 15,
-              marginBottom: 20,
-              gap: 12,
-            }}
-          >
-            {([
-              ["Amount Paid", cancelQuote.totalPaid],
-              ["Deposit Kept", cancelQuote.depositKept],
-              ["Deposit Refunded", cancelQuote.depositRefund],
-              ["Balance Refunded", cancelQuote.balanceRefund],
-              ["Total Refund", cancelQuote.totalRefund],
-            ] as [string, number][]).map(([label, amount]) => (
-              <View
-                key={label}
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  gap: 10,
-                }}
-              >
-                <Text style={{ color: "#617780" }}>
-                  {label}
-                </Text>
-                <Text
-                  style={{
-                    color: "#17313C",
-                    fontWeight: "800",
-                  }}
-                >
-                  RM {Number(amount || 0).toFixed(2)}
-                </Text>
-              </View>
-            ))}
-
-            {!!cancelQuote.explanation && (
-              <Text
-                style={{
-                  color: "#617780",
-                  fontSize: 12,
-                  lineHeight: 19,
-                  marginTop: 8,
-                }}
-              >
-                {cancelQuote.explanation}
-              </Text>
-            )}
-
-            {cancelQuote.refundVia === "CARD" && (
-              <Text style={{ color: "#617780", fontSize: 12 }}>
-                Card refund processing times depend on the payment provider.
-              </Text>
-            )}
-
-            {cancelQuote.refundVia === "OPERATOR_TRANSFER" && (
-              <Text style={{ color: "#617780", fontSize: 12 }}>
-                Refund will be arranged by the operator.
-                {cancelQuote.refundDeadline
-                  ? ` Deadline: ${new Date(
-                      cancelQuote.refundDeadline
-                    ).toLocaleDateString("en-MY")}`
-                  : ""}
-              </Text>
-            )}
           </View>
         ) : null}
 
-        <Text
-          style={{
-            fontSize: 14,
-            fontWeight: "900",
-            color: "#17313C",
-            marginBottom: 12,
-          }}
-        >
-          Cancellation Reason (Optional)
-        </Text>
+        {hero}
 
-        {([
-          ["PLANS_CHANGED", "Plans Changed"],
-          ["FOUND_ANOTHER_CAR", "Found Another Car"],
-          ["PRICE", "Price"],
-          ["OTHER", "Other"],
-        ] as [CustomerCancellationReason, string][]).map(
-          ([value, label]) => (
-            <Pressable
-              key={value}
-              disabled={cancelling}
-              onPress={() =>
-                setCancelReason(
-                  cancelReason === value ? null : value
-                )
-              }
-              style={{
-                padding: 14,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor:
-                  cancelReason === value
-                    ? "#07869B"
-                    : "#E3EAED",
-                backgroundColor:
-                  cancelReason === value
-                    ? "#EAF8FA"
-                    : "#FFFFFF",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 10,
-                marginBottom: 8,
-              }}
-            >
-              <Ionicons
-                name={
-                  cancelReason === value
-                    ? "radio-button-on"
-                    : "radio-button-off"
-                }
-                color="#07869B"
-                size={20}
-              />
-              <Text style={{ color: "#17313C" }}>
-                {label}
-              </Text>
-            </Pressable>
-          )
-        )}
+        {offer ? (
+          <View style={styles.buttonRow}>
+            <Button label="Review offer" variant="brand" grow onPress={() => setOfferOpen(true)} />
+          </View>
+        ) : null}
 
-        <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-          <Pressable
-            onPress={closeCancelDialog}
-            disabled={cancelling}
-            style={{
-              flex: 1,
-              padding: 16,
-              borderRadius: 13,
-              backgroundColor: "#EEF2F4",
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ fontWeight: "800", color: "#17313C" }}>
-              Keep Booking
-            </Text>
-          </Pressable>
+        {steps.length > 0 ? (
+          <Section title="Payment schedule">
+            <GlassCard>
+              <PaymentSchedule steps={steps} />
+              {receiptInReview(booking) ? (
+                <AppText variant="caption" style={styles.mt8}>
+                  Your receipt is with the operator for review.
+                </AppText>
+              ) : null}
+            </GlassCard>
+          </Section>
+        ) : null}
 
-          <Pressable
-            onPress={confirmCancellation}
-            disabled={cancelling || cancelLoading || !cancelQuote}
-            style={{
-              flex: 1,
-              padding: 16,
-              borderRadius: 13,
-              backgroundColor: "#C64F4F",
-              alignItems: "center",
-              opacity:
-                cancelling || cancelLoading || !cancelQuote
-                  ? 0.5
-                  : 1,
-            }}
-          >
-            <Text style={{ color: "#FFFFFF", fontWeight: "900" }}>
-              {cancelling ? "Cancelling..." : "Confirm Cancel"}
-            </Text>
-          </Pressable>
-        </View>
+        <Section title="Your trip">
+          <GlassCard>
+            <View style={styles.carRow}>
+              <View style={[styles.thumb, { backgroundColor: tokens.glassStrong, borderColor: tokens.glassLine }]}>
+                {listing?.imageUrl ? (
+                  <Image source={{ uri: listing.imageUrl }} style={styles.fill} contentFit="cover" transition={150} />
+                ) : (
+                  <Ionicons name="car-sport-outline" size={26} color={tokens.label} />
+                )}
+              </View>
+              <View style={styles.flex}>
+                <AppText variant="headline">{bookingTitle(booking)}</AppText>
+                {specs ? <AppText variant="caption">{specs}</AppText> : null}
+              </View>
+            </View>
+            <View style={[styles.divider, { backgroundColor: tokens.line }]} />
+            <InfoRow icon="calendar-outline" label="Pick-up" value={formatMYT(booking.pickupDate, "dayDateTime")} />
+            <InfoRow icon="flag-outline" label="Return" value={formatMYT(booking.returnDate, "dayDateTime")} />
+            {place ? <InfoRow icon="location-outline" label="Place" value={place} /> : null}
+          </GlassCard>
+        </Section>
+
+        <Section title="Cost">
+          <GlassCard>
+            <View style={styles.costRow}>
+              <AppText style={styles.flex}>Total</AppText>
+              <Money value={booking.totalAmount} variant="headline" />
+            </View>
+            {booking.payment ? (
+              <View style={[styles.costRow, styles.costDivider, { borderTopColor: tokens.line }]}>
+                <AppText style={styles.flex}>Paid so far</AppText>
+                <Money value={booking.payment.paidAmount} />
+              </View>
+            ) : null}
+            {!booking.payment && isActiveBooking(booking) ? (
+              <AppText variant="caption" style={styles.mt8}>
+                Nothing to pay yet. The payment schedule appears once the operator accepts.
+              </AppText>
+            ) : null}
+          </GlassCard>
+        </Section>
+
+        {booking.invoice || booking.receipt ? (
+          <Section title="Documents">
+            <GlassCard padding={4}>
+              {booking.invoice ? (
+                <LinkRow
+                  icon="document-text-outline"
+                  title="Invoice"
+                  subtitle={booking.invoice.invoiceNo || "Ready to view"}
+                  onPress={() =>
+                    router.push({ pathname: "/customer/invoice/[id]", params: { id: String(booking.id) } } as unknown as Href)
+                  }
+                />
+              ) : null}
+              {booking.receipt ? (
+                <LinkRow
+                  icon="receipt-outline"
+                  title="Payment receipt"
+                  subtitle="Uploaded"
+                  onPress={receiptUrl ? () => setReceiptOpen(true) : undefined}
+                  divider={Boolean(booking.invoice)}
+                />
+              ) : null}
+            </GlassCard>
+          </Section>
+        ) : null}
+
+        {booking.operator ? (
+          <Section title="Operator">
+            <GlassCard padding={4}>
+              <View style={styles.operatorName}>
+                <AppText variant="headline">{operatorName}</AppText>
+              </View>
+              {booking.operator.phone ? (
+                <LinkRow
+                  icon="call-outline"
+                  title="Call"
+                  subtitle={booking.operator.phone}
+                  onPress={() => openUrl(`tel:${String(booking.operator.phone).replace(/\s+/g, "")}`)}
+                  divider
+                />
+              ) : null}
+              {booking.operator.email ? (
+                <LinkRow
+                  icon="mail-outline"
+                  title="Email"
+                  subtitle={booking.operator.email}
+                  onPress={() => openUrl(`mailto:${booking.operator.email}`)}
+                  divider
+                />
+              ) : null}
+            </GlassCard>
+          </Section>
+        ) : null}
+
+        {canCancel(booking) ? (
+          <Button label="Cancel booking" variant="text" icon="close-circle-outline" onPress={() => setCancelOpen(true)} />
+        ) : null}
       </ScrollView>
+
+      {owed ? (
+        <FloatingActionBar action={<Button label={`Pay ${partName(owed.part).toLowerCase()}`} variant="cta" onPress={pay} />}>
+          <Money value={owed.amount} variant="headline" />
+          <AppText variant="caption">{owed.dueAt ? `Due ${formatMYT(owed.dueAt, "dayDateTime")}` : partName(owed.part)}</AppText>
+        </FloatingActionBar>
+      ) : null}
+
+      <OfferSheet
+        booking={booking}
+        visible={offerOpen}
+        onClose={() => setOfferOpen(false)}
+        onAccept={acceptOffer}
+        onDecline={declineOffer}
+        onReload={() => load()}
+      />
+
+      <ReceiptViewer uri={receiptUrl} visible={receiptOpen} onClose={() => setReceiptOpen(false)} />
+
+      <CancelSheet
+        bookingId={booking.id}
+        bookingRef={bookingRef(booking)}
+        visible={cancelOpen}
+        onClose={() => setCancelOpen(false)}
+        onConfirm={cancel}
+      />
     </View>
-  </View>
-</Modal>
+  );
+}
 
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <AppText variant="headline" accessibilityRole="header">
+        {title}
+      </AppText>
+      {children}
+    </View>
+  );
+}
 
-    </SafeAreaView>
+function InfoRow({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+  const { tokens } = useTheme();
+  return (
+    <View style={styles.infoRow} accessible accessibilityLabel={`${label}: ${value}`}>
+      <Ionicons name={icon} size={18} color={tokens.label} />
+      <AppText variant="caption" style={styles.infoLabel}>
+        {label}
+      </AppText>
+      <AppText variant="label" color="ink" style={styles.flex} align="right">
+        {value}
+      </AppText>
+    </View>
+  );
+}
+
+function LinkRow({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  divider = false,
+}: {
+  icon: IconName;
+  title: string;
+  subtitle?: string;
+  onPress?: () => void;
+  divider?: boolean;
+}) {
+  const { tokens } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : "text"}
+      accessibilityLabel={[title, subtitle].filter(Boolean).join(", ")}
+      style={({ pressed }) => [
+        styles.linkRow,
+        divider && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.line },
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={[styles.linkIcon, { backgroundColor: tokens.infoBg }]}>
+        <Ionicons name={icon} size={18} color={tokens.infoFg} />
+      </View>
+      <View style={styles.flex}>
+        <AppText variant="bodyStrong">{title}</AppText>
+        {subtitle ? <AppText variant="caption">{subtitle}</AppText> : null}
+      </View>
+      {onPress ? <Ionicons name="chevron-forward" size={18} color={tokens.label} /> : null}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  cancelledBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "#FDF3E3",
-    borderColor: "#E8D9B8",
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 14,
-  },
-
-  cancelledBannerText: {
-    flex: 1,
-    color: "#6B4A15",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F5F8F9",
-  },
-
   screen: {
     flex: 1,
   },
-
-  container: {
-    width: "100%",
-    maxWidth: 700,
-    alignSelf: "center",
+  pad: {
     paddingHorizontal: 18,
-    paddingTop: 14,
   },
-
-  loadingContainer: {
+  content: {
+    paddingHorizontal: 18,
+    gap: 16,
+  },
+  flex: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
-
-  loadingText: {
-    marginTop: 12,
-    color: "#7D9098",
-    fontSize: 13,
-  },
-
-  errorContainer: {
-    flex: 1,
-    padding: 30,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  errorTitle: {
-    marginTop: 14,
-    color: "#17313C",
-    fontWeight: "900",
-    fontSize: 21,
-  },
-
-  errorText: {
-    color: "#81939C",
-    fontSize: 13,
-    marginTop: 8,
-    textAlign: "center",
-  },
-
-  retryButton: {
-    backgroundColor: "#07869B",
-    borderRadius: 15,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    marginTop: 20,
-  },
-
-  retryButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-  },
-
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent:
-      "space-between",
-    marginBottom: 18,
-  },
-
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 15,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E4EBED",
-  },
-
-  headerTitle: {
-    color: "#17313C",
-    fontSize: 17,
-    fontWeight: "900",
-  },
-
-  heroCard: {
-    backgroundColor: "#123A46",
-    borderRadius: 26,
-    padding: 21,
-    marginBottom: 16,
-  },
-
-  heroTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-
-  heroLabel: {
-    color: "#8CB3BC",
-    fontSize: 9,
-    fontWeight: "900",
-  },
-
-  bookingCode: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "900",
-    marginTop: 4,
-  },
-
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderRadius: 12,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-  },
-
-  statusText: {
-    fontSize: 9,
-    fontWeight: "900",
-  },
-
-  heroDivider: {
-    height: 1,
-    backgroundColor: "#31545E",
-    marginVertical: 18,
-  },
-
-  carName: {
-    color: "#FFFFFF",
-    fontSize: 21,
-    fontWeight: "900",
-  },
-
-  carType: {
-    color: "#A6C1C8",
-    fontSize: 12,
-    marginTop: 4,
-  },
-
-  priceRow: {
-    flexDirection: "row",
-    justifyContent:
-      "space-between",
-    alignItems: "flex-end",
-    marginTop: 24,
-  },
-
-  priceLabel: {
-    color: "#8FB0B8",
-    fontSize: 9,
-  },
-
-  price: {
-    color: "#4FD1C5",
-    fontWeight: "900",
-    fontSize: 23,
-    marginTop: 4,
-  },
-
-  createdArea: {
-    alignItems: "flex-end",
-  },
-
-  createdText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-    fontSize: 11,
-    marginTop: 5,
-  },
-
-  pendingBanner: {
-    backgroundColor: "#FFF7E5",
-    borderRadius: 19,
-    padding: 16,
-    flexDirection: "row",
-    gap: 13,
-    marginBottom: 16,
-  },
-
-  bannerIconCircle: {
-    width: 43,
-    height: 43,
-    borderRadius: 14,
-    backgroundColor: "#FFE9B2",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  bannerTitle: {
-    color: "#825500",
-    fontWeight: "900",
-    fontSize: 13,
-  },
-
-  bannerText: {
-    color: "#936F27",
-    fontSize: 11,
-    lineHeight: 17,
-    marginTop: 4,
-  },
-
-  successBanner: {
-    backgroundColor: "#ECF9F1",
-    borderRadius: 19,
-    padding: 16,
-    flexDirection: "row",
-    gap: 13,
-    marginBottom: 16,
-  },
-
-  successIconCircle: {
-    width: 43,
-    height: 43,
-    borderRadius: 14,
-    backgroundColor: "#D8F1E2",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  successTitle: {
-    color: "#21804D",
-    fontWeight: "900",
-    fontSize: 13,
-  },
-
-  successText: {
-    color: "#4D8463",
-    fontSize: 11,
-    lineHeight: 17,
-    marginTop: 4,
-  },
-
-  sectionCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 23,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#E6ECEE",
-  },
-
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 17,
-  },
-
-  sectionIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "#EAF7F9",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 11,
-  },
-
-  sectionTitle: {
-    color: "#17313C",
-    fontSize: 15,
-    fontWeight: "900",
-  },
-
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 11,
-  },
-
-  infoIcon: {
-    width: 34,
-    height: 34,
-    backgroundColor: "#F1F6F7",
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  infoContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-
-  infoLabel: {
-    color: "#8A9BA3",
-    fontSize: 9,
-  },
-
-  infoValue: {
-    color: "#28434D",
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 3,
-  },
-
-  paymentSummary: {
-    flexDirection: "row",
-    justifyContent:
-      "space-between",
-  },
-
-  paymentLabel: {
-    color: "#8A9BA3",
-    fontSize: 10,
-  },
-
-  paymentPaid: {
-    color: "#07869B",
-    fontSize: 20,
-    fontWeight: "900",
-    marginTop: 3,
-  },
-
-  paymentTotal: {
-    color: "#17313C",
-    fontSize: 18,
-    fontWeight: "900",
-    marginTop: 3,
-  },
-
-  progressBackground: {
-    height: 9,
-    backgroundColor: "#E8EEF0",
-    borderRadius: 20,
-    marginTop: 18,
-    overflow: "hidden",
-  },
-
-  progressBar: {
+  fill: {
+    width: "100%",
     height: "100%",
-    backgroundColor: "#07869B",
-    borderRadius: 20,
   },
-
-  progressText: {
-    color: "#778B94",
-    fontSize: 9,
-    marginTop: 7,
+  mt8: {
+    marginTop: 8,
   },
-
-  paymentBreakdown: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 17,
-  },
-
-  paymentPart: {
-    flex: 1,
-    backgroundColor: "#F7FAFB",
-    borderRadius: 15,
-    padding: 13,
-  },
-
-  paymentPartLabel: {
-    color: "#81939C",
-    fontSize: 9,
-  },
-
-  paymentPartAmount: {
-    color: "#17313C",
-    fontWeight: "900",
-    fontSize: 14,
-    marginTop: 5,
-  },
-
-  paymentPartStatus: {
-    color: "#07869B",
-    fontWeight: "800",
-    fontSize: 9,
-    marginTop: 5,
-  },
-
-  noPaymentBox: {
+  topRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: "#FFF8E8",
-    padding: 14,
-    borderRadius: 15,
   },
-
-  noPaymentText: {
-    flex: 1,
-    color: "#886726",
-    fontSize: 11,
-    lineHeight: 17,
+  banner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 12,
+    borderRadius: Radius.sm,
   },
-
-  scheduleRow: {
+  buttonRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  section: {
+    gap: 10,
+  },
+  carRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EDF1F3",
+    gap: 12,
   },
-
-  scheduleIndex: {
-    width: 31,
-    height: 31,
-    borderRadius: 10,
-    backgroundColor: "#EAF7F9",
-    justifyContent: "center",
+  thumb: {
+    width: 76,
+    height: 56,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
-    marginRight: 11,
+    justifyContent: "center",
+    overflow: "hidden",
   },
-
-  scheduleIndexText: {
-    color: "#07869B",
-    fontWeight: "900",
-    fontSize: 11,
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 12,
   },
-
-  scheduleName: {
-    color: "#17313C",
-    fontSize: 12,
-    fontWeight: "900",
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 5,
   },
-
-  scheduleDate: {
-    color: "#8A9BA3",
-    fontSize: 9,
-    marginTop: 4,
+  infoLabel: {
+    width: 64,
   },
-
-  scheduleAmount: {
-    color: "#17313C",
-    fontWeight: "900",
-    fontSize: 12,
+  costRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
-
-  scheduleStatus: {
-    color: "#07869B",
-    fontWeight: "800",
-    fontSize: 9,
-    marginTop: 4,
+  costDivider: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-
   operatorName: {
-    color: "#17313C",
-    fontSize: 17,
-    fontWeight: "900",
-    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
   },
-
-  bottomBar: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#E2E9EB",
-    paddingHorizontal: 18,
-    paddingTop: 13,
-    paddingBottom: 20,
-  },
-
-  primaryButton: {
-    maxWidth: 700,
-    width: "100%",
-    alignSelf: "center",
-    backgroundColor: "#07869B",
-    borderRadius: 18,
-    minHeight: 62,
-    paddingHorizontal: 20,
+  linkRow: {
     flexDirection: "row",
-    justifyContent:
-      "space-between",
     alignItems: "center",
-  },
-
-  primarySmall: {
-    color: "#B9E8ED",
-    fontSize: 8,
-    fontWeight: "900",
-  },
-
-  primaryText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "900",
-    marginTop: 3,
-  },
-
-  bottomStatus: {
-    maxWidth: 700,
-    width: "100%",
-    alignSelf: "center",
+    gap: 12,
     minHeight: 56,
-    backgroundColor: "#F1F7F8",
-    borderRadius: 16,
-    flexDirection: "row",
-    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  linkIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: "center",
-    gap: 9,
+    justifyContent: "center",
   },
-
-  bottomStatusText: {
-    color: "#315762",
-    fontWeight: "800",
-    fontSize: 12,
+  pressed: {
+    opacity: 0.7,
   },
-
-  paymentFinancialSummary: {
-  marginTop: 16,
-  padding: 14,
-  borderRadius: 16,
-  backgroundColor: "#F7FAFB",
-  borderWidth: 1,
-  borderColor: "#E3EAED",
-},
-
-financialRow: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  paddingVertical: 7,
-},
-
-financialLabel: {
-  color: "#82949C",
-  fontSize: 11,
-},
-
-financialValue: {
-  color: "#17313C",
-  fontSize: 12,
-  fontWeight: "900",
-},
-
-financialDivider: {
-  height: 1,
-  backgroundColor: "#E3EAED",
-  marginVertical: 8,
-},
-
-financialStatusLabel: {
-  color: "#17313C",
-  fontSize: 11,
-  fontWeight: "800",
-},
-
-paymentStatusBadge: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 5,
-  paddingHorizontal: 10,
-  paddingVertical: 6,
-  borderRadius: 20,
-  backgroundColor: "#FFF4D6",
-},
-
-paymentStatusText: {
-  fontSize: 10,
-  fontWeight: "900",
-},
-
-documentSection: {
-  marginTop: 18,
-  paddingTop: 16,
-  borderTopWidth: 1,
-  borderTopColor: "#E3EAED",
-},
-
-documentSectionTitle: {
-  color: "#17313C",
-  fontSize: 12,
-  fontWeight: "900",
-  marginBottom: 10,
-},
-
-documentRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 11,
-  paddingVertical: 10,
-},
-
-documentIcon: {
-  width: 40,
-  height: 40,
-  borderRadius: 13,
-  alignItems: "center",
-  justifyContent: "center",
-  backgroundColor: "#EAF8FA",
-},
-
-documentTitle: {
-  color: "#17313C",
-  fontSize: 11,
-  fontWeight: "900",
-},
-
-documentSubtitle: {
-  marginTop: 3,
-  color: "#82949C",
-  fontSize: 10,
-},
 });

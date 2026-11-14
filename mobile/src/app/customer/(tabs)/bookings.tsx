@@ -1,714 +1,200 @@
+import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
+import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { BookingCard, offerSummary } from "@/components/booking/BookingCard";
 import {
-  useFocusEffect,
-  useRouter,
-} from "expo-router";
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import {
-  useCallback,
-  useState,
-} from "react";
+  AppText,
+  Button,
+  ConfirmSheet,
+  EmptyState,
+  ErrorState,
+  SegmentedControl,
+  Skeleton,
+  useToast,
+} from "@/components/ui";
+import { Radius } from "@/constants/theme";
+import { useTabBarInset } from "@/hooks/use-tab-bar-inset";
+import { useTheme } from "@/hooks/use-theme";
+import { getCustomerBookings, rejectAlternative } from "@/services/customerApi";
+import { isActiveBooking, owedPart } from "@/utils/booking-view";
+import { logger } from "@/utils/logger";
 
-import {
-  getCustomerBookings,
-} from "../../../services/customerApi";
+type Tab = "active" | "past";
 
-type Booking = {
-  id: number;
-  bookingCode?: string | null;
-  serviceName?: string | null;
-  serviceType?: string | null;
-  pickupDate?: string | null;
-  returnDate?: string | null;
-  location?: string | null;
-  totalAmount?: number;
-  status?: string;
-  createdAt?: string;
-  payment?: {
-    status?: string;
-    downPaymentStatus?: string;
-    finalPaymentStatus?: string;
-    paidAmount?: number;
-  } | null;
-};
+const TABS = [
+  { value: "active", label: "Active" },
+  { value: "past", label: "Past" },
+] as const;
 
-function formatMoney(value?: number) {
-  const amount = Number(value || 0);
-
-  return `RM ${amount.toFixed(2)}`;
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return "-";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  return date.toLocaleDateString("en-MY", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatStatus(status?: string) {
-  if (!status) return "UNKNOWN";
-
-  return status.replaceAll("_", " ");
-}
-
-function getStatusStyle(status?: string) {
-  switch (status) {
-    case "PENDING":
-      return styles.statusPending;
-
-    case "ACCEPTED":
-    case "CONFIRMED":
-      return styles.statusAccepted;
-
-    case "PAID":
-    case "READY_FOR_PICKUP":
-    case "COMPLETED":
-      return styles.statusPaid;
-
-    case "REJECTED":
-    case "CANCELLED":
-    case "OVERDUE":
-    case "EXPIRED":
-      return styles.statusRejected;
-
-    default:
-      return styles.statusDefault;
-  }
-}
-
-function getStatusTextStyle(status?: string) {
-  switch (status) {
-    case "PENDING":
-      return styles.statusPendingText;
-
-    case "ACCEPTED":
-    case "CONFIRMED":
-      return styles.statusAcceptedText;
-
-    case "PAID":
-    case "READY_FOR_PICKUP":
-    case "COMPLETED":
-      return styles.statusPaidText;
-
-    case "REJECTED":
-    case "CANCELLED":
-    case "OVERDUE":
-    case "EXPIRED":
-      return styles.statusRejectedText;
-
-    default:
-      return styles.statusDefaultText;
-  }
-}
-
+/**
+ * The customer's bookings (plan phase 3, Bookings mock). Active shows what
+ * still needs something from the customer or the operator, with the next
+ * step on each card. Reloads whenever the tab comes into view, so a booking
+ * paid or answered elsewhere is never shown in its old state.
+ */
 export default function Bookings() {
   const router = useRouter();
-  
-  const [bookings, setBookings] =
-    useState<Booking[]>([]);
+  const toast = useToast();
+  const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomInset = useTabBarInset();
 
-  const [loading, setLoading] =
-    useState(true);
+  const [bookings, setBookings] = useState<any[] | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState<Tab>("active");
+  const [declining, setDeclining] = useState<any | null>(null);
 
-  const [refreshing, setRefreshing] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  const loadBookings = async (
-    isRefresh = false
-  ) => {
+  const load = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshing(true);
+    setError(null);
     try {
-      setError("");
-
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      const data =
-        await getCustomerBookings();
-
-      if (Array.isArray(data)) {
-        setBookings(data);
-      } else {
-        setBookings([]);
-      }
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          "Failed to load bookings."
-      );
+      const data = await getCustomerBookings();
+      setBookings(Array.isArray(data) ? data : []);
+    } catch (err) {
+      logger.debug("Failed to load bookings:", err);
+      setError(err);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadBookings();
-    }, [])
+      load();
+    }, [load])
   );
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator
-          size="large"
-          color="#07869B"
-        />
+  const { active, past } = useMemo(() => {
+    const all = bookings ?? [];
+    const activeList = all.filter(isActiveBooking);
+    // Bookings waiting on the customer first: a payment due, then an offer.
+    const rank = (b: any) => (owedPart(b) ? 0 : b.status === "ALTERNATIVE_SUGGESTED" ? 1 : 2);
+    activeList.sort((a, b) => rank(a) - rank(b));
+    return { active: activeList, past: all.filter((b) => !isActiveBooking(b)) };
+  }, [bookings]);
 
-        <Text style={styles.loadingText}>
-          Loading bookings...
-        </Text>
+  const shown = tab === "active" ? active : past;
+
+  const openBooking = useCallback(
+    (booking: any) => router.push({ pathname: "/customer/booking/[id]", params: { id: String(booking.id) } } as unknown as Href),
+    [router]
+  );
+
+  const reviewOffer = useCallback(
+    (booking: any) =>
+      router.push({ pathname: "/customer/booking/[id]", params: { id: String(booking.id), offer: "1" } } as unknown as Href),
+    [router]
+  );
+
+  const pay = useCallback(
+    (booking: any) => {
+      const owed = owedPart(booking);
+      router.push({
+        pathname: "/customer/checkout",
+        params: { bookingId: String(booking.id), ...(owed ? { type: owed.part } : {}) },
+      } as unknown as Href);
+    },
+    [router]
+  );
+
+  const confirmDecline = async () => {
+    if (!declining) return;
+    await rejectAlternative(declining.id);
+    setDeclining(null);
+    toast.show("Offer declined. The booking is closed.", { tone: "info" });
+    await load();
+  };
+
+  const header = (
+    <View style={styles.header}>
+      <View>
+        <AppText variant="largeTitle" accessibilityRole="header">
+          Bookings
+        </AppText>
+        {bookings ? (
+          <AppText variant="caption">
+            {active.length === 0 ? "Nothing active" : `${active.length} active`}
+          </AppText>
+        ) : null}
       </View>
+      <SegmentedControl options={TABS} value={tab} onChange={setTab} accessibilityLabel="Show bookings" />
+    </View>
+  );
+
+  const empty =
+    bookings === null && !error ? (
+      <View style={styles.list}>
+        <Skeleton height={168} radius={Radius.card} />
+        <Skeleton height={168} radius={Radius.card} />
+        <Skeleton height={168} radius={Radius.card} />
+      </View>
+    ) : error ? (
+      <ErrorState error={error} onRetry={() => load()} compact />
+    ) : tab === "active" ? (
+      <EmptyState
+        icon="calendar-outline"
+        title="No active bookings"
+        message="Send a booking request for a car. You don't pay anything until the operator accepts."
+        action={<Button label="Browse cars" variant="brand" size="sm" onPress={() => router.push("/customer/cars")} />}
+      />
+    ) : (
+      <EmptyState icon="time-outline" title="No past bookings" message="Completed, cancelled and declined bookings show here." />
     );
-  }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={
-        styles.container
-      }
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() =>
-            loadBookings(true)
-          }
-        />
-      }
-    >
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>
-          BNPL CAR RENTAL
-        </Text>
-
-        <Text style={styles.title}>
-          My Bookings
-        </Text>
-
-        <Text style={styles.subtitle}>
-          View and track all your booking
-          requests.
-        </Text>
-      </View>
-
-      {error ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>
-            {error}
-          </Text>
-        </View>
-      ) : null}
-
-      {!error &&
-        bookings.length === 0 && (
-          <View style={styles.emptyCard}>
-            <Text
-              style={styles.emptyTitle}
-            >
-              No bookings yet
-            </Text>
-
-            <Text
-              style={styles.emptyText}
-            >
-              Your bookings will appear
-              here after you make a
-              booking request.
-            </Text>
-          </View>
+    <View style={styles.screen}>
+      <FlatList
+        data={shown}
+        keyExtractor={(booking) => String(booking.id)}
+        renderItem={({ item }) => (
+          <BookingCard booking={item} onOpen={openBooking} onPay={pay} onReviewOffer={reviewOffer} onDecline={setDeclining} />
         )}
+        ListHeaderComponent={header}
+        ListEmptyComponent={empty}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: bottomInset }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={tokens.label} colors={[tokens.brand]} />
+        }
+      />
 
-      {bookings.map((booking) => (
-        <Pressable
-          key={booking.id}
-          style={({ pressed }) => [
-            styles.bookingCard,
-            pressed && styles.bookingCardPressed,
-          ]}
-          onPress={() =>
-            router.push(
-              `/customer/booking/${booking.id}`
-            )
-          }
-        >
-          <View style={styles.cardTop}>
-            <View style={styles.codeArea}>
-              <Text
-                style={
-                  styles.bookingLabel
-                }
-              >
-                BOOKING
-              </Text>
-
-              <Text
-                style={
-                  styles.bookingCode
-                }
-              >
-                {booking.bookingCode ||
-                  `BNPL-${booking.id}`}
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.statusBadge,
-                getStatusStyle(
-                  booking.status
-                ),
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  getStatusTextStyle(
-                    booking.status
-                  ),
-                ]}
-              >
-                {formatStatus(
-                  booking.status
-                )}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          <Text
-            style={styles.serviceName}
-          >
-            {booking.serviceName ||
-              "Car Rental"}
-          </Text>
-
-          {booking.serviceType ? (
-            <Text
-              style={
-                styles.serviceType
-              }
-            >
-              {booking.serviceType}
-            </Text>
-          ) : null}
-
-          <View style={styles.infoRow}>
-            <View style={styles.infoItem}>
-              <Text
-                style={styles.infoLabel}
-              >
-                Pick-up
-              </Text>
-
-              <Text
-                style={styles.infoValue}
-              >
-                {formatDate(
-                  booking.pickupDate
-                )}
-              </Text>
-            </View>
-
-            <View style={styles.infoItem}>
-              <Text
-                style={styles.infoLabel}
-              >
-                Return
-              </Text>
-
-              <Text
-                style={styles.infoValue}
-              >
-                {formatDate(
-                  booking.returnDate
-                )}
-              </Text>
-            </View>
-          </View>
-
-          {booking.location ? (
-            <View
-              style={styles.locationRow}
-            >
-              <Text
-                style={styles.infoLabel}
-              >
-                Location
-              </Text>
-
-              <Text
-                style={
-                  styles.locationValue
-                }
-              >
-                {booking.location}
-              </Text>
-            </View>
-          ) : null}
-
-          <View
-            style={styles.bottomRow}
-          >
-            <View>
-              <Text
-                style={styles.infoLabel}
-              >
-                Total Amount
-              </Text>
-
-              <Text
-                style={styles.amount}
-              >
-                {formatMoney(
-                  booking.totalAmount
-                )}
-              </Text>
-            </View>
-
-            {booking.payment ? (
-              <View
-                style={
-                  styles.paymentArea
-                }
-              >
-                <Text
-                  style={
-                    styles.infoLabel
-                  }
-                >
-                  Payment
-                </Text>
-
-                <Text
-                  style={
-                    styles.paymentStatus
-                  }
-                >
-                  {formatStatus(
-                    booking.payment
-                      .status
-                  )}
-                </Text>
-              </View>
-            ) : (
-              <View
-                style={
-                  styles.paymentArea
-                }
-              >
-                <Text
-                  style={
-                    styles.infoLabel
-                  }
-                >
-                  Payment
-                </Text>
-
-                <Text
-                  style={
-                    styles.waitingPayment
-                  }
-                >
-                  Waiting
-                </Text>
-              </View>
-            )}
-          </View>
-        </Pressable>
-      ))}
-    </ScrollView>
+      <ConfirmSheet
+        visible={declining !== null}
+        title="Decline this offer?"
+        message={
+          declining
+            ? `${offerSummary(declining)} If you decline, this booking closes and nothing is charged. You can send a new request for another car.`
+            : undefined
+        }
+        confirmLabel="Decline offer"
+        confirmVariant="danger"
+        cancelLabel="Keep the offer"
+        onConfirm={confirmDecline}
+        onCancel={() => setDeclining(null)}
+      />
+    </View>
   );
 }
 
-const styles =
-  StyleSheet.create({
-    screen: {
-      flex: 1,
-      backgroundColor: "#F7FAFB",
-    },
-
-    container: {
-      width: "100%",
-      maxWidth: 700,
-      alignSelf: "center",
-      paddingHorizontal: 20,
-      paddingTop: 24,
-      paddingBottom: 110,
-    },
-
-    center: {
-      flex: 1,
-      backgroundColor: "#F7FAFB",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-
-    loadingText: {
-      marginTop: 12,
-      color: "#84969E",
-      fontSize: 13,
-    },
-
-    header: {
-      marginBottom: 24,
-    },
-
-    eyebrow: {
-      color: "#07869B",
-      fontSize: 11,
-      fontWeight: "900",
-    },
-
-    title: {
-      color: "#17313C",
-      fontSize: 30,
-      fontWeight: "900",
-      marginTop: 4,
-    },
-
-    subtitle: {
-      color: "#81939C",
-      fontSize: 13,
-      marginTop: 6,
-    },
-
-    errorBox: {
-      backgroundColor: "#FFF0F0",
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 18,
-    },
-
-    errorText: {
-      color: "#D73A49",
-      fontSize: 12,
-      textAlign: "center",
-    },
-
-    emptyCard: {
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
-      borderColor: "#E1E9EC",
-      borderRadius: 22,
-      padding: 30,
-      alignItems: "center",
-    },
-
-    emptyTitle: {
-      color: "#17313C",
-      fontSize: 18,
-      fontWeight: "900",
-    },
-
-    emptyText: {
-      color: "#84969E",
-      fontSize: 12,
-      textAlign: "center",
-      marginTop: 8,
-      lineHeight: 18,
-    },
-
-    bookingCard: {
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
-      borderColor: "#E1E9EC",
-      borderRadius: 22,
-      padding: 18,
-      marginBottom: 16,
-    },
-
-    bookingCardPressed: {
-    opacity: 0.85,
-    transform: [
-      {
-        scale: 0.985,
-      },
-    ],
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
   },
-
-    cardTop: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between",
-      alignItems: "center",
-    },
-
-    codeArea: {
-      flex: 1,
-    },
-
-    bookingLabel: {
-      color: "#8799A1",
-      fontSize: 9,
-      fontWeight: "800",
-    },
-
-    bookingCode: {
-      color: "#17313C",
-      fontSize: 17,
-      fontWeight: "900",
-      marginTop: 3,
-    },
-
-    statusBadge: {
-      borderRadius: 10,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-    },
-
-    statusText: {
-      fontSize: 9,
-      fontWeight: "900",
-    },
-
-    statusPending: {
-      backgroundColor: "#FFF2D6",
-    },
-
-    statusPendingText: {
-      color: "#B87400",
-    },
-
-    statusAccepted: {
-      backgroundColor: "#E6F5F7",
-    },
-
-    statusAcceptedText: {
-      color: "#07869B",
-    },
-
-    statusPaid: {
-      backgroundColor: "#E9F7EF",
-    },
-
-    statusPaidText: {
-      color: "#278653",
-    },
-
-    statusRejected: {
-      backgroundColor: "#FDEDED",
-    },
-
-    statusRejectedText: {
-      color: "#D14343",
-    },
-
-    statusDefault: {
-      backgroundColor: "#EDF1F3",
-    },
-
-    statusDefaultText: {
-      color: "#657A84",
-    },
-
-    divider: {
-      height: 1,
-      backgroundColor: "#E9EEF0",
-      marginVertical: 15,
-    },
-
-    serviceName: {
-      color: "#17313C",
-      fontSize: 18,
-      fontWeight: "900",
-    },
-
-    serviceType: {
-      color: "#84969E",
-      fontSize: 11,
-      marginTop: 4,
-    },
-
-    infoRow: {
-      flexDirection: "row",
-      marginTop: 18,
-      gap: 20,
-    },
-
-    infoItem: {
-      flex: 1,
-    },
-
-    infoLabel: {
-      color: "#8A9BA3",
-      fontSize: 10,
-    },
-
-    infoValue: {
-      color: "#28434D",
-      fontSize: 12,
-      fontWeight: "800",
-      marginTop: 4,
-    },
-
-    locationRow: {
-      marginTop: 15,
-    },
-
-    locationValue: {
-      color: "#28434D",
-      fontSize: 12,
-      fontWeight: "800",
-      marginTop: 4,
-    },
-
-    bottomRow: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between",
-      alignItems: "flex-end",
-      marginTop: 20,
-      paddingTop: 16,
-      borderTopWidth: 1,
-      borderTopColor: "#EDF1F3",
-    },
-
-    amount: {
-      color: "#07869B",
-      fontSize: 19,
-      fontWeight: "900",
-      marginTop: 4,
-    },
-
-    paymentArea: {
-      alignItems: "flex-end",
-    },
-
-    paymentStatus: {
-      color: "#17313C",
-      fontSize: 11,
-      fontWeight: "900",
-      marginTop: 4,
-    },
-
-    waitingPayment: {
-      color: "#B87400",
-      fontSize: 11,
-      fontWeight: "900",
-      marginTop: 4,
-    },
-  });
+  content: {
+    paddingHorizontal: 18,
+  },
+  header: {
+    gap: 16,
+    marginBottom: 16,
+  },
+  list: {
+    gap: 16,
+  },
+  separator: {
+    height: 14,
+  },
+});
