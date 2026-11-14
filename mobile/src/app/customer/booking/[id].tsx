@@ -157,6 +157,17 @@ function scheduleSteps(booking: any): ScheduleStep[] {
   return steps;
 }
 
+/**
+ * F19: the booking's licence step is still open. Only car rentals get a
+ * LICENCE schedule entry, so tours never ask for one.
+ */
+function licenceDue(booking: any) {
+  if (!isActiveBooking(booking)) return false;
+  if ((booking?.serviceType ?? "CAR_RENTAL") !== "CAR_RENTAL") return false;
+  const entries: any[] = booking?.paymentSchedule ?? [];
+  return entries.some((e: any) => e.type === "LICENCE" && (e.status === "DUE" || e.status === "EXPIRED"));
+}
+
 /** One line on what happens next, for bookings with nothing to pay. */
 function nextStepText(booking: any) {
   const status = booking?.status;
@@ -431,6 +442,18 @@ export default function BookingDetailScreen() {
                 <AppText variant="caption" style={styles.mt8}>
                   Your receipt is with the operator for review.
                 </AppText>
+              ) : null}
+              {licenceDue(booking) ? (
+                <Button
+                  label="Driving licence"
+                  variant="line"
+                  size="sm"
+                  icon="card-outline"
+                  style={styles.mt8}
+                  onPress={() =>
+                    router.push({ pathname: "/customer/licence", params: { bookingId: String(booking.id) } } as unknown as Href)
+                  }
+                />
               ) : null}
             </GlassCard>
           </Section>

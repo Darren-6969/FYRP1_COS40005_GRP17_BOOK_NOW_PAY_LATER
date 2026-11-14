@@ -2,7 +2,8 @@
  * F10: one place that turns server statuses into what the app shows.
  *
  * Covers exactly the values in backend/prisma/schema.prisma
- * (BookingStatus: 15, PaymentStatus: 8). Anything else, for example a value
+ * (BookingStatus: 15, PaymentStatus: 8,
+ * LicenceVerificationStatus: 4). Anything else, for example a value
  * added on the server before the app is updated, gets a neutral pill with a
  * readable label instead of a crash or a raw enum.
  */
@@ -56,6 +57,23 @@ function readable(value: string) {
 function lookup(table: Record<string, StatusInfo>, value: string | null | undefined): StatusInfo {
   if (!value) return { label: 'Unknown', tone: 'neutral' };
   return table[value] ?? { label: readable(value), tone: 'neutral' };
+}
+
+/**
+ * Driving licence (LicenceVerificationStatus: 4), plus NOT_SUBMITTED for an
+ * account with no licence yet. The operator rejects a licence as
+ * REUPLOAD_REQUIRED; REJECTED is the older value for the same outcome.
+ */
+export const LICENCE_STATUS: Record<string, StatusInfo> = {
+  NOT_SUBMITTED: { label: 'Not added', tone: 'warn' },
+  UNDER_REVIEW: { label: 'In review', tone: 'info' },
+  APPROVED: { label: 'Verified', tone: 'ok' },
+  REUPLOAD_REQUIRED: { label: 'Needs a new upload', tone: 'err' },
+  REJECTED: { label: 'Needs a new upload', tone: 'err' },
+};
+
+export function licenceStatus(value: string | null | undefined): StatusInfo {
+  return lookup(LICENCE_STATUS, value || 'NOT_SUBMITTED');
 }
 
 export function bookingStatus(value: string | null | undefined): StatusInfo {

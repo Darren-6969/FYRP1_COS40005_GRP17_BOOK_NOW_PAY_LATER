@@ -396,3 +396,63 @@ export async function rejectAlternative(
     { method: "PATCH" }
   );
 }
+
+// ---- F19: driving licence ---------------------------------------------------
+// Routes: backend/src/routes/licence_routes.js (/api/licence-verification).
+
+export type LicenceStatus = "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "REUPLOAD_REQUIRED";
+
+export type LicenceDocument = {
+  id: number;
+  bookingId: number | null;
+  originalName: string;
+  mimeType: string;
+  status: LicenceStatus;
+  /** EXPIRED, UNREADABLE or NOT_A_LICENCE when rejected. */
+  rejectionReason: string | null;
+  submittedAt: string;
+  reviewDueAt: string | null;
+  reviewedAt: string | null;
+};
+
+export type MyLicenceResponse = {
+  /** The latest licence on the account, any booking. Null if none yet. */
+  document: LicenceDocument | null;
+  canReupload: boolean;
+  reuploadWindowEndsAt: string | null;
+};
+
+export async function getMyLicence(): Promise<MyLicenceResponse> {
+  return apiRequest("/licence-verification/me", { method: "GET" });
+}
+
+/**
+ * Sends a licence photo (JPEG or PNG, at most 5 MB) as a file. With a
+ * bookingId it is linked to that booking, which is what puts it in that
+ * operator's review queue; without one it goes on the account only.
+ * The server answers 409 if a licence is already waiting for review, so a
+ * repeat can't create a second document.
+ */
+export async function uploadLicenceFile(input: {
+  uri: string;
+  bookingId?: number | string | null;
+}): Promise<{ message: string; document: LicenceDocument }> {
+  const formData = new FormData();
+  formData.append("licence", new File(input.uri) as unknown as Blob);
+
+  const path = input.bookingId
+    ? `/licence-verification/bookings/${input.bookingId}`
+    : "/licence-verification/me";
+
+  // No Content-Type: fetch sets the multipart boundary itself.
+  const response = await authorizedFetch(
+    path,
+    { method: "POST", body: formData },
+    { fetcher: expoFetch, timeoutMs: UPLOAD_TIMEOUT_MS }
+  );
+
+  if (!response.ok) {
+    throw await errorFromResponse(response, `Licence upload failed (${response.status})`);
+  }
+  return response.json();
+}

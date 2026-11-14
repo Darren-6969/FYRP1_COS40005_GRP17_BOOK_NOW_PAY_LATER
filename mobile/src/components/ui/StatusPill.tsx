@@ -1,16 +1,16 @@
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { Radius } from '@/constants/theme';
-import { bookingStatus, paymentStatus, toneColors, type StatusTone } from '@/constants/status';
+import { bookingStatus, licenceStatus, paymentStatus, toneColors, type StatusTone } from '@/constants/status';
 import { useTheme } from '@/hooks/use-theme';
 
 import { AppText } from './AppText';
 
 type StatusPillProps = (
   | {
-      /** A BookingStatus or PaymentStatus value from the server. */
+      /** A BookingStatus, PaymentStatus or licence status from the server. */
       status: string | null | undefined;
-      kind?: 'booking' | 'payment';
+      kind?: 'booking' | 'payment' | 'licence';
       label?: never;
       tone?: never;
     }
@@ -37,7 +37,9 @@ export function StatusPill(props: StatusPillProps) {
       ? { label: props.label, tone: props.tone }
       : props.kind === 'payment'
         ? paymentStatus(props.status)
-        : bookingStatus(props.status);
+        : props.kind === 'licence'
+          ? licenceStatus(props.status)
+          : bookingStatus(props.status);
 
   const { bg, fg } = toneColors(info.tone, tokens);
 
