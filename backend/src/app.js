@@ -41,6 +41,12 @@ import { operatorActivityMiddleware } from "./services/operator_activity_service
 import { analyticsContextMiddleware } from "./services/analytics_service.js";
 import "./jobs/jobQueue_worker.js";
 import { MEDIA_ROOT } from "./services/media_storage.js";
+import {
+  privateFileContentType,
+  privateStorageEnabled,
+  resolvePrivatePath,
+  verifyPrivateFileToken,
+} from "./services/private_file_storage.js";
 dotenv.config();
 
 const app = express();
@@ -139,6 +145,31 @@ if (MEDIA_ROOT) {
     (_req, res) => res.status(404).end()
   );
 }
+
+// ── Private files (payment receipts) ────────────────────────────────────────
+// Only through a short-lived signed link (private_file_storage.js), which
+// the API puts in responses for people allowed to see the file. An invalid,
+// tampered or expired link gets the same 404 as a missing file. Before CORS
+// for the same reason as /media: the web app shows these in <img>.
+app.get("/files/:token", async (req, res) => {
+  const key = verifyPrivateFileToken(req.params.token);
+  if (!key || !privateStorageEnabled()) return res.status(404).end();
+
+  let fullPath;
+  try {
+    fullPath = resolvePrivatePath(key);
+  } catch {
+    return res.status(404).end();
+  }
+
+  res.setHeader("Content-Type", privateFileContentType(key));
+  res.setHeader("Cache-Control", "private, max-age=300");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.sendFile(fullPath, { dotfiles: "deny" }, (err) => {
+    if (err && !res.headersSent) res.status(404).end();
+  });
+});
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 const allowedOrigins = [

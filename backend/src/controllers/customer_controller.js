@@ -1,5 +1,8 @@
+import crypto from "crypto";
 import prisma from "../config/db.js";
 import { calculatePaymentDeadline } from "../services/payment_deadline_service.js";
+import { deletePrivateFile, privateStorageEnabled, savePrivateFile } from "../services/private_file_storage.js";
+import { processSecureImage } from "../utils/secure_upload.js";
 import {
   notifyCustomerByBooking,
   notifyOperatorUsersByBooking,
@@ -474,10 +477,58 @@ export async function payCustomerBooking(_req, res) {
   });
 }
 
+// JSON route: the photo as a data: URL or an https link (older app builds
+// and the website).
 export async function uploadCustomerReceipt(req, res, next) {
   return runIdempotent(req, res, next, `POST /customer/bookings/${req.params.id}/receipt`, async () => {
+    const { imageUrl } = req.body;
+    if (!imageUrl) return { status: 400, body: { message: "Receipt image is required" } };
+    if (!isValidReceiptImage(imageUrl)) {
+      return { status: 400, body: { message: "Invalid receipt image. Upload an image file or provide an https link." } };
+    }
+    if (imageUrl.length > 7_000_000) {
+      return { status: 400, body: { message: "Receipt image is too large. Please upload a smaller image." } };
+    }
+    return submitCustomerReceipt(req, async () => ({ imageUrl, storageKey: null }));
+  });
+}
+
+// File route (multipart field "receipt"): the photo is checked for its real
+// type, re-encoded without metadata, and stored privately on the VPS volume.
+// Responses carry a short-lived signed link in receipt.imageUrl (config/db.js).
+export async function uploadCustomerReceiptFile(req, res, next) {
+  return runIdempotent(req, res, next, `POST /customer/bookings/${req.params.id}/receipt-file`, async () => {
+    if (!privateStorageEnabled()) {
+      // The app falls back to the JSON route on this code.
+      return {
+        status: 503,
+        body: { code: "PRIVATE_STORAGE_UNAVAILABLE", message: "Receipt file upload is not available right now." },
+      };
+    }
+    if (!req.file?.buffer) return { status: 400, body: { message: "Receipt image is required" } };
+
+    const image = await processSecureImage(req.file.buffer);
+    let savedKey = null;
+    try {
+      return await submitCustomerReceipt(req, async (booking) => {
+        savedKey = await savePrivateFile(`receipts/${booking.id}/${crypto.randomUUID()}${image.extension}`, image.buffer);
+        return { imageUrl: "", storageKey: savedKey };
+      });
+    } catch (err) {
+      // The database write failed after the file was saved: don't leave it.
+      if (savedKey) await deletePrivateFile(savedKey);
+      throw err;
+    }
+  });
+}
+
+/**
+ * Checks and records a customer's payment receipt. `storeImage(booking)`
+ * runs only after every check has passed, so a refused request never writes
+ * a file; it returns { imageUrl, storageKey }.
+ */
+async function submitCustomerReceipt(req, storeImage) {
     const {
-      imageUrl,
       remarks,
       method = "DUITNOW",
       paymentType = PAYMENT_TYPES.FULL_PAYMENT,
@@ -492,13 +543,6 @@ export async function uploadCustomerReceipt(req, res, next) {
       return { status: 403, body: { message: "Manual receipt upload is disabled for this platform or operator." } };
     }
 
-    if (!imageUrl) return { status: 400, body: { message: "Receipt image is required" } };
-    if (!isValidReceiptImage(imageUrl)) {
-      return { status: 400, body: { message: "Invalid receipt image. Upload an image file or provide an https link." } };
-    }
-    if (imageUrl.length > 7_000_000) {
-      return { status: 400, body: { message: "Receipt image is too large. Please upload a smaller image." } };
-    }
     if (!["ACCEPTED", "PENDING_PAYMENT"].includes(booking.status)) {
       return { status: 400, body: { message: "Receipt upload is only available after the booking is accepted." } };
     }
@@ -523,6 +567,10 @@ export async function uploadCustomerReceipt(req, res, next) {
       };
     }
 
+    // Every check passed: only now is the photo stored (a file, for the file
+    // route). A replaced private file is kept, as a record of what was sent.
+    const { imageUrl, storageKey } = await storeImage(booking);
+
     const pendingPayment = getPaymentPendingData(booking.payment, paymentType);
     await prisma.payment.update({
       where: { bookingId: booking.id },
@@ -533,6 +581,7 @@ export async function uploadCustomerReceipt(req, res, next) {
       create: {
         bookingId: booking.id,
         imageUrl,
+        storageKey,
         remarks: remarks || null,
         status: "PENDING",
         paymentType,
@@ -540,6 +589,7 @@ export async function uploadCustomerReceipt(req, res, next) {
       },
       update: {
         imageUrl,
+        storageKey,
         remarks: remarks || null,
         status: "PENDING",
         verifiedAt: null,
@@ -589,7 +639,6 @@ export async function uploadCustomerReceipt(req, res, next) {
       )
     );
     return { status: 201, body: mapBooking(updated) };
-  });
 }
 
 export async function getCustomerInvoices(req, res, next) {

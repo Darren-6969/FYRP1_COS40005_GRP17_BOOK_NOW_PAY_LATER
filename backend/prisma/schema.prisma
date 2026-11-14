@@ -962,9 +962,13 @@ model Receipt {
   bookingId Int     @unique
   booking   Booking @relation(fields: [bookingId], references: [id])
 
-  imageUrl String
-  status   ReceiptStatus @default(PENDING)
-  remarks  String?
+  // A data: URL or https link (older receipts), or "" when the photo is a
+  // private file: then storageKey is set and the API fills imageUrl with a
+  // short-lived signed link (Prisma result extension in config/db.js).
+  imageUrl   String
+  storageKey String?
+  status     ReceiptStatus @default(PENDING)
+  remarks    String?
 
   // The part being paid and the amount the schedule asked for when the receipt
   // was uploaded, so the operator verifies it against the same figure.

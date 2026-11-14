@@ -1,4 +1,8 @@
-import { apiRequest } from "./api";
+import { File } from "expo-file-system";
+import { fetch as expoFetch } from "expo/fetch";
+
+import { UPLOAD_TIMEOUT_MS, apiRequest, authorizedFetch, errorFromResponse } from "./api";
+import { APP_SCHEME } from "@/utils/stripe-payment";
 
 export async function getCustomerBookings() {
   return apiRequest("/customer/bookings", {
@@ -70,6 +74,10 @@ export async function createStripeCheckoutSession(
         paymentType,
 
         source: "mobile",
+
+        // F15: Stripe returns to this scheme. Older builds don't send it
+        // and the backend falls back to "mobile".
+        returnScheme: APP_SCHEME,
       }),
     }
   );
@@ -142,6 +150,47 @@ export async function uploadCustomerReceipt(
       }),
     }
   );
+}
+
+/**
+ * F13: the receipt photo as a file. The backend checks its real type,
+ * strips metadata and stores it privately; responses carry a short-lived
+ * signed link in receipt.imageUrl. Throws ApiError with code
+ * PRIVATE_STORAGE_UNAVAILABLE (or a 404 from an older backend) when the
+ * server can't take files; the caller then falls back to uploadCustomerReceipt.
+ */
+export async function uploadCustomerReceiptFile(
+  bookingId: number | string,
+  input: {
+    uri: string;
+    remarks?: string;
+    method: ManualPaymentMethod;
+    paymentType: ManualPaymentType;
+  },
+  // From useIdempotentAttempt: fixed per attempt, reused on retry (F1).
+  idempotencyKey: string
+) {
+  const formData = new FormData();
+  formData.append("receipt", new File(input.uri) as unknown as Blob);
+  formData.append("remarks", input.remarks || "");
+  formData.append("method", input.method);
+  formData.append("paymentType", input.paymentType);
+
+  // No Content-Type: fetch sets the multipart boundary itself.
+  const response = await authorizedFetch(
+    `/customer/bookings/${bookingId}/receipt-file`,
+    {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: formData,
+    },
+    { fetcher: expoFetch, timeoutMs: UPLOAD_TIMEOUT_MS }
+  );
+
+  if (!response.ok) {
+    throw await errorFromResponse(response, `Receipt upload failed (${response.status})`);
+  }
+  return response.json().catch(() => null);
 }
 
 export async function markCustomerNotificationRead(

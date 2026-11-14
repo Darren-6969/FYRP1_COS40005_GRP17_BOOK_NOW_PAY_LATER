@@ -19,6 +19,8 @@ export function isViewableReceipt(uri: unknown): uri is string {
   if (typeof uri !== 'string') return false;
   // The server already refuses SVG; skip it here too.
   if (uri.startsWith('data:image/svg')) return false;
+  // Signed links from a local backend are http in development builds only.
+  if (__DEV__ && uri.startsWith('http://')) return true;
   return uri.startsWith('https://') || uri.startsWith('data:image/');
 }
 

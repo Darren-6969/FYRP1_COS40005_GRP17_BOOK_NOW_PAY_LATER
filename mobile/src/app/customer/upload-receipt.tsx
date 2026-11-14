@@ -1,40 +1,40 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  useLocalSearchParams,
-  useRouter,
-} from "expo-router";
-
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-
+  AppText,
+  Button,
+  ErrorState,
+  FieldError,
+  FLOATING_BAR_CLEARANCE,
+  FloatingActionBar,
+  GlassCard,
+  IconButton,
+  Money,
+  SkeletonText,
+  TextField,
+  useToast,
+} from "@/components/ui";
+import { Radius } from "@/constants/theme";
+import { useIdempotentAttempt } from "@/hooks/use-idempotent-attempt";
+import { useTheme } from "@/hooks/use-theme";
 import {
   getManualPaymentOptions,
   uploadCustomerReceipt,
+  uploadCustomerReceiptFile,
   type ManualPaymentMethod,
   type ManualPaymentType,
-} from "../../services/customerApi";
+} from "@/services/customerApi";
+import { isApiError } from "@/services/api";
+import { formatMYT } from "@/utils/datetime";
+import { describeError } from "@/utils/errors";
 import { logger } from "@/utils/logger";
-import { useIdempotentAttempt } from "@/hooks/use-idempotent-attempt";
+import { formatRM } from "@/utils/money";
 
 type PaymentOption = {
   paymentType: ManualPaymentType;
@@ -55,1918 +55,503 @@ type ManualPaymentResponse = {
   note?: string | null;
 };
 
-function formatMoney(value?: number) {
-  return `RM ${Number(
-    value || 0
-  ).toFixed(2)}`;
+/**
+ * F13: the photo is sent as a file to /receipt-file, which stores it
+ * privately (max 10 MB). If the server can't take files (private storage not
+ * set up, or an older backend without the route), it falls back to the
+ * original JSON route, which takes a data URL of at most 7,000,000
+ * characters; the base64 copy is kept for that case only.
+ */
+const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
+const MAX_RECEIPT_CHARS = 6_500_000;
+const PICK_QUALITY = 0.5;
+
+type PickedReceipt = {
+  /** Local file, sent to the file route and used for the preview. */
+  uri: string;
+  /** Data URL for the fallback route; null if too large for it. */
+  dataUrl: string | null;
+};
+
+/** The server can't take receipt files: use the JSON route instead. */
+function fileRouteUnavailable(err: unknown) {
+  return isApiError(err) && (err.code === "PRIVATE_STORAGE_UNAVAILABLE" || err.status === 404);
 }
 
-function formatDate(value?: string | null) {
-  if (!value) {
-    return "-";
-  }
+const TOO_LARGE = "This photo is too large to send. Crop it closer to the receipt, or take a screenshot of it instead.";
 
-  const parsed =
-    new Date(value);
+const METHODS: { value: ManualPaymentMethod; label: string; icon: "qr-code-outline" | "wallet-outline" }[] = [
+  { value: "DUITNOW", label: "DuitNow", icon: "qr-code-outline" },
+  { value: "SPAY", label: "SPay", icon: "wallet-outline" },
+];
 
-  if (
-    Number.isNaN(
-      parsed.getTime()
-    )
-  ) {
-    return "-";
-  }
-
-  return parsed.toLocaleDateString(
-    "en-MY",
-    {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }
-  );
+function partLabel(option: PaymentOption) {
+  if (option.label) return option.label;
+  if (option.paymentType === "DOWN_PAYMENT") return "Down payment";
+  if (option.paymentType === "FINAL_PAYMENT") return "Balance";
+  return "Payment in full";
 }
 
-function getPaymentLabel(
-  type?: ManualPaymentType
-) {
-  if (
-    type ===
-    "DOWN_PAYMENT"
-  ) {
-    return "Down Payment";
-  }
-
-  if (
-    type ===
-    "FINAL_PAYMENT"
-  ) {
-    return "Final Payment";
-  }
-
-  return "Full Payment";
-}
-
+/**
+ * Pay by DuitNow or SPay outside the app, then upload the receipt for the
+ * operator to check. The amount, reference and due date are the server's
+ * (manual-payment options); the submit keeps one Idempotency-Key per
+ * attempt (F1), so a retry after a timeout can't send the receipt twice.
+ */
 export default function UploadReceiptScreen() {
-  const router =
-    useRouter();
+  const router = useRouter();
+  const toast = useToast();
+  const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ bookingId?: string; paymentType?: string }>();
+  const bookingId = params.bookingId;
+  const requestedPaymentType = params.paymentType as ManualPaymentType | undefined;
 
-  const params =
-    useLocalSearchParams<{
-      bookingId?: string;
-      paymentType?: string;
-    }>();
+  const [due, setDue] = useState<ManualPaymentResponse | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [paymentType, setPaymentType] = useState<ManualPaymentType | null>(requestedPaymentType || null);
+  const [method, setMethod] = useState<ManualPaymentMethod>("DUITNOW");
+  const [receipt, setReceipt] = useState<PickedReceipt | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [remarks, setRemarks] = useState("");
+  const [submitError, setSubmitError] = useState<unknown>(null);
+  const receiptAttempt = useIdempotentAttempt();
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
 
-  const bookingId =
-    params.bookingId;
+  // The error sits at the end of the form, under the floating bar's reach:
+  // bring it into view when it appears.
+  useEffect(() => {
+    if (submitError) setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+  }, [submitError]);
 
-  const requestedPaymentType =
-    params.paymentType as
-      | ManualPaymentType
-      | undefined;
-
-  const [due, setDue] =
-    useState<ManualPaymentResponse | null>(
-      null
-    );
-
-  const [
-    paymentType,
-    setPaymentType,
-  ] =
-    useState<ManualPaymentType | null>(
-      requestedPaymentType ||
-        null
-    );
-
-  const [
-    paymentMethod,
-    setPaymentMethod,
-  ] =
-    useState<ManualPaymentMethod>(
-      "DUITNOW"
-    );
-
-  const [
-    receiptImage,
-    setReceiptImage,
-  ] = useState("");
-
-  const [
-    remarks,
-    setRemarks,
-  ] = useState("");
-
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
-
-  const [
-    submitting,
-    setSubmitting,
-  ] = useState(false);
-
-  const receiptAttempt =
-    useIdempotentAttempt();
-
-  const [
-    error,
-    setError,
-  ] = useState("");
+  const load = useCallback(async () => {
+    if (!bookingId) {
+      setLoadError(new Error("Booking information is missing."));
+      return;
+    }
+    setLoadError(null);
+    setDue(null);
+    try {
+      const response: ManualPaymentResponse = await getManualPaymentOptions(bookingId);
+      setDue(response);
+      const available = (response?.options || []).filter((o) => o.available);
+      const pick =
+        available.find((o) => o.paymentType === requestedPaymentType) ||
+        available.find((o) => o.paymentType === response?.defaultPaymentType) ||
+        available[0];
+      if (pick) setPaymentType(pick.paymentType);
+    } catch (err) {
+      logger.debug("Failed to load manual payment:", err);
+      setLoadError(err);
+    }
+  }, [bookingId, requestedPaymentType]);
 
   useEffect(() => {
-    if (!bookingId) {
-      setError(
-        "Booking ID is missing."
-      );
+    load();
+  }, [load]);
 
-      setLoading(false);
+  const options = useMemo(() => (due?.options || []).filter((o) => o.available), [due]);
+  const selected = useMemo(() => options.find((o) => o.paymentType === paymentType) || null, [options, paymentType]);
+
+  const pickImage = async () => {
+    setImageError(null);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setImageError("Allow photo access in your phone's settings to upload the receipt.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        quality: PICK_QUALITY,
+        base64: true,
+      });
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (!asset?.uri) {
+        setImageError("We couldn't read that photo. Please choose another one.");
+        return;
+      }
+      if (asset.fileSize && asset.fileSize > MAX_RECEIPT_BYTES) {
+        setReceipt(null);
+        setImageError(TOO_LARGE);
+        return;
+      }
+      const dataUrl = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : null;
+      setReceipt({ uri: asset.uri, dataUrl: dataUrl && dataUrl.length <= MAX_RECEIPT_CHARS ? dataUrl : null });
+    } catch (err) {
+      logger.debug("Receipt image picker failed:", err);
+      setImageError("We couldn't open your photos. Please try again.");
+    }
+  };
+
+  const sendReceipt = async () => {
+    const id = bookingId;
+    if (!id || !selected || !paymentType) return;
+    if (!receipt) {
+      setImageError("Add a photo of your payment receipt.");
       return;
     }
+    setSubmitError(null);
 
-    let cancelled =
-      false;
-
-    async function loadPaymentOptions() {
+    const details = { remarks: remarks.trim(), method, paymentType };
+    // Same booking, photo and details -> same key, so a retry after a
+    // timeout replays the first answer instead of sending twice (F1). The
+    // two routes are separate endpoints, so each gets its own key.
+    try {
       try {
-        setLoading(true);
-        setError("");
-
-        const response =
-          await getManualPaymentOptions(
-            bookingId
-          );
-
-        if (
-          cancelled
-        ) {
+        const attempt = receiptAttempt.attemptFor(JSON.stringify({ route: "file", bookingId: id, uri: receipt.uri, ...details }));
+        await uploadCustomerReceiptFile(id, { uri: receipt.uri, ...details }, attempt.key);
+      } catch (err) {
+        if (!fileRouteUnavailable(err)) throw err;
+        logger.debug("Receipt file route unavailable, sending as data URL:", err);
+        if (!receipt.dataUrl) {
+          setImageError(TOO_LARGE);
           return;
         }
-
-        setDue(
-          response
-        );
-
-        const available =
-          (
-            response?.options ||
-            []
-          ).filter(
-            (
-              item: PaymentOption
-            ) =>
-              item.available
-          );
-
-        const requested =
-          available.find(
-            (
-              item: PaymentOption
-            ) =>
-              item.paymentType ===
-              requestedPaymentType
-          );
-
-        if (
-          requested
-        ) {
-          setPaymentType(
-            requested.paymentType
-          );
-
-          return;
-        }
-
-        const defaultOption =
-          available.find(
-            (
-              item: PaymentOption
-            ) =>
-              item.paymentType ===
-              response
-                ?.defaultPaymentType
-          );
-
-        if (
-          defaultOption
-        ) {
-          setPaymentType(
-            defaultOption.paymentType
-          );
-
-          return;
-        }
-
-        if (
-          available.length >
-          0
-        ) {
-          setPaymentType(
-            available[0]
-              .paymentType
-          );
-        }
-      } catch (
-        err: any
-      ) {
-        logger.debug(
-          "Failed to load manual payment:",
-          err
-        );
-
-        if (
-          !cancelled
-        ) {
-          setError(
-            err?.message ||
-              "Could not load the amount to pay."
-          );
-        }
-      } finally {
-        if (
-          !cancelled
-        ) {
-          setLoading(
-            false
-          );
-        }
+        const body = { imageUrl: receipt.dataUrl, ...details };
+        const attempt = receiptAttempt.attemptFor(JSON.stringify({ route: "json", bookingId: id, ...body }));
+        await uploadCustomerReceipt(id, body, attempt.key);
       }
-    }
-
-    loadPaymentOptions();
-
-    return () => {
-      cancelled =
-        true;
-    };
-  }, [
-    bookingId,
-    requestedPaymentType,
-  ]);
-
-  const availableOptions =
-    useMemo(
-      () =>
-        (
-          due?.options ||
-          []
-        ).filter(
-          (item) =>
-            item.available
-        ),
-      [due]
-    );
-
-  const selectedOption =
-    useMemo(
-      () =>
-        availableOptions.find(
-          (item) =>
-            item.paymentType ===
-            paymentType
-        ) || null,
-      [
-        availableOptions,
-        paymentType,
-      ]
-    );
-
-  async function selectReceiptImage() {
-    try {
-      setError("");
-
-      const permission =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (
-        !permission.granted
-      ) {
-        Alert.alert(
-          "Permission Required",
-          "Please allow photo library access to upload your payment receipt."
-        );
-
-        return;
-      }
-
-      const result =
-        await ImagePicker.launchImageLibraryAsync(
-          {
-            mediaTypes:
-              ["images"],
-
-            allowsEditing:
-              true,
-
-            quality:
-              0.65,
-
-            base64:
-              true,
-          }
-        );
-
-      if (
-        result.canceled
-      ) {
-        return;
-      }
-
-      const asset =
-        result.assets?.[0];
-
-      if (
-        !asset
-      ) {
-        return;
-      }
-
-      if (
-        !asset.base64
-      ) {
-        setError(
-          "Unable to process this image. Please select another receipt image."
-        );
-
-        return;
-      }
-
-      const mimeType =
-        asset.mimeType ||
-        "image/jpeg";
-
-      const dataUrl =
-        `data:${mimeType};base64,${asset.base64}`;
-
-      setReceiptImage(
-        dataUrl
-      );
-    } catch (
-      err: any
-    ) {
-      logger.debug(
-        "Receipt image picker failed:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Failed to select receipt image."
-      );
-    }
-  }
-
-  function submitReceipt() {
-    return receiptAttempt.run(
-      sendReceipt
-    );
-  }
-
-  async function sendReceipt() {
-    if (
-      !bookingId
-    ) {
-      return;
-    }
-
-    if (
-      !paymentType ||
-      !selectedOption
-    ) {
-      setError(
-        "There is nothing to pay by receipt for this booking right now."
-      );
-
-      return;
-    }
-
-    if (
-      !receiptImage
-    ) {
-      setError(
-        "Please upload a receipt image before submitting."
-      );
-
-      return;
-    }
-
-    try {
-      setSubmitting(
-        true
-      );
-
-      setError("");
-
-      const receipt = {
-        imageUrl:
-          receiptImage,
-
-        remarks:
-          remarks.trim(),
-
-        method:
-          paymentMethod,
-
-        paymentType,
-      };
-
-      // Same booking and receipt details -> same key, so a retry after
-      // a timeout can't submit the receipt twice.
-      const attempt =
-        receiptAttempt.attemptFor(
-          JSON.stringify({
-            bookingId,
-            ...receipt,
-          })
-        );
-
-      await uploadCustomerReceipt(
-        bookingId,
-        receipt,
-        attempt.key
-      );
-
       receiptAttempt.finish();
-
-      Alert.alert(
-        "Receipt Submitted",
-        "Your payment receipt has been submitted and is waiting for operator verification.",
-        [
-          {
-            text: "View Booking",
-            onPress: () => {
-              router.dismissAll();
-
-              router.replace({
-                pathname:
-                  "/customer/booking/[id]",
-                params: {
-                  id: String(
-                    bookingId
-                  ),
-                },
-              });
-            },
-          },
-        ]
-      );
-    } catch (
-      err: any
-    ) {
-      logger.debug(
-        "Receipt upload failed:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Failed to upload receipt."
-      );
-    } finally {
-      setSubmitting(
-        false
-      );
+      toast.show("Receipt sent. The operator will check it.", { tone: "ok" });
+      // Nothing to dismiss when opened straight from a link.
+      if (router.canDismiss()) router.dismissAll();
+      router.replace({ pathname: "/customer/booking/[id]", params: { id: String(id) } } as unknown as Href);
+    } catch (err) {
+      logger.debug("Receipt upload failed:", err);
+      setSubmitError(err);
     }
-  }
+  };
 
-  if (
-    loading
-  ) {
+  const submit = () => receiptAttempt.run(sendReceipt);
+
+  const header = (
+    <View style={styles.topRow}>
+      <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+      <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex}>
+        Pay by receipt
+      </AppText>
+    </View>
+  );
+
+  if (loadError) {
     return (
-      <SafeAreaView
-        style={
-          styles.safeArea
-        }
-      >
-        <View
-          style={
-            styles.center
-          }
-        >
-          <ActivityIndicator
-            size="large"
-            color="#07869B"
-          />
-
-          <Text
-            style={
-              styles.loadingText
-            }
-          >
-            Loading payment details...
-          </Text>
-        </View>
-      </SafeAreaView>
+      <View style={[styles.screen, styles.pad, { paddingTop: insets.top + 8 }]}>
+        {header}
+        <ErrorState error={loadError} onRetry={load} />
+      </View>
     );
   }
+
+  const submitInfo = submitError ? describeError(submitError) : null;
 
   return (
-    <SafeAreaView
-      style={
-        styles.safeArea
-      }
-    >
-      <KeyboardAvoidingView
-        style={{
-          flex: 1,
-        }}
-        behavior={
-          Platform.OS ===
-          "ios"
-            ? "padding"
-            : undefined
-        }
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 8, paddingBottom: FLOATING_BAR_CLEARANCE + insets.bottom + 12 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <View
-          style={
-            styles.header
-          }
-        >
-          <Pressable
-            style={
-              styles.backButton
-            }
-            onPress={() =>
-              router.back()
-            }
-          >
-            <Ionicons
-              name="chevron-back"
-              size={22}
-              color="#17313C"
-            />
-          </Pressable>
+        {header}
 
-          <View
-            style={{
-              flex: 1,
-            }}
-          >
-            <Text
-              style={
-                styles.headerTitle
-              }
-            >
-              Upload Receipt
-            </Text>
-
-            <Text
-              style={
-                styles.headerSubtitle
-              }
-            >
-              Manual payment verification
-            </Text>
-          </View>
-        </View>
-
-        <ScrollView
-          showsVerticalScrollIndicator={
-            false
-          }
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={
-            styles.content
-          }
-        >
-          {/* INTRO */}
-          <View
-            style={
-              styles.heroCard
-            }
-          >
-            <View
-              style={
-                styles.heroIcon
-              }
-            >
-              <Ionicons
-                name="receipt-outline"
-                size={26}
-                color="#07869B"
-              />
-            </View>
-
-            <View
-              style={{
-                flex: 1,
-              }}
-            >
-              <Text
-                style={
-                  styles.heroTitle
-                }
-              >
-                Manual Payment
-              </Text>
-
-              <Text
-                style={
-                  styles.heroText
-                }
-              >
-                Complete your DuitNow or
-                SPay payment, then upload
-                the payment receipt for
-                operator verification.
-              </Text>
-            </View>
-          </View>
-
-          {error ? (
-            <View
-              style={
-                styles.errorBox
-              }
-            >
-              <Ionicons
-                name="alert-circle-outline"
-                size={18}
-                color="#C84242"
-              />
-
-              <Text
-                style={
-                  styles.errorText
-                }
-              >
-                {error}
-              </Text>
-            </View>
-          ) : null}
-
-          {selectedOption ? (
-            <>
-              {/* PAYMENT DETAILS */}
-              <View
-                style={
-                  styles.card
-                }
-              >
-                <Text
-                  style={
-                    styles.sectionEyebrow
-                  }
-                >
-                  PAYMENT DETAILS
-                </Text>
-
-                <Text
-                  style={
-                    styles.sectionTitle
-                  }
-                >
-                  Amount to Pay
-                </Text>
-
-                <Text
-                  style={
-                    styles.amount
-                  }
-                >
-                  {formatMoney(
-                    selectedOption.amount
-                  )}
-                </Text>
-
-                <View
-                  style={
-                    styles.summaryBox
-                  }
-                >
-                  <InfoRow
-                    label="Payment"
-                    value={
-                      selectedOption.label ||
-                      getPaymentLabel(
-                        selectedOption.paymentType
-                      )
-                    }
-                  />
-
-                  <InfoRow
-                    label="Reference"
-                    value={
-                      due?.reference ||
-                      "-"
-                    }
-                  />
-
-                  <InfoRow
-                    label="Pay by"
-                    value={formatDate(
-                      selectedOption.dueDate
-                    )}
-                  />
-                </View>
-
-                <View
-                  style={
-                    styles.noticeBox
-                  }
-                >
-                  <Ionicons
-                    name="information-circle-outline"
-                    size={18}
-                    color="#07869B"
-                  />
-
-                  <Text
-                    style={
-                      styles.noticeText
-                    }
-                  >
-                    Pay exactly{" "}
-                    {formatMoney(
-                      selectedOption.amount
-                    )}{" "}
-                    and include{" "}
-                    {due?.reference ||
-                      "the booking reference"}{" "}
-                    in your payment
-                    remarks.
-                    {due?.note
-                      ? ` ${due.note}`
-                      : ""}
-                  </Text>
-                </View>
-
-                {selectedOption.replacesPendingReceipt ? (
-                  <View
-                    style={
-                      styles.warningBox
-                    }
-                  >
-                    <Ionicons
-                      name="warning-outline"
-                      size={18}
-                      color="#A76A00"
-                    />
-
-                    <Text
-                      style={
-                        styles.warningText
-                      }
-                    >
-                      A receipt for this
-                      payment is already
-                      waiting for
-                      verification.
-                      Uploading a new one
-                      will replace it.
-                    </Text>
-                  </View>
-                ) : null}
+        {!due ? (
+          <GlassCard>
+            <SkeletonText lines={5} />
+          </GlassCard>
+        ) : !selected ? (
+          <GlassCard>
+            <AppText variant="bodyStrong">Nothing to pay by receipt right now</AppText>
+            <AppText variant="caption" style={styles.mt4}>
+              {due.options?.find((o) => o.reason)?.reason ||
+                "There's no payment due on this booking, or a receipt is already being checked."}
+            </AppText>
+          </GlassCard>
+        ) : (
+          <>
+            <GlassCard>
+              <AppText variant="micro">Amount to pay</AppText>
+              <Money value={selected.amount} variant="figureL" style={styles.mt4} />
+              <AppText variant="caption" style={styles.mt4}>
+                {partLabel(selected)}
+                {selected.dueDate ? ` · due ${formatMYT(selected.dueDate, "dayDateTime")}` : ""}
+              </AppText>
+              <View style={[styles.refRow, { borderTopColor: tokens.line }]}>
+                <AppText variant="caption" style={styles.flex}>
+                  Reference
+                </AppText>
+                <AppText variant="mono" color="ink" selectable>
+                  {due.reference}
+                </AppText>
               </View>
-
-              {/* PAYMENT TYPE */}
-              {availableOptions.length >
-              1 ? (
-                <View
-                  style={
-                    styles.card
-                  }
-                >
-                  <Text
-                    style={
-                      styles.sectionTitle
-                    }
-                  >
-                    What are you paying?
-                  </Text>
-
-                  <View
-                    style={
-                      styles.optionGroup
-                    }
-                  >
-                    {availableOptions.map(
-                      (
-                        option
-                      ) => {
-                        const selected =
-                          option.paymentType ===
-                          paymentType;
-
-                        return (
-                          <Pressable
-                            key={
-                              option.paymentType
-                            }
-                            style={[
-                              styles.optionCard,
-
-                              selected &&
-                                styles.optionCardSelected,
-                            ]}
-                            onPress={() =>
-                              setPaymentType(
-                                option.paymentType
-                              )
-                            }
-                          >
-                            <View
-                              style={[
-                                styles.radioOuter,
-
-                                selected &&
-                                  styles.radioOuterSelected,
-                              ]}
-                            >
-                              {selected ? (
-                                <View
-                                  style={
-                                    styles.radioInner
-                                  }
-                                />
-                              ) : null}
-                            </View>
-
-                            <View
-                              style={{
-                                flex: 1,
-                              }}
-                            >
-                              <Text
-                                style={
-                                  styles.optionTitle
-                                }
-                              >
-                                {option.label ||
-                                  getPaymentLabel(
-                                    option.paymentType
-                                  )}
-                              </Text>
-
-                              <Text
-                                style={
-                                  styles.optionAmount
-                                }
-                              >
-                                {formatMoney(
-                                  option.amount
-                                )}
-                              </Text>
-                            </View>
-                          </Pressable>
-                        );
-                      }
-                    )}
-                  </View>
+              <View style={[styles.note, { backgroundColor: tokens.infoBg }]}>
+                <Ionicons name="information-circle-outline" size={18} color={tokens.infoFg} />
+                <AppText variant="caption" style={[styles.flex, { color: tokens.infoFg }]}>
+                  Pay exactly {formatRM(selected.amount)} and put {due.reference} in the payment remarks.
+                  {due.note ? ` ${due.note}` : ""}
+                </AppText>
+              </View>
+              {selected.replacesPendingReceipt ? (
+                <View style={[styles.note, { backgroundColor: tokens.warnBg }]}>
+                  <Ionicons name="warning-outline" size={18} color={tokens.warnFg} />
+                  <AppText variant="caption" style={[styles.flex, { color: tokens.warnFg }]}>
+                    A receipt for this payment is already waiting to be checked. Sending a new one replaces it.
+                  </AppText>
                 </View>
               ) : null}
+            </GlassCard>
 
-              {/* PAYMENT METHOD */}
-              <View
-                style={
-                  styles.card
-                }
-              >
-                <Text
-                  style={
-                    styles.sectionTitle
-                  }
-                >
-                  Payment Method
-                </Text>
-
-                <View
-                  style={
-                    styles.methodRow
-                  }
-                >
-                  <PaymentMethodButton
-                    label="DuitNow"
-                    icon="qr-code-outline"
-                    selected={
-                      paymentMethod ===
-                      "DUITNOW"
-                    }
-                    onPress={() =>
-                      setPaymentMethod(
-                        "DUITNOW"
-                      )
-                    }
-                  />
-
-                  <PaymentMethodButton
-                    label="SPay"
-                    icon="wallet-outline"
-                    selected={
-                      paymentMethod ===
-                      "SPAY"
-                    }
-                    onPress={() =>
-                      setPaymentMethod(
-                        "SPAY"
-                      )
-                    }
-                  />
-                </View>
-              </View>
-
-              {/* RECEIPT IMAGE */}
-              <View
-                style={
-                  styles.card
-                }
-              >
-                <Text
-                  style={
-                    styles.sectionTitle
-                  }
-                >
-                  Receipt Image
-                </Text>
-
-                <Text
-                  style={
-                    styles.sectionDescription
-                  }
-                >
-                  Upload a clear screenshot
-                  or photo showing the
-                  completed payment.
-                </Text>
-
-                {receiptImage ? (
-                  <View>
-                    <Image
-                      source={{
-                        uri: receiptImage,
-                      }}
-                      style={
-                        styles.preview
-                      }
-                      resizeMode="contain"
-                    />
-
-                    <View
-                      style={
-                        styles.imageActions
-                      }
-                    >
+            {options.length > 1 ? (
+              <Section title="What are you paying?">
+                <GlassCard padding={4}>
+                  {options.map((option, i) => {
+                    const on = option.paymentType === paymentType;
+                    return (
                       <Pressable
-                        style={
-                          styles.changeImageButton
-                        }
-                        onPress={
-                          selectReceiptImage
-                        }
+                        key={option.paymentType}
+                        onPress={() => setPaymentType(option.paymentType)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: on }}
+                        style={[styles.option, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.line }]}
                       >
-                        <Ionicons
-                          name="images-outline"
-                          size={17}
-                          color="#07869B"
-                        />
-
-                        <Text
-                          style={
-                            styles.changeImageText
-                          }
-                        >
-                          Change Image
-                        </Text>
+                        <View style={[styles.radio, { borderColor: on ? tokens.brand : tokens.label }]}>
+                          {on ? <View style={[styles.radioDot, { backgroundColor: tokens.brand }]} /> : null}
+                        </View>
+                        <AppText variant="bodyStrong" style={styles.flex}>
+                          {partLabel(option)}
+                        </AppText>
+                        <Money value={option.amount} />
                       </Pressable>
+                    );
+                  })}
+                </GlassCard>
+              </Section>
+            ) : null}
 
-                      <Pressable
-                        style={
-                          styles.removeImageButton
-                        }
-                        onPress={() =>
-                          setReceiptImage(
-                            ""
-                          )
-                        }
-                      >
-                        <Ionicons
-                          name="trash-outline"
-                          size={17}
-                          color="#C84242"
-                        />
-
-                        <Text
-                          style={
-                            styles.removeImageText
-                          }
-                        >
-                          Remove
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                ) : (
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.uploadBox,
-
-                      pressed && {
-                        opacity:
-                          0.75,
-                      },
-                    ]}
-                    onPress={
-                      selectReceiptImage
-                    }
-                  >
-                    <View
-                      style={
-                        styles.uploadIcon
-                      }
+            <Section title="Paid with">
+              <View style={styles.methods}>
+                {METHODS.map((m) => {
+                  const on = method === m.value;
+                  return (
+                    <Pressable
+                      key={m.value}
+                      onPress={() => setMethod(m.value)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: on }}
+                      style={[
+                        styles.method,
+                        {
+                          backgroundColor: tokens.glass,
+                          borderColor: on ? tokens.leafInk : tokens.glassLine,
+                          borderWidth: on ? 2 : StyleSheet.hairlineWidth,
+                        },
+                      ]}
                     >
-                      <Ionicons
-                        name="cloud-upload-outline"
-                        size={28}
-                        color="#07869B"
-                      />
-                    </View>
-
-                    <Text
-                      style={
-                        styles.uploadTitle
-                      }
-                    >
-                      Choose Receipt Image
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.uploadSubtitle
-                      }
-                    >
-                      Select from your
-                      photo library
-                    </Text>
-                  </Pressable>
-                )}
+                      <Ionicons name={m.icon} size={20} color={on ? tokens.leafInk : tokens.label} />
+                      <AppText variant="bodyStrong">{m.label}</AppText>
+                    </Pressable>
+                  );
+                })}
               </View>
+            </Section>
 
-              {/* REMARKS */}
-              <View
-                style={
-                  styles.card
-                }
-              >
-                <Text
-                  style={
-                    styles.sectionTitle
-                  }
-                >
-                  Remarks
-                </Text>
-
-                <Text
-                  style={
-                    styles.sectionDescription
-                  }
-                >
-                  Optional payment note for
-                  the operator.
-                </Text>
-
-                <TextInput
-                  value={
-                    remarks
-                  }
-                  onChangeText={
-                    setRemarks
-                  }
-                  placeholder="Example: Paid using DuitNow at 8:30 PM"
-                  placeholderTextColor="#A2AFB4"
-                  multiline
-                  maxLength={
-                    300
-                  }
-                  style={
-                    styles.textArea
-                  }
-                />
-
-                <Text
-                  style={
-                    styles.characterCount
-                  }
-                >
-                  {remarks.length}/300
-                </Text>
-              </View>
-
-              {/* SUBMIT */}
+            <Section title="Receipt">
               <Pressable
-                style={({ pressed }) => [
-                  styles.submitButton,
-
-                  (
-                    pressed ||
-                    submitting ||
-                    !receiptImage
-                  ) && {
-                    opacity:
-                      0.7,
+                onPress={pickImage}
+                accessibilityRole="button"
+                accessibilityLabel={receipt ? "Change receipt photo" : "Add receipt photo"}
+                style={[
+                  styles.photo,
+                  {
+                    backgroundColor: tokens.glass,
+                    borderColor: imageError ? tokens.errFg : tokens.glassLine,
+                    borderWidth: imageError ? 1.5 : StyleSheet.hairlineWidth,
                   },
                 ]}
-                disabled={
-                  submitting ||
-                  !receiptImage
-                }
-                onPress={
-                  submitReceipt
-                }
               >
-                {submitting ? (
-                  <ActivityIndicator
-                    color="#FFFFFF"
-                  />
-                ) : (
+                {receipt ? (
                   <>
-                    <Ionicons
-                      name="checkmark-circle-outline"
-                      size={20}
-                      color="#FFFFFF"
-                    />
-
-                    <Text
-                      style={
-                        styles.submitText
-                      }
-                    >
-                      Submit Receipt
-                    </Text>
+                    <Image source={{ uri: receipt.uri }} style={styles.photoImage} contentFit="contain" />
+                    <View style={[styles.change, { backgroundColor: tokens.glassStrong }]}>
+                      <Ionicons name="swap-horizontal" size={16} color={tokens.ink} />
+                      <AppText variant="label" color="ink">
+                        Change
+                      </AppText>
+                    </View>
                   </>
+                ) : (
+                  <View style={styles.photoEmpty}>
+                    <Ionicons name="image-outline" size={30} color={tokens.label} />
+                    <AppText variant="bodyStrong">Add receipt photo</AppText>
+                    <AppText variant="caption" align="center">
+                      A screenshot from your banking app works best.
+                    </AppText>
+                  </View>
                 )}
               </Pressable>
+              <FieldError message={imageError} />
+            </Section>
 
-              <Text
-                style={
-                  styles.footerNote
-                }
-              >
-                Your payment will remain
-                pending until the operator
-                verifies the submitted
-                receipt.
-              </Text>
-            </>
-          ) : (
-            <View
-              style={
-                styles.emptyCard
-              }
-            >
-              <Ionicons
-                name="information-circle-outline"
-                size={34}
-                color="#82949C"
-              />
+            <TextField
+              label="Note for the operator (optional)"
+              value={remarks}
+              onChangeText={setRemarks}
+              placeholder="e.g. paid from a family member's account"
+              multiline
+              maxLength={300}
+            />
 
-              <Text
-                style={
-                  styles.emptyTitle
-                }
-              >
-                No Manual Payment Available
-              </Text>
+            {submitInfo ? (
+              <View style={[styles.note, { backgroundColor: tokens.errBg }]} accessibilityRole="alert">
+                <Ionicons name="alert-circle-outline" size={18} color={tokens.errFg} />
+                <View style={styles.flex}>
+                  <AppText variant="label" style={{ color: tokens.errFg }}>
+                    {submitInfo.title}
+                  </AppText>
+                  <AppText variant="caption" style={{ color: tokens.errFg }}>
+                    {submitInfo.message}
+                  </AppText>
+                  {submitInfo.retryable ? (
+                    // F1: the same attempt keeps its Idempotency-Key, so a
+                    // second tap replays the server's answer.
+                    <AppText variant="caption" style={[styles.mt4, { color: tokens.errFg }]}>
+                      Your receipt may already have arrived. Tapping Send receipt again won't send it twice.
+                    </AppText>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+          </>
+        )}
+      </ScrollView>
 
-              <Text
-                style={
-                  styles.emptyText
-                }
-              >
-                There is currently no
-                payment available for
-                receipt upload.
-              </Text>
-            </View>
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      {selected ? (
+        <FloatingActionBar
+          action={<Button label="Send receipt" variant="cta" grow disabled={!receipt} onPress={submit} />}
+        >
+          <Money value={selected.amount} variant="headline" />
+          <AppText variant="caption">{partLabel(selected)}</AppText>
+        </FloatingActionBar>
+      ) : null}
+    </KeyboardAvoidingView>
   );
 }
 
-function InfoRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <View
-      style={
-        styles.infoRow
-      }
-    >
-      <Text
-        style={
-          styles.infoLabel
-        }
-      >
-        {label}
-      </Text>
-
-      <Text
-        style={
-          styles.infoValue
-        }
-      >
-        {value}
-      </Text>
+    <View style={styles.section}>
+      <AppText variant="headline" accessibilityRole="header">
+        {title}
+      </AppText>
+      {children}
     </View>
   );
 }
 
-function PaymentMethodButton({
-  label,
-  icon,
-  selected,
-  onPress,
-}: {
-  label: string;
-  icon:
-    | "qr-code-outline"
-    | "wallet-outline";
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      style={[
-        styles.methodButton,
-
-        selected &&
-          styles.methodButtonSelected,
-      ]}
-      onPress={
-        onPress
-      }
-    >
-      <View
-        style={[
-          styles.methodIcon,
-
-          selected &&
-            styles.methodIconSelected,
-        ]}
-      >
-        <Ionicons
-          name={
-            icon
-          }
-          size={22}
-          color={
-            selected
-              ? "#FFFFFF"
-              : "#07869B"
-          }
-        />
-      </View>
-
-      <Text
-        style={[
-          styles.methodLabel,
-
-          selected &&
-            styles.methodLabelSelected,
-        ]}
-      >
-        {label}
-      </Text>
-
-      {selected ? (
-        <Ionicons
-          name="checkmark-circle"
-          size={18}
-          color="#07869B"
-        />
-      ) : null}
-    </Pressable>
-  );
-}
-
-const styles =
-  StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor:
-        "#F5F8F9",
-    },
-
-    center: {
-      flex: 1,
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-    },
-
-    loadingText: {
-      marginTop: 12,
-      color:
-        "#748A93",
-      fontSize: 12,
-      fontWeight:
-        "700",
-    },
-
-    header: {
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      gap: 12,
-      paddingHorizontal:
-        18,
-      paddingVertical:
-        13,
-      backgroundColor:
-        "#FFFFFF",
-      borderBottomWidth:
-        1,
-      borderBottomColor:
-        "#E4EAED",
-    },
-
-    backButton: {
-      width: 42,
-      height: 42,
-      borderRadius:
-        14,
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      backgroundColor:
-        "#F3F7F8",
-    },
-
-    headerTitle: {
-      color:
-        "#17313C",
-      fontSize: 17,
-      fontWeight:
-        "900",
-    },
-
-    headerSubtitle: {
-      marginTop: 2,
-      color:
-        "#82949C",
-      fontSize: 10,
-    },
-
-    content: {
-      padding: 18,
-      paddingBottom:
-        40,
-    },
-
-    heroCard: {
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      gap: 13,
-      padding: 16,
-      borderRadius:
-        20,
-      backgroundColor:
-        "#EAF8FA",
-      borderWidth: 1,
-      borderColor:
-        "#CFECEF",
-      marginBottom:
-        14,
-    },
-
-    heroIcon: {
-      width: 48,
-      height: 48,
-      borderRadius:
-        16,
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      backgroundColor:
-        "#FFFFFF",
-    },
-
-    heroTitle: {
-      color:
-        "#17313C",
-      fontSize: 14,
-      fontWeight:
-        "900",
-    },
-
-    heroText: {
-      marginTop: 4,
-      color:
-        "#64828D",
-      fontSize: 10,
-      lineHeight: 16,
-    },
-
-    errorBox: {
-      flexDirection:
-        "row",
-      gap: 9,
-      alignItems:
-        "flex-start",
-      padding: 13,
-      borderRadius:
-        14,
-      backgroundColor:
-        "#FDEEEE",
-      marginBottom:
-        14,
-    },
-
-    errorText: {
-      flex: 1,
-      color:
-        "#A53B3B",
-      fontSize: 11,
-      lineHeight: 16,
-      fontWeight:
-        "700",
-    },
-
-    card: {
-      padding: 17,
-      borderRadius:
-        20,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E1E8EB",
-      marginBottom:
-        14,
-    },
-
-    sectionEyebrow: {
-      color:
-        "#07869B",
-      fontSize: 9,
-      fontWeight:
-        "900",
-      letterSpacing:
-        0.8,
-    },
-
-    sectionTitle: {
-      marginTop: 3,
-      color:
-        "#17313C",
-      fontSize: 14,
-      fontWeight:
-        "900",
-    },
-
-    sectionDescription: {
-      marginTop: 5,
-      color:
-        "#80939B",
-      fontSize: 10,
-      lineHeight: 15,
-    },
-
-    amount: {
-      marginTop: 10,
-      color:
-        "#07869B",
-      fontSize: 30,
-      fontWeight:
-        "900",
-    },
-
-    summaryBox: {
-      marginTop: 15,
-      padding: 13,
-      backgroundColor:
-        "#F7FAFB",
-      borderRadius:
-        14,
-    },
-
-    infoRow: {
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      justifyContent:
-        "space-between",
-      gap: 20,
-      paddingVertical:
-        6,
-    },
-
-    infoLabel: {
-      color:
-        "#81939B",
-      fontSize: 10,
-    },
-
-    infoValue: {
-      flex: 1,
-      color:
-        "#17313C",
-      fontSize: 10,
-      fontWeight:
-        "900",
-      textAlign:
-        "right",
-    },
-
-    noticeBox: {
-      flexDirection:
-        "row",
-      alignItems:
-        "flex-start",
-      gap: 9,
-      marginTop: 13,
-      padding: 12,
-      borderRadius:
-        13,
-      backgroundColor:
-        "#EFF9FA",
-    },
-
-    noticeText: {
-      flex: 1,
-      color:
-        "#567680",
-      fontSize: 10,
-      lineHeight: 16,
-    },
-
-    warningBox: {
-      flexDirection:
-        "row",
-      alignItems:
-        "flex-start",
-      gap: 9,
-      marginTop: 10,
-      padding: 12,
-      borderRadius:
-        13,
-      backgroundColor:
-        "#FFF7E8",
-    },
-
-    warningText: {
-      flex: 1,
-      color:
-        "#8C620E",
-      fontSize: 10,
-      lineHeight: 16,
-    },
-
-    optionGroup: {
-      marginTop: 12,
-      gap: 9,
-    },
-
-    optionCard: {
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      gap: 12,
-      padding: 13,
-      borderRadius:
-        14,
-      borderWidth: 1,
-      borderColor:
-        "#DFE7EA",
-      backgroundColor:
-        "#FAFCFC",
-    },
-
-    optionCardSelected: {
-      borderColor:
-        "#07869B",
-      backgroundColor:
-        "#EFF9FA",
-    },
-
-    radioOuter: {
-      width: 20,
-      height: 20,
-      borderRadius:
-        10,
-      borderWidth: 2,
-      borderColor:
-        "#B8C5CA",
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-    },
-
-    radioOuterSelected: {
-      borderColor:
-        "#07869B",
-    },
-
-    radioInner: {
-      width: 10,
-      height: 10,
-      borderRadius:
-        5,
-      backgroundColor:
-        "#07869B",
-    },
-
-    optionTitle: {
-      color:
-        "#17313C",
-      fontSize: 11,
-      fontWeight:
-        "900",
-    },
-
-    optionAmount: {
-      marginTop: 3,
-      color:
-        "#07869B",
-      fontSize: 10,
-      fontWeight:
-        "800",
-    },
-
-    methodRow: {
-      marginTop: 12,
-      gap: 9,
-    },
-
-    methodButton: {
-      minHeight: 62,
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      gap: 11,
-      paddingHorizontal:
-        12,
-      borderRadius:
-        15,
-      borderWidth: 1,
-      borderColor:
-        "#DFE7EA",
-      backgroundColor:
-        "#FAFCFC",
-    },
-
-    methodButtonSelected: {
-      borderColor:
-        "#07869B",
-      backgroundColor:
-        "#EFF9FA",
-    },
-
-    methodIcon: {
-      width: 38,
-      height: 38,
-      borderRadius:
-        12,
-      backgroundColor:
-        "#EAF8FA",
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-    },
-
-    methodIconSelected: {
-      backgroundColor:
-        "#07869B",
-    },
-
-    methodLabel: {
-      flex: 1,
-      color:
-        "#647A83",
-      fontSize: 11,
-      fontWeight:
-        "800",
-    },
-
-    methodLabelSelected: {
-      color:
-        "#17313C",
-      fontWeight:
-        "900",
-    },
-
-    uploadBox: {
-      marginTop: 14,
-      minHeight: 170,
-      borderRadius:
-        17,
-      borderWidth: 1.5,
-      borderStyle:
-        "dashed",
-      borderColor:
-        "#AED3D9",
-      backgroundColor:
-        "#F5FBFC",
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      padding: 20,
-    },
-
-    uploadIcon: {
-      width: 54,
-      height: 54,
-      borderRadius:
-        18,
-      backgroundColor:
-        "#E4F5F7",
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-    },
-
-    uploadTitle: {
-      marginTop: 12,
-      color:
-        "#17313C",
-      fontSize: 12,
-      fontWeight:
-        "900",
-    },
-
-    uploadSubtitle: {
-      marginTop: 4,
-      color:
-        "#82949C",
-      fontSize: 10,
-    },
-
-    preview: {
-      marginTop: 14,
-      width:
-        "100%",
-      height: 260,
-      borderRadius:
-        16,
-      backgroundColor:
-        "#F4F7F8",
-    },
-
-    imageActions: {
-      flexDirection:
-        "row",
-      gap: 9,
-      marginTop: 10,
-    },
-
-    changeImageButton: {
-      flex: 1,
-      height: 44,
-      borderRadius:
-        13,
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      gap: 7,
-      backgroundColor:
-        "#EAF8FA",
-    },
-
-    changeImageText: {
-      color:
-        "#07869B",
-      fontSize: 10,
-      fontWeight:
-        "900",
-    },
-
-    removeImageButton: {
-      flex: 1,
-      height: 44,
-      borderRadius:
-        13,
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      gap: 7,
-      backgroundColor:
-        "#FDEEEE",
-    },
-
-    removeImageText: {
-      color:
-        "#C84242",
-      fontSize: 10,
-      fontWeight:
-        "900",
-    },
-
-    textArea: {
-      marginTop: 12,
-      minHeight: 110,
-      padding: 13,
-      borderRadius:
-        14,
-      borderWidth: 1,
-      borderColor:
-        "#DCE5E8",
-      backgroundColor:
-        "#FAFCFC",
-      color:
-        "#17313C",
-      fontSize: 11,
-      textAlignVertical:
-        "top",
-    },
-
-    characterCount: {
-      marginTop: 6,
-      color:
-        "#99A7AC",
-      fontSize: 9,
-      textAlign:
-        "right",
-    },
-
-    submitButton: {
-      height: 54,
-      borderRadius:
-        16,
-      backgroundColor:
-        "#07869B",
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      gap: 8,
-    },
-
-    submitText: {
-      color:
-        "#FFFFFF",
-      fontSize: 12,
-      fontWeight:
-        "900",
-    },
-
-    footerNote: {
-      marginTop: 12,
-      paddingHorizontal:
-        20,
-      textAlign:
-        "center",
-      color:
-        "#87989F",
-      fontSize: 9,
-      lineHeight: 14,
-    },
-
-    emptyCard: {
-      alignItems:
-        "center",
-      padding: 28,
-      borderRadius:
-        20,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E1E8EB",
-    },
-
-    emptyTitle: {
-      marginTop: 12,
-      color:
-        "#17313C",
-      fontSize: 14,
-      fontWeight:
-        "900",
-    },
-
-    emptyText: {
-      marginTop: 6,
-      color:
-        "#81939B",
-      fontSize: 10,
-      textAlign:
-        "center",
-      lineHeight: 16,
-    },
-  });
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  pad: {
+    paddingHorizontal: 18,
+  },
+  content: {
+    paddingHorizontal: 18,
+    gap: 16,
+  },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  flex: {
+    flex: 1,
+  },
+  mt4: {
+    marginTop: 4,
+  },
+  section: {
+    gap: 10,
+  },
+  refRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  note: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "flex-start",
+    padding: 12,
+    borderRadius: Radius.sm,
+    marginTop: 12,
+  },
+  option: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 12,
+  },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  methods: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  method: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: Radius.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  photo: {
+    height: 240,
+    borderRadius: Radius.card,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoImage: {
+    width: "100%",
+    height: "100%",
+  },
+  photoEmpty: {
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 24,
+  },
+  change: {
+    position: "absolute",
+    right: 10,
+    bottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: Radius.pill,
+  },
+});
