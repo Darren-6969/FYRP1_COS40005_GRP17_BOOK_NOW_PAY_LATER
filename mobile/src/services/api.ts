@@ -22,7 +22,11 @@ export const UPLOAD_TIMEOUT_MS = 60_000;
 
 // A 401 from these means wrong credentials or a dead refresh token,
 // not an expired access token, so they never trigger a refresh.
-const NO_REFRESH_PATHS = ["/auth/login", "/auth/register", "/auth/refresh"];
+// A 401 from these means wrong credentials, not an expired login, so it must
+// not trigger a refresh. /auth/change-password answers 401 for a wrong
+// current password; refreshing and retrying would get 401 again and sign the
+// customer out. Its screen refreshes the login first (getMe) instead.
+const NO_REFRESH_PATHS = ["/auth/login", "/auth/register", "/auth/refresh", "/auth/change-password"];
 
 export const ERROR_CODES = {
   NETWORK: "NETWORK_ERROR",
