@@ -1,693 +1,214 @@
-import { Ionicons } from "@expo/vector-icons";
-import {
-  useFocusEffect,
-  useRouter,
-} from "expo-router";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { useCallback, useState } from "react";
+import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import {
-  useCallback,
-  useState,
-} from "react";
-
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-
-import {
-  getSavedListings,
-  removeSavedListing,
-} from "../../services/customerApi";
+import { CarCard, type CarSummary } from "@/components/booking/CarCard";
+import { AppText, Button, EmptyState, ErrorState, GlassCard, IconButton, Skeleton, SkeletonText, StatusPill, useToast } from "@/components/ui";
+import { Radius } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { getSavedListings, removeSavedListing } from "@/services/customerApi";
 import { logger } from "@/utils/logger";
 
 type SavedCar = {
   listingId: number;
   savedAt?: string;
   available?: boolean;
-
   car?: {
     title?: string;
-    modelYear?: number;
     vehicleType?: string;
     seats?: number;
     transmission?: string;
     imageUrl?: string | null;
+    /** Server amount in integer sen (F16: formatted, never calculated). */
     dailyRateSen?: number;
-
-    operator?: {
-      id?: number;
-      companyName?: string;
-    };
-
-    branch?: {
-      name?: string;
-      city?: string;
-    };
+    operator?: { companyName?: string };
+    branch?: { city?: string };
   };
 };
 
+/** The saved item in the shape the shared car card reads. */
+function toSummary(item: SavedCar): CarSummary {
+  const car = item.car || {};
+  return {
+    id: item.listingId,
+    name: car.title || null,
+    vehicleType: car.vehicleType || null,
+    seats: car.seats ?? null,
+    transmission: car.transmission || null,
+    images: car.imageUrl ? [{ imageUrl: car.imageUrl }] : [],
+    operator: car.operator ? { companyName: car.operator.companyName ?? null } : null,
+    branch: car.branch ? { city: car.branch.city ?? null } : null,
+    booking: { dailyRateSen: car.dailyRateSen ?? null },
+  };
+}
+
+/** Saved cars (plan phase 3), on the shared car card. */
 export default function SavedCarsScreen() {
   const router = useRouter();
+  const toast = useToast();
+  const insets = useSafeAreaInsets();
+  const { tokens } = useTheme();
 
-  const [items, setItems] =
-    useState<SavedCar[]>([]);
+  const [items, setItems] = useState<SavedCar[] | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [removing, setRemoving] = useState<Set<number>>(new Set());
 
-  const [loading, setLoading] =
-    useState(true);
-
-  const [refreshing, setRefreshing] =
-    useState(false);
-
-  const [
-    removingId,
-    setRemovingId,
-  ] = useState<number | null>(
-    null
-  );
-
-  const loadSavedCars =
-    async (
-      refresh = false
-    ) => {
-      try {
-        if (refresh) {
-          setRefreshing(true);
-        } else {
-          setLoading(true);
-        }
-
-        const data =
-          await getSavedListings();
-
-        setItems(
-          Array.isArray(data?.items)
-            ? data.items
-            : []
-        );
-      } catch (error) {
-        logger.debug(
-          "Failed to load saved cars:",
-          error
-        );
-
-        setItems([]);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    };
+  const load = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshing(true);
+    setError(null);
+    try {
+      const data = await getSavedListings();
+      setItems(Array.isArray(data?.items) ? data.items : []);
+    } catch (err) {
+      logger.debug("Failed to load saved cars:", err);
+      setError(err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadSavedCars();
-    }, [])
+      load();
+    }, [load])
   );
 
-  const handleRemove =
-    async (
-      listingId: number
-    ) => {
-      if (
-        removingId ===
-        listingId
-      ) {
-        return;
-      }
+  // Removed at once; put back if the server refuses. Saving again is one tap,
+  // so there is no confirmation.
+  const remove = async (item: SavedCar) => {
+    if (removing.has(item.listingId)) return;
+    setRemoving((s) => new Set(s).add(item.listingId));
+    const before = items;
+    setItems((current) => current?.filter((i) => i.listingId !== item.listingId) ?? current);
+    try {
+      await removeSavedListing(item.listingId);
+      toast.show("Removed from saved cars.", { tone: "ok" });
+    } catch (err) {
+      logger.debug("Failed to remove saved car:", err);
+      setItems(before);
+      toast.show("Couldn't remove it. Try again.", { tone: "err" });
+    } finally {
+      setRemoving((s) => {
+        const next = new Set(s);
+        next.delete(item.listingId);
+        return next;
+      });
+    }
+  };
 
-      try {
-        setRemovingId(
-          listingId
-        );
+  const openCar = (item: SavedCar) => {
+    if (item.available === false) return;
+    router.push({ pathname: "/customer/car-details", params: { id: String(item.listingId) } } as unknown as Href);
+  };
 
-        await removeSavedListing(
-          listingId
-        );
+  const header = (
+    <View style={styles.topRow}>
+      <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+      <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex} numberOfLines={1}>
+        Saved cars
+      </AppText>
+    </View>
+  );
 
-        setItems(
-          (current) =>
-            current.filter(
-              (item) =>
-                item.listingId !==
-                listingId
-            )
-        );
-      } catch (error) {
-        logger.debug(
-          "Failed to remove saved car:",
-          error
-        );
-      } finally {
-        setRemovingId(null);
-      }
-    };
+  if (error && !items) {
+    return (
+      <View style={[styles.screen, styles.pad, { paddingTop: insets.top + 8 }]}>
+        {header}
+        <ErrorState error={error} onRetry={() => load()} />
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-    >
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          onPress={() =>
-            router.back()
-          }
-        >
-          <Ionicons
-            name="chevron-back"
-            size={22}
-            color="#17313C"
-          />
-        </Pressable>
-
-        <View
-          style={styles.headerText}
-        >
-          <Text
-            style={styles.title}
-          >
-            Saved Cars
-          </Text>
-
-          <Text
-            style={styles.subtitle}
-          >
-            Vehicles you saved for later
-          </Text>
-        </View>
-
-        <View
-          style={styles.headerSpacer}
-        />
-      </View>
-
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator
-            size="large"
-            color="#07869B"
-          />
-
-          <Text
-            style={styles.loadingText}
-          >
-            Loading saved cars...
-          </Text>
-        </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={
-            false
-          }
-          contentContainerStyle={
-            styles.content
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={
-                refreshing
-              }
-              onRefresh={() =>
-                loadSavedCars(
-                  true
-                )
-              }
+    <View style={styles.screen}>
+      <FlatList
+        data={items ?? []}
+        keyExtractor={(item) => String(item.listingId)}
+        ListHeaderComponent={<View style={styles.headerWrap}>{header}</View>}
+        ListEmptyComponent={
+          items ? (
+            <EmptyState
+              icon="heart-outline"
+              title="No saved cars yet"
+              message="Tap the heart on a car to keep it here for later."
+              action={<Button label="Browse cars" variant="brand" onPress={() => router.push("/customer/cars" as Href)} />}
             />
-          }
-        >
-          {items.length === 0 ? (
-            <View
-              style={styles.emptyCard}
-            >
-              <View
-                style={styles.emptyIcon}
-              >
-                <Ionicons
-                  name="heart-outline"
-                  size={32}
-                  color="#07869B"
-                />
-              </View>
-
-              <Text
-                style={styles.emptyTitle}
-              >
-                No saved cars yet
-              </Text>
-
-              <Text
-                style={styles.emptyText}
-              >
-                Tap the heart icon on a vehicle to save it here.
-              </Text>
-
-              <Pressable
-                style={styles.browseButton}
-                onPress={() =>
-                  router.push(
-                    "/customer/cars"
-                  )
-                }
-              >
-                <Text
-                  style={
-                    styles.browseButtonText
-                  }
-                >
-                  Browse Cars
-                </Text>
-              </Pressable>
-            </View>
           ) : (
-            items.map((item) => {
-              const car =
-                item.car || {};
-
-              const dailyRate =
-                Number(
-                  car.dailyRateSen ||
-                    0
-                ) / 100;
-
-              return (
-                <Pressable
-                  key={
-                    item.listingId
-                  }
-                  style={({
-                    pressed,
-                  }) => [
-                    styles.carCard,
-
-                    pressed &&
-                      item.available !==
-                        false && {
-                        opacity: 0.85,
-                      },
-                  ]}
-                  disabled={
-                    item.available ===
-                    false
-                  }
-                  onPress={() =>
-                    router.push({
-                      pathname:
-                        "/customer/car-details",
-
-                      params: {
-                        id: String(
-                          item.listingId
-                        ),
-                      },
-                    })
-                  }
-                >
-                  <View
-                    style={
-                      styles.imageWrapper
-                    }
-                  >
-                    {car.imageUrl ? (
-                      <Image
-                        source={{
-                          uri: car.imageUrl,
-                        }}
-                        style={
-                          styles.carImage
-                        }
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View
-                        style={
-                          styles.imagePlaceholder
-                        }
-                      >
-                        <Ionicons
-                          name="car-sport-outline"
-                          size={40}
-                          color="#91A5AD"
-                        />
-                      </View>
-                    )}
-
-                    <Pressable
-                      style={
-                        styles.heartButton
-                      }
-                      disabled={
-                        removingId ===
-                        item.listingId
-                      }
-                      onPress={(
-                        event
-                      ) => {
-                        event.stopPropagation();
-
-                        handleRemove(
-                          item.listingId
-                        );
-                      }}
-                    >
-                      <Ionicons
-                        name="heart"
-                        size={20}
-                        color="#E84B4B"
-                      />
-                    </Pressable>
-
-                    {item.available ===
-                      false && (
-                      <View
-                        style={
-                          styles.unavailableBadge
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.unavailableText
-                          }
-                        >
-                          Unavailable
-                        </Text>
-                      </View>
-                    )}
+            <View style={styles.list}>
+              {[0, 1].map((i) => (
+                <GlassCard key={i} padding={8}>
+                  <Skeleton height={150} radius={Radius.md} />
+                  <View style={styles.skeletonText}>
+                    <SkeletonText lines={3} />
                   </View>
-
-                  <View
-                    style={styles.carInfo}
-                  >
-                    <Text
-                      style={styles.carName}
-                      numberOfLines={1}
-                    >
-                      {car.title ||
-                        "Vehicle"}
-                    </Text>
-
-                    <Text
-                      style={styles.carMeta}
-                      numberOfLines={1}
-                    >
-                      {car.vehicleType ||
-                        "Car"}
-
-                      {car.transmission
-                        ? ` · ${car.transmission}`
-                        : ""}
-
-                      {car.seats
-                        ? ` · ${car.seats} seats`
-                        : ""}
-                    </Text>
-
-                    {car.branch?.city ? (
-                      <View
-                        style={
-                          styles.locationRow
-                        }
-                      >
-                        <Ionicons
-                          name="location-outline"
-                          size={13}
-                          color="#81939C"
-                        />
-
-                        <Text
-                          style={
-                            styles.locationText
-                          }
-                        >
-                          {
-                            car.branch
-                              .city
-                          }
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    <View
-                      style={styles.priceRow}
-                    >
-                      <Text
-                        style={styles.price}
-                      >
-                        RM{" "}
-                        {dailyRate.toFixed(
-                          2
-                        )}
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.perDay
-                        }
-                      >
-                        {" "}
-                        / day
-                      </Text>
-                    </View>
-                  </View>
-                </Pressable>
-              );
-            })
-          )}
-        </ScrollView>
-      )}
-    </SafeAreaView>
+                </GlassCard>
+              ))}
+            </View>
+          )
+        }
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        renderItem={({ item }) => {
+          const unavailable = item.available === false;
+          return (
+            <View style={unavailable ? styles.dimmed : null}>
+              {unavailable ? (
+                <View style={styles.unavailable}>
+                  <StatusPill label="Not available now" tone="neutral" />
+                </View>
+              ) : null}
+              <CarCard car={toSummary(item)} saved onPress={() => openCar(item)} onToggleSaved={() => remove(item)} />
+            </View>
+          );
+        }}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={tokens.label} colors={[tokens.brand]} />
+        }
+      />
+    </View>
   );
 }
 
-const styles =
-  StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor:
-        "#F7FAFB",
-    },
-
-    header: {
-      paddingHorizontal: 18,
-      paddingVertical: 14,
-      flexDirection: "row",
-      alignItems: "center",
-    },
-
-    headerButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 15,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E4EBED",
-      alignItems: "center",
-      justifyContent:
-        "center",
-    },
-
-    headerText: {
-      flex: 1,
-      alignItems: "center",
-    },
-
-    headerSpacer: {
-      width: 44,
-    },
-
-    title: {
-      color: "#17313C",
-      fontSize: 18,
-      fontWeight: "900",
-    },
-
-    subtitle: {
-      marginTop: 2,
-      color: "#8799A1",
-      fontSize: 10,
-    },
-
-    center: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent:
-        "center",
-    },
-
-    loadingText: {
-      marginTop: 10,
-      color: "#81939C",
-      fontSize: 11,
-    },
-
-    content: {
-      paddingHorizontal: 18,
-      paddingBottom: 45,
-    },
-
-    emptyCard: {
-      marginTop: 70,
-      padding: 30,
-      borderRadius: 24,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E3EAED",
-      alignItems: "center",
-    },
-
-    emptyIcon: {
-      width: 68,
-      height: 68,
-      borderRadius: 22,
-      backgroundColor:
-        "#E8F7F9",
-      alignItems: "center",
-      justifyContent:
-        "center",
-    },
-
-    emptyTitle: {
-      marginTop: 16,
-      color: "#17313C",
-      fontSize: 17,
-      fontWeight: "900",
-    },
-
-    emptyText: {
-      marginTop: 7,
-      color: "#81939C",
-      fontSize: 11,
-      lineHeight: 17,
-      textAlign: "center",
-    },
-
-    browseButton: {
-      marginTop: 20,
-      paddingHorizontal: 20,
-      paddingVertical: 12,
-      borderRadius: 14,
-      backgroundColor:
-        "#07869B",
-    },
-
-    browseButtonText: {
-      color: "#FFFFFF",
-      fontSize: 11,
-      fontWeight: "900",
-    },
-
-    carCard: {
-      marginBottom: 14,
-      borderRadius: 22,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E3EAED",
-      overflow: "hidden",
-    },
-
-    imageWrapper: {
-      height: 185,
-      backgroundColor:
-        "#EEF3F5",
-      position: "relative",
-    },
-
-    carImage: {
-      width: "100%",
-      height: "100%",
-    },
-
-    imagePlaceholder: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent:
-        "center",
-    },
-
-    heartButton: {
-      position: "absolute",
-      top: 12,
-      right: 12,
-      width: 38,
-      height: 38,
-      borderRadius: 14,
-      backgroundColor:
-        "rgba(255,255,255,0.94)",
-      alignItems: "center",
-      justifyContent:
-        "center",
-    },
-
-    unavailableBadge: {
-      position: "absolute",
-      left: 12,
-      bottom: 12,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 10,
-      backgroundColor:
-        "rgba(23,49,60,0.85)",
-    },
-
-    unavailableText: {
-      color: "#FFFFFF",
-      fontSize: 9,
-      fontWeight: "800",
-    },
-
-    carInfo: {
-      padding: 15,
-    },
-
-    carName: {
-      color: "#17313C",
-      fontSize: 15,
-      fontWeight: "900",
-    },
-
-    carMeta: {
-      marginTop: 5,
-      color: "#81939C",
-      fontSize: 10,
-    },
-
-    locationRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginTop: 9,
-      gap: 4,
-    },
-
-    locationText: {
-      color: "#81939C",
-      fontSize: 10,
-    },
-
-    priceRow: {
-      flexDirection: "row",
-      alignItems: "baseline",
-      marginTop: 12,
-    },
-
-    price: {
-      color: "#07869B",
-      fontSize: 16,
-      fontWeight: "900",
-    },
-
-    perDay: {
-      color: "#8C9BA2",
-      fontSize: 9,
-    },
-  });
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  pad: {
+    paddingHorizontal: 18,
+  },
+  content: {
+    paddingHorizontal: 18,
+  },
+  headerWrap: {
+    marginBottom: 16,
+  },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  flex: {
+    flex: 1,
+  },
+  list: {
+    gap: 12,
+  },
+  separator: {
+    height: 12,
+  },
+  skeletonText: {
+    padding: 8,
+  },
+  dimmed: {
+    opacity: 0.6,
+  },
+  unavailable: {
+    position: "absolute",
+    top: 18,
+    left: 18,
+    zIndex: 2,
+  },
+});

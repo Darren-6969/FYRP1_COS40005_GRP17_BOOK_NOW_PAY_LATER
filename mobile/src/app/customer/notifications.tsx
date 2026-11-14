@@ -1,32 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
-import {
-  useFocusEffect,
-  useRouter,
-} from "expo-router";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { useCallback, useState, type ComponentProps } from "react";
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-
-import {
-  useCallback,
-  useState,
-} from "react";
-
+import { AppText, Button, EmptyState, ErrorState, GlassCard, IconButton, Skeleton, SkeletonText, useToast } from "@/components/ui";
+import { Radius } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import {
   getCustomerBookings,
   getCustomerNotifications,
   markAllCustomerNotificationsRead,
   markCustomerNotificationRead,
-} from "../../services/customerApi";
+} from "@/services/customerApi";
+import { formatMYT } from "@/utils/datetime";
 import { logger } from "@/utils/logger";
+
+type IconName = ComponentProps<typeof Ionicons>["name"];
 
 type Notification = {
   id: number;
@@ -39,632 +29,278 @@ type Notification = {
   createdAt?: string;
 };
 
-function formatDate(value?: string) {
-  if (!value) return "";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return date.toLocaleString("en-MY", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+/** An icon for the notification's type; unknown types get a bell. */
+function iconFor(type?: string): IconName {
+  const t = String(type || "").toUpperCase();
+  if (t.includes("LICENCE")) return "card-outline";
+  if (t.includes("INVOICE")) return "document-text-outline";
+  if (t.includes("REFUND")) return "return-down-back-outline";
+  if (t.includes("PAYMENT") || t.includes("RECEIPT")) return "wallet-outline";
+  if (t.includes("ALTERNATIVE")) return "swap-horizontal-outline";
+  if (t.includes("ACCEPTED") || t.includes("CONFIRMED")) return "checkmark-circle-outline";
+  if (t.includes("REJECTED") || t.includes("CANCELLED") || t.includes("EXPIRED")) return "close-circle-outline";
+  if (t.includes("BOOKING")) return "car-outline";
+  return "notifications-outline";
 }
 
-function getNotificationIcon(type?: string) {
-  switch (type) {
-    case "BOOKING_SUBMITTED":
-    case "BOOKING_REQUEST_RECEIVED":
-      return "car-outline";
-
-    case "PAYMENT_REQUEST":
-    case "PAYMENT_CONFIRMED":
-      return "wallet-outline";
-
-    case "INVOICE_SENT":
-      return "document-text-outline";
-
-    case "BOOKING_ACCEPTED":
-      return "checkmark-circle-outline";
-
-    case "BOOKING_REJECTED":
-      return "close-circle-outline";
-
-    default:
-      return "notifications-outline";
-  }
+/** "BNPL-0202" from the reference, title or message, for older notifications without a bookingId. */
+function bookingCodeOf(item: Notification) {
+  const text = [item.bookingRef, item.title, item.message].filter(Boolean).join(" ");
+  const match = text.match(/\bBNPL-\d+\b/i);
+  return match ? match[0].toUpperCase() : null;
 }
 
-function extractBookingCode(
-  item: Notification
-) {
-  const text = [
-    item.bookingRef,
-    item.title,
-    item.message,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const match =
-    text.match(
-      /\bBNPL-\d+\b/i
-    );
-
-  return match
-    ? match[0].toUpperCase()
-    : null;
-}
-
+/** Customer notifications (plan phase 3). Tapping one opens what it's about. */
 export default function NotificationsScreen() {
   const router = useRouter();
+  const toast = useToast();
+  const insets = useSafeAreaInsets();
+  const { tokens } = useTheme();
 
-  const [notifications, setNotifications] =
-    useState<Notification[]>([]);
+  const [items, setItems] = useState<Notification[] | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [loading, setLoading] =
-    useState(true);
-
-  const [refreshing, setRefreshing] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  const loadNotifications = async (
-    refresh = false
-  ) => {
+  const load = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshing(true);
+    setError(null);
     try {
-      setError("");
-
-      if (refresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      const data =
-        await getCustomerNotifications();
-
-      setNotifications(
-        Array.isArray(data) ? data : []
-      );
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          "Failed to load notifications."
-      );
+      const data = await getCustomerNotifications();
+      setItems(Array.isArray(data) ? data : []);
+    } catch (err) {
+      logger.debug("Failed to load notifications:", err);
+      setError(err);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadNotifications();
-    }, [])
+      load();
+    }, [load])
   );
 
-  
-const handleNotificationPress =
-  async (item: Notification) => {
+  const open = async (item: Notification) => {
     if (!item.isRead) {
-      try {
-        await markCustomerNotificationRead(
-          item.id
-        );
+      setItems((current) => current?.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)) ?? current);
+      markCustomerNotificationRead(item.id).catch((err) => logger.debug("Failed to mark notification read:", err));
+    }
 
-        setNotifications((current) =>
-          current.map((notification) =>
-            notification.id === item.id
-              ? {
-                  ...notification,
-                  isRead: true,
-                }
-              : notification
-          )
-        );
-      } catch (error) {
-        logger.debug(
-          "Failed to mark notification as read:",
-          error
-        );
+    const type = String(item.type || "").toUpperCase();
+    const isInvoice = type.includes("INVOICE");
+    const isPayment = type.includes("PAYMENT") || type.includes("RECEIPT") || type.includes("REFUND");
+    const isLicence = type.includes("LICENCE");
+
+    let bookingId = Number(item.bookingId) > 0 ? Number(item.bookingId) : null;
+    const code = bookingCodeOf(item);
+    if (!bookingId && code) {
+      try {
+        const bookings = await getCustomerBookings();
+        const match = Array.isArray(bookings)
+          ? bookings.find((b: any) => String(b.bookingCode || "").toUpperCase() === code)
+          : null;
+        if (match) bookingId = Number(match.id);
+      } catch (err) {
+        logger.debug("Failed to resolve notification booking:", err);
       }
     }
 
-    const type = String(
-      item.type || ""
-    ).toUpperCase();
-
-    const isInvoice =
-      type.includes("INVOICE");
-
-    const isPayment =
-      type.includes("PAYMENT") ||
-      type.includes("RECEIPT") ||
-      type.includes("REFUND");
-
-    let bookingId =
-      item.bookingId &&
-      Number.isInteger(
-        Number(item.bookingId)
-      ) &&
-      Number(item.bookingId) > 0
-        ? Number(item.bookingId)
-        : null;
-
-    const bookingCode =
-      extractBookingCode(item);
-
-    if (!bookingId && bookingCode) {
-      try {
-        const bookings =
-          await getCustomerBookings();
-
-        if (Array.isArray(bookings)) {
-          const matchedBooking =
-            bookings.find(
-              (booking) =>
-                String(
-                  booking.bookingCode || ""
-                ).toUpperCase() ===
-                bookingCode
-            );
-
-          if (matchedBooking) {
-            bookingId =
-              Number(
-                matchedBooking.id
-              );
-          }
-        }
-      } catch (error) {
-        logger.debug(
-          "Failed to resolve notification booking:",
-          error
-        );
-      }
-    }
-
+    if (isLicence && !bookingId) return router.push("/customer/licence" as Href);
     if (bookingId) {
-      if (isInvoice) {
-        router.push(
-          `/customer/invoice/${bookingId}`
-        );
-
-        return;
-      }
-
-      router.push(
-        `/customer/booking/${bookingId}`
-      );
-
-      return;
+      if (isInvoice) return router.push(`/customer/invoice/${bookingId}` as Href);
+      return router.push(`/customer/booking/${bookingId}` as Href);
     }
-
-    if (isPayment || isInvoice) {
-      router.push(
-        "/customer/(tabs)/payments"
-      );
-
-      return;
-    }
-
-    router.push(
-      "/customer/(tabs)/bookings"
-    );
+    if (isPayment || isInvoice) return router.push("/customer/(tabs)/payments" as Href);
+    router.push("/customer/(tabs)/bookings" as Href);
   };
 
-
-  const handleReadAll = async () => {
+  const markAll = async () => {
     try {
       await markAllCustomerNotificationsRead();
-
-      setNotifications((current) =>
-        current.map((item) => ({
-          ...item,
-          isRead: true,
-        }))
-      );
+      setItems((current) => current?.map((n) => ({ ...n, isRead: true })) ?? current);
     } catch (err) {
-      logger.debug(err);
+      logger.debug("Failed to mark all notifications read:", err);
+      toast.show("Couldn't mark them as read. Try again.", { tone: "err" });
     }
   };
 
-  const unreadCount =
-    notifications.filter(
-      (item) => !item.isRead
-    ).length;
+  const unread = items?.filter((n) => !n.isRead).length ?? 0;
+
+  const header = (
+    <View style={styles.header}>
+      <View style={styles.topRow}>
+        <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+        <View style={styles.flex}>
+          <AppText variant="largeTitle" accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit>
+            Notifications
+          </AppText>
+        </View>
+      </View>
+      {items && items.length > 0 ? (
+        <View style={styles.summary}>
+          <AppText variant="caption" style={styles.flex}>
+            {unread === 0 ? "All read" : unread === 1 ? "1 unread" : `${unread} unread`}
+          </AppText>
+          {unread > 0 ? <Button label="Mark all read" variant="text" size="sm" onPress={markAll} /> : null}
+        </View>
+      ) : null}
+    </View>
+  );
+
+  if (error && !items) {
+    return (
+      <View style={[styles.screen, styles.pad, { paddingTop: insets.top + 8 }]}>
+        {header}
+        <ErrorState error={error} onRetry={() => load()} />
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.headerButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons
-            name="chevron-back"
-            size={22}
-            color="#17313C"
-          />
-        </Pressable>
-
-        <View>
-          <Text style={styles.title}>
-            Notifications
-          </Text>
-
-          <Text style={styles.subtitle}>
-            {unreadCount} unread
-          </Text>
-        </View>
-
-        <Pressable
-          style={styles.headerButton}
-          onPress={handleReadAll}
-        >
-          <Ionicons
-            name="checkmark-done-outline"
-            size={21}
-            color="#07869B"
-          />
-        </Pressable>
-      </View>
-
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator
-            size="large"
-            color="#07869B"
-          />
-
-          <Text style={styles.loadingText}>
-            Loading notifications...
-          </Text>
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.screen}
-          contentContainerStyle={
-            styles.container
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() =>
-                loadNotifications(true)
-              }
+    <View style={styles.screen}>
+      <FlatList
+        data={items ?? []}
+        keyExtractor={(n) => String(n.id)}
+        ListHeaderComponent={header}
+        ListEmptyComponent={
+          items ? (
+            <EmptyState
+              icon="notifications-outline"
+              title="You're all caught up"
+              message="Updates about your bookings, payments and invoices appear here."
             />
-          }
-        >
-          {error ? (
-            <View style={styles.errorCard}>
-              <Text style={styles.errorText}>
-                {error}
-              </Text>
+          ) : (
+            <View style={styles.list}>
+              {[0, 1, 2].map((i) => (
+                <GlassCard key={i}>
+                  <View style={styles.cardRow}>
+                    <Skeleton width={40} height={40} radius={Radius.sm} />
+                    <View style={styles.flex}>
+                      <SkeletonText lines={3} />
+                    </View>
+                  </View>
+                </GlassCard>
+              ))}
             </View>
-          ) : null}
-
-          {!error &&
-            notifications.length === 0 && (
-              <View style={styles.emptyCard}>
-                <View
-                  style={styles.emptyIcon}
-                >
-                  <Ionicons
-                    name="notifications-outline"
-                    size={30}
-                    color="#07869B"
-                  />
-                </View>
-
-                <Text
-                  style={styles.emptyTitle}
-                >
-                  You're all caught up
-                </Text>
-
-                <Text
-                  style={styles.emptyText}
-                >
-                  Booking, payment and
-                  invoice updates will
-                  appear here.
-                </Text>
-              </View>
-            )}
-
-          {notifications.map((item) => (
+          )
+        }
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        renderItem={({ item }) => {
+          const unreadItem = !item.isRead;
+          return (
             <Pressable
-              key={item.id}
-              style={({ pressed }) => [
-                styles.notificationCard,
-
-                !item.isRead &&
-                  styles.unreadCard,
-
-                pressed && {
-                  opacity: 0.8,
-                },
-              ]}
-              onPress={() =>
-                handleNotificationPress(
-                  item
-                )
-              }
+              onPress={() => open(item)}
+              accessibilityRole="button"
+              accessibilityLabel={[unreadItem ? "Unread" : null, item.title, item.message, formatMYT(item.createdAt, "dayDateTime")]
+                .filter(Boolean)
+                .join(". ")}
+              style={({ pressed }) => [pressed && { opacity: 0.75 }]}
             >
-              <View
-                style={styles.iconBox}
-              >
-                <Ionicons
-                  name={getNotificationIcon(
-                    item.type
-                  )}
-                  size={21}
-                  color="#07869B"
-                />
-              </View>
-
-              <View
-                style={
-                  styles.notificationContent
-                }
-              >
-                <View
-                  style={styles.titleRow}
-                >
-                  <Text
-                    style={
-                      styles.notificationTitle
-                    }
-                  >
-                    {item.title ||
-                      "Notification"}
-                  </Text>
-
-                  {!item.isRead && (
-                    <View
-                      style={
-                        styles.unreadDot
-                      }
-                    />
-                  )}
+              <GlassCard strong={unreadItem}>
+                <View style={styles.cardRow}>
+                  <View style={[styles.icon, { backgroundColor: unreadItem ? tokens.infoBg : tokens.glassStrong }]}>
+                    <Ionicons name={iconFor(item.type)} size={20} color={unreadItem ? tokens.infoFg : tokens.label} />
+                  </View>
+                  <View style={styles.flex}>
+                    <View style={styles.titleRow}>
+                      <AppText variant={unreadItem ? "headline" : "bodyStrong"} style={styles.flex}>
+                        {item.title || "Notification"}
+                      </AppText>
+                      {unreadItem ? <View style={[styles.dot, { backgroundColor: tokens.cta }]} /> : null}
+                    </View>
+                    {item.message ? (
+                      <AppText variant="body" style={styles.mt4}>
+                        {item.message}
+                      </AppText>
+                    ) : null}
+                    <View style={styles.meta}>
+                      <AppText variant="caption">{formatMYT(item.createdAt, "dayDateTime")}</AppText>
+                      {item.bookingRef ? (
+                        <AppText variant="mono" color="label">
+                          {item.bookingRef}
+                        </AppText>
+                      ) : null}
+                    </View>
+                  </View>
                 </View>
-
-                <Text
-                  style={
-                    styles.notificationMessage
-                  }
-                >
-                  {item.message}
-                </Text>
-
-                <View
-                  style={styles.metaRow}
-                >
-                  <Text
-                    style={
-                      styles.notificationDate
-                    }
-                  >
-                    {formatDate(
-                      item.createdAt
-                    )}
-                  </Text>
-
-                  {item.bookingRef ? (
-                    <Text
-                      style={
-                        styles.bookingRef
-                      }
-                    >
-                      {item.bookingRef}
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color="#A1B0B6"
-              />
+              </GlassCard>
             </Pressable>
-          ))}
-        </ScrollView>
-      )}
-    </SafeAreaView>
+          );
+        }}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={tokens.label} colors={[tokens.brand]} />
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F7FAFB",
-  },
-
   screen: {
     flex: 1,
   },
-
-  container: {
+  pad: {
     paddingHorizontal: 18,
-    paddingBottom: 40,
   },
-
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+  content: {
+    paddingHorizontal: 18,
   },
-
-  loadingText: {
-    marginTop: 10,
-    color: "#81939C",
-  },
-
   header: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    gap: 6,
+    marginBottom: 12,
+  },
+  topRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent:
-      "space-between",
+    gap: 12,
   },
-
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 15,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E4EBED",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  title: {
-    color: "#17313C",
-    fontSize: 18,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-
-  subtitle: {
-    color: "#8799A1",
-    fontSize: 10,
-    textAlign: "center",
-    marginTop: 2,
-  },
-
-  errorCard: {
-    backgroundColor: "#FDEDED",
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 15,
-  },
-
-  errorText: {
-    color: "#D14343",
-    textAlign: "center",
-    fontSize: 12,
-  },
-
-  emptyCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    alignItems: "center",
-    padding: 30,
-    marginTop: 80,
-    borderWidth: 1,
-    borderColor: "#E5ECEF",
-  },
-
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 22,
-    backgroundColor: "#E5F7F9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  emptyTitle: {
-    color: "#17313C",
-    fontSize: 18,
-    fontWeight: "900",
-    marginTop: 16,
-  },
-
-  emptyText: {
-    color: "#84969E",
-    fontSize: 11,
-    textAlign: "center",
-    marginTop: 7,
-    lineHeight: 17,
-  },
-
-  notificationCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 15,
-    marginBottom: 11,
-
-    borderWidth: 1,
-    borderColor: "#E5ECEF",
-
+  summary: {
     flexDirection: "row",
     alignItems: "center",
+    minHeight: 44,
   },
-
-  unreadCard: {
-    backgroundColor: "#F0FAFB",
-    borderColor: "#CBECEF",
-  },
-
-  iconBox: {
-    width: 45,
-    height: 45,
-    borderRadius: 15,
-    backgroundColor: "#E6F7F9",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
-  notificationContent: {
+  flex: {
     flex: 1,
   },
-
+  list: {
+    gap: 10,
+  },
+  separator: {
+    height: 10,
+  },
+  cardRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  icon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
   },
-
-  notificationTitle: {
-    flex: 1,
-    color: "#17313C",
-    fontSize: 13,
-    fontWeight: "900",
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-
-  unreadDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 7,
-    backgroundColor: "#E84B4B",
-    marginLeft: 7,
+  mt4: {
+    marginTop: 4,
   },
-
-  notificationMessage: {
-    color: "#667C85",
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 5,
-  },
-
-  metaRow: {
+  meta: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
     marginTop: 8,
-  },
-
-  notificationDate: {
-    color: "#9AABB2",
-    fontSize: 9,
-  },
-
-  bookingRef: {
-    marginLeft: 10,
-    color: "#07869B",
-    fontSize: 9,
-    fontWeight: "800",
+    flexWrap: "wrap",
   },
 });
