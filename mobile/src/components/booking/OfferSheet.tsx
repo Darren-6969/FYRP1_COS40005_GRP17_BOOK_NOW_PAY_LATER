@@ -9,7 +9,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { isApiError } from '@/services/api';
 import { formatMYT } from '@/utils/datetime';
 import { describeError } from '@/utils/errors';
-import { bookingTitle } from '@/utils/booking-view';
+import { bookingTitle, carSpecs } from '@/utils/booking-view';
 
 type OfferSheetProps = {
   booking: any;
@@ -30,9 +30,7 @@ function listingTitle(listing: any) {
   return listing.name || [listing.make, listing.model].filter(Boolean).join(' ') || null;
 }
 
-function specs(listing: any) {
-  return [listing?.transmission, listing?.seats ? `${listing.seats} seats` : null].filter(Boolean).join(' · ');
-}
+const specs = carSpecs;
 
 /** Where the car is collected, from a pricing snapshot and its listing. */
 function placeOf(pricing: any, listing: any, requestedLocation?: string | null) {
@@ -64,6 +62,8 @@ export function OfferSheet({ booking, visible, onClose, onAccept, onDecline, onR
   const [confirmingDecline, setConfirmingDecline] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Accept and decline block each other while either is running.
+  const [working, setWorking] = useState<'accept' | 'decline' | null>(null);
 
   useEffect(() => {
     if (!visible) {
@@ -116,8 +116,10 @@ export function OfferSheet({ booking, visible, onClose, onAccept, onDecline, onR
 
   // ---- Actions ------------------------------------------------------------
   const accept = async () => {
+    if (working) return;
     setError(null);
     setNotice(null);
+    setWorking('accept');
     try {
       await onAccept();
     } catch (err) {
@@ -128,15 +130,21 @@ export function OfferSheet({ booking, visible, onClose, onAccept, onDecline, onR
         return;
       }
       setError(err);
+    } finally {
+      setWorking(null);
     }
   };
 
   const decline = async () => {
+    if (working) return;
     setError(null);
+    setWorking('decline');
     try {
       await onDecline();
     } catch (err) {
       setError(err);
+    } finally {
+      setWorking(null);
     }
   };
 
@@ -145,13 +153,13 @@ export function OfferSheet({ booking, visible, onClose, onAccept, onDecline, onR
   const footer = confirmingDecline ? (
     <View style={styles.footer}>
       <AppText variant="caption">Declining closes this booking. Nothing is charged, and you can request another car.</AppText>
-      <Button label="Decline offer" variant="danger" onPress={decline} />
-      <Button label="Go back" variant="line" onPress={() => setConfirmingDecline(false)} />
+      <Button label="Decline offer" variant="danger" loading={working === 'decline'} onPress={decline} />
+      <Button label="Go back" variant="line" disabled={working !== null} onPress={() => setConfirmingDecline(false)} />
     </View>
   ) : (
     <View style={styles.footer}>
-      <Button label="Accept offer" variant="brand" onPress={accept} />
-      <Button label="Decline" variant="line" onPress={() => setConfirmingDecline(true)} />
+      <Button label="Accept offer" variant="brand" loading={working === 'accept'} onPress={accept} />
+      <Button label="Decline" variant="line" disabled={working !== null} onPress={() => setConfirmingDecline(true)} />
     </View>
   );
 

@@ -39,11 +39,13 @@ import {
 import {
   bookingRef,
   bookingTitle,
+  carSpecs,
   isActiveBooking,
   owedPart,
   paidInFull,
   partName,
   receiptInReview,
+  runBookingAction,
   timeLeft,
 } from "@/utils/booking-view";
 import { formatMYT } from "@/utils/datetime";
@@ -81,7 +83,12 @@ function scheduleTitle(entry: any) {
  * bookings without entries fall back to the two payment parts.
  */
 function scheduleSteps(booking: any): ScheduleStep[] {
-  const entries = (booking?.paymentSchedule ?? [])
+  // A cancelled, declined or finished booking has nothing left to schedule
+  // (the server voids its entries).
+  if (!isActiveBooking(booking)) return [];
+
+  const allEntries: any[] = booking?.paymentSchedule ?? [];
+  const entries = allEntries
     .filter((e: any) => e.status !== "VOID")
     .sort((a: any, b: any) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
 
@@ -95,16 +102,28 @@ function scheduleSteps(booking: any): ScheduleStep[] {
     return "upcoming" as const;
   };
 
+  // A part whose receipt is waiting for the operator isn't "due" any more.
+  const partStatus = (part: string | null) =>
+    part === "DOWN_PAYMENT"
+      ? booking?.payment?.downPaymentStatus
+      : part === "FINAL_PAYMENT"
+        ? booking?.payment?.finalPaymentStatus
+        : booking?.payment?.status;
+
   if (entries.length > 0) {
     return entries.map((entry: any) => {
       const paid = entry.status === "PAID";
+      const inReview =
+        entry.type === "PAYMENT" && String(partStatus(entry.paymentPart) ?? "").includes("PENDING_VERIFICATION");
       const caption = paid
         ? entry.paidAt
           ? `Done ${formatMYT(entry.paidAt, "dayDate")}`
           : "Done"
-        : entry.status === "EXPIRED"
-          ? `Missed · was due ${formatMYT(entry.dueAt, "dayDateTime")}`
-          : `Due ${formatMYT(entry.dueAt, "dayDateTime")}`;
+        : inReview
+          ? "Receipt in review"
+          : entry.status === "EXPIRED"
+            ? `Missed · was due ${formatMYT(entry.dueAt, "dayDateTime")}`
+            : `Due ${formatMYT(entry.dueAt, "dayDateTime")}`;
       return {
         key: String(entry.id),
         title: scheduleTitle(entry),
@@ -114,6 +133,10 @@ function scheduleSteps(booking: any): ScheduleStep[] {
       };
     });
   }
+
+  // Entries exist but all are void: nothing is due. The part-based fallback
+  // below is only for older bookings that never had schedule entries.
+  if (allEntries.length > 0) return [];
 
   const p = booking?.payment;
   if (!p) return [];
@@ -148,7 +171,10 @@ function nextStepText(booking: any) {
     case "CANCELLED":
       return booking?.cancelledAt ? `Cancelled ${formatMYT(booking.cancelledAt, "dayDateTime")}.` : "This booking was cancelled.";
     case "REJECTED":
-      return "The operator couldn't take this booking. Nothing was charged.";
+      // Declining an offer also ends as REJECTED; don't blame the operator.
+      return booking?.alternativeSuggestedAt
+        ? "The offer was declined, so this booking is closed. Nothing was charged."
+        : "The operator couldn't take this booking. Nothing was charged.";
     case "EXPIRED":
       return "This request expired without a reply. Nothing was charged.";
     case "NO_SHOW":
@@ -257,7 +283,7 @@ export default function BookingDetailScreen() {
   const car = booking.car;
   const listing = car?.listing;
   const place = car?.pickupPoint?.label || car?.requestedLocation || booking.location || listing?.branch?.name || null;
-  const specs = [listing?.transmission, listing?.seats ? `${listing.seats} seats` : null].filter(Boolean).join(" · ");
+  const specs = carSpecs(listing);
   // https links and older base64 data URLs both open in the in-app viewer.
   const receiptUrl: string | null = isViewableReceipt(booking.receipt?.imageUrl) ? booking.receipt.imageUrl : null;
 
@@ -267,25 +293,35 @@ export default function BookingDetailScreen() {
       params: { bookingId: String(booking.id), ...(owed ? { type: owed.part } : {}) },
     } as unknown as Href);
 
+  // Each action re-checks the booking after a timeout, so a slow server
+  // that did the work isn't reported as a failure (runBookingAction).
+  const offerAnswered = (b: any) => b?.status !== "ALTERNATIVE_SUGGESTED";
+
+  // The sheet keeps its spinner until the fresh booking is on screen, so
+  // the customer never sees the old state behind the "done" toast.
   const acceptOffer = async () => {
-    await acceptAlternative(booking.id);
+    await runBookingAction(booking.id, () => acceptAlternative(booking.id), offerAnswered);
+    await load();
     setOfferOpen(false);
     toast.show("Offer accepted. Your payment schedule is ready.", { tone: "ok" });
-    await load();
   };
 
   const declineOffer = async () => {
-    await rejectAlternative(booking.id);
+    await runBookingAction(booking.id, () => rejectAlternative(booking.id), offerAnswered);
+    await load();
     setOfferOpen(false);
     toast.show("Offer declined. The booking is closed.", { tone: "info" });
-    await load();
   };
 
   const cancel = async (reason: CustomerCancellationReason | null) => {
-    await cancelCustomerBooking(booking.id, reason ?? undefined);
+    await runBookingAction(
+      booking.id,
+      () => cancelCustomerBooking(booking.id, reason ?? undefined),
+      (b) => b?.status === "CANCELLED"
+    );
+    await load();
     setCancelOpen(false);
     toast.show("Booking cancelled.", { tone: "info" });
-    await load();
   };
 
   const openUrl = (url: string) => Linking.openURL(url).catch((err) => logger.debug("Failed to open link:", err));

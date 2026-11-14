@@ -127,7 +127,8 @@ export function CancelSheet({ bookingId, bookingRef, visible, onClose, onConfirm
         </GlassCard>
       )}
 
-      {quote?.explanation ? <AppText variant="caption">{quote.explanation}</AppText> : null}
+      {/* The "Nothing to refund" card already says it when nothing was paid. */}
+      {quote?.explanation && !nothingPaid ? <AppText variant="caption">{quote.explanation}</AppText> : null}
 
       {quote && Number(quote.totalRefund) > 0 && quote.refundVia ? (
         <View style={[styles.note, { backgroundColor: tokens.infoBg }]}>

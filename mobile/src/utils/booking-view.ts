@@ -7,6 +7,8 @@
  * calculates money (F16); the one calculation is time left to a deadline.
  */
 
+import { ERROR_CODES, isApiError } from '@/services/api';
+import { getCustomerBookingById } from '@/services/customerApi';
 import { nextPaymentOf, type NextPayment } from '@/utils/next-payment';
 
 /** Statuses after which nothing more happens: shown under "Past". */
@@ -66,6 +68,48 @@ export function bookingRef(booking: any) {
 
 export function bookingImage(booking: any): string | null {
   return booking?.car?.listing?.imageUrl ?? null;
+}
+
+/** "Automatic · 5 seats" from a car listing ("AUTOMATIC" in the data). */
+export function carSpecs(listing: any) {
+  const t = typeof listing?.transmission === 'string' ? listing.transmission.trim() : '';
+  const transmission = t ? t[0].toUpperCase() + t.slice(1).toLowerCase() : null;
+  return [transmission, listing?.seats ? `${listing.seats} seats` : null].filter(Boolean).join(' · ');
+}
+
+/**
+ * Runs a booking action (accept or decline an offer, cancel) and copes with
+ * an answer that never arrived. On a slow server the request can time out
+ * on the phone after the server has already done it; retrying then fails
+ * because the booking has moved on. So after a timeout or lost connection
+ * the booking is fetched again, a few times since the server may still be
+ * finishing: if `isDone` says the action took effect, that booking is
+ * returned as success. Otherwise the original error is thrown for the
+ * screen to show.
+ */
+const RECHECKS = 4;
+const RECHECK_GAP_MS = 3000;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function runBookingAction(
+  bookingId: number | string,
+  action: () => Promise<unknown>,
+  isDone: (booking: any) => boolean
+): Promise<any | null> {
+  try {
+    await action();
+    return null;
+  } catch (err) {
+    const uncertain = isApiError(err) && (err.code === ERROR_CODES.TIMEOUT || err.code === ERROR_CODES.NETWORK);
+    if (!uncertain) throw err;
+    for (let attempt = 0; attempt < RECHECKS; attempt++) {
+      if (attempt > 0) await wait(RECHECK_GAP_MS);
+      const fresh = await getCustomerBookingById(bookingId).catch(() => null);
+      if (fresh && isDone(fresh)) return fresh;
+    }
+    throw err;
+  }
 }
 
 /**

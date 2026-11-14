@@ -18,7 +18,7 @@ import { Radius } from "@/constants/theme";
 import { useTabBarInset } from "@/hooks/use-tab-bar-inset";
 import { useTheme } from "@/hooks/use-theme";
 import { getCustomerBookings, rejectAlternative } from "@/services/customerApi";
-import { isActiveBooking, owedPart } from "@/utils/booking-view";
+import { isActiveBooking, owedPart, runBookingAction } from "@/utils/booking-view";
 import { logger } from "@/utils/logger";
 
 type Tab = "active" | "past";
@@ -102,10 +102,12 @@ export default function Bookings() {
 
   const confirmDecline = async () => {
     if (!declining) return;
-    await rejectAlternative(declining.id);
+    const id = declining.id;
+    await runBookingAction(id, () => rejectAlternative(id), (b) => b?.status !== "ALTERNATIVE_SUGGESTED");
+    // Reload before closing, so the card never shows the old state.
+    await load();
     setDeclining(null);
     toast.show("Offer declined. The booking is closed.", { tone: "info" });
-    await load();
   };
 
   const header = (
