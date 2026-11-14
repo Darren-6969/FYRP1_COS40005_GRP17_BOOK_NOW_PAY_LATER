@@ -127,6 +127,34 @@ export default function CustomerLayout() {
         />
 
       <Stack.Screen
+        name="licence"
+        options={{
+          animation: "slide_from_right",
+        }}
+      />
+
+      <Stack.Screen
+        name="account/edit-profile"
+        options={{
+          animation: "slide_from_right",
+        }}
+      />
+
+      <Stack.Screen
+        name="account/change-password"
+        options={{
+          animation: "slide_from_right",
+        }}
+      />
+
+      <Stack.Screen
+        name="account/notification-settings"
+        options={{
+          animation: "slide_from_right",
+        }}
+      />
+
+      <Stack.Screen
         name="saved-cars"
         options={{
             animation: "slide_from_right",

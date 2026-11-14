@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { FontFamily, Radius } from '@/constants/theme';
@@ -12,10 +13,12 @@ type TextFieldProps = Omit<TextInputProps, 'style'> & {
   error?: string | null;
   /** Helper text under the field when there's no error. */
   hint?: string;
+  /** Inside the pill after the input, e.g. a show-password button. */
+  trailing?: ReactNode;
 };
 
 /** A labelled input on a frosted pill, with its error underneath. */
-export function TextField({ label, error, hint, multiline, ...input }: TextFieldProps) {
+export function TextField({ label, error, hint, multiline, trailing, ...input }: TextFieldProps) {
   const { tokens } = useTheme();
 
   return (
@@ -27,6 +30,7 @@ export function TextField({ label, error, hint, multiline, ...input }: TextField
         style={[
           styles.field,
           multiline && styles.multiline,
+          trailing ? styles.withTrailing : null,
           {
             backgroundColor: tokens.glass,
             borderColor: error ? tokens.errFg : tokens.glassLine,
@@ -39,9 +43,10 @@ export function TextField({ label, error, hint, multiline, ...input }: TextField
           accessibilityHint={error || hint}
           placeholderTextColor={tokens.label}
           multiline={multiline}
-          style={[styles.input, { color: tokens.ink }, multiline && styles.inputMultiline]}
+          style={[styles.input, { color: tokens.ink }, multiline && styles.inputMultiline, trailing ? styles.flex : null]}
           {...input}
         />
+        {trailing}
       </View>
       {error ? <FieldError message={error} /> : hint ? <AppText variant="caption" style={styles.hint}>{hint}</AppText> : null}
     </View>
@@ -57,6 +62,15 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     paddingHorizontal: 16,
     justifyContent: 'center',
+  },
+  withTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 6,
+  },
+  flex: {
+    flex: 1,
   },
   multiline: {
     borderRadius: Radius.md,
