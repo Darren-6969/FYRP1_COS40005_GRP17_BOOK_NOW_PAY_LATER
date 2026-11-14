@@ -1,35 +1,18 @@
-// F2: where Stripe sends the customer back after paying.
-// Built in the current style; restyled in redesign phase 3.
+// F2: where Stripe sends the customer back after paying. Restyled in
+// redesign phase 3.
 
 import { Ionicons } from "@expo/vector-icons";
-import {
-  useLocalSearchParams,
-  useRouter,
-  type Href,
-} from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { isApiError } from "@/services/api";
-import {
-  confirmStripeCheckoutSession,
-  getCustomerBookingById,
-} from "@/services/customerApi";
+import { AppText, Button, GlassCard } from "@/components/ui";
+import { useTheme } from "@/hooks/use-theme";
+import { ERROR_CODES, isApiError } from "@/services/api";
+import { confirmStripeCheckoutSession, getCustomerBookingById } from "@/services/customerApi";
 import { logger } from "@/utils/logger";
-import {
-  forgetStripePayment,
-  isPartPaid,
-  paidAmountLabel,
-  pendingStripePayment,
-} from "@/utils/stripe-payment";
+import { forgetStripePayment, isPartPaid, paidAmountLabel, pendingStripePayment } from "@/utils/stripe-payment";
 
 // Waits between checks: about 20 seconds in total before "Still processing".
 const RETRY_DELAYS_MS = [2000, 3000, 4000, 5000, 6000];
@@ -37,24 +20,36 @@ const RETRY_DELAYS_MS = [2000, 3000, 4000, 5000, 6000];
 type Phase =
   | { kind: "checking" }
   | { kind: "processing" }
-  | { kind: "offline"; message: string }
+  | { kind: "offline" }
   | { kind: "failed"; message: string };
 
-const sleep = (ms: number) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Errors that mean "no answer yet", so the loop keeps checking. */
+function isTransient(err: unknown) {
+  if (!isApiError(err)) return false;
+  return (
+    err.code === ERROR_CODES.NETWORK ||
+    err.code === ERROR_CODES.TIMEOUT ||
+    // The server is still finishing an earlier confirm call for this
+    // session (idempotency). Not an error for the customer.
+    err.code === "REQUEST_IN_PROGRESS" ||
+    // 400 "Stripe payment is unpaid": not settled yet.
+    err.status === 400
+  );
+}
+
+function isOffline(err: unknown) {
+  return isApiError(err) && (err.code === ERROR_CODES.NETWORK || err.code === ERROR_CODES.TIMEOUT);
+}
 
 export default function PaymentStatusScreen() {
   const router = useRouter();
-
-  const params = useLocalSearchParams<{
-    id: string;
-    payment?: string;
-    session_id?: string;
-  }>();
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ id: string; payment?: string; session_id?: string }>();
 
   const bookingId = params.id;
-  const sessionId =
-    params.payment === "success" ? params.session_id : undefined;
+  const sessionId = params.payment === "success" ? params.session_id : undefined;
 
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
   const mounted = useRef(true);
@@ -70,7 +65,6 @@ export default function PaymentStatusScreen() {
     (booking: any) => {
       const paymentType = pendingStripePayment(bookingId);
       forgetStripePayment(bookingId);
-
       router.replace({
         pathname: "/customer/payment-success",
         params: {
@@ -103,35 +97,27 @@ export default function PaymentStatusScreen() {
     return false;
   }, [bookingId, sessionId, showPaid]);
 
-  // Checks, waits, checks again; ends on paid, offline, an error, or
-  // "Still processing" after about 20 seconds.
+  // Checks, waits, checks again. A dropped connection, a timeout or "still
+  // processing" on one check doesn't end the loop (Phase 2 test: the first
+  // check showed "No connection" instead of retrying). Ends on paid, a real
+  // error, or after about 20 seconds.
   const checkLoop = useCallback(async () => {
     setPhase({ kind: "checking" });
+    let lastError: unknown = null;
 
     for (let i = 0; i <= RETRY_DELAYS_MS.length; i++) {
       try {
         if (await checkOnce()) return;
+        lastError = null;
       } catch (err) {
-        if (isApiError(err) && err.status === 0) {
-          if (mounted.current) {
-            setPhase({ kind: "offline", message: err.message });
-          }
-          return;
-        }
-
-        // 400 "Stripe payment is unpaid": not settled yet, keep checking.
-        if (!(isApiError(err) && err.status === 400)) {
+        if (!isTransient(err)) {
           logger.warn("[payment-status] check failed", err);
           if (mounted.current) {
-            setPhase({
-              kind: "failed",
-              message:
-                (err as Error)?.message ||
-                "We couldn't check this payment.",
-            });
+            setPhase({ kind: "failed", message: (err as Error)?.message || "We couldn't check this payment." });
           }
           return;
         }
+        lastError = err;
       }
 
       if (!mounted.current) return;
@@ -139,7 +125,7 @@ export default function PaymentStatusScreen() {
       if (!mounted.current) return;
     }
 
-    if (mounted.current) setPhase({ kind: "processing" });
+    if (mounted.current) setPhase(isOffline(lastError) ? { kind: "offline" } : { kind: "processing" });
   }, [checkOnce]);
 
   const running = useRef(false);
@@ -149,7 +135,6 @@ export default function PaymentStatusScreen() {
       setPhase({ kind: "failed", message: "Booking information is missing." });
       return;
     }
-
     // One check loop at a time ("Check again" while one is running).
     if (running.current) return;
     running.current = true;
@@ -164,144 +149,97 @@ export default function PaymentStatusScreen() {
     check();
   }, [check]);
 
-  const openBooking = () =>
-    router.replace(`/customer/booking/${bookingId}` as Href);
+  const openBooking = () => router.replace(`/customer/booking/${bookingId}` as Href);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+    <View style={[styles.screen, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+      {phase.kind === "checking" ? (
+        <StatusCard
+          icon={null}
+          title="Confirming your payment"
+          message="This usually takes a few seconds. Please keep the app open."
+        />
+      ) : (
+        <StatusCard
+          icon={phase.kind === "processing" ? "time-outline" : phase.kind === "offline" ? "cloud-offline-outline" : "alert-circle-outline"}
+          tone={phase.kind === "failed" ? "err" : "info"}
+          title={
+            phase.kind === "processing"
+              ? "Still processing"
+              : phase.kind === "offline"
+                ? "No connection"
+                : "Couldn't confirm the payment"
+          }
+          message={
+            phase.kind === "processing"
+              ? "Stripe hasn't confirmed this payment yet. If you were charged, it will show on your booking shortly. You won't be charged twice."
+              : phase.kind === "offline"
+                ? "We couldn't reach the server to check this payment. If you paid, nothing is lost: check again when you're back online."
+                : phase.message
+          }
+        >
+          <Button label="Check again" variant="brand" icon="refresh" onPress={check} />
+          <Button label="View booking" variant="line" onPress={openBooking} />
+        </StatusCard>
+      )}
+    </View>
+  );
+}
 
-      <View style={styles.container}>
-        {phase.kind === "checking" ? (
-          <>
-            <ActivityIndicator size="large" color="#07869B" />
-            <Text style={styles.title}>Confirming your payment</Text>
-            <Text style={styles.text}>
-              This usually takes a few seconds. Please keep the app open.
-            </Text>
-          </>
-        ) : (
-          <>
-            <View style={styles.iconCircle}>
-              <Ionicons
-                name={
-                  phase.kind === "processing"
-                    ? "time-outline"
-                    : phase.kind === "offline"
-                      ? "cloud-offline-outline"
-                      : "alert-circle-outline"
-                }
-                size={34}
-                color="#07869B"
-              />
-            </View>
+function StatusCard({
+  icon,
+  tone = "info",
+  title,
+  message,
+  children,
+}: {
+  icon: ComponentProps<typeof Ionicons>["name"] | null;
+  tone?: "info" | "err";
+  title: string;
+  message: string;
+  children?: ReactNode;
+}) {
+  const { tokens } = useTheme();
+  const bg = tone === "err" ? tokens.errBg : tokens.infoBg;
+  const fg = tone === "err" ? tokens.errFg : tokens.infoFg;
 
-            <Text style={styles.title}>
-              {phase.kind === "processing"
-                ? "Still processing"
-                : phase.kind === "offline"
-                  ? "No connection"
-                  : "Couldn't confirm the payment"}
-            </Text>
-
-            <Text style={styles.text}>
-              {phase.kind === "processing"
-                ? "Stripe hasn't confirmed this payment yet. If you were charged, it will show on your booking shortly. You won't be charged twice."
-                : phase.message}
-            </Text>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && { opacity: 0.8 },
-              ]}
-              onPress={check}
-              accessibilityRole="button"
-            >
-              <Ionicons name="refresh" size={18} color="#FFFFFF" />
-              <Text style={styles.primaryText}>Check again</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.secondaryButton}
-              onPress={openBooking}
-              accessibilityRole="button"
-            >
-              <Text style={styles.secondaryText}>View booking</Text>
-            </Pressable>
-          </>
-        )}
+  return (
+    <GlassCard padding={24} style={styles.card}>
+      <View style={[styles.icon, { backgroundColor: bg }]}>
+        {icon ? <Ionicons name={icon} size={30} color={fg} /> : <ActivityIndicator size="large" color={fg} />}
       </View>
-    </SafeAreaView>
+      <AppText variant="title" align="center" accessibilityRole="header">
+        {title}
+      </AppText>
+      <AppText align="center" accessibilityLiveRegion="polite">
+        {message}
+      </AppText>
+      {children ? <View style={styles.buttons}>{children}</View> : null}
+    </GlassCard>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  screen: {
     flex: 1,
-    backgroundColor: "#F7FAFB",
+    justifyContent: "center",
+    paddingHorizontal: 18,
   },
-
-  container: {
-    flex: 1,
+  card: {
+    alignItems: "center",
+    gap: 12,
+  },
+  icon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 28,
-    gap: 14,
+    marginBottom: 4,
   },
-
-  iconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "#E3F3F6",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#17313C",
-    textAlign: "center",
-  },
-
-  text: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#5B6B73",
-    textAlign: "center",
-    maxWidth: 340,
-  },
-
-  primaryButton: {
-    marginTop: 10,
-    minHeight: 50,
-    paddingHorizontal: 24,
-    borderRadius: 25,
-    backgroundColor: "#07869B",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
+  buttons: {
     alignSelf: "stretch",
-  },
-
-  primaryText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-
-  secondaryButton: {
-    minHeight: 48,
-    justifyContent: "center",
-    paddingHorizontal: 16,
-  },
-
-  secondaryText: {
-    color: "#07869B",
-    fontSize: 15,
-    fontWeight: "600",
+    gap: 10,
+    marginTop: 8,
   },
 });
