@@ -5,11 +5,15 @@ export type StripePaymentType =
   | "FINAL_PAYMENT"
   | "FULL_PAYMENT";
 
+// F15: the app's own link scheme, sent to the backend as `returnScheme` when
+// creating a checkout session. Must match app.json "scheme", and must be on
+// the backend's list (backend/src/utils/mobileScheme.js).
+export const APP_SCHEME = "bnplsarawak";
+
 // Stripe returns to these (see backend stripe_routes.js, source "mobile"):
-//   success: mobile://customer/payment-status/{id}?payment=success&session_id=...
-//   cancel:  mobile://customer/booking/{id}?payment=cancelled
-// The prefix must match app.json "scheme".
-export const STRIPE_RETURN_PREFIX = "mobile://customer/";
+//   success: bnplsarawak://customer/payment-status/{id}?payment=success&session_id=...
+//   cancel:  bnplsarawak://customer/booking/{id}?payment=cancelled
+export const STRIPE_RETURN_PREFIX = `${APP_SCHEME}://customer/`;
 
 // The in-app path for a Stripe return URL, or null for anything that isn't
 // one of ours (never navigate to an arbitrary URL).

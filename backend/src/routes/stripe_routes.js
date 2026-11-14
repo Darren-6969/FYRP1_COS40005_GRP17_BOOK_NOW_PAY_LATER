@@ -17,6 +17,7 @@ import { allowOperatorAccess, allowRoles } from "../middlewares/rbac_middleware.
 import { paymentLimiter } from "../middlewares/rate_limit_middleware.js";
 import { escapeHtml } from "../utils/escapeHTML.js";
 import { operatorBookingUrl } from "../utils/frontendUrls.js";
+import { mobileReturnScheme } from "../utils/mobileScheme.js";
 import {
   getPaymentConfirmationData,
   getPaymentSpec,
@@ -1042,15 +1043,22 @@ const totalCents =
 const isMobile =
   req.body?.source === "mobile";
 
+// F15: the app's link scheme. New builds send returnScheme "bnplsarawak";
+// builds already installed send nothing and still answer only to
+// "mobile://". Only schemes on this list are used, so a request can't send
+// customers back to some other app. Drop "mobile" once no one runs an old
+// build.
+const scheme = mobileReturnScheme(req.body?.returnScheme);
+
 const successUrl = isMobile
-  ? `mobile://customer/payment-status/${booking.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`
+  ? `${scheme}://customer/payment-status/${booking.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`
   : `${
       process.env.FRONTEND_URL ||
       "http://localhost:5173"
     }/customer/payment-status/${booking.id}?payment=success&session_id={CHECKOUT_SESSION_ID}`;
 
 const cancelUrl = isMobile
-  ? `mobile://customer/booking/${booking.id}?payment=cancelled`
+  ? `${scheme}://customer/booking/${booking.id}?payment=cancelled`
   : `${
       process.env.FRONTEND_URL ||
       "http://localhost:5173"

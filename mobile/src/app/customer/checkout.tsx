@@ -125,7 +125,7 @@ export default function CheckoutScreen() {
     rememberStripePayment(booking.id, part);
 
     // In-app browser that closes itself when Stripe redirects to
-    // mobile://customer/... (success or cancel).
+    // bnplsarawak://customer/... (success or cancel).
     const browserResult = await WebBrowser.openAuthSessionAsync(checkoutUrl, STRIPE_RETURN_PREFIX);
 
     if (browserResult.type === "success") {
