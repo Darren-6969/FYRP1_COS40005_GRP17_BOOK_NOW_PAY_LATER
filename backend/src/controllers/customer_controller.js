@@ -358,7 +358,14 @@ export async function getCustomerBookings(req, res, next) {
       orderBy: { createdAt: "desc" },
       include: {
         customer: { select: { id: true, name: true, email: true } },
-        operator: true,
+        // The operator's latest config, as on the detail endpoint: the
+        // response deadline (car.responseDueAt) and mapOperatorForCustomer
+        // read it. Without it the deadline fell back to the 120-minute default.
+        operator: {
+          include: {
+            configs: { orderBy: { createdAt: "desc" }, take: 1 },
+          },
+        },
         payment: true,
         receipt: true,
         invoice: true,
