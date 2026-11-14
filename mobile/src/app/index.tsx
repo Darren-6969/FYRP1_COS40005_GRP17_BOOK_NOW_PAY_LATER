@@ -1,5 +1,6 @@
-import { Redirect, useRouter, type Href } from "expo-router";
-import { useEffect, useState } from "react";
+import { Redirect, useFocusEffect, useRouter, type Href } from "expo-router";
+import { setStatusBarStyle } from "expo-status-bar";
+import { useCallback, useEffect, useState } from "react";
 import {
   ImageBackground,
   Pressable,
@@ -10,6 +11,7 @@ import {
 } from "react-native";
 
 import { homeForRole } from "@/hooks/use-role-guard";
+import { useTheme } from "@/hooks/use-theme";
 import { getStoredUser, getToken } from "@/services/session";
 import { logger } from "@/utils/logger";
 
@@ -24,7 +26,19 @@ type Launch =
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { tokens } = useTheme();
   const [launch, setLaunch] = useState<Launch>({ state: "checking" });
+
+  // White status bar icons over the dark photo, only while Welcome is on
+  // screen; the theme's default comes back when another screen covers it.
+  // (A <StatusBar> element here would stay in force while Welcome sits
+  // underneath in the stack.) Welcome is restyled in phase 5.
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle("light");
+      return () => setStatusBarStyle(tokens.statusBar);
+    }, [tokens.statusBar])
+  );
 
   // F18: a saved login goes straight to its home. This only reads the
   // device, so it is instant and works offline; the section's role guard
