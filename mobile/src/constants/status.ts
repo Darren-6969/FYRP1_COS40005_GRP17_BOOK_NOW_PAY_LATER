@@ -76,6 +76,18 @@ export function licenceStatus(value: string | null | undefined): StatusInfo {
   return lookup(LICENCE_STATUS, value || 'NOT_SUBMITTED');
 }
 
+/** A listing's state on the platform (ListingStatus: 4). */
+export const LISTING_STATUS: Record<string, StatusInfo> = {
+  PUBLISHED: { label: 'Published', tone: 'ok' },
+  DRAFT: { label: 'Draft', tone: 'neutral' },
+  WITHDRAWN: { label: 'Withdrawn', tone: 'warn' },
+  SUSPENDED: { label: 'Suspended', tone: 'err' },
+};
+
+export function listingStatus(value: string | null | undefined): StatusInfo {
+  return lookup(LISTING_STATUS, value);
+}
+
 export function bookingStatus(value: string | null | undefined): StatusInfo {
   return lookup(BOOKING_STATUS, value);
 }

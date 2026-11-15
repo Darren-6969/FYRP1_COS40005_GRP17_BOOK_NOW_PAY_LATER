@@ -1,691 +1,361 @@
-
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import {
-  useLocalSearchParams,
-  useRouter,
-} from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 
+import { AccountScreen } from "@/components/account/AccountScreen";
+import { AppText, Button, ConfirmSheet, ErrorState, FieldError, GlassCard, SkeletonText, StatusPill, useToast } from "@/components/ui";
+import { Radius } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import {
   attachOperatorListingImage,
   deleteOperatorListingImage,
   getOperatorListingById,
-  OperatorListing,
   publishOperatorListing,
   reorderOperatorListingImages,
   uploadOperatorListingImage,
   withdrawOperatorListing,
-} from "../../../services/operatorApi";
+  type OperatorListing,
+  type OperatorListingImage,
+} from "@/services/operatorApi";
+import { describeError } from "@/utils/errors";
+import { logger } from "@/utils/logger";
 
+/** CLAUDE.md: up to 5 photos per listing. */
+const MAX_PHOTOS = 5;
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Photos and status for one car (plan phase 4). The server re-encodes and
+ * resizes every photo; the first one is the cover customers see. Publish
+ * and withdraw ask first, and the server's message (for example the plan's
+ * listing limit) shows in the sheet.
+ */
 export default function ManageListingScreen() {
   const router = useRouter();
+  const toast = useToast();
+  const { tokens } = useTheme();
   const params = useLocalSearchParams<{ id?: string }>();
-  const listingId = Number(params.id);
+  const parsed = Number(params.id);
+  const listingId = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 
-  const [listing, setListing] =
-    useState<OperatorListing | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [listing, setListing] = useState<OperatorListing | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [working, setWorking] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<OperatorListingImage | null>(null);
+  const [statusAction, setStatusAction] = useState<"publish" | "withdraw" | null>(null);
+  // Blocks a second photo action before the first one's state lands (F17).
+  const busy = useRef(false);
 
-  const loadListing = useCallback(async () => {
-    if (!Number.isInteger(listingId) || listingId <= 0) {
-      setError("Invalid listing ID.");
-      setLoading(false);
+  const load = useCallback(async () => {
+    if (!listingId) {
+      setLoadError(new Error("This listing link isn't valid."));
       return;
     }
-
+    setLoadError(null);
     try {
-      setError("");
       const response = await getOperatorListingById(listingId);
       setListing(response.listing);
-    } catch (err: any) {
-      setError(err?.message || "Failed to load listing.");
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      logger.debug("Failed to load listing:", err);
+      setLoadError(err);
     }
   }, [listingId]);
 
   useEffect(() => {
-    loadListing();
-  }, [loadListing]);
+    load();
+  }, [load]);
 
-  const images = [...(listing?.images || [])].sort(
-    (a, b) => a.sortOrder - b.sortOrder
-  );
+  const images = [...(listing?.images || [])].sort((a, b) => a.sortOrder - b.sortOrder);
+  const full = images.length >= MAX_PHOTOS;
 
-  const uploadPhoto = async () => {
-    if (!listing || busy) return;
-
+  const run = async (label: string, work: () => Promise<void>) => {
+    if (busy.current) return;
+    busy.current = true;
+    setWorking(label);
+    setPhotoError(null);
     try {
-      const permission =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      await work();
+    } catch (err) {
+      logger.debug(`Listing photo action failed (${label}):`, err);
+      setPhotoError(describeError(err).message);
+    } finally {
+      busy.current = false;
+      setWorking(null);
+    }
+  };
 
+  const addPhoto = () =>
+    run("upload", async () => {
+      if (!listingId) return;
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert(
-          "Photo Access Required",
-          "Please allow access to your photos."
-        );
+        setPhotoError("Allow photo access in your phone's settings to add photos.");
         return;
       }
-
-      const result =
-        await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ["images"],
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.75,
-        });
-
-      if (result.canceled || !result.assets.length) {
-        return;
-      }
-
-      const asset = result.assets[0];
-
-      if (
-        asset.fileSize != null &&
-        asset.fileSize > 5 * 1024 * 1024
-      ) {
-        Alert.alert(
-          "Image Too Large",
-          "Please select an image smaller than 5 MB."
-        );
-        return;
-      }
-
-      setBusy(true);
-
-      const uploaded = await uploadOperatorListingImage({
-        uri: asset.uri,
-        fileName: "listing-photo.jpg",
-        mimeType: "image/jpeg",
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.75,
       });
-
-      // Upload alone does not add the photo to the listing.
-      const updated = await attachOperatorListingImage(
-        listingId,
-        uploaded.url
-      );
-
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      if (asset.fileSize != null && asset.fileSize > MAX_PHOTO_BYTES) {
+        setPhotoError("This photo is over 5 MB. Choose a smaller one.");
+        return;
+      }
+      const uploaded = await uploadOperatorListingImage({ uri: asset.uri, fileName: "listing-photo.jpg", mimeType: "image/jpeg" });
+      // Uploading alone doesn't add it to the listing.
+      const updated = await attachOperatorListingImage(listingId, uploaded.url);
       setListing(updated.listing);
+      toast.show("Photo added.", { tone: "ok" });
+    });
 
-      Alert.alert(
-        "Success",
-        "Photo uploaded and added to this listing."
-      );
-    } catch (err: any) {
-      Alert.alert(
-        "Upload Failed",
-        err?.message || "Unable to upload photo."
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const moveImage = async (
-    imageId: number,
-    direction: -1 | 1
-  ) => {
-    if (busy || !listing) return;
-
-    const currentIndex = images.findIndex(
-      (image) => image.id === imageId
-    );
-
-    const nextIndex = currentIndex + direction;
-
-    if (
-      currentIndex < 0 ||
-      nextIndex < 0 ||
-      nextIndex >= images.length
-    ) {
-      return;
-    }
-
-    const reordered = [...images];
-
-    [reordered[currentIndex], reordered[nextIndex]] = [
-      reordered[nextIndex],
-      reordered[currentIndex],
-    ];
-
-    try {
-      setBusy(true);
-
-      const response =
-        await reorderOperatorListingImages(
-          listingId,
-          reordered.map((image) => image.id)
-        );
-
+  const move = (image: OperatorListingImage, direction: -1 | 1) =>
+    run(`move-${image.id}`, async () => {
+      if (!listingId) return;
+      const from = images.findIndex((i) => i.id === image.id);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= images.length) return;
+      const order = [...images];
+      [order[from], order[to]] = [order[to], order[from]];
+      const response = await reorderOperatorListingImages(listingId, order.map((i) => i.id));
       setListing(response.listing);
-    } catch (err: any) {
-      Alert.alert(
-        "Reorder Failed",
-        err?.message || "Unable to reorder photos."
-      );
-    } finally {
-      setBusy(false);
-    }
+    });
+
+  const removePhoto = async () => {
+    if (!deleting || !listingId) return;
+    const response = await deleteOperatorListingImage(listingId, deleting.id);
+    setListing(response.listing);
+    setDeleting(null);
+    toast.show("Photo removed.", { tone: "ok" });
   };
 
-  const removeImage = (imageId: number) => {
-    if (busy) return;
+  const changeStatus = async () => {
+    if (!listingId || !statusAction) return;
+    const response = statusAction === "publish" ? await publishOperatorListing(listingId) : await withdrawOperatorListing(listingId);
+    setListing(response.listing);
+    toast.show(statusAction === "publish" ? "Published. Customers can now book this car." : "Withdrawn. Existing bookings still go ahead.", {
+      tone: "ok",
+    });
+    setStatusAction(null);
+  };
 
-    Alert.alert(
-      "Delete Photo",
-      "Remove this photo from the listing?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setBusy(true);
-
-              const response =
-                await deleteOperatorListingImage(
-                  listingId,
-                  imageId
-                );
-
-              setListing(response.listing);
-            } catch (err: any) {
-              Alert.alert(
-                "Delete Failed",
-                err?.message || "Unable to delete photo."
-              );
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
-      ]
+  if (loadError && !listing) {
+    return (
+      <AccountScreen title="Photos & status">
+        <ErrorState error={loadError} onRetry={load} />
+      </AccountScreen>
     );
-  };
+  }
 
-  const changeStatus = (publish: boolean) => {
-    if (busy || !listing) return;
-
-    Alert.alert(
-      publish ? "Publish Listing" : "Withdraw Listing",
-      publish
-        ? "Make this vehicle available to customers?"
-        : "Remove this vehicle from public listings?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm",
-          onPress: async () => {
-            try {
-              setBusy(true);
-
-              const response = publish
-                ? await publishOperatorListing(listingId)
-                : await withdrawOperatorListing(listingId);
-
-              setListing(response.listing);
-
-              Alert.alert(
-                "Success",
-                publish
-                  ? "Listing published successfully."
-                  : "Listing withdrawn successfully."
-              );
-            } catch (err: any) {
-              Alert.alert(
-                "Action Failed",
-                err?.message ||
-                  "Unable to change listing status."
-              );
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
-      ]
+  if (!listing) {
+    return (
+      <AccountScreen title="Photos & status">
+        <GlassCard>
+          <SkeletonText lines={5} />
+        </GlassCard>
+      </AccountScreen>
     );
-  };
+  }
+
+  const published = listing.status === "PUBLISHED";
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.back}
-          onPress={() => router.back()}
-          disabled={busy}
-        >
-          <Ionicons
-            name="arrow-back"
-            size={22}
-            color="#17313C"
-          />
-        </Pressable>
+    <AccountScreen title="Photos & status">
+      <AppText variant="bodyStrong">{listing.name}</AppText>
 
-        <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>
-            VEHICLE MANAGEMENT
-          </Text>
-          <Text style={styles.title}>
-            Manage Listing
-          </Text>
+      <GlassCard>
+        <View style={styles.statusRow}>
+          <View style={styles.flex}>
+            <AppText variant="micro">On the platform</AppText>
+            <StatusPill kind="listing" status={listing.status} style={styles.mt4} />
+          </View>
+          {published ? (
+            <Button label="Withdraw" variant="line" size="sm" onPress={() => setStatusAction("withdraw")} />
+          ) : listing.status !== "SUSPENDED" ? (
+            <Button label="Publish" variant="brand" size="sm" onPress={() => setStatusAction("publish")} />
+          ) : null}
         </View>
+        <AppText variant="caption" style={styles.mt8}>
+          {published
+            ? "Customers can find and request this car."
+            : listing.status === "SUSPENDED"
+              ? "Suspended by the platform. Contact support."
+              : "Customers can't see this car until you publish it."}
+        </AppText>
+      </GlassCard>
+
+      <View style={styles.photosHead}>
+        <AppText variant="headline" accessibilityRole="header" style={styles.flex}>
+          Photos
+        </AppText>
+        <AppText variant="caption">
+          {images.length} of {MAX_PHOTOS}
+        </AppText>
       </View>
+      <AppText variant="caption">The first photo is the cover customers see. JPEG, PNG or WebP, up to 5 MB.</AppText>
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator
-            size="large"
-            color="#07869B"
-          />
-        </View>
-      ) : error || !listing ? (
-        <View style={styles.center}>
-          <Text style={styles.error}>
-            {error || "Listing not found."}
-          </Text>
-          <Pressable onPress={loadListing}>
-            <Text style={styles.link}>Try Again</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.summary}>
-            <Text style={styles.listingName}>
-              {listing.name}
-            </Text>
-            <Text style={styles.status}>
-              {listing.status.replace(/_/g, " ")}
-            </Text>
-          </View>
-
-          <View style={styles.sectionTop}>
-            <Text style={styles.sectionTitle}>
-              Vehicle Photos
-            </Text>
-            <Text style={styles.count}>
-              {images.length} photos
-            </Text>
-          </View>
-
-          <Text style={styles.description}>
-            The first photo is the cover image.
-            Use the arrows to change display order.
-          </Text>
-
-          <Pressable
-            style={styles.uploadButton}
-            disabled={busy}
-            onPress={uploadPhoto}
-          >
-            {busy ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <>
-                <Ionicons
-                  name="cloud-upload-outline"
-                  size={20}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.uploadText}>
-                  Add Photo
-                </Text>
-              </>
-            )}
-          </Pressable>
-
-          {images.length === 0 ? (
-            <View style={styles.empty}>
-              <Ionicons
-                name="images-outline"
-                size={34}
-                color="#81939C"
-              />
-              <Text style={styles.description}>
-                No photos uploaded yet.
-              </Text>
-            </View>
-          ) : (
-            images.map((image, index) => (
-              <View
-                key={image.id}
-                style={styles.imageCard}
-              >
-                <Image
-                  source={{ uri: image.imageUrl }}
-                  style={styles.photo}
-                  resizeMode="contain"
-                />
-
-                <View style={styles.imageContent}>
-                  <View style={styles.imageTitleRow}>
-                    <Text style={styles.imageTitle}>
-                      Photo {index + 1}
-                    </Text>
-
-                    {index === 0 && (
-                      <Text style={styles.primary}>
-                        COVER
-                      </Text>
-                    )}
-                  </View>
-
-                  <View style={styles.actions}>
-                    <Pressable
-                      style={styles.smallButton}
-                      disabled={busy || index === 0}
-                      onPress={() =>
-                        moveImage(image.id, -1)
-                      }
-                    >
-                      <Ionicons
-                        name="arrow-up"
-                        size={19}
-                        color="#07869B"
-                      />
-                    </Pressable>
-
-                    <Pressable
-                      style={styles.smallButton}
-                      disabled={
-                        busy || index === images.length - 1
-                      }
-                      onPress={() =>
-                        moveImage(image.id, 1)
-                      }
-                    >
-                      <Ionicons
-                        name="arrow-down"
-                        size={19}
-                        color="#07869B"
-                      />
-                    </Pressable>
-
-                    <Pressable
-                      style={styles.deleteButton}
-                      disabled={busy}
-                      onPress={() => removeImage(image.id)}
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={19}
-                        color="#D14343"
-                      />
-                    </Pressable>
-                  </View>
-                </View>
+      {images.map((image, index) => (
+        <GlassCard key={image.id} padding={8}>
+          <View style={[styles.photo, { backgroundColor: tokens.glassStrong }]}>
+            <Image source={{ uri: image.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" accessible={false} />
+            {index === 0 ? (
+              <View style={styles.cover}>
+                <StatusPill label="Cover" tone="ok" />
               </View>
-            ))
-          )}
+            ) : null}
+            {working === `move-${image.id}` ? (
+              <View style={[styles.overlay, { backgroundColor: tokens.scrim }]}>
+                <ActivityIndicator color="#FFFFFF" />
+              </View>
+            ) : null}
+          </View>
+          <View style={styles.photoActions}>
+            <PhotoButton icon="arrow-up" label="Move up" disabled={index === 0 || !!working} onPress={() => move(image, -1)} />
+            <PhotoButton icon="arrow-down" label="Move down" disabled={index === images.length - 1 || !!working} onPress={() => move(image, 1)} />
+            <View style={styles.flex} />
+            <PhotoButton icon="trash-outline" label="Remove photo" danger disabled={!!working} onPress={() => setDeleting(image)} />
+          </View>
+        </GlassCard>
+      ))}
 
-          <View style={styles.separator} />
+      <Button
+        label={full ? "Photo limit reached" : images.length ? "Add another photo" : "Add a photo"}
+        variant="line"
+        icon="add"
+        disabled={full || (!!working && working !== "upload")}
+        loading={working === "upload"}
+        onPress={addPhoto}
+      />
+      <FieldError message={photoError} />
 
-          <Text style={styles.sectionTitle}>
-            Publication Status
-          </Text>
+      <Button
+        label="Edit details"
+        variant="text"
+        icon="chevron-forward"
+        iconPosition="end"
+        style={styles.alignStart}
+        onPress={() => router.push({ pathname: "/operator/listing/form", params: { id: String(listing.id) } } as unknown as Href)}
+      />
 
-          <Text style={styles.description}>
-            Published vehicles are visible to customers.
-            Withdrawn vehicles are hidden from new bookings.
-          </Text>
+      <ConfirmSheet
+        visible={!!deleting}
+        title="Remove this photo?"
+        message="It's deleted from the listing. You can add it again later."
+        confirmLabel="Remove photo"
+        confirmVariant="danger"
+        onConfirm={removePhoto}
+        onCancel={() => setDeleting(null)}
+      />
 
-          {listing.status === "PUBLISHED" ? (
-            <Pressable
-              style={styles.withdrawButton}
-              disabled={busy}
-              onPress={() => changeStatus(false)}
-            >
-              <Text style={styles.withdrawText}>
-                Withdraw Listing
-              </Text>
-            </Pressable>
-          ) : listing.status === "DRAFT" ||
-            listing.status === "WITHDRAWN" ? (
-            <Pressable
-              style={styles.publishButton}
-              disabled={busy}
-              onPress={() => changeStatus(true)}
-            >
-              <Text style={styles.publishText}>
-                Publish Listing
-              </Text>
-            </Pressable>
-          ) : (
-            <Text style={styles.error}>
-              This listing cannot be published from
-              its current status.
-            </Text>
-          )}
+      <ConfirmSheet
+        visible={!!statusAction}
+        title={statusAction === "publish" ? "Publish this car?" : "Withdraw this car?"}
+        message={
+          statusAction === "publish"
+            ? "Customers can find and request it. It counts towards your plan's listing limit."
+            : "Customers can no longer find or request it. Bookings you've already accepted still go ahead, and the listing isn't deleted."
+        }
+        confirmLabel={statusAction === "publish" ? "Publish" : "Withdraw"}
+        confirmVariant={statusAction === "publish" ? "brand" : "danger"}
+        onConfirm={changeStatus}
+        onCancel={() => setStatusAction(null)}
+      />
+    </AccountScreen>
+  );
+}
 
-          <Text style={styles.description}>
-            Publishing is subject to your operator
-            subscription limit and backend validation.
-          </Text>
-        </ScrollView>
-      )}
-    </SafeAreaView>
+function PhotoButton({
+  icon,
+  label,
+  onPress,
+  disabled,
+  danger = false,
+}: {
+  icon: "arrow-up" | "arrow-down" | "trash-outline";
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  const { tokens } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      style={({ pressed }) => [
+        styles.photoButton,
+        { backgroundColor: tokens.glassStrong, borderColor: tokens.glassLine, opacity: disabled ? 0.35 : pressed ? 0.7 : 1 },
+      ]}
+    >
+      <Ionicons name={icon} size={18} color={danger ? tokens.errFg : tokens.ink} />
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  flex: {
     flex: 1,
-    backgroundColor: "#F7FAFB",
   },
-  header: {
-    padding: 20,
+  mt4: {
+    marginTop: 4,
+    alignSelf: "flex-start",
+  },
+  mt8: {
+    marginTop: 8,
+  },
+  alignStart: {
+    alignSelf: "flex-start",
+  },
+  statusRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 13,
+    gap: 12,
   },
-  back: {
-    width: 43,
-    height: 43,
-    borderRadius: 13,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-  },
-  eyebrow: {
-    color: "#07869B",
-    fontSize: 10,
-    fontWeight: "900",
-  },
-  title: {
-    color: "#17313C",
-    fontSize: 23,
-    fontWeight: "900",
-    marginTop: 5,
-  },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 25,
-  },
-  error: {
-    color: "#D14343",
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  link: {
-    color: "#07869B",
-    fontWeight: "900",
-    marginTop: 15,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingBottom: 70,
-  },
-  summary: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 17,
-    padding: 18,
-    marginBottom: 25,
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-  },
-  listingName: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#17313C",
-  },
-  status: {
-    fontSize: 11,
-    fontWeight: "900",
-    color: "#07869B",
-    marginTop: 9,
-  },
-  sectionTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: "900",
-    color: "#17313C",
-  },
-  count: {
-    color: "#81939C",
-    fontSize: 12,
-  },
-  description: {
-    color: "#81939C",
-    fontSize: 12,
-    lineHeight: 19,
-    marginTop: 10,
-    marginBottom: 15,
-  },
-  uploadButton: {
-    backgroundColor: "#07869B",
-    borderRadius: 14,
-    minHeight: 50,
+  photosHead: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
-    marginBottom: 20,
-  },
-  uploadText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  empty: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    padding: 36,
-    alignItems: "center",
-  },
-  imageCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 17,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    marginBottom: 15,
   },
   photo: {
-  width: "100%",
-  aspectRatio: 4 / 3,
-  backgroundColor: "#F3F6F8",
-},
-  imageContent: {
-    padding: 15,
-  },
-  imageTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  imageTitle: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#17313C",
-  },
-  primary: {
-    backgroundColor: "#E6F7F9",
-    color: "#07869B",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 8,
+    height: 180,
+    borderRadius: Radius.md,
     overflow: "hidden",
-    fontSize: 10,
-    fontWeight: "900",
   },
-  actions: {
+  cover: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+  },
+  overlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoActions: {
     flexDirection: "row",
-    gap: 10,
-    marginTop: 14,
+    alignItems: "center",
+    gap: 8,
+    paddingTop: 8,
+    paddingHorizontal: 4,
   },
-  smallButton: {
+  photoButton: {
     width: 44,
-    height: 41,
-    backgroundColor: "#E6F7F9",
-    borderRadius: 11,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
-  },
-  deleteButton: {
-    width: 44,
-    height: 41,
-    backgroundColor: "#FFF0F0",
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: "auto",
-  },
-  separator: {
-    height: 1,
-    backgroundColor: "#E3EAED",
-    marginVertical: 25,
-  },
-  publishButton: {
-    backgroundColor: "#07869B",
-    borderRadius: 14,
-    padding: 16,
-    alignItems: "center",
-  },
-  publishText: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-    fontSize: 13,
-  },
-  withdrawButton: {
-    backgroundColor: "#FFF0F0",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#F0CDCD",
-    padding: 16,
-    alignItems: "center",
-  },
-  withdrawText: {
-    color: "#D14343",
-    fontSize: 13,
-    fontWeight: "900",
   },
 });
