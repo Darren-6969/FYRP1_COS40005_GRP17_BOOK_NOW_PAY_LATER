@@ -2,22 +2,18 @@ import { Stack } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 
 import { useRoleGuard } from "@/hooks/use-role-guard";
+import { useTheme } from "@/hooks/use-theme";
 
 export default function CustomerLayout() {
   // F4: only signed-in customers get past here, deep links included.
   const allowed = useRoleGuard("CUSTOMER");
+  const { tokens } = useTheme();
 
   if (!allowed) {
+    // Transparent, so the ambient background shows in light and dark.
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#F7FAFB",
-        }}
-      >
-        <ActivityIndicator size="large" color="#07869B" />
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color={tokens.brand} />
       </View>
     );
   }
