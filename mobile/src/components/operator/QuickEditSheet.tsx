@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppText, BottomSheet, Button, TextField, useToast } from "@/components/ui";
@@ -8,6 +8,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { quickEditOperatorListing, type OperatorListing } from "@/services/operatorApi";
 import { describeError } from "@/utils/errors";
 import { logger } from "@/utils/logger";
+import { useResetOnChange } from "@/hooks/use-reset-on-change";
 
 /** A ringgit amount as typed: whole ringgit, or up to two decimals. */
 const MONEY = /^\d+(\.\d{1,2})?$/;
@@ -29,18 +30,20 @@ export function QuickEditSheet({
 }) {
   const toast = useToast();
   const { tokens } = useTheme();
-  const [price, setPrice] = useState("");
-  const [quantity, setQuantity] = useState("");
+  const priceOf = (l: OperatorListing | null) => (l?.price !== undefined && l?.price !== null ? String(l.price) : "");
+  const [price, setPrice] = useState(() => priceOf(listing));
+  const [quantity, setQuantity] = useState(() => String(listing?.quantity ?? ""));
   const [errors, setErrors] = useState<{ price?: string; quantity?: string }>({});
   const [saveError, setSaveError] = useState<unknown>(null);
 
-  useEffect(() => {
+  // Fills in from the listing each time a different one is opened.
+  useResetOnChange(listing, () => {
     if (!listing) return;
-    setPrice(listing.price !== undefined && listing.price !== null ? String(listing.price) : "");
+    setPrice(priceOf(listing));
     setQuantity(String(listing.quantity ?? ""));
     setErrors({});
     setSaveError(null);
-  }, [listing]);
+  });
 
   if (!listing) return null;
 

@@ -35,6 +35,7 @@ import { formatMYT } from "@/utils/datetime";
 import { describeError } from "@/utils/errors";
 import { logger } from "@/utils/logger";
 import { formatRM } from "@/utils/money";
+import { startAsync } from "@/utils/start-async";
 
 type PaymentOption = {
   paymentType: ManualPaymentType;
@@ -124,13 +125,8 @@ export default function UploadReceiptScreen() {
     if (submitError) setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
   }, [submitError]);
 
-  const load = useCallback(async () => {
-    if (!bookingId) {
-      setLoadError(new Error("Booking information is missing."));
-      return;
-    }
-    setLoadError(null);
-    setDue(null);
+  const load = useCallback(() => startAsync(async () => {
+    if (!bookingId) return;
     try {
       const response: ManualPaymentResponse = await getManualPaymentOptions(bookingId);
       setDue(response);
@@ -144,7 +140,15 @@ export default function UploadReceiptScreen() {
       logger.debug("Failed to load manual payment:", err);
       setLoadError(err);
     }
-  }, [bookingId, requestedPaymentType]);
+  }), [bookingId, requestedPaymentType]);
+
+  // Retry resets first; the first load needs no reset, so the effect's load
+  // makes no synchronous state updates (react-hooks/set-state-in-effect).
+  const retry = () => {
+    setLoadError(null);
+    setDue(null);
+    return load();
+  };
 
   useEffect(() => {
     load();
@@ -236,11 +240,14 @@ export default function UploadReceiptScreen() {
     </View>
   );
 
-  if (loadError) {
+  // A link without a booking is an error straight away, with nothing to load.
+  const shownLoadError = loadError ?? (bookingId ? null : new Error("Booking information is missing."));
+
+  if (shownLoadError) {
     return (
       <View style={[styles.screen, styles.pad, { paddingTop: insets.top + 8 }]}>
         {header}
-        <ErrorState error={loadError} onRetry={load} />
+        <ErrorState error={shownLoadError} onRetry={retry} />
       </View>
     );
   }
@@ -420,7 +427,7 @@ export default function UploadReceiptScreen() {
                     // F1: the same attempt keeps its Idempotency-Key, so a
                     // second tap replays the server's answer.
                     <AppText variant="caption" style={[styles.mt4, { color: tokens.errFg }]}>
-                      Your receipt may already have arrived. Tapping Send receipt again won't send it twice.
+                      Your receipt may already have arrived. Tapping Send receipt again won&apos;t send it twice.
                     </AppText>
                   ) : null}
                 </View>

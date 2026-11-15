@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import { ReceiptViewer, isViewableReceipt } from "@/components/booking/ReceiptViewer";
@@ -12,6 +12,7 @@ import { formatMYT } from "@/utils/datetime";
 import { describeError } from "@/utils/errors";
 import { logger } from "@/utils/logger";
 import { customerName, operatorBookingRef } from "@/utils/operator-booking";
+import { useResetOnChange } from "@/hooks/use-reset-on-change";
 
 /** Which part the receipt pays, from the receipt or the part waiting for review. */
 export function receiptPart(payment: OperatorPayment): { label: string; amount: number | string | null | undefined } {
@@ -52,12 +53,13 @@ export function ReceiptReviewSheet({
   const [sendError, setSendError] = useState<unknown>(null);
   const [viewer, setViewer] = useState(false);
 
-  useEffect(() => {
+  // Back to the first step for each receipt.
+  useResetOnChange(payment?.id, () => {
     setRejecting(false);
     setReason("");
     setReasonError(null);
     setSendError(null);
-  }, [payment?.id]);
+  });
 
   if (!payment) return null;
   const booking = payment.booking;

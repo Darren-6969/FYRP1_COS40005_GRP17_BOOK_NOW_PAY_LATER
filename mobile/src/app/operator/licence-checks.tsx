@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import { File } from "expo-file-system";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";

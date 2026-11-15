@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { AppText, BottomSheet, Button, Chip, GlassCard } from "@/components/ui";
@@ -84,9 +84,12 @@ export default function CarFilterModal({ visible, cars, filters, onClose, onAppl
   const { tokens } = useTheme();
   const [draft, setDraft] = useState<CarFilters>(filters);
 
-  useEffect(() => {
+  // Starts from the applied filters each time it opens (or they change while open).
+  const [openedWith, setOpenedWith] = useState({ visible, filters });
+  if (openedWith.visible !== visible || openedWith.filters !== filters) {
+    setOpenedWith({ visible, filters });
     if (visible) setDraft(filters);
-  }, [visible, filters]);
+  }
 
   // Brand and operator options come from the cars on offer.
   const brands = useMemo(

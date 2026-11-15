@@ -14,6 +14,7 @@ import {
   type OperatorListingFormPayload,
 } from "@/services/operatorApi";
 import { logger } from "@/utils/logger";
+import { startAsync } from "@/utils/start-async";
 
 const VEHICLE_TYPES = ["SEDAN", "HATCHBACK", "COMPACT", "SUV", "MPV", "PICKUP", "VAN"] as const;
 const TRANSMISSIONS = [
@@ -144,8 +145,7 @@ export default function OperatorListingFormScreen() {
   const [errors, setErrors] = useState<Errors>({});
   const [saveError, setSaveError] = useState<unknown>(null);
 
-  const load = async () => {
-    setLoadError(null);
+  const load = () => startAsync(async () => {
     try {
       if (Number.isNaN(listingId)) throw new Error("This listing link isn't valid.");
       const [branchResponse, listingResponse] = await Promise.all([
@@ -187,6 +187,13 @@ export default function OperatorListingFormScreen() {
       logger.debug("Failed to load the listing form:", err);
       setLoadError(err);
     }
+  });
+
+  // Retry resets first; the first load needs no reset, so the effect's load
+  // makes no synchronous state updates (react-hooks/set-state-in-effect).
+  const retry = () => {
+    setLoadError(null);
+    return load();
   };
 
   useEffect(() => {
@@ -254,7 +261,7 @@ export default function OperatorListingFormScreen() {
   if (loadError) {
     return (
       <AccountScreen title={title}>
-        <ErrorState error={loadError} onRetry={load} />
+        <ErrorState error={loadError} onRetry={retry} />
       </AccountScreen>
     );
   }

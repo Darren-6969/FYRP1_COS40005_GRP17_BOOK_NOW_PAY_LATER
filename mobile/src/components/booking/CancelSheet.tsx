@@ -12,6 +12,8 @@ import {
 } from '@/services/customerApi';
 import { formatMYT } from '@/utils/datetime';
 import { describeError } from '@/utils/errors';
+import { useResetOnChange } from '@/hooks/use-reset-on-change';
+import { startAsync } from '@/utils/start-async';
 
 type CancelSheetProps = {
   bookingId: number | string;
@@ -42,23 +44,32 @@ export function CancelSheet({ bookingId, bookingRef, visible, onClose, onConfirm
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
-  const loadQuote = useCallback(async () => {
-    setQuote(null);
-    setQuoteError(null);
+  const loadQuote = useCallback(() => startAsync(async () => {
     try {
       setQuote(await getCustomerCancellationQuote(bookingId));
     } catch (err) {
       setQuoteError(err);
     }
-  }, [bookingId]);
+  }), [bookingId]);
+
+  // Fresh each time it opens: cleared during render, then the quote is fetched.
+  useResetOnChange(visible, () => {
+    if (!visible) return;
+    setReason(null);
+    setError(null);
+    setQuote(null);
+    setQuoteError(null);
+  });
 
   useEffect(() => {
-    if (visible) {
-      setReason(null);
-      setError(null);
-      loadQuote();
-    }
+    if (visible) loadQuote();
   }, [visible, loadQuote]);
+
+  const retryQuote = () => {
+    setQuote(null);
+    setQuoteError(null);
+    return loadQuote();
+  };
 
   const close = () => {
     if (!busy) onClose();
@@ -93,7 +104,7 @@ export function CancelSheet({ bookingId, bookingRef, visible, onClose, onConfirm
       }
     >
       {quoteError ? (
-        <ErrorState error={quoteError} onRetry={loadQuote} compact />
+        <ErrorState error={quoteError} onRetry={retryQuote} compact />
       ) : !quote ? (
         <GlassCard>
           <SkeletonText lines={4} />
@@ -102,7 +113,7 @@ export function CancelSheet({ bookingId, bookingRef, visible, onClose, onConfirm
         <GlassCard>
           <AppText variant="bodyStrong">Nothing to refund</AppText>
           <AppText variant="caption" style={styles.mt4}>
-            You haven't paid anything for this booking, so cancelling costs nothing.
+            You haven&apos;t paid anything for this booking, so cancelling costs nothing.
           </AppText>
         </GlassCard>
       ) : (

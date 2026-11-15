@@ -12,6 +12,7 @@ import {
   type OperatorPointPayload,
 } from "@/services/operatorApi";
 import { logger } from "@/utils/logger";
+import { startAsync } from "@/utils/start-async";
 
 type Usage = OperatorPickupPoint["usage"];
 
@@ -53,8 +54,7 @@ export default function PointFormScreen() {
   const [errors, setErrors] = useState<Errors>({});
   const [saveError, setSaveError] = useState<unknown>(null);
 
-  const load = async () => {
-    setLoadError(null);
+  const load = () => startAsync(async () => {
     try {
       if (!branchId || Number.isNaN(pointId)) throw new Error("This link isn't valid.");
       const response = await getOperatorBranches();
@@ -77,6 +77,13 @@ export default function PointFormScreen() {
       logger.debug("Failed to load the point:", err);
       setLoadError(err);
     }
+  });
+
+  // Retry resets first; the first load needs no reset, so the effect's load
+  // makes no synchronous state updates (react-hooks/set-state-in-effect).
+  const retry = () => {
+    setLoadError(null);
+    return load();
   };
 
   useEffect(() => {
@@ -90,7 +97,7 @@ export default function PointFormScreen() {
   if (loadError) {
     return (
       <AccountScreen title={title}>
-        <ErrorState error={loadError} onRetry={load} />
+        <ErrorState error={loadError} onRetry={retry} />
       </AccountScreen>
     );
   }

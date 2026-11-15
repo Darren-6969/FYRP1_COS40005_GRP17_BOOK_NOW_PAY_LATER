@@ -150,7 +150,7 @@ export const PaymentCard = memo(function PaymentCard({ payment, onPay, onInvoice
         <View style={[styles.note, { backgroundColor: tokens.errBg }]}>
           <Ionicons name="alert-circle-outline" size={18} color={tokens.errFg} />
           <AppText variant="caption" style={[styles.flex, { color: tokens.errFg }]}>
-            Your last receipt wasn't accepted{receipt.remarks ? `: ${receipt.remarks}` : '.'} Please pay again or upload a new receipt.
+            Your last receipt wasn&apos;t accepted{receipt.remarks ? `: ${receipt.remarks}` : '.'} Please pay again or upload a new receipt.
           </AppText>
         </View>
       ) : null}

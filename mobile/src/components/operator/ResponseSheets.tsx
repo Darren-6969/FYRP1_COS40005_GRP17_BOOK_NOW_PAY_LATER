@@ -34,6 +34,8 @@ import {
 import { describeError } from "@/utils/errors";
 import { logger } from "@/utils/logger";
 import { customerName, operatorBookingRef, operatorBookingTitle } from "@/utils/operator-booking";
+import { useResetOnChange } from "@/hooks/use-reset-on-change";
+import { startAsync } from "@/utils/start-async";
 
 export type BookingResponse = "accept" | "reject" | "suggest" | "handover" | "noshow";
 
@@ -118,13 +120,13 @@ function DeclineSheet({
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (visible) {
-      setChoice(null);
-      setNote("");
-      setError(null);
-    }
-  }, [visible]);
+  // Fresh each time it opens.
+  useResetOnChange(visible, () => {
+    if (!visible) return;
+    setChoice(null);
+    setNote("");
+    setError(null);
+  });
 
   const other = choice === "Other";
 
@@ -189,12 +191,12 @@ function NoShowSheet({
   const [remark, setRemark] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (visible) {
-      setRemark("");
-      setError(null);
-    }
-  }, [visible]);
+  // Fresh each time it opens.
+  useResetOnChange(visible, () => {
+    if (!visible) return;
+    setRemark("");
+    setError(null);
+  });
 
   return (
     <ConfirmSheet
@@ -253,9 +255,7 @@ function SuggestSheet({
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<unknown>(null);
 
-  const load = async () => {
-    setLoadError(null);
-    setOptions(null);
+  const load = () => startAsync(async () => {
     try {
       const data = await getAlternativeOptions(booking.id);
       setOptions(data.options ?? []);
@@ -263,20 +263,34 @@ function SuggestSheet({
       logger.debug("[suggest] options failed", err);
       setLoadError(err);
     }
-  };
+  });
 
-  useEffect(() => {
-    if (!visible) return;
+  // Fresh each time it opens, for the booking it opens with: cleared during
+  // render, then the options are fetched.
+  const openKey = visible ? booking.id : null;
+  useResetOnChange(openKey, () => {
+    if (openKey === null) return;
+    setOptions(null);
+    setLoadError(null);
     setSelected(null);
     setQuote(null);
     setQuoteError(null);
     setReason("");
     setReasonError(null);
     setSendError(null);
-    load();
-    // Reload each time the sheet opens, for the booking it opens with.
+  });
+
+  useEffect(() => {
+    if (openKey !== null) load();
+    // Fetch once per opening; load() reads the booking in openKey.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, booking.id]);
+  }, [openKey]);
+
+  const retryOptions = () => {
+    setLoadError(null);
+    setOptions(null);
+    return load();
+  };
 
   const choose = async (option: AlternativeOption) => {
     setSelected(option);
@@ -324,7 +338,7 @@ function SuggestSheet({
       footer={<Button label="Send offer" variant="brand" disabled={!ready} onPress={send} />}
     >
       {loadError ? (
-        <ErrorState error={loadError} onRetry={load} compact />
+        <ErrorState error={loadError} onRetry={retryOptions} compact />
       ) : !options ? (
         <GlassCard>
           <SkeletonText lines={4} />

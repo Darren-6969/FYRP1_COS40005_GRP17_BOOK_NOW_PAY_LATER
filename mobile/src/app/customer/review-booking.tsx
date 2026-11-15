@@ -24,6 +24,7 @@ import { getPublicCarById, quotePublicCar } from "@/services/carApi";
 import { createCarBooking } from "@/services/customerApi";
 import { formatMYT, mytToIso } from "@/utils/datetime";
 import { logger } from "@/utils/logger";
+import { startAsync } from "@/utils/start-async";
 
 type Params = {
   listingId?: string;
@@ -67,17 +68,37 @@ export default function ReviewBooking() {
 
   const [car, setCar] = useState<any | null>(null);
   const [quote, setQuote] = useState<any | null>(null);
-  const [quoteLoading, setQuoteLoading] = useState(true);
-  const [quoteError, setQuoteError] = useState<unknown>(null);
+  const [quoteResultError, setQuoteResultError] = useState<unknown>(null);
+  // Which inputs the quote or error belongs to. Loading is worked out from it
+  // during render, so the effect makes no synchronous updates.
+  const [quoteFor, setQuoteFor] = useState<string | null>(null);
 
-  const loadQuote = useCallback(async () => {
-    if (!params.listingId || !params.from || !params.to || !params.pickupPointId || !params.dropoffPointId) {
-      setQuoteLoading(false);
-      setQuoteError(new Error("The pick-up, drop-off or dates are missing. Go back and check them."));
-      return;
-    }
-    setQuoteLoading(true);
-    setQuoteError(null);
+  const missingInputs = !params.listingId || !params.from || !params.to || !params.pickupPointId || !params.dropoffPointId;
+  const quoteKey = JSON.stringify([
+    params.listingId,
+    params.from,
+    params.ft,
+    params.to,
+    params.tt,
+    params.pickupPointId,
+    params.dropoffPointId,
+    params.dateOfBirth,
+    cdwSelected,
+  ]);
+
+  const loadQuote = useCallback(() => startAsync(async () => {
+    if (!params.listingId || !params.from || !params.to || !params.pickupPointId || !params.dropoffPointId) return;
+    const key = JSON.stringify([
+      params.listingId,
+      params.from,
+      params.ft,
+      params.to,
+      params.tt,
+      params.pickupPointId,
+      params.dropoffPointId,
+      params.dateOfBirth,
+      cdwSelected,
+    ]);
     try {
       const response = await quotePublicCar(params.listingId, {
         from: params.from,
@@ -94,13 +115,14 @@ export default function ReviewBooking() {
         throw new Error(response.problems?.[0]?.message || "This car isn't available for these dates any more.");
       }
       setQuote(response.quote);
+      setQuoteResultError(null);
+      setQuoteFor(key);
     } catch (err) {
       setQuote(null);
-      setQuoteError(err);
-    } finally {
-      setQuoteLoading(false);
+      setQuoteResultError(err);
+      setQuoteFor(key);
     }
-  }, [
+  }), [
     params.listingId,
     params.from,
     params.ft,
@@ -120,6 +142,17 @@ export default function ReviewBooking() {
         .catch((err) => logger.debug("Failed to load car for review:", err));
     }
   }, [loadQuote, params.listingId]);
+
+  const quoteLoading = !missingInputs && quoteFor !== quoteKey;
+  const quoteError = missingInputs
+    ? new Error("The pick-up, drop-off or dates are missing. Go back and check them.")
+    : quoteFor === quoteKey
+      ? quoteResultError
+      : null;
+  const retryQuote = () => {
+    setQuoteFor(null);
+    return loadQuote();
+  };
 
   const submitBooking = async () => {
     setSubmitError(null);
@@ -219,7 +252,7 @@ export default function ReviewBooking() {
           {quoteLoading ? (
             <SkeletonText lines={4} />
           ) : quoteError ? (
-            <ErrorState error={quoteError} onRetry={loadQuote} compact />
+            <ErrorState error={quoteError} onRetry={retryQuote} compact />
           ) : quote ? (
             <View style={styles.gap10}>
               <Row icon="navigate-outline" label="Pick-up" value={quote.pickupPoint?.label} sub={quote.pickupPoint?.address} />
@@ -237,7 +270,7 @@ export default function ReviewBooking() {
         {quote ? (
           <GlassCard>
             <AppText variant="headline" style={styles.cardTitle}>
-              How you'll pay
+              How you&apos;ll pay
             </AppText>
             <PaymentSchedule steps={paymentStepsFromQuote(quote, car)} />
           </GlassCard>

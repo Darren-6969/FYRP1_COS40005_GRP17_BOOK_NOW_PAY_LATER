@@ -17,6 +17,12 @@ import { FontFamily, Radius, type ThemeTokens } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { TAB_BAR_HEIGHT, tabBarBottomOffset } from '@/hooks/use-tab-bar-inset';
 
+/**
+ * The same cap as AppText, on both the label and its measuring copy, so the
+ * active pill still fits on the screen at the largest system text size.
+ */
+const LABEL_MAX_SCALE = 1.4;
+
 const ITEM = 48;
 const ITEM_PADDING = 13;
 const ICON = 22;
@@ -161,7 +167,7 @@ function TabItem({ label, focused, reduceMotion, tokens, badge, onPress, onLongP
       <Animated.View style={[styles.item, pillStyle]}>
         <View>{renderIcon(color)}</View>
         <Animated.View style={[styles.labelClip, labelStyle]}>
-          <Text numberOfLines={1} style={[styles.label, { color: tokens.navOnFg }]}>
+          <Text numberOfLines={1} maxFontSizeMultiplier={LABEL_MAX_SCALE} style={[styles.label, { color: tokens.navOnFg }]}>
             {label}
           </Text>
         </Animated.View>
@@ -170,6 +176,7 @@ function TabItem({ label, focused, reduceMotion, tokens, badge, onPress, onLongP
 
       {/* Off-screen copy used only to measure the label. */}
       <Text
+        maxFontSizeMultiplier={LABEL_MAX_SCALE}
         style={[styles.label, styles.measure]}
         onLayout={(e) => setLabelWidth(Math.ceil(e.nativeEvent.layout.width))}
         accessible={false}

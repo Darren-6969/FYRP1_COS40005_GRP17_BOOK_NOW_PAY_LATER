@@ -102,7 +102,6 @@ export default function PaymentStatusScreen() {
   // check showed "No connection" instead of retrying). Ends on paid, a real
   // error, or after about 20 seconds.
   const checkLoop = useCallback(async () => {
-    setPhase({ kind: "checking" });
     let lastError: unknown = null;
 
     for (let i = 0; i <= RETRY_DELAYS_MS.length; i++) {
@@ -131,10 +130,7 @@ export default function PaymentStatusScreen() {
   const running = useRef(false);
 
   const check = useCallback(async () => {
-    if (!bookingId) {
-      setPhase({ kind: "failed", message: "Booking information is missing." });
-      return;
-    }
+    if (!bookingId) return;
     // One check loop at a time ("Check again" while one is running).
     if (running.current) return;
     running.current = true;
@@ -149,11 +145,19 @@ export default function PaymentStatusScreen() {
     check();
   }, [check]);
 
+  // The screen starts in "checking"; Check again goes back to it. A link
+  // without a booking fails straight away, with nothing to check.
+  const checkAgain = () => {
+    setPhase({ kind: "checking" });
+    return check();
+  };
+  const shownPhase: Phase = bookingId ? phase : { kind: "failed", message: "Booking information is missing." };
+
   const openBooking = () => router.replace(`/customer/booking/${bookingId}` as Href);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
-      {phase.kind === "checking" ? (
+      {shownPhase.kind === "checking" ? (
         <StatusCard
           icon={null}
           title="Confirming your payment"
@@ -161,24 +165,24 @@ export default function PaymentStatusScreen() {
         />
       ) : (
         <StatusCard
-          icon={phase.kind === "processing" ? "time-outline" : phase.kind === "offline" ? "cloud-offline-outline" : "alert-circle-outline"}
-          tone={phase.kind === "failed" ? "err" : "info"}
+          icon={shownPhase.kind === "processing" ? "time-outline" : shownPhase.kind === "offline" ? "cloud-offline-outline" : "alert-circle-outline"}
+          tone={shownPhase.kind === "failed" ? "err" : "info"}
           title={
-            phase.kind === "processing"
+            shownPhase.kind === "processing"
               ? "Still processing"
-              : phase.kind === "offline"
+              : shownPhase.kind === "offline"
                 ? "No connection"
                 : "Couldn't confirm the payment"
           }
           message={
-            phase.kind === "processing"
+            shownPhase.kind === "processing"
               ? "Stripe hasn't confirmed this payment yet. If you were charged, it will show on your booking shortly. You won't be charged twice."
-              : phase.kind === "offline"
+              : shownPhase.kind === "offline"
                 ? "We couldn't reach the server to check this payment. If you paid, nothing is lost: check again when you're back online."
-                : phase.message
+                : shownPhase.message
           }
         >
-          <Button label="Check again" variant="brand" icon="refresh" onPress={check} />
+          <Button label="Check again" variant="brand" icon="refresh" onPress={checkAgain} />
           <Button label="View booking" variant="line" onPress={openBooking} />
         </StatusCard>
       )}

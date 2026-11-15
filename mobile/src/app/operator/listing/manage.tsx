@@ -22,6 +22,7 @@ import {
 } from "@/services/operatorApi";
 import { describeError } from "@/utils/errors";
 import { logger } from "@/utils/logger";
+import { startAsync } from "@/utils/start-async";
 
 /** CLAUDE.md: up to 5 photos per listing. */
 const MAX_PHOTOS = 5;
@@ -50,12 +51,8 @@ export default function ManageListingScreen() {
   // Blocks a second photo action before the first one's state lands (F17).
   const busy = useRef(false);
 
-  const load = useCallback(async () => {
-    if (!listingId) {
-      setLoadError(new Error("This listing link isn't valid."));
-      return;
-    }
-    setLoadError(null);
+  const load = useCallback(() => startAsync(async () => {
+    if (!listingId) return;
     try {
       const response = await getOperatorListingById(listingId);
       setListing(response.listing);
@@ -63,7 +60,14 @@ export default function ManageListingScreen() {
       logger.debug("Failed to load listing:", err);
       setLoadError(err);
     }
-  }, [listingId]);
+  }), [listingId]);
+
+  // Retry resets first; the first load needs no reset, so the effect's load
+  // makes no synchronous state updates (react-hooks/set-state-in-effect).
+  const retry = () => {
+    setLoadError(null);
+    return load();
+  };
 
   useEffect(() => {
     load();
@@ -145,10 +149,13 @@ export default function ManageListingScreen() {
     setStatusAction(null);
   };
 
-  if (loadError && !listing) {
+  // A bad link is an error straight away, with nothing to load.
+  const shownLoadError = loadError ?? (listingId ? null : new Error("This listing link isn't valid."));
+
+  if (shownLoadError && !listing) {
     return (
       <AccountScreen title="Photos & status">
-        <ErrorState error={loadError} onRetry={load} />
+        <ErrorState error={shownLoadError} onRetry={retry} />
       </AccountScreen>
     );
   }

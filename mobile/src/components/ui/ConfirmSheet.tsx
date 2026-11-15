@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Radius } from '@/constants/theme';
@@ -8,6 +8,7 @@ import { describeError } from '@/utils/errors';
 
 import { AppText } from './AppText';
 import { Button } from './Button';
+import { useResetOnChange } from '@/hooks/use-reset-on-change';
 
 type ConfirmSheetProps = {
   visible: boolean;
@@ -55,12 +56,13 @@ export function ConfirmSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
-  useEffect(() => {
+  // Cleared whenever it closes, ready for the next time.
+  useResetOnChange(visible, () => {
     if (!visible) {
       setError(null);
       setBusy(false);
     }
-  }, [visible]);
+  });
 
   const dismiss = () => {
     if (!busy) onCancel();
@@ -82,7 +84,8 @@ export function ConfirmSheet({
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={dismiss}>
-      <View style={styles.root}>
+      {/* Same keyboard handling as BottomSheet: a reason or note field stays above the keyboard. */}
+      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable
           style={[StyleSheet.absoluteFill, { backgroundColor: tokens.scrim }]}
           onPress={dismiss}
@@ -101,6 +104,8 @@ export function ConfirmSheet({
           ]}
         >
           <View style={[styles.grabber, { backgroundColor: tokens.line }]} />
+          {/* Scrolls when the content is taller than the screen, e.g. at the largest text size. */}
+          <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <AppText variant="title" accessibilityRole="header">
             {title}
           </AppText>
@@ -117,13 +122,14 @@ export function ConfirmSheet({
               </AppText>
             </View>
           ) : null}
+          </ScrollView>
 
           <View style={styles.buttons}>
             <Button label={confirmLabel} variant={confirmVariant} loading={busy} onPress={confirm} />
             <Button label={cancelLabel} variant="line" disabled={busy} onPress={dismiss} />
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -133,7 +139,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
+  scroll: {
+    flexGrow: 0,
+  },
   sheet: {
+    maxHeight: '92%',
     borderTopLeftRadius: Radius.hero,
     borderTopRightRadius: Radius.hero,
     borderWidth: StyleSheet.hairlineWidth,

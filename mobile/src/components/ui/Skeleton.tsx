@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, View, type DimensionValue, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
@@ -16,7 +16,7 @@ type SkeletonProps = {
  */
 export function Skeleton({ width = '100%', height = 16, radius = 8, style }: SkeletonProps) {
   const { tokens } = useTheme();
-  const opacity = useRef(new Animated.Value(0.55)).current;
+  const opacity = useState(() => new Animated.Value(0.55))[0];
   const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {

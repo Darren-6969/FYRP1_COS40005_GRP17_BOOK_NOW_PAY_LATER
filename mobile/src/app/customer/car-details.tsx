@@ -28,6 +28,7 @@ import { getPublicCarById, quotePublicCar } from "@/services/carApi";
 import { getSavedListingIds, removeSavedListing, saveListing } from "@/services/customerApi";
 import { logger } from "@/utils/logger";
 import { formatSen } from "@/utils/money";
+import { startAsync } from "@/utils/start-async";
 
 type Params = { id?: string; city?: string; from?: string; ft?: string; to?: string; tt?: string };
 
@@ -65,21 +66,29 @@ export default function CarDetails() {
   const [cdw, setCdw] = useState(false);
 
   const [quote, setQuote] = useState<any | null>(null);
-  const [quoteLoading, setQuoteLoading] = useState(false);
-  const [quoteError, setQuoteError] = useState<unknown>(null);
+  const [quoteResultError, setQuoteResultError] = useState<unknown>(null);
+  // Which trip the quote or error above belongs to. Loading is worked out
+  // from it during render, so the effect makes no synchronous updates.
+  const [quoteFor, setQuoteFor] = useState<string | null>(null);
   // Only the newest quote request may update the screen; an older one
   // (e.g. before CDW was switched on) can finish later on a slow network.
   const quoteSeq = useRef(0);
 
-  const loadCar = useCallback(async () => {
-    if (!listingId) return setCarError(new Error("This car link is missing its ID."));
-    setCarError(null);
+  const loadCar = useCallback(() => startAsync(async () => {
+    if (!listingId) return;
     try {
       setCar(await getPublicCarById(listingId));
     } catch (err) {
       setCarError(err);
     }
-  }, [listingId]);
+  }), [listingId]);
+
+  // Retry resets first; the first load needs no reset, so the effect's load
+  // makes no synchronous state updates (react-hooks/set-state-in-effect).
+  const retryCar = () => {
+    setCarError(null);
+    return loadCar();
+  };
 
   useEffect(() => {
     loadCar();
@@ -93,15 +102,13 @@ export default function CarDetails() {
 
   const hasDates = Boolean(trip.from && trip.to);
 
-  const loadQuote = useCallback(async () => {
+  // The inputs the price depends on; a new value means a new quote is due.
+  const quoteKey = JSON.stringify([listingId, trip.from, trip.fromTime, trip.to, trip.toTime, cdw]);
+
+  const loadQuote = useCallback(() => startAsync(async () => {
     const seq = ++quoteSeq.current;
-    if (!listingId || !trip.from || !trip.to) {
-      setQuote(null);
-      setQuoteLoading(false);
-      return;
-    }
-    setQuoteLoading(true);
-    setQuoteError(null);
+    if (!listingId || !trip.from || !trip.to) return;
+    const key = JSON.stringify([listingId, trip.from, trip.fromTime, trip.to, trip.toTime, cdw]);
     try {
       const response = await quotePublicCar(listingId, {
         from: trip.from,
@@ -111,20 +118,30 @@ export default function CarDetails() {
         cdw,
         addOns: {},
       });
-      if (seq === quoteSeq.current) setQuote(response);
+      if (seq !== quoteSeq.current) return;
+      setQuote(response);
+      setQuoteResultError(null);
+      setQuoteFor(key);
     } catch (err) {
       if (seq !== quoteSeq.current) return;
       logger.debug("Failed to load car quote:", err);
       setQuote(null);
-      setQuoteError(err);
-    } finally {
-      if (seq === quoteSeq.current) setQuoteLoading(false);
+      setQuoteResultError(err);
+      setQuoteFor(key);
     }
-  }, [listingId, trip.from, trip.fromTime, trip.to, trip.toTime, cdw]);
+  }), [listingId, trip.from, trip.fromTime, trip.to, trip.toTime, cdw]);
 
   useEffect(() => {
     loadQuote();
   }, [loadQuote]);
+
+  // Loading while the newest trip has no result yet; an error only for that trip.
+  const quoteLoading = hasDates && quoteFor !== quoteKey;
+  const quoteError = hasDates && quoteFor === quoteKey ? quoteResultError : null;
+  const retryQuote = () => {
+    setQuoteFor(null);
+    return loadQuote();
+  };
 
   const toggleSaved = async () => {
     const next = !saved;
@@ -138,9 +155,11 @@ export default function CarDetails() {
     }
   };
 
-  const q = quote?.quote;
-  const availability = quote?.availability;
-  const problems: { code?: string; message?: string }[] = (quote?.problems || []).filter(
+  // No dates: nothing from the last quote is shown (as when it was cleared).
+  const shownQuote = hasDates ? quote : null;
+  const q = shownQuote?.quote;
+  const availability = shownQuote?.availability;
+  const problems: { code?: string; message?: string }[] = (shownQuote?.problems || []).filter(
     (p: any) => !LATER_PROBLEMS.has(p?.code)
   );
   const unavailable = availability && availability.available === false;
@@ -160,13 +179,16 @@ export default function CarDetails() {
       },
     } as unknown as Href);
 
-  if (carError) {
+  // A link without a car is an error straight away, with nothing to load.
+  const shownCarError = carError ?? (listingId ? null : new Error("This car link is missing its ID."));
+
+  if (shownCarError) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
         <View style={styles.pad}>
           <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
         </View>
-        <ErrorState error={carError} onRetry={loadCar} />
+        <ErrorState error={shownCarError} onRetry={retryCar} />
       </View>
     );
   }
@@ -253,7 +275,7 @@ export default function CarDetails() {
             ) : quoteLoading && !q ? (
               <SkeletonText lines={4} />
             ) : quoteError ? (
-              <ErrorState error={quoteError} onRetry={loadQuote} compact />
+              <ErrorState error={quoteError} onRetry={retryQuote} compact />
             ) : q ? (
               <View style={styles.gap10}>
                 <QuoteBreakdown quote={q} />
@@ -301,7 +323,7 @@ export default function CarDetails() {
           {schedule.length ? (
             <GlassCard>
               <AppText variant="headline" style={styles.cardTitle}>
-                How you'll pay
+                How you&apos;ll pay
               </AppText>
               <PaymentSchedule steps={schedule} />
             </GlassCard>

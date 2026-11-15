@@ -11,6 +11,7 @@ import {
   type OperatorBranchPayload,
 } from "@/services/operatorApi";
 import { logger } from "@/utils/logger";
+import { startAsync } from "@/utils/start-async";
 
 type Form = { name: string; address: string; city: string; state: string; country: string; phone: string };
 type Errors = Partial<Record<keyof Form, string>>;
@@ -31,9 +32,8 @@ export default function BranchFormScreen() {
   const [errors, setErrors] = useState<Errors>({});
   const [saveError, setSaveError] = useState<unknown>(null);
 
-  const load = async () => {
+  const load = () => startAsync(async () => {
     if (!editing) return;
-    setLoadError(null);
     try {
       if (Number.isNaN(branchId)) throw new Error("This branch link isn't valid.");
       // There is no single-branch endpoint; the list has every field.
@@ -52,6 +52,13 @@ export default function BranchFormScreen() {
       logger.debug("Failed to load the branch:", err);
       setLoadError(err);
     }
+  });
+
+  // Retry resets first; the first load needs no reset, so the effect's load
+  // makes no synchronous state updates (react-hooks/set-state-in-effect).
+  const retry = () => {
+    setLoadError(null);
+    return load();
   };
 
   useEffect(() => {
@@ -65,7 +72,7 @@ export default function BranchFormScreen() {
   if (loadError) {
     return (
       <AccountScreen title={title}>
-        <ErrorState error={loadError} onRetry={load} />
+        <ErrorState error={loadError} onRetry={retry} />
       </AccountScreen>
     );
   }

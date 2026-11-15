@@ -34,6 +34,7 @@ import { getStoredUser } from "@/services/session";
 import { chatLinkTarget } from "@/utils/chat-links";
 import { describeError } from "@/utils/errors";
 import { logger } from "@/utils/logger";
+import { startAsync } from "@/utils/start-async";
 
 /** Which conversation to resume, per signed-in customer. */
 const STORE_KEY = "bnpl_chat_conversation";
@@ -108,8 +109,11 @@ export default function SupportChatScreen() {
   // A ref as well as state: a second tap in the same frame sees it (F17).
   const busy = useRef(false);
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  // The latest messages for send(), updated after render (never during it).
   const messagesRef = useRef<ChatMessage[]>([]);
-  messagesRef.current = messages ?? [];
+  useEffect(() => {
+    messagesRef.current = messages ?? [];
+  }, [messages]);
 
   const remember = useCallback(async (conversationId: number, visitorToken: string | null) => {
     const next = { userId: userId.current, conversationId, visitorToken };
@@ -170,9 +174,7 @@ export default function SupportChatScreen() {
     [remember, ticket]
   );
 
-  const start = useCallback(async () => {
-    setLoadError(null);
-    setMessages(null);
+  const start = useCallback(() => startAsync(async () => {
     try {
       const user = await getStoredUser();
       userId.current = user?.id ?? null;
@@ -196,7 +198,15 @@ export default function SupportChatScreen() {
     } catch (err) {
       setLoadError(err);
     }
-  }, [send]);
+  }), [send]);
+
+  // Retry resets first; the first load needs no reset, so the effect's load
+  // makes no synchronous state updates (react-hooks/set-state-in-effect).
+  const retryStart = () => {
+    setLoadError(null);
+    setMessages(null);
+    return start();
+  };
 
   useEffect(() => {
     start();
@@ -268,7 +278,7 @@ export default function SupportChatScreen() {
     return (
       <View style={[styles.screen, styles.pad]}>
         {header}
-        <ErrorState error={loadError} onRetry={start} />
+        <ErrorState error={loadError} onRetry={retryStart} />
       </View>
     );
   }

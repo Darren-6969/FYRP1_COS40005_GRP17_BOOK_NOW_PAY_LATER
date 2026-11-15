@@ -13,6 +13,7 @@ import { getPublicCars } from "@/services/carApi";
 import { getSavedListingIds, removeSavedListing, saveListing } from "@/services/customerApi";
 import { applyCarFilters, hasActiveFilters, vehicleTypesOf } from "@/utils/car-filters";
 import { logger } from "@/utils/logger";
+import { startAsync } from "@/utils/start-async";
 
 type Params = {
   city?: string;
@@ -50,9 +51,7 @@ export default function CarsScreen() {
 
   const city = params.city || "";
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(() => startAsync(async () => {
     try {
       const data = await getPublicCars();
       setCars(Array.isArray(data?.items) ? data.items : []);
@@ -62,7 +61,15 @@ export default function CarsScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }), []);
+
+  // Retry resets first; the first load needs no reset, so the effect's load
+  // makes no synchronous state updates (react-hooks/set-state-in-effect).
+  const retry = () => {
+    setLoading(true);
+    setError(null);
+    return load();
+  };
 
   useEffect(() => {
     load();
@@ -191,7 +198,7 @@ export default function CarsScreen() {
       <Skeleton height={260} radius={Radius.card} />
     </View>
   ) : error ? (
-    <ErrorState error={error} onRetry={load} compact />
+    <ErrorState error={error} onRetry={retry} compact />
   ) : (
     <EmptyState
       icon="search-outline"

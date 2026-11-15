@@ -196,8 +196,9 @@ export default function ReturnModal({ booking, onClose, onDone }: Props) {
                 setCollected((c) => !c);
                 setError(null);
               }}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: collected }}
+              // The row is a bigger tap area only; screen readers use the Switch
+              // itself, so the setting isn't announced twice.
+              accessible={false}
               style={[styles.switchRow, { borderTopColor: tokens.line }]}
             >
               <AppText variant="body" color="ink" style={styles.flex}>

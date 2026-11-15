@@ -68,7 +68,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 function ToastView({ toast, onDone }: { toast: ToastState; onDone: () => void }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
-  const progress = useRef(new Animated.Value(0)).current;
+  const progress = useState(() => new Animated.Value(0))[0];
 
   const hide = useCallback(() => {
     Animated.timing(progress, { toValue: 0, duration: 180, easing: Easing.in(Easing.ease), useNativeDriver: true }).start(

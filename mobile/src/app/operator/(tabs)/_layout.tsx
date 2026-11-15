@@ -8,9 +8,11 @@ import { FloatingTabBar } from "@/components/FloatingTabBar";
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
 function tabIcon(active: IconName, inactive: IconName) {
-  return ({ focused, color, size }: { focused: boolean; color: ColorValue; size: number }) => (
-    <Ionicons name={focused ? active : inactive} size={size} color={color as string} />
-  );
+  // Named, so React DevTools and error messages show which component this is.
+  function TabIcon({ focused, color, size }: { focused: boolean; color: ColorValue; size: number }) {
+    return <Ionicons name={focused ? active : inactive} size={size} color={color as string} />;
+  }
+  return TabIcon;
 }
 
 export default function OperatorTabLayout() {

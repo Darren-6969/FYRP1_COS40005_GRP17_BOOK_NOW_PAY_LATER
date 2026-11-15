@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // Dev-only logger. Release builds print nothing, so request URLs and
 // server responses never reach device logs (F12).
 export const logger = {

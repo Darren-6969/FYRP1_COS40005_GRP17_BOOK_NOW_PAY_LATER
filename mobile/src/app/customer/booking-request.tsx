@@ -24,6 +24,7 @@ import { getStoredUser } from "@/services/session";
 import { formatMYT, mytToIso } from "@/utils/datetime";
 import { formatSen } from "@/utils/money";
 import { normaliseMalaysianPhone } from "@/utils/phone";
+import { startAsync } from "@/utils/start-async";
 
 type Point = {
   id: string;
@@ -86,9 +87,8 @@ export default function BookingRequest() {
   // Errors only show after Continue is tried, not while typing.
   const [showErrors, setShowErrors] = useState(false);
 
-  const loadCar = useCallback(async () => {
-    if (!params.listingId) return setCarError(new Error("This booking link is missing the car."));
-    setCarError(null);
+  const loadCar = useCallback(() => startAsync(async () => {
+    if (!params.listingId) return;
     try {
       const data = await getPublicCarById(params.listingId);
       setCar(data);
@@ -97,7 +97,14 @@ export default function BookingRequest() {
     } catch (err) {
       setCarError(err);
     }
-  }, [params.listingId]);
+  }), [params.listingId]);
+
+  // Retry resets first; the first load needs no reset, so the effect's load
+  // makes no synchronous state updates (react-hooks/set-state-in-effect).
+  const retryCar = () => {
+    setCarError(null);
+    return loadCar();
+  };
 
   useEffect(() => {
     loadCar();
@@ -173,13 +180,16 @@ export default function BookingRequest() {
     setDateOfBirth(`${selected.getFullYear()}-${pad2(selected.getMonth() + 1)}-${pad2(selected.getDate())}`);
   };
 
-  if (carError) {
+  // A link without a car is an error straight away, with nothing to load.
+  const shownCarError = carError ?? (params.listingId ? null : new Error("This booking link is missing the car."));
+
+  if (shownCarError) {
     return (
       <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
         <View style={styles.pad}>
           <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
         </View>
-        <ErrorState error={carError} onRetry={loadCar} />
+        <ErrorState error={shownCarError} onRetry={retryCar} />
       </View>
     );
   }
@@ -283,7 +293,7 @@ export default function BookingRequest() {
             <GlassCard>
               <View style={styles.between}>
                 <AppText variant="bodyStrong" style={styles.flex}>
-                  I'm the driver
+                  I&apos;m the driver
                 </AppText>
                 <Switch value={driverIsBooker} onValueChange={setDriverIsBooker} {...switchColors} accessibilityLabel="I'm the driver" />
               </View>
@@ -299,7 +309,7 @@ export default function BookingRequest() {
             {ageRulesOn ? (
               <View style={styles.gap6}>
                 <AppText variant="label" color="ink">
-                  Driver's date of birth
+                  Driver&apos;s date of birth
                 </AppText>
                 <Pressable
                   onPress={() => setDobOpen(true)}

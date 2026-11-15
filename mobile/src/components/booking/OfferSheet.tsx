@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { AppText, BottomSheet, Button, GlassCard, Money } from '@/components/ui';
@@ -10,6 +10,7 @@ import { isApiError } from '@/services/api';
 import { formatMYT } from '@/utils/datetime';
 import { describeError } from '@/utils/errors';
 import { bookingTitle, carSpecs } from '@/utils/booking-view';
+import { useResetOnChange } from '@/hooks/use-reset-on-change';
 
 type OfferSheetProps = {
   booking: any;
@@ -65,13 +66,13 @@ export function OfferSheet({ booking, visible, onClose, onAccept, onDecline, onR
   // Accept and decline block each other while either is running.
   const [working, setWorking] = useState<'accept' | 'decline' | null>(null);
 
-  useEffect(() => {
-    if (!visible) {
-      setConfirmingDecline(false);
-      setError(null);
-      setNotice(null);
-    }
-  }, [visible]);
+  // Back to the first step whenever it closes.
+  useResetOnChange(visible, () => {
+    if (visible) return;
+    setConfirmingDecline(false);
+    setError(null);
+    setNotice(null);
+  });
 
   if (!booking) return null;
 
@@ -257,7 +258,7 @@ export function OfferSheet({ booking, visible, onClose, onAccept, onDecline, onR
 
       {alt?.pricing ? (
         <GlassCard>
-          <AppText variant="micro">How you'll pay if you accept</AppText>
+          <AppText variant="micro">How you&apos;ll pay if you accept</AppText>
           {Number(alt.pricing.depositPct) >= 100 || !alt.pricing.balanceSen ? (
             <View style={styles.payRow}>
               <AppText style={styles.flex}>Pay in full after accepting</AppText>
@@ -278,7 +279,7 @@ export function OfferSheet({ booking, visible, onClose, onAccept, onDecline, onR
             </>
           )}
           <AppText variant="caption" style={styles.mt8}>
-            Accepting doesn't charge you. You'll get a payment deadline, the same as any accepted booking.
+            Accepting doesn&apos;t charge you. You&apos;ll get a payment deadline, the same as any accepted booking.
           </AppText>
         </GlassCard>
       ) : null}

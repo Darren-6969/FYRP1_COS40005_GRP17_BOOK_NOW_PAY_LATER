@@ -58,19 +58,26 @@ export default function CustomerHome() {
   const [tripOpen, setTripOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const loadCars = useCallback(async () => {
+  // Every update is in a promise callback, after the request answers.
+  const loadCars = useCallback(
+    () =>
+      getPublicCars()
+        .then((data) => setCars(Array.isArray(data?.items) ? data.items : []))
+        .catch((err) => {
+          logger.debug("Failed to load cars:", err);
+          setCarsError(err);
+        })
+        .finally(() => setCarsLoading(false)),
+    []
+  );
+
+  // Retry resets first; the first load needs no reset, so the effect's load
+  // makes no synchronous state updates (react-hooks/set-state-in-effect).
+  const retryCars = () => {
     setCarsLoading(true);
     setCarsError(null);
-    try {
-      const data = await getPublicCars();
-      setCars(Array.isArray(data?.items) ? data.items : []);
-    } catch (err) {
-      logger.debug("Failed to load cars:", err);
-      setCarsError(err);
-    } finally {
-      setCarsLoading(false);
-    }
-  }, []);
+    return loadCars();
+  };
 
   useEffect(() => {
     loadCars();
@@ -234,7 +241,7 @@ export default function CustomerHome() {
       <Skeleton height={260} radius={Radius.card} />
     </View>
   ) : carsError ? (
-    <ErrorState error={carsError} onRetry={loadCars} compact />
+    <ErrorState error={carsError} onRetry={retryCars} compact />
   ) : (
     <EmptyState
       icon="car-sport-outline"

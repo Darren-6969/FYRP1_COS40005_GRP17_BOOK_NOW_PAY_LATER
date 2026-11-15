@@ -223,7 +223,7 @@ export default function BookingDetailScreen() {
   const offerParamUsed = useRef(false);
 
   // Re-render each minute so the countdown stays current.
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(timer);
@@ -362,7 +362,7 @@ export default function BookingDetailScreen() {
         <AppText variant="caption" style={{ color: tokens.onHeroSoft }}>
           {replyBy ? `${operatorName} replies by ${replyBy}.` : `${operatorName} will reply soon.`}
           {replyBy && car?.autoRejectOnTimeout ? " If there's no reply by then, the request closes and nothing is charged." : ""}
-          {" "}You don't pay anything until it's accepted.
+          {" "}You don&apos;t pay anything until it&apos;s accepted.
         </AppText>
       </HeroCard>
     );
@@ -418,7 +418,7 @@ export default function BookingDetailScreen() {
           <View style={[styles.banner, { backgroundColor: tokens.noticeBg }]} accessibilityRole="alert">
             <Ionicons name="information-circle-outline" size={20} color={tokens.noticeFg} />
             <AppText variant="caption" style={[styles.flex, { color: tokens.noticeFg }]}>
-              Payment cancelled. You haven't been charged, and you can pay again from this booking.
+              Payment cancelled. You haven&apos;t been charged, and you can pay again from this booking.
             </AppText>
             <Pressable onPress={() => setPaymentCancelled(false)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Dismiss">
               <Ionicons name="close" size={18} color={tokens.noticeFg} />

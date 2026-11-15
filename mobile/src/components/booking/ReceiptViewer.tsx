@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText, IconButton } from '@/components/ui';
+import { useResetOnChange } from '@/hooks/use-reset-on-change';
 
 type ReceiptViewerProps = {
   /** The receipt's imageUrl from the server: an https link or a data:image URL. */
@@ -33,9 +34,10 @@ export function ReceiptViewer({ uri, visible, onClose, title = 'Payment receipt'
   const insets = useSafeAreaInsets();
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
+  // A new receipt, or opening again, gets a fresh try at loading the image.
+  useResetOnChange(`${visible}|${uri}`, () => {
     if (visible) setFailed(false);
-  }, [visible, uri]);
+  });
 
   return (
     <Modal visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
@@ -60,7 +62,7 @@ export function ReceiptViewer({ uri, visible, onClose, title = 'Payment receipt'
           <View style={styles.empty}>
             <Ionicons name="image-outline" size={36} color="#c8dcd2" />
             <AppText align="center" style={styles.emptyText}>
-              This receipt can't be shown on the phone.
+              This receipt can&apos;t be shown on the phone.
             </AppText>
           </View>
         )}

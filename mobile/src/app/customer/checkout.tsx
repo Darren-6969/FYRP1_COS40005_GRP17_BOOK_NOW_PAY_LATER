@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter, type Href } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -82,8 +82,11 @@ export default function CheckoutScreen() {
   const [part, setPart] = useState<StripePaymentType>(
     params.type === "FINAL_PAYMENT" || params.type === "FULL_PAYMENT" ? params.type : "DOWN_PAYMENT"
   );
+  // The latest part for async callbacks, updated after render (never during it).
   const partRef = useRef(part);
-  partRef.current = part;
+  useEffect(() => {
+    partRef.current = part;
+  }, [part]);
 
   const checkoutAttempt = useIdempotentAttempt();
 
@@ -259,9 +262,9 @@ export default function CheckoutScreen() {
 
             {!open ? (
               <GlassCard>
-                <AppText variant="bodyStrong">Payment isn't open for this booking</AppText>
+                <AppText variant="bodyStrong">Payment isn&apos;t open for this booking</AppText>
                 <AppText variant="caption">
-                  It's {booking.status ? booking.status.toLowerCase().replace(/_/g, " ") : "not ready"}. Check the booking for details.
+                  It&apos;s {booking.status ? booking.status.toLowerCase().replace(/_/g, " ") : "not ready"}. Check the booking for details.
                 </AppText>
               </GlassCard>
             ) : !anythingOwed ? (

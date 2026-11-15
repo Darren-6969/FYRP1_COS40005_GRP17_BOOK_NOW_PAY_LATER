@@ -32,6 +32,7 @@ import {
 import { bookingRef } from "@/utils/booking-view";
 import { formatMYT } from "@/utils/datetime";
 import { logger } from "@/utils/logger";
+import { startAsync } from "@/utils/start-async";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -84,6 +85,8 @@ type Loaded = {
   mine: MyLicenceResponse;
   /** The account's latest licence (mine.document). */
   doc: LicenceDocument | null;
+  /** When this was loaded; deadlines are compared with it, not with the clock during render. */
+  loadedAt: number;
   /** Where an upload goes. Null: the account only. */
   target: { id: number | string; label: string } | null;
 };
@@ -113,8 +116,9 @@ export default function LicenceScreen() {
   const [sendError, setSendError] = useState<unknown>(null);
   const [replacing, setReplacing] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoadError(null);
+  const load = useCallback(
+    () =>
+      startAsync(async () => {
     try {
       // The account's latest licence, from any booking. An approved one is
       // reused for every car booking, so it is what this screen shows.
@@ -140,12 +144,21 @@ export default function LicenceScreen() {
         }
       }
       const doc = mine.document;
-      setData({ mine, doc, target });
+      setData({ mine, doc, target, loadedAt: Date.now() });
     } catch (err) {
       logger.debug("Failed to load licence:", err);
       setLoadError(err);
     }
-  }, [bookingId]);
+      }),
+    [bookingId]
+  );
+
+  // Retry resets first; the first load needs no reset, so the effect's load
+  // makes no synchronous state updates (react-hooks/set-state-in-effect).
+  const retry = () => {
+    setLoadError(null);
+    return load();
+  };
 
   useEffect(() => {
     load();
@@ -217,7 +230,7 @@ export default function LicenceScreen() {
     return (
       <View style={[styles.screen, styles.pad, { paddingTop: insets.top + 8 }]}>
         {header}
-        <ErrorState error={loadError} onRetry={load} />
+        <ErrorState error={loadError} onRetry={retry} />
       </View>
     );
   }
@@ -231,7 +244,7 @@ export default function LicenceScreen() {
     !!data && !!doc && (view === "rejected" || view === "expired") && sameBooking && !data.mine.canReupload;
   // The re-upload deadline only applies to the same booking, and only while ahead.
   const endsAt = data?.mine.reuploadWindowEndsAt ?? null;
-  const uploadBy = sameBooking && endsAt && new Date(endsAt).getTime() > Date.now() ? endsAt : null;
+  const uploadBy = sameBooking && endsAt && new Date(endsAt).getTime() > (data?.loadedAt ?? 0) ? endsAt : null;
   // An upload that isn't linked to a booking (the website's route) never
   // reaches an operator's review queue; let it be sent again for the booking.
   const unlinkedReview = view === "review" && !!doc && doc.bookingId == null && !!data?.target;

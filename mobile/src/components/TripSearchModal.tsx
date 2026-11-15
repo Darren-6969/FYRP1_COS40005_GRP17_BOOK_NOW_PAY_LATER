@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 
 import {
@@ -73,13 +73,16 @@ export default function TripSearchModal({ visible, value, onClose, onApply }: Pr
   const [error, setError] = useState("");
   const [picker, setPicker] = useState<PickerTarget | null>(null);
 
-  useEffect(() => {
+  // Starts from the current trip each time it opens (or the trip changes while open).
+  const [openedWith, setOpenedWith] = useState({ visible, value });
+  if (openedWith.visible !== visible || openedWith.value !== value) {
+    setOpenedWith({ visible, value });
     if (visible) {
       setDraft(value);
       setError("");
       setPicker(null);
     }
-  }, [visible, value]);
+  }
 
   const apply = () => {
     // "Today" in Malaysia, whatever the phone's time zone (F7).

@@ -134,7 +134,7 @@ export const Tokens: Record<ColorScheme, ThemeTokens> = {
     background: '#09120F',
     ink: '#EEF1EC',
     text: '#B9C4BE',
-    label: '#93A69D',
+    label: '#A0B1A9', // 4.6:1 on cards over the brightest glow (Phase 6 contrast check)
     line: 'rgba(255,255,255,0.07)',
 
     glass: 'rgba(255,255,255,0.055)',
@@ -146,7 +146,7 @@ export const Tokens: Record<ColorScheme, ThemeTokens> = {
     heroFrom: '#2F7564',
     heroTo: '#153A31',
     onHero: '#FFFFFF',
-    onHeroSoft: '#C8DCD2',
+    onHeroSoft: '#E5EEE9', // 4.6:1 on the lighter end of the hero gradient
     leaf: '#A6E3B8',
     leafInk: '#8FCAB7',
 
@@ -167,7 +167,7 @@ export const Tokens: Record<ColorScheme, ThemeTokens> = {
     okBg: 'rgba(143,202,183,0.14)',
     okFg: '#A9D6C6',
     warnBg: 'rgba(240,160,99,0.16)',
-    warnFg: '#F3B38A',
+    warnFg: '#F4B891', // 4.6:1 inside a warning pill on a card
     infoBg: 'rgba(169,203,224,0.13)',
     infoFg: '#A9CBE0',
     errBg: 'rgba(245,176,160,0.13)',
