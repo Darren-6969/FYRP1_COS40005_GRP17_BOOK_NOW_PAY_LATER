@@ -1,719 +1,367 @@
-import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
-import {
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import {
-  loginUser,
-  registerUser,
-} from "../services/authApi";
+import { SaveError } from "@/components/account/AccountScreen";
+import { AppText, Button, FieldError, GlassCard, IconButton, SegmentedControl, TextField, type SegmentOption } from "@/components/ui";
+import { useTheme } from "@/hooks/use-theme";
+import { ApiError } from "@/services/api";
+import { loginUser, registerUser } from "@/services/authApi";
+import { saveSession } from "@/services/session";
+import { WEBSITE_URL } from "@/utils/chat-links";
+import { logger } from "@/utils/logger";
 
-import {
-  saveSession,
-} from "../services/session";
+type Mode = "login" | "register";
+type Field = "name" | "email" | "password" | "confirm" | "terms" | "privacy";
+type Errors = Partial<Record<Field, string>>;
 
+const MODES: readonly SegmentOption<Mode>[] = [
+  { value: "login", label: "Sign in" },
+  { value: "register", label: "Create account" },
+];
+
+/** The server's password rules (auth_validator.js), checked here first. */
+const RULES: { test: (v: string) => boolean; text: string }[] = [
+  { test: (v) => v.length >= 8, text: "8 characters" },
+  { test: (v) => /[A-Z]/.test(v), text: "an upper-case letter" },
+  { test: (v) => /[a-z]/.test(v), text: "a lower-case letter" },
+  { test: (v) => /[0-9]/.test(v), text: "a number" },
+];
+
+/** The website's pages for things the app doesn't do itself (open in the in-app browser). */
+const openWebsite = (path: string) => WebBrowser.openBrowserAsync(`${WEBSITE_URL}${path}`).catch(() => {});
+
+/**
+ * Sign in and create an account (plan phase 5): the ambient background, a
+ * frosted form card and errors under each field instead of one message.
+ * Opened from Welcome with ?mode=login or ?mode=register.
+ */
 export default function LoginScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { tokens } = useTheme();
+  const params = useLocalSearchParams<{ mode?: string }>();
 
-  const [mode, setMode] =
-    useState<"login" | "register">("login");
-
+  const [mode, setMode] = useState<Mode>(params.mode === "register" ? "register" : "login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] =
-    useState("");
-  const [confirmPassword, setConfirmPassword] =
-    useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [terms, setTerms] = useState(false);
+  const [privacy, setPrivacy] = useState(false);
+  const [errors, setErrors] = useState<Errors>({});
+  const [submitError, setSubmitError] = useState<unknown>(null);
 
-  const [showPassword, setShowPassword] =
-    useState(false);
+  const register = mode === "register";
 
-  const [termsAccepted, setTermsAccepted] =
-    useState(false);
+  const clear = (field: Field) => {
+    if (errors[field]) setErrors((e) => ({ ...e, [field]: undefined }));
+    if (submitError) setSubmitError(null);
+  };
 
-  const [privacyAccepted, setPrivacyAccepted] =
-    useState(false);
+  const switchMode = (next: Mode) => {
+    setMode(next);
+    setErrors({});
+    setSubmitError(null);
+  };
 
-  const [loading, setLoading] =
-    useState(false);
+  const enterApp = async (data: any) => {
+    const role = data?.user?.role;
+    if (role !== "CUSTOMER" && role !== "NORMAL_SELLER") {
+      throw new ApiError({
+        status: 403,
+        code: "ROLE_NOT_SUPPORTED",
+        message: "This account can't use the mobile app. Sign in on the website instead.",
+      });
+    }
+    await saveSession(data.token, data.refreshToken, data.user);
+    router.replace((role === "CUSTOMER" ? "/customer/home" : "/operator/dashboard") as Href);
+  };
 
-  const [error, setError] =
-    useState("");
+  const submit = async () => {
+    const next: Errors = {};
+    const mail = email.trim();
+    if (!mail) next.email = "Enter your email address.";
+    else if (!/^\S+@\S+\.\S+$/.test(mail)) next.email = "Enter a valid email address, for example name@email.com.";
 
-  
-const handleLogin = async () => {
-  setError("");
-
-  if (!email.trim() || !password) {
-    setError(
-      "Please enter your email and password."
-    );
-    return;
-  }
-
-  try {
-    setLoading(true);
-
-    const data = await loginUser(
-      email.trim(),
-      password
-    );
-
-    const role = data.user?.role;
-
-    if (
-      role !== "CUSTOMER" &&
-      role !== "NORMAL_SELLER"
-    ) {
-      setError(
-        "This account role is not supported in the mobile app."
-      );
-      return;
+    if (register) {
+      if (name.trim().length < 2) next.name = "Enter your full name.";
+      if (!password) next.password = "Choose a password.";
+      else if (!RULES.every((r) => r.test(password))) next.password = "Your password doesn't meet the rules below.";
+      if (!confirm) next.confirm = "Enter your password again.";
+      else if (password && confirm !== password) next.confirm = "This doesn't match your password.";
+      if (!terms) next.terms = "Agree to the Terms and Conditions to continue.";
+      if (!privacy) next.privacy = "Agree to the Privacy Policy to continue.";
+    } else if (!password) {
+      next.password = "Enter your password.";
     }
 
-    await saveSession(
-      data.token,
-      data.refreshToken,
-      data.user
-    );
-
-    if (role === "CUSTOMER") {
-      router.replace("/customer/home");
-      return;
-    }
-
-    if (role === "NORMAL_SELLER") {
-      router.replace("/operator/dashboard");
-      return;
-    }
-  } catch (err: any) {
-    setError(
-      err?.message || "Login failed."
-    );
-  } finally {
-    setLoading(false);
-  }
-};
-
-
-  const handleRegister = async () => {
-    setError("");
-
-    if (
-      !name.trim() ||
-      !email.trim() ||
-      !password ||
-      !confirmPassword
-    ) {
-      setError(
-        "Please complete all fields."
-      );
-      return;
-    }
-
-    if (name.trim().length < 2) {
-      setError(
-        "Name must be at least 2 characters."
-      );
-      return;
-    }
-
-    if (password.length < 8) {
-      setError(
-        "Password must be at least 8 characters."
-      );
-      return;
-    }
-
-    if (!/[A-Z]/.test(password)) {
-      setError(
-        "Password must contain at least one uppercase letter."
-      );
-      return;
-    }
-
-    if (!/[a-z]/.test(password)) {
-      setError(
-        "Password must contain at least one lowercase letter."
-      );
-      return;
-    }
-
-    if (!/[0-9]/.test(password)) {
-      setError(
-        "Password must contain at least one number."
-      );
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError(
-        "Passwords do not match."
-      );
-      return;
-    }
-
-    if (!termsAccepted) {
-      setError(
-        "Please accept the Terms & Conditions."
-      );
-      return;
-    }
-
-    if (!privacyAccepted) {
-      setError(
-        "Please accept the Privacy Policy."
-      );
-      return;
-    }
+    setErrors(next);
+    setSubmitError(null);
+    if (Object.values(next).some(Boolean)) return;
 
     try {
-      setLoading(true);
-
-      // 1. Create real customer account
-      await registerUser(
-        name.trim(),
-        email.trim(),
-        password
-      );
-
-      // 2. Login immediately after registration
-      const loginData = await loginUser(
-        email.trim(),
-        password
-      );
-
-      // 3. Save token / refreshToken / user
-      await saveSession(
-        loginData.token,
-        loginData.refreshToken,
-        loginData.user
-      );
-
-      // 4. Enter customer mobile app
-      router.replace("/customer/home");
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          "Registration failed."
-      );
-    } finally {
-      setLoading(false);
+      if (register) await registerUser(name.trim(), mail, password);
+      await enterApp(await loginUser(mail, password));
+    } catch (err) {
+      logger.debug("Sign in failed:", err);
+      setSubmitError(err);
     }
   };
 
-  const handleSubmit = () => {
-    if (mode === "login") {
-      handleLogin();
-    } else {
-      handleRegister();
-    }
-  };
+  const unmet = RULES.filter((r) => !r.test(password)).map((r) => r.text);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView
-        contentContainerStyle={
-          styles.container
-        }
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* LOGO */}
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>
-            BNPL
-          </Text>
+        <View style={styles.topRow}>
+          {router.canGoBack() ? <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} /> : null}
         </View>
 
-        {/* HEADER */}
-        <Text style={styles.title}>
-          {mode === "login"
-            ? "Welcome Back"
-            : "Create Account"}
-        </Text>
-
-        <Text style={styles.subtitle}>
-          {mode === "login"
-            ? "Sign in to continue to BNPL Car Rental"
-            : "Create your BNPL customer account"}
-        </Text>
-
-        {/* TABS */}
-        <View style={styles.tabs}>
-          <Pressable
-            style={[
-              styles.tab,
-              mode === "login" &&
-                styles.activeTab,
-            ]}
-            onPress={() => {
-              setMode("login");
-              setError("");
-            }}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                mode === "login" &&
-                  styles.activeTabText,
-              ]}
-            >
-              Login
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.tab,
-              mode === "register" &&
-                styles.activeTab,
-            ]}
-            onPress={() => {
-              setMode("register");
-              setError("");
-            }}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                mode === "register" &&
-                  styles.activeTabText,
-              ]}
-            >
-              Register
-            </Text>
-          </Pressable>
+        <View style={styles.brand}>
+          <Image source={require("../../assets/images/logo-circle.png")} style={styles.logo} accessible={false} />
+          <AppText variant="largeTitle" accessibilityRole="header" align="center">
+            {register ? "Create your account" : "Welcome back"}
+          </AppText>
+          <AppText variant="body" align="center">
+            {register ? "Request a car for free. Pay only once it's accepted." : "Sign in to see your bookings and payments."}
+          </AppText>
         </View>
 
-        {/* NAME */}
-        {mode === "register" && (
-          <>
-            <Text style={styles.label}>
-              Full Name
-            </Text>
+        <GlassCard strong padding={16}>
+          <SegmentedControl options={MODES} value={mode} onChange={switchMode} accessibilityLabel="Sign in or create an account" />
 
-            <View style={styles.inputBox}>
-              <Text style={styles.icon}>
-                👤
-              </Text>
-
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your full name"
+          <View style={styles.fields}>
+            {register ? (
+              <TextField
+                label="Full name"
                 value={name}
-                onChangeText={setName}
+                onChangeText={(t) => {
+                  setName(t);
+                  clear("name");
+                }}
+                error={errors.name}
+                placeholder="As on your driving licence"
                 autoCapitalize="words"
+                autoComplete="name"
+                textContentType="name"
+                maxLength={120}
               />
-            </View>
-          </>
-        )}
-
-        {/* EMAIL */}
-        <Text style={styles.label}>
-          Email Address
-        </Text>
-
-        <View style={styles.inputBox}>
-          <Text style={styles.icon}>
-            ✉
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
-
-        {/* PASSWORD */}
-        <Text style={styles.label}>
-          Password
-        </Text>
-
-        <View style={styles.inputBox}>
-          <Text style={styles.icon}>
-            🔒
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-            autoCapitalize="none"
-          />
-
-          <Pressable
-            onPress={() =>
-              setShowPassword(
-                !showPassword
-              )
-            }
-          >
-            <Text style={styles.showText}>
-              {showPassword
-                ? "Hide"
-                : "Show"}
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* CONFIRM PASSWORD */}
-        {mode === "register" && (
-          <>
-            <Text style={styles.label}>
-              Confirm Password
-            </Text>
-
-            <View style={styles.inputBox}>
-              <Text style={styles.icon}>
-                🔒
-              </Text>
-
-              <TextInput
-                style={styles.input}
-                placeholder="Confirm password"
-                value={confirmPassword}
-                onChangeText={
-                  setConfirmPassword
-                }
-                secureTextEntry={
-                  !showPassword
-                }
-                autoCapitalize="none"
+            ) : null}
+            <TextField
+              label="Email"
+              value={email}
+              onChangeText={(t) => {
+                setEmail(t);
+                clear("email");
+              }}
+              error={errors.email}
+              placeholder="name@email.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+              textContentType="emailAddress"
+            />
+            <TextField
+              label="Password"
+              value={password}
+              onChangeText={(t) => {
+                setPassword(t);
+                clear("password");
+              }}
+              error={errors.password}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoComplete={register ? "new-password" : "current-password"}
+              textContentType={register ? "newPassword" : "password"}
+              maxLength={128}
+              hint={register && password && unmet.length ? `Still needs ${unmet.join(", ")}.` : undefined}
+              trailing={
+                <Pressable
+                  onPress={() => setShowPassword((s) => !s)}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                  hitSlop={8}
+                  style={styles.eye}
+                >
+                  <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={tokens.label} />
+                </Pressable>
+              }
+            />
+            {register ? (
+              <>
+                <TextField
+                  label="Confirm password"
+                  value={confirm}
+                  onChangeText={(t) => {
+                    setConfirm(t);
+                    clear("confirm");
+                  }}
+                  error={errors.confirm}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  textContentType="newPassword"
+                  maxLength={128}
+                />
+                <Agree
+                  checked={terms}
+                  onToggle={() => {
+                    setTerms((v) => !v);
+                    clear("terms");
+                  }}
+                  label="I agree to the"
+                  link="Terms and Conditions"
+                  onLink={() => openWebsite("/info/terms")}
+                  error={errors.terms}
+                />
+                <Agree
+                  checked={privacy}
+                  onToggle={() => {
+                    setPrivacy((v) => !v);
+                    clear("privacy");
+                  }}
+                  label="I agree to the"
+                  link="Privacy Policy"
+                  onLink={() => openWebsite("/info/privacy")}
+                  error={errors.privacy}
+                />
+              </>
+            ) : (
+              <Button
+                label="Forgot password?"
+                variant="text"
+                size="sm"
+                style={styles.forgot}
+                onPress={() => openWebsite("/forgot-password")}
               />
-            </View>
+            )}
+          </View>
 
-            {/* PASSWORD INFO */}
-            <Text style={styles.passwordInfo}>
-              Password must contain at
-              least 8 characters, including
-              uppercase, lowercase and a
-              number.
-            </Text>
+          <SaveError error={submitError} />
 
-            {/* TERMS */}
-            <Pressable
-              style={styles.checkboxRow}
-              onPress={() =>
-                setTermsAccepted(
-                  !termsAccepted
-                )
-              }
-            >
-              <View
-                style={[
-                  styles.checkbox,
-                  termsAccepted &&
-                    styles.checkboxSelected,
-                ]}
-              >
-                {termsAccepted && (
-                  <Text
-                    style={
-                      styles.checkmark
-                    }
-                  >
-                    ✓
-                  </Text>
-                )}
-              </View>
+          <Button label={register ? "Create account" : "Sign in"} variant={register ? "cta" : "brand"} style={styles.submit} onPress={submit} />
+        </GlassCard>
 
-              <Text
-                style={
-                  styles.checkboxText
-                }
-              >
-                I agree to the Terms &
-                Conditions
-              </Text>
-            </Pressable>
+        <AppText variant="caption" align="center" style={styles.footnote}>
+          {register ? "Operators join through the website." : "Customers and operators sign in here."}
+        </AppText>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
 
-            {/* PRIVACY */}
-            <Pressable
-              style={styles.checkboxRow}
-              onPress={() =>
-                setPrivacyAccepted(
-                  !privacyAccepted
-                )
-              }
-            >
-              <View
-                style={[
-                  styles.checkbox,
-                  privacyAccepted &&
-                    styles.checkboxSelected,
-                ]}
-              >
-                {privacyAccepted && (
-                  <Text
-                    style={
-                      styles.checkmark
-                    }
-                  >
-                    ✓
-                  </Text>
-                )}
-              </View>
-
-              <Text
-                style={
-                  styles.checkboxText
-                }
-              >
-                I agree to the Privacy
-                Policy
-              </Text>
-            </Pressable>
-          </>
-        )}
-
-        {/* FORGOT PASSWORD */}
-        {mode === "login" && (
-          <Pressable
-            style={styles.forgotButton}
-          >
-            <Text
-              style={styles.forgotText}
-            >
-              Forgot password?
-            </Text>
-          </Pressable>
-        )}
-
-        {/* ERROR */}
-        {error ? (
-          <Text style={styles.error}>
-            {error}
-          </Text>
-        ) : null}
-
-        {/* SUBMIT */}
+function Agree({
+  checked,
+  onToggle,
+  label,
+  link,
+  onLink,
+  error,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+  label: string;
+  link: string;
+  onLink: () => void;
+  error?: string;
+}) {
+  const { tokens } = useTheme();
+  return (
+    <View>
+      <View style={styles.agree}>
         <Pressable
-          style={({ pressed }) => [
-            styles.submitButton,
-            pressed && {
-              opacity: 0.85,
-            },
-            loading && {
-              opacity: 0.6,
+          onPress={onToggle}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked }}
+          accessibilityLabel={`${label} ${link}`}
+          hitSlop={8}
+          style={[
+            styles.box,
+            {
+              borderColor: error ? tokens.errFg : checked ? tokens.brand : tokens.label,
+              backgroundColor: checked ? tokens.brand : "transparent",
             },
           ]}
-          disabled={loading}
-          onPress={handleSubmit}
         >
-          <Text style={styles.submitText}>
-            {loading
-              ? mode === "login"
-                ? "Signing In..."
-                : "Creating Account..."
-              : mode === "login"
-              ? "Sign In"
-              : "Create Account"}
-          </Text>
+          {checked ? <Ionicons name="checkmark" size={16} color={tokens.onBrand} /> : null}
         </Pressable>
-      </ScrollView>
-    </SafeAreaView>
+        <AppText variant="body" style={styles.flex} onPress={onToggle}>
+          {label}{" "}
+          <AppText variant="bodyStrong" color="leafInk" onPress={onLink} accessibilityRole="link">
+            {link}
+          </AppText>
+        </AppText>
+      </View>
+      <FieldError message={error} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  screen: {
     flex: 1,
-    backgroundColor: "#F7FAFB",
   },
-
-  container: {
-    width: "100%",
-    maxWidth: 620,
-    alignSelf: "center",
-    paddingHorizontal: 32,
-    paddingTop: 20,
-    paddingBottom: 50,
-  },
-
-  logo: {
-    alignSelf: "center",
-    backgroundColor: "#07869B",
-    borderRadius: 18,
-    paddingHorizontal: 22,
-    paddingVertical: 12,
-    marginBottom: 28,
-  },
-
-  logoText: {
-    color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "900",
-  },
-
-  title: {
-    color: "#17313C",
-    fontSize: 36,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-
-  subtitle: {
-    color: "#738892",
-    fontSize: 16,
-    textAlign: "center",
-    marginTop: 8,
-    marginBottom: 34,
-  },
-
-  tabs: {
-    flexDirection: "row",
-    backgroundColor: "#EAF0F2",
-    borderRadius: 18,
-    padding: 5,
-    marginBottom: 34,
-  },
-
-  tab: {
-    flex: 1,
-    height: 50,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 14,
-  },
-
-  activeTab: {
-    backgroundColor: "#FFFFFF",
-  },
-
-  tabText: {
-    color: "#81929A",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-
-  activeTabText: {
-    color: "#07869B",
-  },
-
-  label: {
-    color: "#17313C",
-    fontSize: 14,
-    fontWeight: "800",
-    marginBottom: 10,
-    marginTop: 12,
-  },
-
-  inputBox: {
-    minHeight: 66,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#DDE6EA",
-    borderRadius: 18,
+  content: {
     paddingHorizontal: 18,
-    flexDirection: "row",
-    alignItems: "center",
+    gap: 18,
   },
-
-  icon: {
-    fontSize: 17,
-    marginRight: 12,
-  },
-
-  input: {
+  flex: {
     flex: 1,
-    fontSize: 15,
-    color: "#17313C",
-    minHeight: 60,
-    outlineStyle: "none",
-  } as any,
-
-  showText: {
-    color: "#07869B",
-    fontSize: 13,
-    fontWeight: "800",
   },
-
-  passwordInfo: {
-    color: "#81939C",
-    fontSize: 11,
-    lineHeight: 17,
-    marginTop: 10,
+  topRow: {
+    minHeight: 44,
+    flexDirection: "row",
   },
-
-  forgotButton: {
+  brand: {
+    alignItems: "center",
+    gap: 8,
+  },
+  logo: {
+    width: 72,
+    height: 72,
+    marginBottom: 4,
+  },
+  fields: {
+    gap: 14,
+    marginTop: 16,
+  },
+  eye: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  forgot: {
     alignSelf: "flex-end",
-    marginTop: 16,
-    marginBottom: 10,
   },
-
-  forgotText: {
-    color: "#07869B",
-    fontWeight: "800",
-    fontSize: 13,
-  },
-
-  checkboxRow: {
+  agree: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+    minHeight: 44,
+  },
+  box: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  submit: {
     marginTop: 16,
   },
-
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: "#B7C6CC",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
-  },
-
-  checkboxSelected: {
-    backgroundColor: "#07869B",
-    borderColor: "#07869B",
-  },
-
-  checkmark: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-    fontSize: 14,
-  },
-
-  checkboxText: {
-    color: "#526A74",
-    fontSize: 12,
-    flex: 1,
-  },
-
-  error: {
-    color: "#E5484D",
-    fontSize: 12,
-    textAlign: "center",
-    marginTop: 18,
-  },
-
-  submitButton: {
-    minHeight: 66,
-    backgroundColor: "#078FA5",
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 24,
-  },
-
-  submitText: {
-    color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "900",
+  footnote: {
+    marginTop: 4,
   },
 });
