@@ -1,96 +1,64 @@
-
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useState, type ReactNode } from "react";
+import { Linking, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import ReturnModal from "@/components/operator/ReturnModal";
+import { ResponseSheets, type BookingResponse } from "@/components/operator/ResponseSheets";
+import { AppText, Button, ErrorState, GlassCard, IconButton, Money, SkeletonText, StatusPill } from "@/components/ui";
+import { Radius } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { getOperatorBookingById, type OperatorBooking } from "@/services/operatorApi";
+import { formatMYT } from "@/utils/datetime";
+import { logger } from "@/utils/logger";
 import {
-  useFocusEffect,
-  useLocalSearchParams,
-  useRouter,
-} from "expo-router";
+  customerName,
+  mayMarkNoShow,
+  operatorBookingRef,
+  operatorBookingTitle,
+  pickupPlace,
+  replyByText,
+} from "@/utils/operator-booking";
 
-import { useCallback, useState } from "react";
-
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-
-import {
-  getOperatorBookingById,
-  handoverOperatorBooking,
-  OperatorBooking,
-} from "../../../services/operatorApi";
-
-import ReturnModal from "../../../components/operator/ReturnModal";
-
-const formatDate = (value?: string | null) => {
-  if (!value) return "Not specified";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-
-  return date.toLocaleString("en-MY", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
-
-const formatMoney = (value?: number) =>
-  `RM ${Number(value || 0).toFixed(2)}`;
-
-export default function OperatorBookingDetails() {
+/**
+ * One booking for the operator (plan phase 4): what to do next first, then
+ * the trip, the customer and the payments. Accept, Suggest (F6), Decline,
+ * handover and no-show (F6) open the shared response sheets.
+ */
+export default function OperatorBookingDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
+  const { tokens } = useTheme();
+  const params = useLocalSearchParams<{ id?: string }>();
+  const parsed = Number(params.id);
+  // Only a whole positive number reaches the API.
+  const bookingId = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 
-  const bookingId = Number(id);
-
-  const [booking, setBooking] =
-    useState<OperatorBooking | null>(null);
-
-  const [loading, setLoading] = useState(true);
+  const [booking, setBooking] = useState<OperatorBooking | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [processing, setProcessing] = useState(false);
+  const [respond, setRespond] = useState<BookingResponse | null>(null);
   const [showReturn, setShowReturn] = useState(false);
-  const [error, setError] = useState("");
+  const [now, setNow] = useState(() => new Date());
 
-  const loadBooking = useCallback(
+  const load = useCallback(
     async (refresh = false) => {
-      if (!Number.isInteger(bookingId) || bookingId <= 0) {
-        setError("Invalid booking ID.");
-        setLoading(false);
+      if (!bookingId) {
+        setError(new Error("This booking link isn't valid."));
         return;
       }
-
+      if (refresh) setRefreshing(true);
+      setError(null);
+      setNow(new Date());
       try {
-        setError("");
-
-        if (refresh) {
-          setRefreshing(true);
-        } else {
-          setLoading(true);
-        }
-
-        const response =
-          await getOperatorBookingById(bookingId);
-
+        const response = await getOperatorBookingById(bookingId);
         setBooking(response.booking);
-      } catch (err: any) {
-        setError(
-          err?.message || "Failed to load booking."
-        );
+      } catch (err) {
+        logger.debug("Failed to load operator booking:", err);
+        setError(err);
       } finally {
-        setLoading(false);
         setRefreshing(false);
       }
     },
@@ -99,494 +67,370 @@ export default function OperatorBookingDetails() {
 
   useFocusEffect(
     useCallback(() => {
-      loadBooking();
-    }, [loadBooking])
+      load();
+    }, [load])
   );
 
-  const confirmHandover = () => {
-    if (!booking || processing) return;
+  const header = (
+    <View style={styles.topRow}>
+      <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+      <View style={styles.flex}>
+        <AppText variant="title" accessibilityRole="header" numberOfLines={1}>
+          {booking ? operatorBookingRef(booking) : "Booking"}
+        </AppText>
+        {booking ? (
+          <AppText variant="caption" numberOfLines={1}>
+            Requested {formatMYT(booking.createdAt, "dayDateTime")}
+          </AppText>
+        ) : null}
+      </View>
+      {booking ? <StatusPill status={booking.status} /> : null}
+    </View>
+  );
 
-    Alert.alert(
-      "Record Handover",
-      `Confirm that the vehicle for ${
-        booking.bookingCode || `Booking #${booking.id}`
-      } has been handed over to the customer?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Confirm Handover",
-          onPress: async () => {
-            try {
-              setProcessing(true);
-
-              await handoverOperatorBooking(booking.id);
-
-              await loadBooking(true);
-
-              Alert.alert(
-                "Success",
-                "Vehicle handover recorded successfully."
-              );
-            } catch (err: any) {
-              Alert.alert(
-                "Handover Failed",
-                err?.message ||
-                  "Unable to record handover."
-              );
-            } finally {
-              setProcessing(false);
-            }
-          },
-        },
-      ]
+  if (error && !booking) {
+    return (
+      <View style={[styles.screen, styles.pad, { paddingTop: insets.top + 8 }]}>
+        {header}
+        <ErrorState error={error} onRetry={() => load()} />
+      </View>
     );
-  };
+  }
 
-  const status = booking?.status || "";
+  if (!booking) {
+    return (
+      <View style={[styles.screen, styles.pad, { paddingTop: insets.top + 8, gap: 16 }]}>
+        {header}
+        <GlassCard>
+          <SkeletonText lines={5} />
+        </GlassCard>
+      </View>
+    );
+  }
 
-  const canHandover =
-    status === "READY_FOR_PICKUP";
+  const status = booking.status;
+  const car = booking.car;
+  const listing = car?.listing;
+  const place = pickupPlace(booking);
+  const dropoff = car?.dropoffPoint?.label || car?.requestedDropoffLocation || null;
+  const p = booking.payment;
+  const noShow = mayMarkNoShow(booking, now);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons
-            name="chevron-back"
-            size={23}
-            color="#17313C"
-          />
-        </Pressable>
-
-        <View style={styles.headerText}>
-          <Text style={styles.headerLabel}>
-            OPERATOR
-          </Text>
-
-          <Text style={styles.headerTitle}>
-            Booking Details
-          </Text>
-        </View>
-      </View>
-
+    <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => loadBooking(true)}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={tokens.label} colors={[tokens.brand]} />
         }
       >
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator
-              size="large"
-              color="#07869B"
-            />
-            <Text style={styles.muted}>
-              Loading booking...
-            </Text>
-          </View>
-        ) : error ? (
-          <View style={styles.card}>
-            <Text style={styles.error}>{error}</Text>
+        {header}
 
-            <Pressable onPress={() => loadBooking()}>
-              <Text style={styles.link}>Try Again</Text>
-            </Pressable>
-          </View>
-        ) : booking ? (
-          <>
-            <View style={styles.card}>
-              <Text style={styles.bookingCode}>
-                {booking.bookingCode ||
-                  `Booking #${booking.id}`}
-              </Text>
+        <NextStep booking={booking} now={now} onRespond={setRespond} onReturn={() => setShowReturn(true)} />
 
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusText}>
-                  {status.replace(/_/g, " ")}
-                </Text>
+        <Section title="Trip">
+          <GlassCard>
+            <View style={styles.carRow}>
+              <View style={[styles.photo, { backgroundColor: tokens.glassStrong }]}>
+                {listing?.imageUrl ? (
+                  <Image source={{ uri: listing.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" accessible={false} />
+                ) : (
+                  <Ionicons name="car-sport-outline" size={24} color={tokens.label} />
+                )}
               </View>
-
-              <Text style={styles.vehicleName}>
-                {booking.serviceName || "Car Rental"}
-              </Text>
-
-              <Text style={styles.muted}>
-                Booking information
-              </Text>
-
-              <View style={styles.divider} />
-
-              <DetailRow
-                label="Customer"
-                value={booking.customer?.name || "N/A"}
-              />
-
-              <DetailRow
-                label="Email"
-                value={booking.customer?.email || "N/A"}
-              />
-
-              <DetailRow
-                label="Location"
-                value={booking.location || "N/A"}
-              />
-
-              <DetailRow
-                label="Pickup"
-                value={formatDate(booking.pickupDate)}
-              />
-
-              <DetailRow
-                label="Return"
-                value={formatDate(booking.returnDate)}
-              />
+              <View style={styles.flex}>
+                <AppText variant="bodyStrong">{operatorBookingTitle(booking)}</AppText>
+                {listing?.branch?.name ? <AppText variant="caption">{listing.branch.name}</AppText> : null}
+              </View>
             </View>
+            <Line label="Pick-up" value={formatMYT(booking.pickupDate, "dayDateTime")} first />
+            <Line label="Return" value={formatMYT(booking.returnDate, "dayDateTime")} />
+            {place ? <Line label="Pick-up place" value={place} /> : null}
+            {dropoff ? <Line label="Drop-off place" value={dropoff} /> : null}
+            {booking.pickedUpAt ? <Line label="Handed over" value={formatMYT(booking.pickedUpAt, "dayDateTime")} /> : null}
+            {booking.returnedAt ? <Line label="Returned" value={formatMYT(booking.returnedAt, "dayDateTime")} /> : null}
+          </GlassCard>
+        </Section>
 
-            <Text style={styles.sectionTitle}>
-              Payment Information
-            </Text>
-
-            <View style={styles.card}>
-              <DetailRow
-                label="Payment Status"
-                value={booking.payment?.status || "N/A"}
-              />
-
-              <DetailRow
-                label="Total Rental"
-                value={formatMoney(booking.totalAmount)}
-              />
-
-              <DetailRow
-                label="Licence Status"
-                value={
-                  booking.customer?.licenceStatus ||
-                  "NOT SUBMITTED"
-                }
-              />
+        <Section title="Customer">
+          <GlassCard>
+            <AppText variant="bodyStrong">{customerName(booking)}</AppText>
+            {booking.customer?.email ? (
+              <AppText variant="caption" selectable>
+                {booking.customer.email}
+              </AppText>
+            ) : null}
+            <View style={[styles.lineRow, styles.firstLine, { borderTopColor: tokens.line }]}>
+              <AppText variant="caption" style={styles.flex}>
+                Driving licence
+              </AppText>
+              <StatusPill kind="licence" status={booking.customer?.licenceStatus} />
             </View>
+            {car?.driver?.name ? <Line label="Driver" value={car.driver.name} /> : null}
+            {car?.driver?.phone ? (
+              <View style={[styles.lineRow, { borderTopColor: tokens.line }]}>
+                <AppText variant="caption" style={styles.flex}>
+                  Phone
+                </AppText>
+                <Button
+                  label={car.driver.phone}
+                  variant="text"
+                  size="sm"
+                  icon="call-outline"
+                  onPress={() => Linking.openURL(`tel:${car.driver!.phone}`).catch(() => {})}
+                />
+              </View>
+            ) : null}
+          </GlassCard>
+        </Section>
 
-            <Text style={styles.sectionTitle}>
-              Vehicle Handover
-            </Text>
-
-            <View style={styles.card}>
-              {canHandover ? (
-                <>
-                  <Text style={styles.description}>
-                    Confirm the customer identity, driving
-                    licence and vehicle handover before
-                    continuing.
-                  </Text>
-
-                  <Pressable
-                    style={[
-                      styles.primaryButton,
-                      processing && styles.disabled,
-                    ]}
-                    disabled={processing}
-                    onPress={confirmHandover}
-                  >
-                    {processing ? (
-                      <ActivityIndicator color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <Ionicons
-                          name="key-outline"
-                          size={19}
-                          color="#FFFFFF"
-                        />
-                        <Text style={styles.primaryText}>
-                          Record Handover
-                        </Text>
-                      </>
-                    )}
-                  </Pressable>
-                </>
-              ) : status === "IN_PROGRESS" ? (
-                <View>
-                    <View style={styles.infoLine}>
-                    <Ionicons
-                        name="checkmark-circle"
-                        size={22}
-                        color="#07869B"
-                    />
-
-                    <Text style={styles.infoText}>
-                        Vehicle handed over. Rental is
-                        currently in progress.
-                    </Text>
-                    </View>
-
-                    <Pressable
-                    style={styles.primaryButton}
-                    onPress={() => setShowReturn(true)}
-                    >
-                    <Ionicons
-                        name="return-down-back-outline"
-                        size={19}
-                        color="#FFFFFF"
-                    />
-
-                    <Text style={styles.primaryText}>
-                        Record Return
-                    </Text>
-                    </Pressable>
+        <Section title="Payment">
+          <GlassCard>
+            <View style={styles.lineRow}>
+              <AppText variant="caption" style={styles.flex}>
+                Booking total
+              </AppText>
+              <Money value={booking.totalAmount} variant="headline" />
+            </View>
+            {p ? (
+              <>
+                <PartLine label="Down payment" amount={p.downPaymentAmount} status={p.downPaymentStatus} />
+                <PartLine label="Balance" amount={p.finalPaymentAmount} status={p.finalPaymentStatus} />
+                <View style={[styles.lineRow, { borderTopColor: tokens.line, borderTopWidth: StyleSheet.hairlineWidth }]}>
+                  <AppText variant="caption" style={styles.flex}>
+                    Payment status
+                  </AppText>
+                  <StatusPill kind="payment" status={p.status} />
                 </View>
-              
-                ) : status === "COMPLETED" ? (
-                <View>
-                    <View style={styles.infoLine}>
-                    <Ionicons
-                        name="checkmark-circle"
-                        size={22}
-                        color="#07869B"
-                    />
+              </>
+            ) : (
+              <AppText variant="caption" style={styles.mt8}>
+                Payments are set up when you accept the request.
+              </AppText>
+            )}
+            {Number(booking.lateReturnCharge || 0) > 0 ? (
+              <View style={[styles.lineRow, { borderTopColor: tokens.line, borderTopWidth: StyleSheet.hairlineWidth }]}>
+                <AppText variant="caption" style={styles.flex}>
+                  Late return charge{booking.lateReturnPaidAt ? " (paid at counter)" : " (not paid yet)"}
+                </AppText>
+                <Money value={booking.lateReturnCharge} />
+              </View>
+            ) : null}
+          </GlassCard>
+        </Section>
 
-                    <Text style={styles.infoText}>
-                        Rental completed and vehicle returned.
-                    </Text>
-                    </View>
+        {status === "ALTERNATIVE_SUGGESTED" ? (
+          <Section title="Your offer">
+            <GlassCard>
+              <AppText variant="body">
+                You suggested {booking.alternativeServiceName || "another car"}
+                {booking.alternativeSuggestedAt ? ` on ${formatMYT(booking.alternativeSuggestedAt, "dayDateTime")}` : ""}.
+                The customer is deciding.
+              </AppText>
+              {booking.alternativeReason ? (
+                <AppText variant="caption" style={styles.mt8}>
+                  Your message: {booking.alternativeReason}
+                </AppText>
+              ) : null}
+            </GlassCard>
+          </Section>
+        ) : null}
 
-                    {booking.returnedAt && (
-                    <DetailRow
-                        label="Actual Return"
-                        value={formatDate(booking.returnedAt)}
-                    />
-                    )}
-
-                    {booking.lateReturnHours != null && (
-                    <DetailRow
-                        label="Chargeable Hours"
-                        value={`${booking.lateReturnHours} hour(s)`}
-                    />
-                    )}
-
-                    {Number(booking.lateReturnCharge || 0) > 0 && (
-                    <>
-                        <DetailRow
-                        label="Late Return Charge"
-                        value={formatMoney(booking.lateReturnCharge)}
-                        />
-
-                        <DetailRow
-                        label="Counter Payment"
-                        value={
-                            booking.lateReturnPaidAt
-                            ? "Paid at Counter"
-                            : "Pending"
-                        }
-                        />
-                    </>
-                    )}
-                </View>
-
-              ) : (
-                <Text style={styles.description}>
-                  Handover becomes available when the
-                  booking reaches READY FOR PICKUP.
-                </Text>
-              )}
-            </View>
-          </>
+        {noShow ? (
+          <Button
+            label="Mark as no-show"
+            variant="text"
+            icon="person-remove-outline"
+            style={styles.alignStart}
+            onPress={() => setRespond("noshow")}
+          />
         ) : null}
       </ScrollView>
-      {showReturn && booking && (
-  <ReturnModal
-    booking={booking}
-    onClose={() => setShowReturn(false)}
-    onDone={async () => {
-      await loadBooking(true);
-    }}
-  />
-)}
-    </SafeAreaView>
+
+      <ResponseSheets booking={booking} action={respond} onClose={() => setRespond(null)} onDone={() => load(true)} />
+      {showReturn ? (
+        <ReturnModal booking={booking} onClose={() => setShowReturn(false)} onDone={async () => load(true)} />
+      ) : null}
+    </View>
   );
 }
 
-function DetailRow({
-  label,
-  value,
+/** What the operator should do now, with its button. */
+function NextStep({
+  booking,
+  now,
+  onRespond,
+  onReturn,
 }: {
-  label: string;
-  value: string;
+  booking: OperatorBooking;
+  now: Date;
+  onRespond: (action: BookingResponse) => void;
+  onReturn: () => void;
 }) {
+  const { tokens } = useTheme();
+  const status = booking.status;
+
+  let title: string | null = null;
+  let body: string | null = null;
+  let actions: ReactNode = null;
+
+  if (status === "PENDING") {
+    title = replyByText(booking.car?.responseDueAt, now) || "Answer this request";
+    body = `${customerName(booking)} asked for this car. Accept it, suggest another car, or decline with a reason.`;
+    actions = (
+      <View style={styles.actions}>
+        <Button label="Accept" variant="brand" size="sm" grow onPress={() => onRespond("accept")} />
+        <Button label="Suggest" variant="line" size="sm" grow onPress={() => onRespond("suggest")} />
+        <Button label="Decline" variant="line" size="sm" grow onPress={() => onRespond("reject")} />
+      </View>
+    );
+  } else if (status === "READY_FOR_PICKUP") {
+    title = "Ready for pick-up";
+    body = "Paid in full and the licence is verified. Check the driver's identity and licence at handover.";
+    actions = <Button label="Record handover" variant="brand" icon="key-outline" onPress={() => onRespond("handover")} />;
+  } else if (status === "IN_PROGRESS") {
+    title = "On trip";
+    body = booking.returnDate ? `Due back ${formatMYT(booking.returnDate, "dayDateTime")}.` : "The car is with the customer.";
+    actions = <Button label="Record return" variant="brand" icon="return-down-back-outline" onPress={onReturn} />;
+  } else if (status === "PAID") {
+    title = "Paid, waiting on the licence";
+    body = "The booking becomes ready for pick-up once the customer's driving licence is verified.";
+  } else if (["ACCEPTED", "PENDING_PAYMENT", "CONFIRMED"].includes(status)) {
+    title = "Waiting for the customer to pay";
+    body = "You'll be notified when a payment arrives. DuitNow receipts appear in Payments for you to check.";
+  } else if (status === "OVERDUE") {
+    title = "Payment overdue";
+    body = "The customer missed a payment deadline. Contact them, or cancel the booking from the website.";
+  }
+
+  if (!title) return null;
+
   return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
+    <GlassCard strong>
+      <View style={styles.nextHead}>
+        <Ionicons name="flag-outline" size={18} color={tokens.leafInk} />
+        <AppText variant="headline" style={styles.flex}>
+          {title}
+        </AppText>
+      </View>
+      {body ? (
+        <AppText variant="body" style={styles.mt8}>
+          {body}
+        </AppText>
+      ) : null}
+      {actions ? <View style={styles.mt12}>{actions}</View> : null}
+    </GlassCard>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <AppText variant="headline" accessibilityRole="header">
+        {title}
+      </AppText>
+      {children}
+    </View>
+  );
+}
+
+function Line({ label, value, first = false }: { label: string; value: string; first?: boolean }) {
+  const { tokens } = useTheme();
+  return (
+    <View style={[styles.lineRow, first && styles.firstLine, { borderTopColor: tokens.line, borderTopWidth: first ? StyleSheet.hairlineWidth : 0 }]}>
+      <AppText variant="caption" style={styles.label}>
+        {label}
+      </AppText>
+      <AppText variant="body" color="ink" style={styles.value}>
+        {value}
+      </AppText>
+    </View>
+  );
+}
+
+function PartLine({ label, amount, status }: { label: string; amount?: number; status?: string }) {
+  const { tokens } = useTheme();
+  return (
+    <View style={[styles.lineRow, { borderTopColor: tokens.line, borderTopWidth: StyleSheet.hairlineWidth }]}>
+      <View style={styles.flex}>
+        <AppText variant="caption">{label}</AppText>
+        <Money value={amount} variant="bodyStrong" />
+      </View>
+      {status ? <StatusPill kind="payment" status={status} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#F7FAFB",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 15,
-    paddingBottom: 15,
-    gap: 13,
-  },
-  backButton: {
-    width: 43,
-    height: 43,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerText: {
+  screen: {
     flex: 1,
   },
-  headerLabel: {
-    fontSize: 10,
-    fontWeight: "900",
-    color: "#07869B",
-    letterSpacing: 1,
-  },
-  headerTitle: {
-    fontSize: 19,
-    fontWeight: "900",
-    color: "#17313C",
-    marginTop: 2,
+  pad: {
+    paddingHorizontal: 18,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingBottom: 65,
+    paddingHorizontal: 18,
+    gap: 16,
   },
-  center: {
+  topRow: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 80,
+    gap: 12,
   },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    padding: 18,
-    marginBottom: 17,
+  flex: {
+    flex: 1,
   },
-  bookingCode: {
-    color: "#17313C",
-    fontSize: 21,
-    fontWeight: "900",
-  },
-  statusBadge: {
-    backgroundColor: "#E6F7F9",
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 10,
-    alignSelf: "flex-start",
-    marginTop: 12,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: "900",
-    color: "#07869B",
-  },
-  vehicleName: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#17313C",
-    marginTop: 18,
-    marginBottom: 7,
-  },
-  muted: {
-    fontSize: 12,
-    color: "#81939C",
+  mt8: {
     marginTop: 8,
   },
-  divider: {
-    height: 1,
-    backgroundColor: "#EDF1F3",
-    marginVertical: 17,
+  mt12: {
+    marginTop: 12,
   },
-  detailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 14,
-    marginVertical: 9,
+  alignStart: {
+    alignSelf: "flex-start",
   },
-  detailLabel: {
-    fontSize: 12,
-    color: "#81939C",
-    flex: 1,
-  },
-  detailValue: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#17313C",
-    flex: 1.5,
-    textAlign: "right",
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: "900",
-    color: "#17313C",
-    marginBottom: 13,
-    marginTop: 6,
-  },
-  description: {
-    color: "#71858E",
-    fontSize: 12,
-    lineHeight: 20,
-  },
-  primaryButton: {
-    backgroundColor: "#07869B",
-    paddingVertical: 15,
-    borderRadius: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
-    marginTop: 18,
-  },
-  primaryText: {
-    fontSize: 13,
-    fontWeight: "900",
-    color: "#FFFFFF",
-  },
-  disabled: {
-    opacity: 0.55,
-  },
-  infoLine: {
-    flexDirection: "row",
-    alignItems: "center",
+  section: {
     gap: 10,
   },
-  infoText: {
-    color: "#07869B",
-    fontSize: 12,
+  nextHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  actions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  carRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 12,
+  },
+  photo: {
+    width: 72,
+    height: 54,
+    borderRadius: Radius.sm,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 8,
+  },
+  firstLine: {
+    marginTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  label: {
+    width: 110,
+  },
+  value: {
     flex: 1,
-    fontWeight: "700",
-    lineHeight: 19,
-  },
-  error: {
-    fontSize: 13,
-    color: "#D14343",
-  },
-  link: {
-    fontSize: 13,
-    color: "#07869B",
-    fontWeight: "900",
-    marginTop: 12,
+    textAlign: "right",
   },
 });

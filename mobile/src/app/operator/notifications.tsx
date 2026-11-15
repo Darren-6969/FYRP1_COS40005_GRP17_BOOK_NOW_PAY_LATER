@@ -1,610 +1,294 @@
-
 import { Ionicons } from "@expo/vector-icons";
-import {
-  useFocusEffect,
-  useRouter,
-} from "expo-router";
-import { useCallback, useState } from "react";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { useCallback, useState, type ComponentProps } from "react";
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-
+  AppText,
+  Button,
+  EmptyState,
+  ErrorState,
+  GlassCard,
+  IconButton,
+  SegmentedControl,
+  Skeleton,
+  SkeletonText,
+  useToast,
+  type SegmentOption,
+} from "@/components/ui";
+import { Radius } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import {
   getOperatorBookings,
   getOperatorNotifications,
   markAllOperatorNotificationsRead,
   markOperatorNotificationRead,
-  OperatorNotification,
-} from "../../services/operatorApi";
+  type OperatorNotification,
+} from "@/services/operatorApi";
+import { formatMYT } from "@/utils/datetime";
 import { logger } from "@/utils/logger";
 
-type NotificationFilter = "ALL" | "UNREAD";
+type IconName = ComponentProps<typeof Ionicons>["name"];
+type Filter = "ALL" | "UNREAD";
 
-function formatDate(value: string) {
-  const date = new Date(value);
+const FILTERS: readonly SegmentOption<Filter>[] = [
+  { value: "ALL", label: "All" },
+  { value: "UNREAD", label: "Unread" },
+];
 
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString("en-MY", {
-    timeZone: "Asia/Kuala_Lumpur",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function contentOf(n: OperatorNotification) {
+  return `${n.type || ""} ${n.title || ""}`.toUpperCase();
 }
 
-function isPaymentNotification(
-  notification: OperatorNotification
-) {
-  const content =
-    `${notification.type} ${notification.title}`.toUpperCase();
-
-  return (
-    content.includes("PAYMENT") ||
-    content.includes("RECEIPT") ||
-    content.includes("INVOICE")
-  );
+function iconFor(n: OperatorNotification): IconName {
+  const t = contentOf(n);
+  if (t.includes("LICENCE")) return "card-outline";
+  if (t.includes("PAYMENT") || t.includes("RECEIPT") || t.includes("INVOICE")) return "wallet-outline";
+  if (t.includes("ALTERNATIVE")) return "swap-horizontal-outline";
+  if (t.includes("CANCEL") || t.includes("REJECT") || t.includes("EXPIRED")) return "close-circle-outline";
+  if (t.includes("SUBSCRIPTION")) return "ribbon-outline";
+  if (t.includes("BOOKING") || t.includes("REQUEST")) return "car-outline";
+  return "notifications-outline";
 }
 
+/** Operator notifications (plan phase 4). Tapping one opens what it's about. */
 export default function OperatorNotificationsScreen() {
   const router = useRouter();
+  const toast = useToast();
+  const insets = useSafeAreaInsets();
+  const { tokens } = useTheme();
 
-  const [notifications, setNotifications] =
-    useState<OperatorNotification[]>([]);
-
-  const [filter, setFilter] =
-    useState<NotificationFilter>("ALL");
-
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<OperatorNotification[] | null>(null);
+  const [filter, setFilter] = useState<Filter>("ALL");
+  const [error, setError] = useState<unknown>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState("");
 
-  const loadNotifications = useCallback(
-    async (refresh = false) => {
-      try {
-        setError("");
-
-        if (refresh) {
-          setRefreshing(true);
-        } else {
-          setLoading(true);
-        }
-
-        const response = await getOperatorNotifications();
-
-        setNotifications(
-          Array.isArray(response?.notifications)
-            ? response.notifications
-            : []
-        );
-      } catch (err: any) {
-        setError(
-          err?.message ||
-            "Unable to load notifications."
-        );
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    []
-  );
+  const load = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshing(true);
+    setError(null);
+    try {
+      const response = await getOperatorNotifications();
+      setItems(Array.isArray(response?.notifications) ? response.notifications : []);
+    } catch (err) {
+      logger.debug("Failed to load operator notifications:", err);
+      setError(err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadNotifications();
-    }, [loadNotifications])
+      load();
+    }, [load])
   );
 
-  const unreadCount = notifications.filter(
-    (item) => !item.isRead
-  ).length;
+  const open = async (n: OperatorNotification) => {
+    if (!n.isRead) {
+      setItems((current) => current?.map((i) => (i.id === n.id ? { ...i, isRead: true } : i)) ?? current);
+      markOperatorNotificationRead(n.id).catch((err) => logger.debug("Failed to mark notification read:", err));
+    }
 
-  const visibleNotifications =
-    filter === "UNREAD"
-      ? notifications.filter((item) => !item.isRead)
-      : notifications;
+    const t = contentOf(n);
+    if (t.includes("LICENCE")) return router.push("/operator/licence-checks" as Href);
+    if (t.includes("PAYMENT") || t.includes("RECEIPT") || t.includes("INVOICE")) {
+      return router.push("/operator/(tabs)/payments" as Href);
+    }
 
-  const handleNotification = async (
-    notification: OperatorNotification
-  ) => {
-    if (processing) return;
+    // The booking code from the text; never guess an ID.
+    const code = `${n.title} ${n.message}`.match(/BNPL-[A-Za-z0-9]+/i)?.[0]?.toUpperCase();
+    if (code) {
+      try {
+        const response = await getOperatorBookings("ALL");
+        const match = response.bookings.find((b) => b.bookingCode?.toUpperCase() === code);
+        if (match) return router.push(`/operator/booking/${match.id}` as Href);
+      } catch (err) {
+        logger.debug("Notification booking lookup failed:", err);
+      }
+    }
+    router.push("/operator/(tabs)/bookings" as Href);
+  };
 
+  const markAll = async () => {
     try {
-      setProcessing(true);
-
-      if (!notification.isRead) {
-        await markOperatorNotificationRead(
-          notification.id
-        );
-
-        setNotifications((previous) =>
-          previous.map((item) =>
-            item.id === notification.id
-              ? { ...item, isRead: true }
-              : item
-          )
-        );
-      }
-
-      // Payment-related notifications open Payments.
-      if (isPaymentNotification(notification)) {
-        router.push("/operator/payments");
-        return;
-      }
-
-      // Extract a booking code, never guess an ID.
-      const content =
-        `${notification.title} ${notification.message}`;
-
-      const codeMatch = content.match(
-        /BNPL-[A-Za-z0-9]+/i
-      );
-
-      if (codeMatch) {
-        try {
-          const response = await getOperatorBookings("ALL");
-
-          const match = response.bookings.find(
-            (booking) =>
-              booking.bookingCode?.toUpperCase() ===
-              codeMatch[0].toUpperCase()
-          );
-
-          if (match) {
-            router.push({
-              pathname: "/operator/booking/[id]",
-              params: { id: String(match.id) },
-            });
-            return;
-          }
-        } catch (lookupError) {
-          logger.debug(
-            "Notification booking lookup failed:",
-            lookupError
-          );
-        }
-      }
-
-      // Safe fallback when a notification has no booking ID.
-      router.push("/operator/bookings");
-    } catch (err: any) {
-      Alert.alert(
-        "Notification Error",
-        err?.message ||
-          "Unable to open notification."
-      );
-    } finally {
-      setProcessing(false);
+      await markAllOperatorNotificationsRead();
+      setItems((current) => current?.map((i) => ({ ...i, isRead: true })) ?? current);
+    } catch (err) {
+      logger.debug("Failed to mark all operator notifications read:", err);
+      toast.show("Couldn't mark them as read. Try again.", { tone: "err" });
     }
   };
 
-  const markAllRead = () => {
-    if (processing || unreadCount === 0) return;
+  const unread = items?.filter((n) => !n.isRead).length ?? 0;
+  const shown = filter === "UNREAD" ? items?.filter((n) => !n.isRead) ?? null : items;
 
-    Alert.alert(
-      "Mark All as Read",
-      "Mark all your notifications as read?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Mark All Read",
-          onPress: async () => {
-            try {
-              setProcessing(true);
+  const header = (
+    <View style={styles.header}>
+      <View style={styles.topRow}>
+        <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
+        <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex} numberOfLines={1} adjustsFontSizeToFit>
+          Notifications
+        </AppText>
+      </View>
+      {items && items.length > 0 ? (
+        <>
+          <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} accessibilityLabel="Show" />
+          <View style={styles.summary}>
+            <AppText variant="caption" style={styles.flex}>
+              {unread === 0 ? "All read" : unread === 1 ? "1 unread" : `${unread} unread`}
+            </AppText>
+            {unread > 0 ? <Button label="Mark all read" variant="text" size="sm" onPress={markAll} /> : null}
+          </View>
+        </>
+      ) : null}
+    </View>
+  );
 
-              await markAllOperatorNotificationsRead();
-
-              setNotifications((previous) =>
-                previous.map((item) => ({
-                  ...item,
-                  isRead: true,
-                }))
-              );
-            } catch (err: any) {
-              Alert.alert(
-                "Error",
-                err?.message ||
-                  "Unable to update notifications."
-              );
-            } finally {
-              setProcessing(false);
-            }
-          },
-        },
-      ]
+  if (error && !items) {
+    return (
+      <View style={[styles.screen, styles.pad, { paddingTop: insets.top + 8 }]}>
+        {header}
+        <ErrorState error={error} onRetry={() => load()} />
+      </View>
     );
-  };
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => router.back()}
-          disabled={processing}
-        >
-          <Ionicons
-            name="arrow-back"
-            size={22}
-            color="#17313C"
-          />
-        </Pressable>
-
-        <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>
-            OPERATOR ACTIVITY
-          </Text>
-          <Text style={styles.title}>
-            Notifications
-          </Text>
-        </View>
-
-        <View style={styles.unreadBadge}>
-          <Text style={styles.unreadCount}>
-            {unreadCount}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.toolbar}>
-        <View style={styles.filters}>
-          <Pressable
-            style={[
-              styles.filter,
-              filter === "ALL" && styles.filterActive,
-            ]}
-            onPress={() => setFilter("ALL")}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                filter === "ALL" &&
-                  styles.filterTextActive,
-              ]}
+    <View style={styles.screen}>
+      <FlatList
+        data={shown ?? []}
+        keyExtractor={(n) => String(n.id)}
+        ListHeaderComponent={header}
+        ListEmptyComponent={
+          items ? (
+            <EmptyState
+              icon="notifications-outline"
+              title={filter === "UNREAD" ? "Nothing unread" : "You're all caught up"}
+              message="New requests, payments and licence uploads appear here."
+            />
+          ) : (
+            <View style={styles.list}>
+              {[0, 1, 2].map((i) => (
+                <GlassCard key={i}>
+                  <View style={styles.cardRow}>
+                    <Skeleton width={40} height={40} radius={Radius.sm} />
+                    <View style={styles.flex}>
+                      <SkeletonText lines={3} />
+                    </View>
+                  </View>
+                </GlassCard>
+              ))}
+            </View>
+          )
+        }
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        renderItem={({ item }) => {
+          const fresh = !item.isRead;
+          return (
+            <Pressable
+              onPress={() => open(item)}
+              accessibilityRole="button"
+              accessibilityLabel={[fresh ? "Unread" : null, item.title, item.message, formatMYT(item.createdAt, "dayDateTime")]
+                .filter(Boolean)
+                .join(". ")}
+              style={({ pressed }) => [pressed && { opacity: 0.75 }]}
             >
-              All
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.filter,
-              filter === "UNREAD" &&
-                styles.filterActive,
-            ]}
-            onPress={() => setFilter("UNREAD")}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                filter === "UNREAD" &&
-                  styles.filterTextActive,
-              ]}
-            >
-              Unread
-            </Text>
-          </Pressable>
-        </View>
-
-        <Pressable
-          onPress={markAllRead}
-          disabled={processing || unreadCount === 0}
-        >
-          <Text
-            style={[
-              styles.markAllText,
-              unreadCount === 0 && styles.disabledText,
-            ]}
-          >
-            Mark all read
-          </Text>
-        </Pressable>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.content}
+              <GlassCard strong={fresh}>
+                <View style={styles.cardRow}>
+                  <View style={[styles.icon, { backgroundColor: fresh ? tokens.infoBg : tokens.glassStrong }]}>
+                    <Ionicons name={iconFor(item)} size={20} color={fresh ? tokens.infoFg : tokens.label} />
+                  </View>
+                  <View style={styles.flex}>
+                    <View style={styles.titleRow}>
+                      <AppText variant={fresh ? "headline" : "bodyStrong"} style={styles.flex}>
+                        {item.title || "Notification"}
+                      </AppText>
+                      {fresh ? <View style={[styles.dot, { backgroundColor: tokens.cta }]} /> : null}
+                    </View>
+                    {item.message ? (
+                      <AppText variant="body" style={styles.mt4}>
+                        {item.message}
+                      </AppText>
+                    ) : null}
+                    <AppText variant="caption" style={styles.mt8}>
+                      {formatMYT(item.createdAt, "dayDateTime")}
+                    </AppText>
+                  </View>
+                </View>
+              </GlassCard>
+            </Pressable>
+          );
+        }}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => loadNotifications(true)}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={tokens.label} colors={[tokens.brand]} />
         }
-      >
-        {!!error && (
-          <View style={styles.emptyCard}>
-            <Text style={styles.errorText}>
-              {error}
-            </Text>
-
-            <Pressable
-              onPress={() => loadNotifications()}
-            >
-              <Text style={styles.retryText}>
-                Try Again
-              </Text>
-            </Pressable>
-          </View>
-        )}
-
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator
-              size="large"
-              color="#07869B"
-            />
-            <Text style={styles.helperText}>
-              Loading notifications...
-            </Text>
-          </View>
-        ) : !error &&
-          visibleNotifications.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons
-              name="notifications-off-outline"
-              size={37}
-              color="#81939C"
-            />
-
-            <Text style={styles.emptyTitle}>
-              No notifications
-            </Text>
-
-            <Text style={styles.helperText}>
-              {filter === "UNREAD"
-                ? "You have no unread notifications."
-                : "Operator notifications will appear here."}
-            </Text>
-          </View>
-        ) : !error ? (
-          visibleNotifications.map((notification) => (
-            <Pressable
-              key={notification.id}
-              onPress={() =>
-                handleNotification(notification)
-              }
-              disabled={processing}
-              style={[
-                styles.notificationCard,
-                !notification.isRead &&
-                  styles.unreadCard,
-              ]}
-            >
-              <View style={styles.iconContainer}>
-                <Ionicons
-                  name={
-                    isPaymentNotification(notification)
-                      ? "wallet-outline"
-                      : "notifications-outline"
-                  }
-                  size={21}
-                  color="#07869B"
-                />
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <View style={styles.notificationTop}>
-                  <Text style={styles.notificationTitle}>
-                    {notification.title}
-                  </Text>
-
-                  {!notification.isRead && (
-                    <View style={styles.unreadDot} />
-                  )}
-                </View>
-
-                <Text style={styles.message}>
-                  {notification.message}
-                </Text>
-
-                <Text style={styles.date}>
-                  {formatDate(notification.createdAt)}
-                </Text>
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={17}
-                color="#A1B0B6"
-              />
-            </Pressable>
-          ))
-        ) : null}
-      </ScrollView>
-    </SafeAreaView>
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  screen: {
     flex: 1,
-    backgroundColor: "#F7FAFB",
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 20,
-    gap: 13,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  eyebrow: {
-    fontSize: 10,
-    fontWeight: "900",
-    color: "#07869B",
-    letterSpacing: 1.1,
-  },
-  title: {
-    fontSize: 25,
-    fontWeight: "900",
-    color: "#17313C",
-    marginTop: 4,
-  },
-  unreadBadge: {
-    minWidth: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#E6F7F9",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 7,
-  },
-  unreadCount: {
-    color: "#07869B",
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  toolbar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 17,
-  },
-  filters: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  filter: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-  },
-  filterActive: {
-    backgroundColor: "#07869B",
-    borderColor: "#07869B",
-  },
-  filterText: {
-    color: "#617780",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  filterTextActive: {
-    color: "#FFFFFF",
-  },
-  markAllText: {
-    color: "#07869B",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  disabledText: {
-    opacity: 0.4,
+  pad: {
+    paddingHorizontal: 18,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingBottom: 75,
+    paddingHorizontal: 18,
   },
-  center: {
-    paddingTop: 85,
-    alignItems: "center",
-  },
-  helperText: {
-    color: "#81939C",
-    fontSize: 12,
-    textAlign: "center",
-    marginTop: 12,
-  },
-  notificationCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 17,
-    padding: 15,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: "#E3EAED",
+  header: {
+    gap: 10,
     marginBottom: 12,
   },
-  unreadCard: {
-    backgroundColor: "#F1FBFC",
-    borderColor: "#C6E8ED",
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
-  iconContainer: {
-    width: 43,
-    height: 43,
-    borderRadius: 13,
-    backgroundColor: "#E6F7F9",
+  summary: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 44,
+  },
+  flex: {
+    flex: 1,
+  },
+  list: {
+    gap: 10,
+  },
+  separator: {
+    height: 10,
+  },
+  cardRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  icon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.sm,
     alignItems: "center",
     justifyContent: "center",
   },
-  notificationTop: {
+  titleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  notificationTitle: {
-    color: "#17313C",
-    fontSize: 13,
-    fontWeight: "900",
-    flex: 1,
-  },
-  unreadDot: {
-    height: 8,
+  dot: {
     width: 8,
+    height: 8,
     borderRadius: 4,
-    backgroundColor: "#D14343",
   },
-  message: {
-    color: "#6F838C",
-    fontSize: 12,
-    lineHeight: 19,
-    marginTop: 6,
+  mt4: {
+    marginTop: 4,
   },
-  date: {
-    color: "#9AABB2",
-    fontSize: 10,
-    marginTop: 9,
-  },
-  emptyCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    padding: 35,
-    alignItems: "center",
-  },
-  emptyTitle: {
-    color: "#17313C",
-    fontSize: 15,
-    fontWeight: "900",
-    marginTop: 13,
-  },
-  errorText: {
-    color: "#D14343",
-    fontSize: 12,
-    textAlign: "center",
-  },
-  retryText: {
-    color: "#07869B",
-    fontWeight: "800",
-    marginTop: 10,
+  mt8: {
+    marginTop: 8,
   },
 });

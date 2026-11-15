@@ -76,6 +76,7 @@ export type OperatorBooking = {
   customer?: {
     name?: string;
     email?: string;
+    phone?: string | null;
     licenceStatus?: string;
     licenceSubmittedAt?: string | null;
     licenceVerifiedAt?: string | null;
@@ -102,6 +103,35 @@ listing?: {
 } | null;
 
 lateReturnPaidAt?: string | null;
+
+  serviceType?: string;
+  alternativeUsed?: boolean;
+  alternativeSuggestedAt?: string | null;
+  alternativeServiceName?: string | null;
+  alternativeReason?: string | null;
+  noShowRemark?: string | null;
+
+  /** Car bookings: the same car view the customer sees (car_booking_view.js). */
+  car?: {
+    listing?: {
+      id: number;
+      name?: string | null;
+      make?: string | null;
+      model?: string | null;
+      seats?: number | null;
+      transmission?: string | null;
+      imageUrl?: string | null;
+      branch?: { name?: string | null } | null;
+    } | null;
+    pickupPoint?: { label?: string | null } | null;
+    dropoffPoint?: { label?: string | null } | null;
+    requestedLocation?: string | null;
+    requestedDropoffLocation?: string | null;
+    driver?: { name?: string | null; phone?: string | null } | null;
+    /** When the operator should answer a pending request. */
+    responseDueAt?: string | null;
+    autoRejectOnTimeout?: boolean;
+  } | null;
 };
 
 
@@ -857,3 +887,85 @@ export async function reviewOperatorLicence(
 
 
 
+
+
+// ---- F6: suggest another car, mark a no-show --------------------------------
+// Routes: backend/src/routes/operator_routes.js. Every price is the server's.
+
+export type AlternativeOption = {
+  id: number;
+  name: string;
+  make?: string | null;
+  model?: string | null;
+  seats?: number | null;
+  transmission?: string | null;
+  branchName?: string | null;
+  sameBranch?: boolean;
+  imageUrl?: string | null;
+  /** Integer sen. */
+  dailyRateSen?: number | null;
+  /** Free for the booked dates; null when the dates can't be checked. */
+  available: boolean | null;
+  unavailableDates?: string[];
+};
+
+export type AlternativeQuote = {
+  listing: { id: number; name: string } | null;
+  pricing: {
+    /** Integer sen. */
+    totalSen: number;
+    depositSen?: number;
+    balanceSen?: number;
+  } | null;
+  kind: string | null;
+  problems: { code: string; message: string }[];
+  pointsChanged: boolean;
+  droppedAddons: string[];
+};
+
+/** The operator's other published cars, each marked free or not for the booked dates. */
+export async function getAlternativeOptions(bookingId: number): Promise<{ options: AlternativeOption[] }> {
+  return apiRequest(`/operators/bookings/${bookingId}/alternative/options`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+/** Prices the chosen car for the booked dates. Writes nothing. */
+export async function previewAlternativeQuote(
+  bookingId: number,
+  alternativeListingId: number
+): Promise<{ quote: AlternativeQuote }> {
+  return apiRequest(`/operators/bookings/${bookingId}/alternative/quote`, {
+    method: "POST",
+    body: JSON.stringify({ alternativeListingId }),
+  });
+}
+
+/**
+ * Sends the offer. The server quotes again with the car locked and answers
+ * 409 with the problem's code if the car is no longer free.
+ */
+export async function suggestAlternativeCar(
+  bookingId: number,
+  input: { alternativeListingId: number; reason: string }
+): Promise<{ booking: OperatorBooking }> {
+  return apiRequest(`/operators/bookings/${bookingId}/suggest-alternative`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * Only between pick-up time and the operator's no-show window, and only for
+ * a booking with the down payment or the full amount paid (server rules).
+ */
+export async function markOperatorBookingNoShow(
+  bookingId: number,
+  remark: string
+): Promise<{ booking: OperatorBooking }> {
+  return apiRequest(`/operators/bookings/${bookingId}/no-show`, {
+    method: "PATCH",
+    body: JSON.stringify({ remark }),
+  });
+}

@@ -1,652 +1,306 @@
-
 import { Ionicons } from "@expo/vector-icons";
-import {
-  useFocusEffect,
-  useRouter,
-} from "expo-router";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AccountSheet } from "@/components/operator/AccountSheet";
+import { OperatorBookingCard } from "@/components/operator/OperatorBookingCard";
+import { ResponseSheets, type BookingResponse } from "@/components/operator/ResponseSheets";
+import { AppText, Button, ErrorState, Figure, GlassCard, HeroCard, IconButton, Money, Skeleton, SkeletonText } from "@/components/ui";
+import { Radius } from "@/constants/theme";
+import { useTabBarInset } from "@/hooks/use-tab-bar-inset";
+import { useTheme } from "@/hooks/use-theme";
 import {
-  useCallback,
-  useState,
-} from "react";
-
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-
-import {
+  getOperatorBookings,
   getOperatorDashboard,
   getOperatorNotifications,
-  OperatorDashboard,
-} from "../../../services/operatorApi";
-
-import {
-  clearSession,
-  getStoredUser,
-} from "../../../services/session";
+  type OperatorBooking,
+  type OperatorDashboard,
+} from "@/services/operatorApi";
+import { getStoredUser } from "@/services/session";
+import { formatMYT } from "@/utils/datetime";
 import { logger } from "@/utils/logger";
+import { nextReplyDue, replyByText, todayCounts } from "@/utils/operator-booking";
 
+/** How many requests the dashboard shows before "See all". */
+const REQUEST_COUNT = 3;
+
+/**
+ * Operator dashboard (plan phase 4 mock): a Today card with the requests
+ * waiting and the nearest reply deadline, then the requests themselves
+ * with Accept, Suggest and Decline. Totals are the server's; today's
+ * pick-ups and returns are counted from the bookings list (no money).
+ */
 export default function OperatorDashboardScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const bottomInset = useTabBarInset();
+  const { tokens } = useTheme();
 
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [dashboard, setDashboard] = useState<OperatorDashboard | null>(null);
+  const [bookings, setBookings] = useState<OperatorBooking[]>([]);
+  const [unread, setUnread] = useState(0);
+  const [user, setUser] = useState<{ name?: string; email?: string } | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [respond, setRespond] = useState<{ booking: OperatorBooking; action: BookingResponse } | null>(null);
+  const [now, setNow] = useState(() => new Date());
 
-  const [dashboard, setDashboard] =
-    useState<OperatorDashboard | null>(null);
-
-  const [operatorName, setOperatorName] =
-    useState("Operator");
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [refreshing, setRefreshing] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  const loadDashboard = async (
-    refresh = false
-  ) => {
+  const load = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshing(true);
+    setError(null);
+    setNow(new Date());
     try {
-      setError("");
-
-      if (refresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      const user = await getStoredUser();
-
-      setOperatorName(user?.name || "Operator");
-
-      
-const data = await getOperatorDashboard();
-
-setDashboard(data);
-
-// Load unread operator notifications.
-try {
-  const response = await getOperatorNotifications();
-
-  const unread = (response.notifications || []).filter(
-    (notification) => !notification.isRead
-  ).length;
-
-  setUnreadCount(unread);
-} catch (notificationError) {
-  logger.debug(
-    "Unable to load notification count:",
-    notificationError
-  );
-}
-
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          "Unable to load operator dashboard."
-      );
+      getStoredUser().then(setUser).catch(() => {});
+      const [summary, list] = await Promise.all([getOperatorDashboard(), getOperatorBookings("ALL")]);
+      setDashboard(summary);
+      setBookings(Array.isArray(list?.bookings) ? list.bookings : []);
+      // The bell's dot only; a failure here shouldn't hide the dashboard.
+      getOperatorNotifications()
+        .then((r) => setUnread((r.notifications || []).filter((n: any) => !n.isRead).length))
+        .catch((err) => logger.debug("Unable to load notification count:", err));
+    } catch (err) {
+      logger.debug("Failed to load operator dashboard:", err);
+      setError(err);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadDashboard();
-    }, [])
+      load();
+    }, [load])
   );
 
-  const handleLogout = () => {
-    Alert.alert(
-      "Log Out",
-      "Are you sure you want to log out?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Log Out",
-          style: "destructive",
-          onPress: async () => {
-            await clearSession();
-            router.dismissAll();
-            router.replace("/login");
-          },
-        },
-      ]
-    );
-  };
-
+  const requests = useMemo(
+    () =>
+      bookings
+        .filter((b) => b.status === "PENDING")
+        .sort(
+          (a, b) =>
+            new Date(a.car?.responseDueAt ?? a.createdAt ?? 0).getTime() -
+            new Date(b.car?.responseDueAt ?? b.createdAt ?? 0).getTime()
+        ),
+    [bookings]
+  );
+  const today = useMemo(() => todayCounts(bookings, now), [bookings, now]);
+  const nextDue = useMemo(() => nextReplyDue(bookings), [bookings]);
   const summary = dashboard?.summary;
+  const waiting = summary?.pendingRequests ?? requests.length;
 
-  const money = (value?: number) =>
-    `RM ${Number(value || 0).toLocaleString(
-      "en-MY",
-      {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }
-    )}`;
+  const openBooking = (b: OperatorBooking) => router.push(`/operator/booking/${b.id}` as Href);
+
+  const header = (
+    <View style={styles.header}>
+      <View style={styles.flex}>
+        <AppText variant="largeTitle" accessibilityRole="header">
+          Today
+        </AppText>
+        <AppText variant="caption">{formatMYT(now, "dayDate")}</AppText>
+      </View>
+      <IconButton icon="notifications-outline" label="Notifications" dot={unread > 0} onPress={() => router.push("/operator/notifications" as Href)} />
+      <IconButton icon="person-circle-outline" label="Account" onPress={() => setAccountOpen(true)} />
+    </View>
+  );
+
+  if (error && !dashboard) {
+    return (
+      <View style={[styles.screen, styles.pad, { paddingTop: insets.top + 8 }]}>
+        {header}
+        <ErrorState error={error} onRetry={() => load()} />
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.screen}>
       <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: bottomInset }]}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => loadDashboard(true)}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={tokens.label} colors={[tokens.brand]} />
         }
       >
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>
-              BNPL MERCHANT
-            </Text>
+        {header}
 
-            <Text style={styles.title}>
-              Dashboard
-            </Text>
-
-            <Text style={styles.subtitle}>
-              Welcome back, {operatorName}
-            </Text>
-          </View>
-
-          
-          <Pressable
-            style={styles.notificationButton}
-            onPress={() => router.push("/operator/notifications")}
-          >
-            <Ionicons
-              name="notifications-outline"
-              size={23}
-              color="#17313C"
-            />
-
-            {unreadCount > 0 && (
-              <View style={styles.notificationDot} />
-            )}
-          </Pressable>
-
-
-          <Pressable
-            style={styles.logoutButton}
-            onPress={handleLogout}
-          >
-            <Ionicons
-              name="log-out-outline"
-              size={22}
-              color="#17313C"
-            />
-          </Pressable>
-        </View>
-
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator
-              size="large"
-              color="#07869B"
-            />
-            <Text style={styles.helperText}>
-              Loading dashboard...
-            </Text>
-          </View>
-        ) : error ? (
-          <View style={styles.emptyCard}>
-            <Ionicons
-              name="alert-circle-outline"
-              size={30}
-              color="#D14343"
-            />
-
-            <Text style={styles.errorText}>
-              {error}
-            </Text>
-
-            <Pressable
-              onPress={() => loadDashboard()}
-            >
-              <Text style={styles.retryText}>
-                Try Again
-              </Text>
-            </Pressable>
-          </View>
+        {!dashboard ? (
+          <>
+            <Skeleton height={190} radius={Radius.hero} />
+            <GlassCard>
+              <SkeletonText lines={4} />
+            </GlassCard>
+          </>
         ) : (
           <>
-            <Text style={styles.sectionTitle}>
-              Overview
-            </Text>
+            <HeroCard tag="Requests waiting">
+              <Figure size="xl" style={{ color: tokens.onHero }}>
+                {waiting}
+              </Figure>
+              <AppText variant="caption" style={{ color: tokens.onHeroSoft }}>
+                {waiting === 0
+                  ? "Nothing to answer right now."
+                  : nextDue
+                    ? `${replyByText(nextDue.car?.responseDueAt, now)}.${nextDue.car?.autoRejectOnTimeout === false ? "" : " Unanswered requests are declined automatically."}`
+                    : "Answer them before they expire."}
+              </AppText>
+              <View style={styles.metrics}>
+                <Metric value={today.pickups} label={today.pickups === 1 ? "Pick-up today" : "Pick-ups today"} />
+                <Metric value={today.returns} label={today.returns === 1 ? "Return today" : "Returns today"} />
+                <Metric value={summary?.expiredBookings ?? 0} label="Overdue" />
+              </View>
+            </HeroCard>
+
+            <View style={styles.section}>
+              <View style={styles.sectionHead}>
+                <AppText variant="headline" accessibilityRole="header" style={styles.flex}>
+                  Requests
+                </AppText>
+                {requests.length > REQUEST_COUNT ? (
+                  <Button
+                    label={`See all ${requests.length}`}
+                    variant="text"
+                    size="sm"
+                    onPress={() => router.push("/operator/(tabs)/bookings" as Href)}
+                  />
+                ) : null}
+              </View>
+              {requests.length === 0 ? (
+                <GlassCard>
+                  <AppText variant="body">No requests waiting. New ones appear here.</AppText>
+                </GlassCard>
+              ) : (
+                requests.slice(0, REQUEST_COUNT).map((b) => (
+                  <OperatorBookingCard
+                    key={b.id}
+                    booking={b}
+                    now={now}
+                    onOpen={openBooking}
+                    onRespond={(booking, action) => setRespond({ booking, action })}
+                  />
+                ))
+              )}
+            </View>
+
+            <View style={styles.stats}>
+              <GlassCard style={styles.stat}>
+                <AppText variant="micro">Total revenue</AppText>
+                <Money value={summary?.totalRevenue} variant="figureL" style={styles.mt4} />
+                <AppText variant="caption">{summary?.paidBookings ?? 0} paid bookings</AppText>
+              </GlassCard>
+              <GlassCard style={styles.stat}>
+                <AppText variant="micro">Payments due</AppText>
+                <Figure style={styles.mt4}>{summary?.paymentPending ?? 0}</Figure>
+                <AppText variant="caption">waiting for customers</AppText>
+              </GlassCard>
+            </View>
 
             <Pressable
-  onPress={() => router.push("/operator/licence-checks")}
-  style={{
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-  }}
->
-  <Ionicons
-    name="id-card-outline"
-    size={24}
-    color="#07869B"
-  />
-
-  <View style={{ flex: 1 }}>
-    <Text
-      style={{
-        fontSize: 14,
-        fontWeight: "900",
-        color: "#17313C",
-      }}
-    >
-      Licence Checks
-    </Text>
-    <Text
-      style={{
-        fontSize: 11,
-        color: "#81939C",
-        marginTop: 5,
-      }}
-    >
-      Review submitted driving licences
-    </Text>
-  </View>
-
-  <Ionicons
-    name="chevron-forward"
-    size={19}
-    color="#81939C"
-  />
-</Pressable>
-
-
-            <View style={styles.statsGrid}>
-              <StatCard
-                title="Total Bookings"
-                value={summary?.totalBookings ?? 0}
-                icon="calendar-outline"
-              />
-
-              <StatCard
-                title="Pending Requests"
-                value={summary?.pendingRequests ?? 0}
-                icon="time-outline"
-              />
-
-              <StatCard
-                title="Payment Pending"
-                value={summary?.paymentPending ?? 0}
-                icon="wallet-outline"
-              />
-
-              <StatCard
-                title="Paid Bookings"
-                value={summary?.paidBookings ?? 0}
-                icon="checkmark-circle-outline"
-              />
-
-              <StatCard
-                title="Expired Bookings"
-                value={summary?.expiredBookings ?? 0}
-                icon="alert-circle-outline"
-              />
-            </View>
-
-            <View style={styles.revenueCard}>
-              <View style={styles.revenueTop}>
-                <Text style={styles.revenueLabel}>
-                  Total Revenue
-                </Text>
-
-                <Ionicons
-                  name="trending-up-outline"
-                  size={23}
-                  color="#FFFFFF"
-                />
-              </View>
-
-              <Text style={styles.revenueAmount}>
-                {money(summary?.totalRevenue)}
-              </Text>
-            </View>
-
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
-                Recent Bookings
-              </Text>
-
-              <Text style={styles.sectionCount}>
-                {dashboard?.recentBookings?.length || 0}
-              </Text>
-            </View>
-
-            {dashboard?.recentBookings?.length ? (
-              dashboard.recentBookings.map((booking) => (
-                <View
-                  key={booking.id}
-                  style={styles.bookingCard}
-                >
-                  <View style={styles.bookingTop}>
-                    <Text style={styles.bookingCode}>
-                      {booking.bookingCode ||
-                        `Booking #${booking.id}`}
-                    </Text>
-
-                    <View style={styles.statusBadge}>
-                      <Text style={styles.statusText}>
-                        {String(
-                          booking.status || "UNKNOWN"
-                        ).replaceAll("_", " ")}
-                      </Text>
-                    </View>
+              onPress={() => router.push("/operator/licence-checks" as Href)}
+              accessibilityRole="button"
+              accessibilityLabel="Licence checks. Review customers' driving licences"
+              style={({ pressed }) => [pressed && { opacity: 0.75 }]}
+            >
+              <GlassCard>
+                <View style={styles.linkRow}>
+                  <View style={[styles.linkIcon, { backgroundColor: tokens.glassStrong, borderColor: tokens.glassLine }]}>
+                    <Ionicons name="card-outline" size={20} color={tokens.ink} />
                   </View>
-
-                  <Text style={styles.bookingName}>
-                    {booking.serviceName || "Car Rental"}
-                  </Text>
-
-                  <Text style={styles.bookingAmount}>
-                    {money(booking.totalAmount)}
-                  </Text>
+                  <View style={styles.flex}>
+                    <AppText variant="bodyStrong">Licence checks</AppText>
+                    <AppText variant="caption">Review customers&apos; driving licences</AppText>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={tokens.label} />
                 </View>
-              ))
-            ) : (
-              <View style={styles.emptyCard}>
-                <Ionicons
-                  name="car-outline"
-                  size={30}
-                  color="#81939C"
-                />
-
-                <Text style={styles.helperText}>
-                  No recent bookings found.
-                </Text>
-              </View>
-            )}
+              </GlassCard>
+            </Pressable>
           </>
         )}
-
       </ScrollView>
-    </SafeAreaView>
+
+      <ResponseSheets
+        booking={respond?.booking ?? null}
+        action={respond?.action ?? null}
+        onClose={() => setRespond(null)}
+        onDone={() => load(true)}
+      />
+      <AccountSheet visible={accountOpen} onClose={() => setAccountOpen(false)} name={user?.name} email={user?.email} />
+    </View>
   );
 }
 
-function StatCard({
-  title,
-  value,
-  icon,
-}: {
-  title: string;
-  value: number;
-  icon: React.ComponentProps<typeof Ionicons>["name"];
-}) {
+function Metric({ value, label }: { value: number; label: string }) {
+  const { tokens } = useTheme();
   return (
-    <View style={styles.statCard}>
-      <Ionicons
-        name={icon}
-        size={22}
-        color="#07869B"
-      />
-
-      <Text style={styles.statValue}>
+    <View style={styles.metric} accessible accessibilityLabel={`${value} ${label}`}>
+      <AppText variant="title" style={{ color: tokens.onHero }}>
         {value}
-      </Text>
-
-      <Text style={styles.statLabel}>
-        {title}
-      </Text>
+      </AppText>
+      <AppText variant="caption" style={{ color: tokens.onHeroSoft }}>
+        {label}
+      </AppText>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  screen: {
     flex: 1,
-    backgroundColor: "#F7FAFB",
   },
-
+  pad: {
+    paddingHorizontal: 18,
+  },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 60,
+    paddingHorizontal: 18,
+    gap: 16,
   },
-
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 28,
+    gap: 10,
   },
-
-  eyebrow: {
-    color: "#07869B",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.4,
+  flex: {
+    flex: 1,
   },
-
-  title: {
-    color: "#17313C",
-    fontSize: 29,
-    fontWeight: "900",
-    marginTop: 5,
+  mt4: {
+    marginTop: 4,
   },
-
-  subtitle: {
-    color: "#84969E",
-    fontSize: 12,
-    marginTop: 5,
-  },
-
-  logoutButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  center: {
-    paddingVertical: 90,
-    alignItems: "center",
-  },
-
-  helperText: {
-    color: "#81939C",
-    fontSize: 12,
-    marginTop: 12,
-    textAlign: "center",
-  },
-
-  sectionTitle: {
-    color: "#17313C",
-    fontSize: 17,
-    fontWeight: "900",
-    marginBottom: 14,
-  },
-
-  statsGrid: {
+  metrics: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-
-  statCard: {
-    width: "48%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    padding: 18,
-    minHeight: 130,
-  },
-
-  statValue: {
-    color: "#17313C",
-    fontSize: 27,
-    fontWeight: "900",
-    marginTop: 12,
-  },
-
-  statLabel: {
-    color: "#81939C",
-    fontSize: 11,
-    marginTop: 5,
-  },
-
-  revenueCard: {
-    backgroundColor: "#07869B",
-    borderRadius: 22,
-    padding: 22,
-    marginTop: 18,
-    marginBottom: 30,
-  },
-
-  revenueTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  revenueLabel: {
-    color: "#DDF5F8",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  revenueAmount: {
-    color: "#FFFFFF",
-    fontSize: 27,
-    fontWeight: "900",
-    marginTop: 13,
-  },
-
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  sectionCount: {
-    color: "#81939C",
-    fontSize: 12,
-    fontWeight: "800",
-    marginBottom: 14,
-  },
-
-  bookingCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    padding: 16,
-    marginBottom: 12,
-  },
-
-  bookingTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  bookingCode: {
-    color: "#17313C",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-
-  statusBadge: {
-    backgroundColor: "#E6F7F9",
-    borderRadius: 10,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-  },
-
-  statusText: {
-    color: "#07869B",
-    fontSize: 9,
-    fontWeight: "900",
-  },
-
-  bookingName: {
-    color: "#617780",
-    fontSize: 12,
-    marginTop: 12,
-  },
-
-  bookingAmount: {
-    color: "#17313C",
-    fontSize: 14,
-    fontWeight: "800",
+    gap: 10,
     marginTop: 8,
   },
-
-  emptyCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#E3EAED",
-    padding: 28,
+  metric: {
+    flex: 1,
+  },
+  section: {
+    gap: 10,
+  },
+  sectionHead: {
+    flexDirection: "row",
     alignItems: "center",
+    minHeight: 44,
   },
-
-  errorText: {
-    color: "#D14343",
-    textAlign: "center",
-    marginTop: 12,
+  stats: {
+    flexDirection: "row",
+    gap: 10,
   },
-
-  retryText: {
-    color: "#07869B",
-    fontWeight: "900",
-    marginTop: 14,
+  stat: {
+    flex: 1,
   },
-
-  notificationButton: {
-  width: 46,
-  height: 46,
-  borderRadius: 15,
-  backgroundColor: "#FFFFFF",
-  borderWidth: 1,
-  borderColor: "#E3EAED",
-  justifyContent: "center",
-  alignItems: "center",
-  marginRight: 10,
-},
-
-notificationDot: {
-  position: "absolute",
-  top: 9,
-  right: 10,
-  height: 9,
-  width: 9,
-  borderRadius: 5,
-  backgroundColor: "#D14343",
-  borderWidth: 1.5,
-  borderColor: "#FFFFFF",
-},
+  linkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  linkIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
