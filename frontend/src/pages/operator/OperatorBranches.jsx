@@ -306,34 +306,24 @@ export default function OperatorBranches() {
     }
   };
 
-  const toggleBranchStatus =
-    async (branch) => {
-      try {
-        await operatorService.updateBranch(
-          branch.id,
-          {
-            isActive:
-              !branch.isActive,
-          }
-        );
-
-        await loadBranches();
-      } catch (err) {
-        setError(
-          err.response?.data?.message ||
-            "Failed to update branch"
-        );
+  
+const toggleBranchStatus = async (branch) => {
+  try {
+    await operatorService.updateBranch(
+      branch.id,
+      {
+        isActive: !branch.isActive,
       }
+    );
 
-          {showTransfer && (
-        <OperatorBranchTransfer
-          onClose={() => {
-            setShowTransfer(false);
-            loadBranches();
-          }}
-        />
-      )}
-    };
+    await loadBranches();
+  } catch (err) {
+    setError(
+      err.response?.data?.message ||
+      "Failed to update branch"
+    );
+  }
+};
 
     const handlePointSubmit =
   async (e) => {
@@ -1069,8 +1059,20 @@ return (
               </table>
             )}
           </div>
+        
         </section>
       )}
+
+      {/* Requirement 8.3 - Branch Transfer Modal */}
+      {showTransfer && (
+        <OperatorBranchTransfer
+          onClose={() => {
+            setShowTransfer(false);
+            loadBranches();
+          }}
+        />
+      )}
+
     </div>
   );
 }
