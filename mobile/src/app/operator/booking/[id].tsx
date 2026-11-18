@@ -21,6 +21,7 @@ import {
   pickupPlace,
   replyByText,
 } from "@/utils/operator-booking";
+import CounterVerificationCard from "@/components/operator/CounterVerificationCard";
 
 /**
  * One booking for the operator (plan phase 4): what to do next first, then
@@ -128,6 +129,11 @@ export default function OperatorBookingDetailScreen() {
         {header}
 
         <NextStep booking={booking} now={now} onRespond={setRespond} onReturn={() => setShowReturn(true)} />
+
+        <CounterVerificationCard
+          booking={booking}
+          onUpdated={() => load(true)}
+        />
 
         <Section title="Trip">
           <GlassCard>

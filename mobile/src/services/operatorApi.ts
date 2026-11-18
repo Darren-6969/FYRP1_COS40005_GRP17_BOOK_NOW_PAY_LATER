@@ -68,6 +68,14 @@ export type OperatorBooking = {
   pickedUpAt?: string | null;
   returnedAt?: string | null;
 
+  bookingDetails?: {
+  internationalPermitRequired?: boolean;
+  driver?: {
+    internationalPermitRequired?: boolean;
+  };
+  counterVerification?: CounterVerification | null;
+  } | null;
+
   // Late return charges
   lateReturnHours?: number;
   lateReturnCharge?: number;
@@ -192,6 +200,35 @@ export async function handoverOperatorBooking(
   );
 }
 
+
+export type CounterVerification = {
+  identityMatched: boolean;
+  licenceSighted: boolean;
+  permitSighted: boolean;
+  permitRequired: boolean;
+  verifiedById: number;
+  verifiedAt: string;
+};
+
+export async function verifyOperatorBookingAtCounter(
+  bookingId: number,
+  payload: {
+    identityMatched: boolean;
+    licenceSighted: boolean;
+    permitSighted: boolean;
+  }
+): Promise<{
+  message: string;
+  counterVerification: CounterVerification;
+}> {
+  return apiRequest(
+    `/operators/bookings/${bookingId}/counter-verification`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
 
 export type OperatorReturnSummary = {
   scheduledReturnAt: string;

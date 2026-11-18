@@ -41,6 +41,7 @@ import {
   handoverBooking,
   returnBooking,
   updateBookingPermitRequirement,
+  verifyBookingAtCounter,
 
   getOperatorPaymentVerifications,
   approvePayment,
@@ -180,6 +181,12 @@ router.get("/bookings", ...ownerOrStaffAccess, getOperatorBookings);
 router.get("/bookings/:id", ...ownerOrStaffAccess, getOperatorBookingById);
 router.patch("/bookings/:id/permit-requirement", ...ownerOrStaffAccess, updateBookingPermitRequirement);
 router.post("/bookings/bulk-action", ...ownerOrStaffAccess, bulkBookingAction);
+
+router.patch(
+  "/bookings/:id/counter-verification",
+  ...ownerOrStaffAccess,
+  verifyBookingAtCounter
+);
 
 router.patch(
   "/bookings/:id/handover",

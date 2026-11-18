@@ -26,6 +26,7 @@ import {
 } from "../../components/booking/carBookingParts";
 
 import OperatorPermitRequirement from "../../components/operator/OperatorPermitRequirement";
+import OperatorCounterVerification from "../../components/operator/OperatorCounterVerification";
 
 export default function OperatorBookingDetail() {
   const { id } = useParams();
@@ -317,6 +318,21 @@ export default function OperatorBookingDetail() {
   // =========================================================
   const canHandover =
     bookingStatus === "READY_FOR_PICKUP";
+
+  const counter = bookingDetails.counterVerification;
+
+  const permitRequired =
+    bookingDetails.internationalPermitRequired === true ||
+    (
+      bookingDetails.internationalPermitRequired == null &&
+      bookingDetails.driver?.internationalPermitRequired === true
+    );
+
+  const counterCompleted =
+    counter?.identityMatched === true &&
+    counter?.licenceSighted === true &&
+    counter?.permitRequired === permitRequired &&
+    (!permitRequired || counter?.permitSighted === true);
 
   const awaitingLicenceForHandover =
     bookingStatus === "PAID";
@@ -725,7 +741,7 @@ export default function OperatorBookingDetail() {
                 <button
                   type="button"
                   className="operator-link-btn"
-                  disabled={!!actionLoading}
+                  disabled={!!actionLoading || !counterCompleted}
                   onClick={() =>
                     setShowAlternative(true)
                   }
@@ -966,6 +982,11 @@ export default function OperatorBookingDetail() {
       {/* IDP Document Requirements */}
       <OperatorPermitRequirement
         key={booking.id}
+        booking={booking}
+        onUpdated={loadBooking}
+      />
+
+      <OperatorCounterVerification
         booking={booking}
         onUpdated={loadBooking}
       />

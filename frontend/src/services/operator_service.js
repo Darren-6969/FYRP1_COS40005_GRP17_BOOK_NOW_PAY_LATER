@@ -304,6 +304,13 @@ updateBranchPoint(
     );
   },
 
+  verifyBookingAtCounter(id, payload) {
+    return api.patch(
+      `/operators/bookings/${id}/counter-verification`,
+      payload
+    );
+  },
+
   returnBooking(
     id,
     payload = {}

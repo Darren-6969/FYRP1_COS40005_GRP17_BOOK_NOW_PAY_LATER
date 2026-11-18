@@ -2168,6 +2168,9 @@ export async function updateBookingPermitRequirement(
         const updatedDetails = {
           ...details,
           internationalPermitRequired: required,
+          ...(previousRequired !== required
+            ? { counterVerification: null }
+            : {}),
         };
 
         await tx.booking.update({
@@ -2241,6 +2244,167 @@ export async function updateBookingPermitRequirement(
       message: "Document requirement updated.",
       internationalPermitRequired: result.required,
       booking: mapBooking(refreshed),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+
+/**
+ * Requirement 7: Physical counter verification.
+ * Records the staff member, time and checks performed.
+ */
+export async function verifyBookingAtCounter(req, res, next) {
+  try {
+    const {
+      identityMatched,
+      licenceSighted,
+      permitSighted,
+    } = req.body ?? {};
+
+    if (
+      identityMatched !== true ||
+      licenceSighted !== true ||
+      typeof permitSighted !== "boolean"
+    ) {
+      return res.status(400).json({
+        message:
+          "Confirm the driver's identity and physical driving licence, and provide the IDP check.",
+      });
+    }
+
+    const booking = await findOperatorBooking(
+      req,
+      req.params.id
+    );
+
+    if (!booking) {
+      return res.status(404).json({
+        message: "Booking not found.",
+      });
+    }
+
+    const result = await prisma.$transaction(
+      async (tx) => {
+        // Use the same booking lock as the Handover API.
+        await tx.$queryRaw`
+          SELECT id FROM "Booking"
+          WHERE id = ${booking.id}
+          FOR UPDATE
+        `;
+
+        const current = await tx.booking.findFirst({
+          where: {
+            id: booking.id,
+            ...bookingWhere(req),
+          },
+          include: {
+            payment: true,
+          },
+        });
+
+        if (!current) {
+          const error = new Error("Booking not found.");
+          error.statusCode = 404;
+          throw error;
+        }
+
+        if (
+          current.serviceType !== "CAR_RENTAL" ||
+          current.status !== "READY_FOR_PICKUP" ||
+          current.payment?.status !== "PAID"
+        ) {
+          const error = new Error(
+            "Counter verification is available only for fully paid car rentals ready for pickup."
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+
+        const licenceValid = await isLicenceSatisfied(
+          current,
+          tx
+        );
+
+        const permitValid = await isPermitSatisfied(
+          current,
+          tx
+        );
+
+        if (!licenceValid || !permitValid) {
+          const error = new Error(
+            "Online driving document verification is incomplete."
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+
+        const details =
+          current.bookingDetails &&
+          typeof current.bookingDetails === "object" &&
+          !Array.isArray(current.bookingDetails)
+            ? current.bookingDetails
+            : {};
+
+        const permitRequired =
+          details.internationalPermitRequired === true ||
+          (
+            details.internationalPermitRequired == null &&
+            details.driver?.internationalPermitRequired === true
+          );
+
+        if (permitRequired && !permitSighted) {
+          const error = new Error(
+            "The physical International Driving Permit must be inspected."
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+
+        const counterVerification = {
+          identityMatched: true,
+          licenceSighted: true,
+          permitSighted: permitRequired,
+          permitRequired,
+          verifiedById: req.user.id,
+          verifiedAt: new Date().toISOString(),
+        };
+
+        await tx.booking.update({
+          where: { id: current.id },
+          data: {
+            bookingDetails: {
+              ...details,
+              counterVerification,
+            },
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            userId: req.user.id,
+            action: "BOOKING_COUNTER_VERIFIED",
+            entityType: "Booking",
+            entityId: String(current.id),
+            details: {
+              counterVerification,
+              bookingCode: current.bookingCode,
+            },
+          },
+        });
+
+        return counterVerification;
+      },
+      {
+        maxWait: 10000,
+        timeout: 20000,
+      }
+    );
+
+    return res.json({
+      message: "Counter verification completed.",
+      counterVerification: result,
     });
   } catch (error) {
     next(error);
@@ -2328,6 +2492,43 @@ const updatedBooking = await prisma.$transaction(
       );
       error.statusCode = 409;
       throw error;
+    }
+
+
+    // Requirement 7: Counter verification is mandatory
+    // for car rentals before physical handover.
+    if (current.serviceType === "CAR_RENTAL") {
+      const details =
+        current.bookingDetails &&
+        typeof current.bookingDetails === "object" &&
+        !Array.isArray(current.bookingDetails)
+          ? current.bookingDetails
+          : {};
+
+      const counter = details.counterVerification;
+
+      const permitRequired =
+        details.internationalPermitRequired === true ||
+        (
+          details.internationalPermitRequired == null &&
+          details.driver?.internationalPermitRequired === true
+        );
+
+      const counterComplete =
+        counter?.identityMatched === true &&
+        counter?.licenceSighted === true &&
+        Boolean(counter?.verifiedById) &&
+        Boolean(counter?.verifiedAt) &&
+        counter?.permitRequired === permitRequired &&
+        (!permitRequired || counter?.permitSighted === true);
+
+      if (!counterComplete) {
+        const error = new Error(
+          "Complete physical counter verification before vehicle handover."
+        );
+        error.statusCode = 409;
+        throw error;
+      }
     }
 
     // All conditions satisfied.
