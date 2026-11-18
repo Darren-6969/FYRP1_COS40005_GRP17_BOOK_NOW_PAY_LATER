@@ -103,6 +103,12 @@ export default function OperatorLayout() {
     function getNotificationLink(item) {
   const text = `${item.title || ""} ${item.message || ""}`;
   const type = String(item.type || "").toUpperCase();
+  if (
+  type.includes("PERMIT") ||
+  text.toLowerCase().includes("international permit")
+  ) {
+    return "/operator/licence-verification";
+  }
 
   // Chat requests (Step 9)
   if (type === "SUPPORT") {

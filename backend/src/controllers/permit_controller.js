@@ -4,6 +4,10 @@ import { validateSecureDocument } from "../utils/secure_upload.js";
 import {
   promoteToReadyForPickup,
 } from "../services/booking_status_service.js";
+import {
+  createInAppNotification,
+  notifyOperatorUsersByBooking,
+} from "../services/notification_email_service.js";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -256,6 +260,43 @@ export async function uploadPermit(req, res, next) {
       },
     });
 
+
+    // Notify the operator when an IDP is submitted.
+    // The notification is stored in the database
+    // and also emitted through Socket.IO.
+    try {
+      const notificationBooking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        select: {
+          id: true,
+          bookingCode: true,
+          operatorId: true,
+        },
+      });
+
+      if (notificationBooking) {
+        await notifyOperatorUsersByBooking({
+          booking: notificationBooking,
+          title: "International Permit awaiting review",
+          message:
+            `${req.user.name || "A customer"} submitted an ` +
+            `International Driving Permit for booking ` +
+            `${notificationBooking.bookingCode || notificationBooking.id}. ` +
+            `Please review the document.`,
+          type: "PERMIT_REVIEW_REQUIRED",
+          notifyMaster: false,
+        });
+      }
+    } catch (notificationError) {
+      // Notification failure should not make a
+      // successfully uploaded document appear failed.
+      console.error(
+        "[Permit] Operator notification failed:",
+        notificationError
+      );
+    }
+
+
     return res.status(201).json({
       message: "International permit submitted for review.",
       document: safeDocument(document),
@@ -309,6 +350,32 @@ export async function getPermitQueue(req, res, next) {
         },
         take: 100,
       });
+
+
+    // Inform the customer of the review decision.
+    try {
+      await createInAppNotification({
+        userId: document.customerId,
+        title:
+          decision === "APPROVED"
+            ? "International Permit approved"
+            : "International Permit re-upload required",
+        message:
+          decision === "APPROVED"
+            ? "Your International Driving Permit has been approved."
+            : `Your International Driving Permit needs to be ` +
+              `re-uploaded. Reason: ${reason.replaceAll("_", " ")}.`,
+        type:
+          decision === "APPROVED"
+            ? "PERMIT_APPROVED"
+            : "PERMIT_REUPLOAD_REQUIRED",
+      });
+    } catch (notificationError) {
+      console.error(
+        "[Permit] Customer notification failed:",
+        notificationError
+      );
+    }
 
     return res.json({ documents });
   } catch (error) {

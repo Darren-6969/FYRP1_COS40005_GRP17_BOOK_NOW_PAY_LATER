@@ -885,9 +885,151 @@ export async function reviewOperatorLicence(
 }
 
 
+/**
+ * Operator International Permit Verification
+ */
 
+export type OperatorPermitDocument = {
+  id: number;
+  customerId: number;
+  bookingId: number | null;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: string;
+  submittedAt: string;
+  permitExpiryDate: string | null;
+  customer?: {
+    id: number;
+    name: string;
+    email?: string | null;
+  } | null;
+  booking?: {
+    id: number;
+    bookingCode: string;
+  } | null;
+};
 
+export type OperatorPermitQueue = {
+  documents: OperatorPermitDocument[];
+};
 
+export type PermitRejectionReason =
+  | "EXPIRED"
+  | "UNREADABLE"
+  | "NOT_A_PERMIT"
+  | "DETAILS_MISMATCH";
+
+export async function getOperatorPermitQueue():
+  Promise<OperatorPermitQueue> {
+  return apiRequest(
+    "/licence-verification/permit/queue",
+    { method: "GET" }
+  );
+}
+
+export async function downloadOperatorPermitDocument(
+  documentId: number
+): Promise<{
+  file: File;
+  mimeType: string;
+}> {
+  if (!Number.isInteger(documentId) || documentId <= 0) {
+    throw new Error("Invalid permit document ID.");
+  }
+
+  const response = await authorizedFetch(
+    `/licence-verification/permit/queue/${documentId}/document`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/pdf, image/png, image/jpeg",
+      },
+    },
+    {
+      fetcher: expoFetch,
+      timeoutMs: UPLOAD_TIMEOUT_MS,
+    }
+  );
+
+  if (!response.ok) {
+    throw await errorFromResponse(
+      response,
+      `Failed to download permit (${response.status}).`
+    );
+  }
+
+  const mimeType = (
+    response.headers.get("Content-Type") || ""
+  )
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+
+  const extensions: Record<string, string> = {
+    "application/pdf": "pdf",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+  };
+
+  const extension = extensions[mimeType];
+
+  if (!extension) {
+    throw new Error("Unsupported permit document format.");
+  }
+
+  const bytes = await response.bytes();
+
+  if (
+    bytes.length === 0 ||
+    bytes.length > 5 * 1024 * 1024
+  ) {
+    throw new Error("Invalid permit document size.");
+  }
+
+  const file = new File(
+    Paths.cache,
+    `permit-review-${documentId}-${Date.now()}.${extension}`
+  );
+
+  await file.write(bytes);
+
+  return {
+    file,
+    mimeType,
+  };
+}
+
+export async function reviewOperatorPermit(
+  documentId: number,
+  decision: "APPROVED" | "REJECTED",
+  reason?: PermitRejectionReason
+): Promise<{
+  message: string;
+  document: {
+    id: number;
+    status: string;
+  };
+}> {
+  if (!Number.isInteger(documentId) || documentId <= 0) {
+    throw new Error("Invalid permit document ID.");
+  }
+
+  if (decision === "REJECTED" && !reason) {
+    throw new Error("Please select a rejection reason.");
+  }
+
+  return apiRequest(
+    `/licence-verification/permit/queue/${documentId}/review`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        decision,
+        ...(decision === "REJECTED" ? { reason } : {}),
+      }),
+    }
+  );
+}
 
 // ---- F6: suggest another car, mark a no-show --------------------------------
 // Routes: backend/src/routes/operator_routes.js. Every price is the server's.

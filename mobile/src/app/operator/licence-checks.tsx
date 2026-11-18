@@ -151,6 +151,31 @@ export default function OperatorLicenceChecksScreen() {
           {queue.oldestSubmittedAt ? ` · oldest sent ${formatMYT(queue.oldestSubmittedAt, "dayDateTime")}` : ""}
         </AppText>
       ) : null}
+
+
+      <GlassCard>
+        <View style={{ gap: 10 }}>
+          <AppText variant="bodyStrong">
+            International Driving Permit
+          </AppText>
+
+          <AppText variant="caption">
+            Review and verify IDP documents uploaded
+            by customers for car rental bookings.
+          </AppText>
+
+          <Button
+            label="International Permit Checks"
+            variant="line"
+            size="sm"
+            icon="document-text-outline"
+            onPress={() =>
+              router.push("/operator/permit-checks" as Href)
+            }
+          />
+        </View>
+      </GlassCard>
+
     </View>
   );
 
