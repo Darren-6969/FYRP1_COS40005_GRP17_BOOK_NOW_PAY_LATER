@@ -680,9 +680,26 @@ export async function updateDailyStockAllocation(
               blockedQuantity: 0,
               isBlocked: false,
             },
+            
             update: {
               quantity: nextQuantity,
+
+              // Recalculate full-block status if this
+              // allocation contains servicing vehicles.
+              // Preserve independent full-day blocks
+              // when there is no servicing quantity.
+              isBlocked:
+                Number(
+                  allocationMap.get(date)?.blockedQuantity ?? 0
+                ) > 0
+                  ? Number(
+                      allocationMap.get(date).blockedQuantity
+                    ) >= (resetToDefault
+                      ? defaultQuantity
+                      : nextQuantity)
+                  : allocationMap.get(date)?.isBlocked ?? false,
             },
+
           });
         }
 

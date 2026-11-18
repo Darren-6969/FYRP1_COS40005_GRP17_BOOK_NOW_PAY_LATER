@@ -387,11 +387,13 @@ const totalFleetQuantity =
     selectedListing?.quantity || 0
   );
 
-  const blockedAllocations =
-    allocations.filter(
-      (item) =>
-        item.isBlocked === true
-    );
+  
+const blockedAllocations = allocations.filter(
+  (item) =>
+    Number(item.blockedQuantity || 0) > 0 ||
+    item.isBlocked === true
+);
+
 
 
   // =========================
@@ -1013,10 +1015,18 @@ const totalFleetQuantity =
                                 "Vehicle servicing"}
                             </td>
 
-                            <td>
-                              <span className="operator-status danger">
-                                Blocked
-                              </span>
+                            <td>                            
+                            <span
+                              className={
+                                allocation.isBlocked
+                                  ? "operator-status danger"
+                                  : "operator-status warning"
+                              }
+                            >
+                              {allocation.isBlocked
+                                ? "Fully Blocked"
+                                : `${allocation.blockedQuantity} Vehicle(s) in Servicing`}
+                            </span>
                             </td>
 
                             <td>
