@@ -456,3 +456,84 @@ export async function uploadLicenceFile(input: {
   }
   return response.json();
 }
+
+
+//
+// International Driving Permit (IDP)
+//
+
+export type PermitStatus =
+  | "UNDER_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "REUPLOAD_REQUIRED";
+
+export type PermitDocument = {
+  id: number;
+  bookingId: number | null;
+  originalName: string;
+  status: PermitStatus;
+  rejectionReason: string | null;
+  permitExpiryDate: string | null;
+  submittedAt: string;
+  reviewedAt: string | null;
+};
+
+export type MyPermitResponse = {
+  document: PermitDocument | null;
+  canReupload: boolean;
+};
+
+// Get permit for a particular booking
+export async function getMyPermit(
+  bookingId: number | string
+): Promise<MyPermitResponse> {
+  return apiRequest(
+    `/licence-verification/permit/me?bookingId=${encodeURIComponent(String(bookingId))}`,
+    { method: "GET" }
+  );
+}
+
+// Upload IDP to the same backend used by the website
+export async function uploadPermitFile(input: {
+  bookingId: number | string;
+  uri: string;
+  permitExpiryDate: string;
+}): Promise<{
+  message: string;
+  document: PermitDocument;
+}> {
+  const formData = new FormData();
+
+  formData.append(
+    "permit",
+    new File(input.uri) as unknown as Blob
+  );
+
+  formData.append(
+    "permitExpiryDate",
+    input.permitExpiryDate
+  );
+
+  const response = await authorizedFetch(
+    `/licence-verification/permit/bookings/${input.bookingId}`,
+    {
+      method: "POST",
+      body: formData,
+    },
+    {
+      fetcher: expoFetch,
+      timeoutMs: UPLOAD_TIMEOUT_MS,
+    }
+  );
+
+  if (!response.ok) {
+    throw await errorFromResponse(
+      response,
+      `Permit upload failed (${response.status})`
+    );
+  }
+
+  return response.json();
+}
+

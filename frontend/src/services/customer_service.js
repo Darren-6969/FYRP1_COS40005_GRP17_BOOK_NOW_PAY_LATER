@@ -134,6 +134,34 @@ export const submitLicenceDocument = (file) => {
   });
 };
 
+
+//
+// International Driving Permit (IDP)
+//
+
+// Get the logged-in customer's permit
+export const getMyPermit = (bookingId) =>
+  api.get("/licence-verification/permit/me", {
+    params: bookingId ? { bookingId } : {},
+  });
+
+// Upload a permit for a booking
+export const submitPermitDocument = (
+  bookingId,
+  file,
+  permitExpiryDate
+) => {
+  const formData = new FormData();
+
+  formData.append("permit", file);
+  formData.append("permitExpiryDate", permitExpiryDate);
+
+  return api.post(
+    `/licence-verification/permit/bookings/${bookingId}`,
+    formData
+  );
+};
+
 // BNPLB-108: saved cars live on the customer's account (no dates).
 export const getSavedListings = () => api.get("/customer/saved");
 export const getSavedListingIds = () => api.get("/customer/saved/ids");

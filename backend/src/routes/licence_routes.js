@@ -21,6 +21,14 @@ import {
   allowRoles,
 } from "../middlewares/rbac_middleware.js";
 
+import {
+  getMyPermit,
+  uploadPermit,
+  getPermitQueue,
+  downloadPermit,
+  reviewPermit,
+} from "../controllers/permit_controller.js";
+
 const router = express.Router();
 
 /*
@@ -183,5 +191,57 @@ router.delete(
   ...masterOnly,
   deletePeakDate
 );
+
+
+/*
+ * ==========================================
+ * INTERNATIONAL DRIVING PERMIT
+ * ==========================================
+ */
+
+// Customer: view own permit
+router.get(
+  "/permit/me",
+  ...customerOnly,
+  getMyPermit
+);
+
+// Customer: upload permit
+router.post(
+  "/permit/me",
+  ...customerOnly,
+  licenceUpload.single("permit"),
+  uploadPermit
+);
+
+// Customer: upload permit for a booking
+router.post(
+  "/permit/bookings/:bookingId",
+  ...customerOnly,
+  licenceUpload.single("permit"),
+  uploadPermit
+);
+
+// Operator: pending permit reviews
+router.get(
+  "/permit/queue",
+  ...licenceReviewer,
+  getPermitQueue
+);
+
+// Operator: view original document
+router.get(
+  "/permit/queue/:id/document",
+  ...licenceReviewer,
+  downloadPermit
+);
+
+// Operator: approve / reject
+router.patch(
+  "/permit/queue/:id/review",
+  ...licenceReviewer,
+  reviewPermit
+);
+
 
 export default router;

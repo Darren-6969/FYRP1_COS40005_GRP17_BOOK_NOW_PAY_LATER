@@ -25,6 +25,8 @@ import {
   timeLeft,
 } from "../../components/booking/carBookingParts";
 
+import OperatorPermitRequirement from "../../components/operator/OperatorPermitRequirement";
+
 export default function OperatorBookingDetail() {
   const { id } = useParams();
 
@@ -961,6 +963,12 @@ export default function OperatorBookingDetail() {
         )}
       </div>
 
+      {/* IDP Document Requirements */}
+      <OperatorPermitRequirement
+        key={booking.id}
+        booking={booking}
+        onUpdated={loadBooking}
+      />
 
       {/* =========================
           Add-ons

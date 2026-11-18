@@ -378,6 +378,51 @@ updateBranchPoint(
     );
   },
 
+
+  /**
+   * International Driving Permit Verification
+   */
+
+  getPermitQueue() {
+    return api.get(
+      "/licence-verification/permit/queue"
+    );
+  },
+
+  downloadPermitDocument(id) {
+    return api.get(
+      `/licence-verification/permit/queue/${id}/document`,
+      {
+        responseType: "blob",
+      }
+    );
+  },
+
+  reviewPermitDocument(id, decision, reason = "") {
+    return api.patch(
+      `/licence-verification/permit/queue/${id}/review`,
+      {
+        decision,
+        reason,
+      }
+    );
+  },
+
+
+  updateBookingPermitRequirement(
+    bookingId,
+    required,
+    reason
+  ) {
+    return api.patch(
+      `/operators/bookings/${bookingId}/permit-requirement`,
+      {
+        required,
+        reason,
+      }
+    );
+  },
+
   /**
    * Payments
    */

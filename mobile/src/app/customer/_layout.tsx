@@ -130,6 +130,13 @@ export default function CustomerLayout() {
       />
 
       <Stack.Screen
+        name="permit"
+        options={{
+          animation: "slide_from_right",
+        }}
+      />
+
+      <Stack.Screen
         name="account/edit-profile"
         options={{
           animation: "slide_from_right",

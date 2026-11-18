@@ -40,6 +40,7 @@ import {
 
   handoverBooking,
   returnBooking,
+  updateBookingPermitRequirement,
 
   getOperatorPaymentVerifications,
   approvePayment,
@@ -177,6 +178,7 @@ router.post("/subscription-upgrade-request", ...ownerOnlyAccess, requestSubscrip
  */
 router.get("/bookings", ...ownerOrStaffAccess, getOperatorBookings);
 router.get("/bookings/:id", ...ownerOrStaffAccess, getOperatorBookingById);
+router.patch("/bookings/:id/permit-requirement", ...ownerOrStaffAccess, updateBookingPermitRequirement);
 router.post("/bookings/bulk-action", ...ownerOrStaffAccess, bulkBookingAction);
 
 router.patch(

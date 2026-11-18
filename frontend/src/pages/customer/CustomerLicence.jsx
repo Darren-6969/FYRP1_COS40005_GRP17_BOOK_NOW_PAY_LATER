@@ -15,6 +15,8 @@ import {
   submitLicenceDocument,
 } from "../../services/customer_service";
 
+import CustomerPermitPanel from "../../components/customer/CustomerPermitPanel";
+
 export default function CustomerLicence() {
   const [document, setDocument] =
     useState(null);
@@ -322,6 +324,10 @@ export default function CustomerLicence() {
           pickup.
         </div>
       </section>
+
+      {/* International Driving Permit */}
+      <CustomerPermitPanel />
+      
     </div>
   );
 }

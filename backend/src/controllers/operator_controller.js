@@ -43,6 +43,8 @@ import { createAuditLog as writeAuditLog } from "../services/log_service.js";
 import {
   transitionBookingStatus,
   promoteToReadyForPickup,
+  isLicenceSatisfied,
+  isPermitSatisfied,
   TERMINAL_BOOKING_STATUSES,
 } from "../services/booking_status_service.js";
 import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_service.js";
@@ -2071,8 +2073,33 @@ export async function bulkBookingAction(req, res, next) {
   }
 }
 
-export async function handoverBooking(req, res, next) {
+
+/**
+ * International Driving Permit is required.
+ */
+export async function updateBookingPermitRequirement(
+  req,
+  res,
+  next
+) {
   try {
+    const required = req.body?.required;
+    const reason = String(req.body?.reason ?? "").trim();
+
+    if (typeof required !== "boolean") {
+      return res.status(400).json({
+        message: "required must be true or false.",
+      });
+    }
+
+    if (!reason || reason.length > 300) {
+      return res.status(400).json({
+        message:
+          "A reason between 1 and 300 characters is required.",
+      });
+    }
+
+    // Enforce the existing operator/company scope.
     const booking = await findOperatorBooking(
       req,
       req.params.id
@@ -2080,50 +2107,248 @@ export async function handoverBooking(req, res, next) {
 
     if (!booking) {
       return res.status(404).json({
-        message: "Booking not found",
+        message: "Booking not found.",
       });
     }
 
-    /*
-     * Handover is only allowed after full payment.
-     */
-    const isPaid =
-      booking.status === "PAID" ||
-      booking.payment?.status === "PAID";
-
-    if (!isPaid) {
+    if (booking.serviceType !== "CAR_RENTAL") {
       return res.status(400).json({
         message:
-          "The booking must be fully paid before handover.",
+          "IDP requirements apply only to car rental bookings.",
       });
     }
 
-    if (booking.status === "IN_PROGRESS") {
-      return res.status(400).json({
-        message:
-          "This booking has already been handed over.",
-      });
-    }
+    const editableStatuses = [
+      "PENDING",
+      "ACCEPTED",
+      "PENDING_PAYMENT",
+      "CONFIRMED",
+      "OVERDUE",
+      "ALTERNATIVE_SUGGESTED",
+      "PAID",
+      "READY_FOR_PICKUP",
+    ];
 
-    if (booking.status !== "READY_FOR_PICKUP") {
-      return res.status(400).json({
-        message: "Handover is available only after payment and licence verification.",
-      });
-    }
+    const result = await prisma.$transaction(
+      async (tx) => {
+        // Serialize requirement updates for this booking.
+        await tx.$queryRaw`
+          SELECT id FROM "Booking"
+          WHERE id = ${booking.id}
+          FOR UPDATE
+        `;
 
-    const updatedBooking = await prisma.$transaction(async (tx) => {
-      await transitionBookingStatus({
-        bookingId: booking.id,
-        newStatus: "IN_PROGRESS",
-        actorId: req.user.id,
-        remark: "Vehicle handed over to customer.",
-        database: tx,
-      });
-      return tx.booking.findUnique({
-        where: { id: booking.id },
-        include: includeBookingRelations(),
-      });
+        const current = await tx.booking.findUnique({
+          where: { id: booking.id },
+        });
+
+        if (
+          !current ||
+          !editableStatuses.includes(current.status)
+        ) {
+          const error = new Error(
+            "Document requirements can no longer be changed for this booking."
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+
+        const details =
+          current.bookingDetails &&
+          typeof current.bookingDetails === "object" &&
+          !Array.isArray(current.bookingDetails)
+            ? current.bookingDetails
+            : {};
+
+        const previousRequired =
+          details.internationalPermitRequired === true;
+
+        // Preserve all existing contact, driver and
+        // agreement details.
+        const updatedDetails = {
+          ...details,
+          internationalPermitRequired: required,
+        };
+
+        await tx.booking.update({
+          where: { id: current.id },
+          data: {
+            bookingDetails: updatedDetails,
+          },
+        });
+
+        const updatedBooking = {
+          ...current,
+          bookingDetails: updatedDetails,
+        };
+
+        // A booking previously ready for pickup must
+        // return to PAID if a newly required permit
+        // has not been approved.
+        if (
+          current.status === "READY_FOR_PICKUP" &&
+          !(await isPermitSatisfied(updatedBooking, tx))
+        ) {
+          await transitionBookingStatus({
+            bookingId: current.id,
+            newStatus: "PAID",
+            actorId: req.user.id,
+            remark:
+              "International permit verification required before handover.",
+            database: tx,
+          });
+        }
+
+        // Re-evaluate readiness when requirements
+        // change on a fully paid booking.
+        if (current.status === "PAID") {
+          await promoteToReadyForPickup({
+            bookingId: current.id,
+            actorId: req.user.id,
+            remark:
+              "All required driving documents verified.",
+            database: tx,
+          });
+        }
+
+        await tx.auditLog.create({
+          data: {
+            userId: req.user.id,
+            action: "BOOKING_IDP_REQUIREMENT_UPDATED",
+            entityType: "Booking",
+            entityId: String(current.id),
+            details: {
+              previousRequired,
+              required,
+              reason,
+            },
+          },
+        });
+
+        return {
+          required,
+          previousRequired,
+        };
+      }
+    );
+
+    const refreshed = await findOperatorBooking(
+      req,
+      booking.id
+    );
+
+    return res.json({
+      message: "Document requirement updated.",
+      internationalPermitRequired: result.required,
+      booking: mapBooking(refreshed),
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handoverBooking(req, res, next) {
+  try {
+    
+const booking = await findOperatorBooking(
+  req,
+  req.params.id
+);
+
+if (!booking) {
+  return res.status(404).json({
+    message: "Booking not found.",
+  });
+}
+
+// Check all handover conditions inside one transaction.
+const updatedBooking = await prisma.$transaction(
+  async (tx) => {
+    // Lock the booking against simultaneous
+    // IDP requirement changes.
+    await tx.$queryRaw`
+      SELECT id FROM "Booking"
+      WHERE id = ${booking.id}
+      FOR UPDATE
+    `;
+
+    // Reload current data inside the transaction.
+    const current = await tx.booking.findFirst({
+      where: {
+        id: booking.id,
+        ...bookingWhere(req),
+      },
+      include: includeBookingRelations(),
+    });
+
+    if (!current) {
+      const error = new Error("Booking not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (current.status === "IN_PROGRESS") {
+      const error = new Error(
+        "This booking has already been handed over."
+      );
+      error.statusCode = 409;
+      throw error;
+    }
+
+    // Verify actual payment record.
+    if (current.payment?.status !== "PAID") {
+      const error = new Error(
+        "Full payment is required before handover."
+      );
+      error.statusCode = 409;
+      throw error;
+    }
+
+    if (current.status !== "READY_FOR_PICKUP") {
+      const error = new Error(
+        "Booking is not ready for vehicle pickup."
+      );
+      error.statusCode = 409;
+      throw error;
+    }
+
+    // Driving licence verification.
+    if (!(await isLicenceSatisfied(current, tx))) {
+      const error = new Error(
+        "Driving licence verification is required."
+      );
+      error.statusCode = 409;
+      throw error;
+    }
+
+    // International Driving Permit verification.
+    if (!(await isPermitSatisfied(current, tx))) {
+      const error = new Error(
+        "International Driving Permit verification is required before handover."
+      );
+      error.statusCode = 409;
+      throw error;
+    }
+
+    // All conditions satisfied.
+    await transitionBookingStatus({
+      bookingId: current.id,
+      newStatus: "IN_PROGRESS",
+      actorId: req.user.id,
+      remark: "Vehicle handed over to customer.",
+      database: tx,
+    });
+
+    return tx.booking.findUnique({
+      where: { id: current.id },
+      include: includeBookingRelations(),
+    });
+  },
+  {
+    maxWait: 10000,
+    timeout: 20000,
+  }
+);
 
     await createAuditLog({
       req,

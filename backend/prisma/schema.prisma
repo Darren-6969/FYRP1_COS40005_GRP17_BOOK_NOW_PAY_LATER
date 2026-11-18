@@ -265,15 +265,15 @@ model User {
   operatorAccessLevel OperatorAccessLevel?
   operatorUserStatus  OperatorUserStatus   @default(ACTIVE)
 
-  provisionedVia String? // "HOST" for auto-provisioned customers
-  customerStatus String    @default("ACTIVE") // "RESTRICTED" until OTP step-up
-  otpCodeHash    String?
-  otpExpiresAt   DateTime?
-  otpAttempts    Int       @default(0)
+  provisionedVia          String? // "HOST" for auto-provisioned customers
+  customerStatus          String    @default("ACTIVE") // "RESTRICTED" until OTP step-up
+  otpCodeHash             String?
+  otpExpiresAt            DateTime?
+  otpAttempts             Int       @default(0)
   privacyPolicyAcceptedAt DateTime?
   privacyPolicyAcceptedIp String?
-  termsAcceptedAt DateTime?
-  termsAcceptedIp String?
+  termsAcceptedAt         DateTime?
+  termsAcceptedIp         String?
 
   operatorId Int?
   operator   Operator? @relation(fields: [operatorId], references: [id])
@@ -288,6 +288,8 @@ model User {
   reviewedApplications     OperatorApplication[]       @relation("ApplicationReviewerUser")
   licenceDocuments         CustomerLicenceDocument[]
   reviewedLicenceDocuments CustomerLicenceDocument[]   @relation("LicenceReviewer")
+  permitDocuments          CustomerPermitDocument[]    @relation("CustomerPermitOwner")
+  reviewedPermitDocuments  CustomerPermitDocument[]    @relation("CustomerPermitReviewer")
   creditProfile            CustomerCreditProfile?
   creditEventActor         CreditProfileEvent[]        @relation("CreditEventActor")
   creditAppeals            CreditAppeal[]              @relation("CreditAppealCustomer")
@@ -401,7 +403,7 @@ model Operator {
   subscriptionStartedAt DateTime?
   subscriptionEndsAt    DateTime?
 
-  subscriptionStatus           SubscriptionStatus @default(ACTIVE)
+  subscriptionStatus           SubscriptionStatus           @default(ACTIVE)
   subscriptionPaidUntil        DateTime?
   subscriptionSuspendedAt      DateTime?
   subscriptionSuspensionReason String?
@@ -410,7 +412,7 @@ model Operator {
   // FR-SUB-004: any saved operator action refreshes lastActivityAt. After 90
   // days without one the operator is warned and a fixed 14-day grace period
   // starts (inactivityGraceStartedAt); any action ends it.
-  lastActivityAt           DateTime @default(now())
+  lastActivityAt           DateTime  @default(now())
   inactivityGraceStartedAt DateTime?
 
   // Seller page (FR-CUST-007). The slug gives the operator a short link to
@@ -610,6 +612,38 @@ model CustomerLicenceDocument {
   @@index([bookingId])
 }
 
+model CustomerPermitDocument {
+  id Int @id @default(autoincrement())
+
+  customerId Int
+  customer   User @relation("CustomerPermitOwner", fields: [customerId], references: [id], onDelete: Cascade)
+
+  bookingId Int?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  content      Bytes  @db.ByteA
+
+  status          LicenceVerificationStatus @default(UNDER_REVIEW)
+  rejectionReason String?                   @db.Text
+
+  submittedAt  DateTime  @default(now())
+  reviewedAt   DateTime?
+  reviewedById Int?
+  reviewedBy   User?     @relation("CustomerPermitReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  permitExpiryDate DateTime? @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([bookingId])
+  @@index([status])
+}
+
 model PlatformPeakDate {
   id        Int      @id @default(autoincrement())
   peakDate  DateTime @db.Date
@@ -764,8 +798,9 @@ model Booking {
   commissionLedgerEntries CommissionLedgerEntry[]
   paymentScheduleEntries  PaymentScheduleEntry[]
   licenceDocuments        CustomerLicenceDocument[]
+  permitDocuments         CustomerPermitDocument[]
   statusHistory           BookingStatusHistory[]
-  creditEvents            CreditProfileEvent[] @relation("CreditEventBooking")
+  creditEvents            CreditProfileEvent[]      @relation("CreditEventBooking")
   chatEscalations         ChatEscalation[]
   receipt                 Receipt?
   invoice                 Invoice?
@@ -1033,8 +1068,8 @@ model BNPLConfig {
   noShowWindowHours    Int     @default(24)
 
   // Operator booking action settings
-  bookingResponseDeadlineMinutes  Int     @default(120)
-  autoRejectInactiveBooking       Boolean @default(true)
+  bookingResponseDeadlineMinutes Int     @default(120)
+  autoRejectInactiveBooking      Boolean @default(true)
   // The reminder before an automatic rejection is
   // operatorReminderBeforeAutoRejectMinutes, under notification settings.
 
@@ -1311,10 +1346,10 @@ model Listing {
   images      ListingImage[]
   addons      ListingAddon[]
   allocations ListingAllocation[]
-  bookings    Booking[] @relation("BookingListing")
+  bookings    Booking[]           @relation("BookingListing")
 
-  alternativeBookings Booking[] @relation("BookingAlternativeListing")
-  savedBy             SavedListing[]
+  alternativeBookings     Booking[]          @relation("BookingAlternativeListing")
+  savedBy                 SavedListing[]
   chatConversationsInView ChatConversation[]
 
   createdAt DateTime @default(now())
@@ -1533,7 +1568,6 @@ model StripeWebhookEvent {
   @@index([status, nextAttemptAt, receivedAt])
 }
 
-
 // FR-ARCH-001: the PostgreSQL job queue. Work that must not block a request, or
 // must survive a restart, is written here and drained by a worker. A job whose
 // lease has expired is reclaimed, so a crashed worker strands nothing, and one
@@ -1549,7 +1583,7 @@ model JobQueue {
   id Int @id @default(autoincrement())
 
   jobType String
-  payload Json    @db.JsonB
+  payload Json   @db.JsonB
 
   status         JobStatus @default(PENDING)
   claimedAt      DateTime?

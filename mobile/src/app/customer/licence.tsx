@@ -266,6 +266,32 @@ export default function LicenceScreen() {
       >
         {header}
 
+        <GlassCard>
+  <View style={{ gap: 10 }}>
+    <AppText variant="headline">
+      International Driving Permit
+    </AppText>
+
+    <AppText variant="caption">
+      Travelling with an overseas driving licence?
+      You may need an International Driving Permit
+      for your car rental.
+    </AppText>
+
+    <Button
+      label="Manage International Permit"
+      variant="line"
+      icon="document-text-outline"
+      onPress={() =>
+        router.push({
+          pathname: "../customer/permit",
+          params: bookingId ? { bookingId } : {},
+        })
+      }
+    />
+  </View>
+</GlassCard>
+
         {!data || !view ? (
           <GlassCard>
             <SkeletonText lines={4} />

@@ -9,6 +9,8 @@ import {
   operatorService,
 } from "../../services/operator_service";
 
+import OperatorPermitReview from "../../components/operator/OperatorPermitReview";
+
 const REJECTION_REASONS = [
   ["EXPIRED", "Expired document"],
   ["UNREADABLE", "Unreadable image"],
@@ -477,6 +479,10 @@ export default function OperatorLicenceVerification() {
           </div>
         )}
       </section>
+
+       {/* International Driving Permit Verification */}
+      <OperatorPermitReview />
+      
     </div>
   );
 }

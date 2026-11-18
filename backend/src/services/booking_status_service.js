@@ -17,7 +17,7 @@ const TRANSITIONS = {
   PENDING_PAYMENT: ["CONFIRMED", "PAID", "REJECTED", "CANCELLED", "EXPIRED"],
   CONFIRMED: ["PAID", "CANCELLED", "EXPIRED", "NO_SHOW", "NO_SHOW_UNPAID"],
   PAID: ["READY_FOR_PICKUP", "IN_PROGRESS", "COMPLETED", "CANCELLED", "EXPIRED", "NO_SHOW", "NO_SHOW_UNPAID"],
-  READY_FOR_PICKUP: ["IN_PROGRESS", "CANCELLED", "NO_SHOW", "NO_SHOW_UNPAID"],
+  READY_FOR_PICKUP: ["PAID", "IN_PROGRESS", "CANCELLED", "NO_SHOW", "NO_SHOW_UNPAID"],
   IN_PROGRESS: ["COMPLETED", "NO_SHOW", "NO_SHOW_UNPAID"],
   // Overdue waits for the operator when automatic cancellation is off. V2.13
   // 3.5 keeps it so the operator can chase a late customer, so a late down
@@ -128,6 +128,85 @@ export async function isLicenceSatisfied(booking, database = prisma) {
   return Boolean(licence);
 }
 
+/**
+ * International Driving Permit requirement.
+ *
+ * Only explicitly flagged bookings require an IDP.
+ * Existing bookings remain unchanged.
+ */
+
+export function isInternationalPermitRequired(booking) {
+  if (booking.serviceType !== "CAR_RENTAL") {
+    return false;
+  }
+
+  const details = booking.bookingDetails || {};
+
+  // An explicit operator decision takes priority.
+  if (
+    typeof details.internationalPermitRequired === "boolean"
+  ) {
+    return details.internationalPermitRequired;
+  }
+
+  return (
+    details.driver?.internationalPermitRequired === true
+  );
+}
+
+
+/**
+ * Verify the latest IDP submitted for this booking.
+ */
+export async function isPermitSatisfied(
+  booking,
+  database = prisma
+) {
+  if (!isInternationalPermitRequired(booking)) {
+    return true;
+  }
+
+  const permit =
+    await database.customerPermitDocument.findFirst({
+      where: {
+        customerId: booking.customerId,
+        bookingId: booking.id,
+      },
+      orderBy: [
+        { submittedAt: "desc" },
+        { id: "desc" },
+      ],
+      select: {
+        status: true,
+        permitExpiryDate: true,
+      },
+    });
+
+  if (!permit || permit.status !== "APPROVED") {
+    return false;
+  }
+
+  if (!permit.permitExpiryDate) {
+    return false;
+  }
+
+  // Use the rental return date, or today if unavailable.
+  const requiredUntil = booking.returnDate
+    ? new Date(booking.returnDate)
+    : new Date();
+
+  const expiryDay = permit.permitExpiryDate
+    .toISOString()
+    .slice(0, 10);
+
+  const requiredDay = requiredUntil
+    .toISOString()
+    .slice(0, 10);
+
+  return expiryDay >= requiredDay;
+}
+
+
 // Moves a booking from PAID to READY_FOR_PICKUP when both conditions hold, and
 // does nothing otherwise. Every path that can complete either condition calls
 // it: the Stripe webhook, DuitNow payment approval and licence approval. The
@@ -146,11 +225,16 @@ export async function promoteToReadyForPickup({
       status: true,
       customerId: true,
       serviceType: true,
-      payment: { select: { status: true } },
+      bookingDetails: true,
+      returnDate: true,
+      payment: {
+        select: { status: true },
+      },
     },
   });
   if (!booking || booking.status !== "PAID" || booking.payment?.status !== "PAID") return false;
   if (!(await isLicenceSatisfied(booking, database))) return false;
+  if (!(await isPermitSatisfied(booking, database))) return false;
 
   await transitionBookingStatus({
     bookingId,
