@@ -7,6 +7,8 @@ import {
   operatorService,
 } from "../../services/operator_service";
 
+import OperatorBranchTransfer from "../../components/operator/OperatorBranchTransfer";
+
 const emptyForm = {
   name: "",
   address: "",
@@ -28,6 +30,9 @@ const emptyPointForm = {
 export default function OperatorBranches() {
   const [branches, setBranches] =
     useState([]);
+  
+  const [showTransfer, setShowTransfer] =
+    useState(false);
 
   const [form, setForm] =
     useState(emptyForm);
@@ -319,6 +324,15 @@ export default function OperatorBranches() {
             "Failed to update branch"
         );
       }
+
+          {showTransfer && (
+        <OperatorBranchTransfer
+          onClose={() => {
+            setShowTransfer(false);
+            loadBranches();
+          }}
+        />
+      )}
     };
 
     const handlePointSubmit =
@@ -479,23 +493,34 @@ export default function OperatorBranches() {
       selectedBranchId
   );
 
-  return (
-    <div className="operator-page">
+  
+return (
+  <div className="operator-page">
 
-      <section className="operator-page-head">
-        <div>
-          <p className="operator-eyebrow">
-            Catalogue Management
-          </p>
+    <section className="operator-page-head">
+      <div>
+        <p className="operator-eyebrow">
+          Catalogue Management
+        </p>
 
-          <h1>Branches</h1>
+        <h1>Branches</h1>
 
-          <p>
-            Manage pickup locations used
-            by your listings.
-          </p>
-        </div>
-      </section>
+        <p>
+          Manage pickup locations used
+          by your listings.
+        </p>
+      </div>
+
+      {/* Requirement 8.3 - Branch Transfer */}
+      <button
+        type="button"
+        className="operator-primary-btn"
+        onClick={() => setShowTransfer(true)}
+      >
+        Transfer Vehicles
+      </button>
+    </section>
+
 
       {error && (
         <div className="operator-alert danger">

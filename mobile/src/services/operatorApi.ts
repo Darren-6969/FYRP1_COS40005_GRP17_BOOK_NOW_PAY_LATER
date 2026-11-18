@@ -439,6 +439,66 @@ export async function getOperatorListings(
   );
 }
 
+
+export type DailyStockAllocationPayload = {
+  fromDate: string;
+  toDate: string;
+  quantity: number | null;
+};
+
+export type DailyStockAllocationResult = {
+  message: string;
+  listingId: number;
+  listingName: string;
+  defaultQuantity: number;
+  dailyQuantity: number | null;
+  resetToDefault: boolean;
+  fromDate: string;
+  toDate: string;
+  updatedDates: string[];
+};
+
+export async function updateOperatorDailyStock(
+  listingId: number,
+  payload: DailyStockAllocationPayload
+): Promise<DailyStockAllocationResult> {
+  return apiRequest(
+    `/operators/listings/${listingId}/daily-allocation`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+
+export type OperatorDailyAllocation = {
+  listingId: number;
+  date: string;
+  quantity: number | null;
+  blockedQuantity: number;
+  isBlocked: boolean;
+  note?: string | null;
+};
+
+export async function getOperatorDailyAllocations(
+  listingId: number,
+  fromDate: string,
+  toDate: string
+): Promise<{
+  allocations: OperatorDailyAllocation[];
+}> {
+  const params = new URLSearchParams({
+    from: fromDate,
+    to: toDate,
+  });
+
+  return apiRequest(
+    `/operators/listings/${listingId}/allocations?${params}`,
+    { method: "GET" }
+  );
+}
+
 export async function getOperatorListingById(
   listingId: number
 ): Promise<{ listing: OperatorListing }> {
@@ -501,6 +561,65 @@ export async function getOperatorBranches(): Promise<{
   return apiRequest("/operators/branches", {
     method: "GET",
   });
+}
+
+
+export type BranchStockTransferPayload = {
+  sourceListingId: number;
+  destinationListingId: number;
+  quantity: number;
+  reason: string;
+  operatorId?: number;
+};
+
+export type BranchStockTransfer = {
+  id: number;
+  operatorId: number;
+  sourceListingId: number;
+  destinationListingId: number;
+  sourceBranchId: number;
+  destinationBranchId: number;
+  sourceBranchName: string;
+  destinationBranchName: string;
+  vehicleName: string;
+  quantity: number;
+  beforeSourceQuantity: number;
+  afterSourceQuantity: number;
+  beforeDestinationQuantity: number;
+  afterDestinationQuantity: number;
+  reason: string;
+  transferredById: number;
+  transferredAt: string;
+};
+
+export async function transferOperatorBranchStock(
+  payload: BranchStockTransferPayload
+): Promise<{
+  message: string;
+  transfer: BranchStockTransfer;
+}> {
+  return apiRequest(
+    "/operators/branches/transfers",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function getOperatorBranchTransfers(
+  operatorId?: number
+): Promise<{
+  transfers: BranchStockTransfer[];
+}> {
+  const query = operatorId
+    ? `?operatorId=${operatorId}`
+    : "";
+
+  return apiRequest(
+    `/operators/branches/transfers${query}`,
+    { method: "GET" }
+  );
 }
 
 export type OperatorListingFormPayload = {

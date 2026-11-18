@@ -15,6 +15,11 @@ import {
   allowMasterOrOperatorAccess,
 } from "../middlewares/rbac_middleware.js";
 
+import {
+  transferBranchStock,
+  getBranchTransfers,
+} from "../controllers/branch_transfer_controller.js";
+
 const router = express.Router();
 
 const operatorBaseAccess = [
@@ -26,6 +31,18 @@ const ownerOrStaffAccess = [
   ...operatorBaseAccess,
   allowMasterOrOperatorAccess("OWNER", "STAFF"),
 ];
+
+router.get(
+  "/transfers",
+  ...ownerOrStaffAccess,
+  getBranchTransfers
+);
+
+router.post(
+  "/transfers",
+  ...ownerOrStaffAccess,
+  transferBranchStock
+);
 
 router.get(
   "/",

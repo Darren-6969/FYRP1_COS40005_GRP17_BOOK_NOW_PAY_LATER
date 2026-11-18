@@ -60,18 +60,50 @@ export default function OperatorBranchesScreen() {
     await load(true);
   };
 
-  const header = (
-    <View style={styles.header}>
-      <View style={styles.topRow}>
-        <IconButton icon="chevron-back" label="Back" onPress={() => router.back()} />
-        <AppText variant="largeTitle" accessibilityRole="header" style={styles.flex} numberOfLines={1}>
-          Branches
-        </AppText>
-        <IconButton icon="add" label="Add a branch" onPress={() => router.push("/operator/branch/form" as Href)} />
-      </View>
-      <AppText variant="caption">Where customers collect and return your cars. Each branch has its own pick-up and drop-off points.</AppText>
+  
+const header = (
+  <View style={styles.header}>
+    <View style={styles.topRow}>
+      <IconButton
+        icon="chevron-back"
+        label="Back"
+        onPress={() => router.back()}
+      />
+
+      <AppText
+        variant="largeTitle"
+        accessibilityRole="header"
+        style={styles.flex}
+        numberOfLines={1}
+      >
+        Branches
+      </AppText>
+
+      <IconButton
+        icon="add"
+        label="Add a branch"
+        onPress={() =>
+          router.push("/operator/branch/form" as Href)
+        }
+      />
     </View>
-  );
+
+    {/* Requirement 8.3 - Branch Transfer */}
+    <Button
+      label="Transfer Vehicles"
+      variant="line"
+      icon="swap-horizontal-outline"
+      onPress={() =>
+        router.push("/operator/branch-transfer" as Href)
+      }
+    />
+
+    <AppText variant="caption">
+      Where customers collect and return your cars.
+      Each branch has its own pick-up and drop-off points.
+    </AppText>
+  </View>
+);
 
   if (error && !branches) {
     return (

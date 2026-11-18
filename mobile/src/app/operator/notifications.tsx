@@ -44,6 +44,9 @@ function contentOf(n: OperatorNotification) {
 function iconFor(n: OperatorNotification): IconName {
   const t = contentOf(n);
   if (t.includes("PERMIT") || t.includes("LICENCE")) {return "card-outline";}
+  if (t.includes("STOCK_EXHAUSTED")) {
+  return "car-sport-outline";
+}
   if (t.includes("PAYMENT") || t.includes("RECEIPT") || t.includes("INVOICE")) return "wallet-outline";
   if (t.includes("ALTERNATIVE")) return "swap-horizontal-outline";
   if (t.includes("CANCEL") || t.includes("REJECT") || t.includes("EXPIRED")) return "close-circle-outline";
@@ -91,6 +94,10 @@ export default function OperatorNotificationsScreen() {
     }
 
     const t = contentOf(n);
+    // Stock Availability Alert
+    if (t.includes("STOCK_EXHAUSTED")) {
+      return router.push("/operator/(tabs)/listings" as Href);
+    }
     if (t.includes("PERMIT")) {return router.push("/operator/permit-checks" as Href);}
     if (t.includes("LICENCE")) return router.push("/operator/licence-checks" as Href);
     if (t.includes("PAYMENT") || t.includes("RECEIPT") || t.includes("INVOICE")) {

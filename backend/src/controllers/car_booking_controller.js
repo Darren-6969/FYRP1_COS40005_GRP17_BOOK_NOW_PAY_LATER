@@ -176,7 +176,9 @@ export async function createCarBooking(req, res, next) {
 
     // Notifications must never turn a recorded booking into a failed request.
     const operatorUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/operator/bookings/${booking.id}`;
+    
     Promise.allSettled([
+      // 1. Notify customer about successful booking request
       notifyCustomerByBooking({
         booking,
         title: "Booking request sent",
@@ -188,16 +190,45 @@ export async function createCarBooking(req, res, next) {
           customerUrl: `${process.env.FRONTEND_URL || "http://localhost:5173"}/customer/bookings/${booking.id}`,
         }),
       }),
+
+      // 2. Notify operator about new booking request
       notifyOperatorUsersByBooking({
         booking,
         title: "New booking request",
         message: `${booking.bookingCode} requires operator review and approval.`,
         type: "BOOKING_SUBMITTED",
         emailSubject: `New Booking Request - ${booking.bookingCode}`,
-        emailHtml: bookingSubmittedTemplate({ booking, operatorUrl }),
+        emailHtml: bookingSubmittedTemplate({
+          booking,
+          operatorUrl,
+        }),
       }),
+
+      // 3. Notify operator when vehicle stock becomes exhausted
+      ...(exhaustedDates?.length
+        ? [
+            notifyOperatorUsersByBooking({
+              booking,
+              title: "Vehicle Stock Exhausted",
+              message:
+                `${listing.name} has reached full allocation ` +
+                `for ${exhaustedDates.length} rental date(s). ` +
+                `Affected dates: ${exhaustedDates.join(", ")}. ` +
+                `Latest booking: ${booking.bookingCode}.`,
+              type: "STOCK_EXHAUSTED",
+              notifyMaster: false,
+            }),
+          ]
+        : []),
     ]).then((results) =>
-      results.filter((x) => x.status === "rejected").forEach((x) => console.error("[car-booking] notify failed:", x.reason?.message))
+      results
+        .filter((x) => x.status === "rejected")
+        .forEach((x) =>
+          console.error(
+            "[car-booking] notify failed:",
+            x.reason?.message
+          )
+        )
     );
   } catch (err) {
     if (claim?.record) await releaseIdempotencyKey(claim.record);

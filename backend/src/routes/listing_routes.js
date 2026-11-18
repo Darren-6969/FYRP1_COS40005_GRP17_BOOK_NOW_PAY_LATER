@@ -15,6 +15,7 @@ import {
   reactivateListing,
   bulkUpdateListingStatus,
   getListingAllocations,
+  updateDailyStockAllocation,
   blockListingForServicing,
   unblockListingServicing,
 } from "../controllers/listing_controller.js";
@@ -48,6 +49,13 @@ router.get(
   "/:id/allocations",
   ...ownerOrStaffAccess,
   getListingAllocations
+);
+
+
+router.patch(
+  "/:id/daily-allocation",
+  ...ownerOrStaffAccess,
+  updateDailyStockAllocation
 );
 
 router.put(

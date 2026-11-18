@@ -96,6 +96,14 @@ export const operatorService = {
       );
     },
 
+
+  updateDailyStockAllocation(id, payload) {
+    return api.patch(
+      `/operators/listings/${id}/daily-allocation`,
+      payload
+    );
+  },
+
     setPrimaryListingImage(
       listingId,
       imageId
@@ -210,6 +218,21 @@ export const operatorService = {
       return api.post(
         "/operators/branches",
         payload
+      );
+    },
+
+
+    transferBranchStock(payload) {
+      return api.post(
+        "/operators/branches/transfers",
+        payload
+      );
+    },
+
+    getBranchTransfers(params = {}) {
+      return api.get(
+        "/operators/branches/transfers",
+        { params }
       );
     },
 

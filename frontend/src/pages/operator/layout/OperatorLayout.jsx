@@ -103,6 +103,11 @@ export default function OperatorLayout() {
     function getNotificationLink(item) {
   const text = `${item.title || ""} ${item.message || ""}`;
   const type = String(item.type || "").toUpperCase();
+  // Requirement 8.1 - Stock Availability Alert
+  if (type === "STOCK_EXHAUSTED") {
+    return "/operator/listings";
+  }
+  // International Permit
   if (
   type.includes("PERMIT") ||
   text.toLowerCase().includes("international permit")

@@ -12,6 +12,7 @@ import { useTabBarInset } from "@/hooks/use-tab-bar-inset";
 import { useTheme } from "@/hooks/use-theme";
 import { getOperatorListings, type OperatorListing, type OperatorListingSubscription } from "@/services/operatorApi";
 import { logger } from "@/utils/logger";
+import { DailyStockSheet } from "@/components/operator/DailyStockSheet";
 
 type Filter = "ALL" | "PUBLISHED" | "DRAFT" | "WITHDRAWN";
 
@@ -41,6 +42,7 @@ export default function OperatorListingsScreen() {
   const [filter, setFilter] = useState<Filter>("ALL");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<OperatorListing | null>(null);
+  const [dailyStockListing, setDailyStockListing] = useState<OperatorListing | null>(null);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
@@ -219,6 +221,16 @@ export default function OperatorListingsScreen() {
                     onPress={() => router.push({ pathname: "/operator/listing/manage", params: { id: String(item.id) } } as unknown as Href)}
                   />
                 </View>
+
+                {item.category === "CAR_RENTAL" && (
+                  <Button
+                    label="Daily Stock"
+                    variant="line"
+                    size="sm"
+                    icon="calendar-outline"
+                    onPress={() => setDailyStockListing(item)}
+                  />
+                )}
                 <Button
                   label="Edit details"
                   variant="text"
@@ -244,6 +256,11 @@ export default function OperatorListingsScreen() {
         listing={editing}
         onClose={() => setEditing(null)}
         onSaved={(updated) => setListings((current) => current?.map((l) => (l.id === updated.id ? updated : l)) ?? current)}
+      />
+
+      <DailyStockSheet
+        listing={dailyStockListing}
+        onClose={() => setDailyStockListing(null)}
       />
     </View>
   );

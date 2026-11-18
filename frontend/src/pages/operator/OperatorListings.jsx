@@ -13,6 +13,8 @@ import {
   formatOperatorMoney,
 } from "../../services/operator_service";
 
+import OperatorDailyStock from "../../components/operator/OperatorDailyStock";
+
 const STATUS_TABS = [
   {
     label: "All",
@@ -638,6 +640,9 @@ function ListingCard({
   const [isEditing, setIsEditing] =
     useState(false);
 
+  const [showDailyStock, setShowDailyStock] =
+    useState(false);
+
   const [editPrice, setEditPrice] =
     useState(
       listing.price ?? ""
@@ -996,6 +1001,16 @@ const cancelInlineEdit = () => {
 
         <div className="operator-listing-actions">
 
+          {isCar && (
+            <button
+              type="button"
+              className="operator-secondary-btn"
+              onClick={() => setShowDailyStock(true)}
+            >
+              Daily Stock
+            </button>
+          )}
+
           {isEditing ? (
           <>
           <button
@@ -1068,6 +1083,13 @@ const cancelInlineEdit = () => {
           )}
         </div>
       </div>
+      {showDailyStock && (
+        <OperatorDailyStock
+          listing={listing}
+          onClose={() => setShowDailyStock(false)}
+          onUpdated={onUpdated}
+        />
+      )}
     </article>
   );
 }

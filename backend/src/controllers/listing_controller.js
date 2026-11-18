@@ -18,6 +18,12 @@ import {
 
 import { getPlatformSettings } from "../services/platform_settings_service.js";
 import { assertSubscriptionActive } from "../services/subscription_admin_service.js";
+import {
+  assertListingQuantitySafe,
+} from "../services/listing_stock_service.js";
+import {
+  reservedStockByDate,
+} from "../services/listing_stock_service.js";
 
 function isPlainDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(
@@ -48,6 +54,59 @@ function addPlainDateDays(
   return date
     .toISOString()
     .slice(0, 10);
+}
+
+
+function validStockDate(value) {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value)
+  ) {
+    return false;
+  }
+
+  const parsed = new Date(
+    `${value}T00:00:00.000Z`
+  );
+
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  );
+}
+
+function stockDateRange(fromDate, toDate) {
+  if (
+    !validStockDate(fromDate) ||
+    !validStockDate(toDate) ||
+    toDate < fromDate
+  ) {
+    const error = new Error(
+      "Invalid servicing date range."
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const dates = [];
+
+  for (
+    let date = fromDate;
+    date <= toDate;
+    date = addPlainDateDays(date, 1)
+  ) {
+    dates.push(date);
+
+    if (dates.length > 90) {
+      const error = new Error(
+        "Servicing date range cannot exceed 90 days."
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
+  return dates;
 }
 
 function listingWhere(req) {
@@ -331,340 +390,573 @@ export async function getListingAllocations(
   }
 }
 
+
+/**
+ * Requirement 8.2.5
+ * Update the available fleet capacity for selected dates.
+ *
+ * PATCH /api/operators/listings/:id/daily-allocation
+ *
+ * Body:
+ * {
+ *   fromDate: "2026-11-25",
+ *   toDate: "2026-11-27",
+ *   quantity: 3
+ * }
+ *
+ * Set quantity to null to remove daily overrides
+ * and restore the listing's default fleet quantity.
+ */
+export async function updateDailyStockAllocation(
+  req,
+  res,
+  next
+) {
+  try {
+    const listingId = parseId(
+      req.params.id,
+      "listing id"
+    );
+
+    const {
+      fromDate,
+      toDate,
+      quantity,
+    } = req.body ?? {};
+
+    const validDate = (value) => {
+      if (
+        typeof value !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(value)
+      ) {
+        return false;
+      }
+
+      const parsed = new Date(
+        `${value}T00:00:00.000Z`
+      );
+
+      return (
+        !Number.isNaN(parsed.getTime()) &&
+        parsed.toISOString().slice(0, 10) === value
+      );
+    };
+
+    if (
+      !validDate(fromDate) ||
+      !validDate(toDate) ||
+      toDate < fromDate
+    ) {
+      return res.status(400).json({
+        message: "Invalid allocation date range.",
+      });
+    }
+
+    // This endpoint manages the upcoming
+    // 90-day inventory calendar.
+    const today = new Date(
+      Date.now() + 8 * 60 * 60 * 1000
+    ).toISOString().slice(0, 10);
+
+    const maxDate = new Date(
+      `${today}T00:00:00.000Z`
+    );
+
+    maxDate.setUTCDate(
+      maxDate.getUTCDate() + 89
+    );
+
+    const lastAllowedDate =
+      maxDate.toISOString().slice(0, 10);
+
+    if (
+      fromDate < today ||
+      toDate > lastAllowedDate
+    ) {
+      return res.status(400).json({
+        message:
+          "Daily stock adjustments must be within the upcoming 90 days.",
+      });
+    }
+
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        req.body ?? {},
+        "quantity"
+      )
+    ) {
+      return res.status(400).json({
+        message:
+          "Quantity is required. Use null to reset the daily override.",
+      });
+    }
+
+    const resetToDefault = quantity === null;
+
+    const nextQuantity = resetToDefault
+      ? null
+      : Number(quantity);
+
+    if (
+      !resetToDefault &&
+      (
+        quantity === "" ||
+        typeof quantity === "boolean" ||
+        !Number.isSafeInteger(nextQuantity) ||
+        nextQuantity < 0
+      )
+    ) {
+      return res.status(400).json({
+        message:
+          "Quantity must be a non-negative whole number, or null to reset.",
+      });
+    }
+
+    const dates = [];
+
+    for (
+      let date = fromDate;
+      date <= toDate;
+      date = addPlainDateDays(date, 1)
+    ) {
+      dates.push(date);
+
+      if (dates.length > 90) {
+        return res.status(400).json({
+          message:
+            "Allocation range cannot exceed 90 days.",
+        });
+      }
+    }
+
+    const result = await prisma.$transaction(
+      async (tx) => {
+        // Booking creation locks the same Listing
+        // row, preventing simultaneous allocation
+        // changes and booking reservations.
+        await tx.$queryRaw`
+          SELECT id FROM "Listing"
+          WHERE id = ${listingId}
+          FOR UPDATE
+        `;
+
+        const listing = await tx.listing.findFirst({
+          where: {
+            id: listingId,
+            ...listingWhere(req),
+          },
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            quantity: true,
+          },
+        });
+
+        if (!listing) {
+          const error = new Error(
+            "Listing not found."
+          );
+          error.statusCode = 404;
+          throw error;
+        }
+
+        if (listing.category !== "CAR_RENTAL") {
+          const error = new Error(
+            "Daily vehicle stock applies only to car rental listings."
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+
+        const defaultQuantity =
+          Number(listing.quantity);
+
+        if (
+          !resetToDefault &&
+          nextQuantity > defaultQuantity
+        ) {
+          const error = new Error(
+            `Daily allocation cannot exceed the fleet total of ${defaultQuantity}. ` +
+            "Increase the listing quantity first."
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+
+        // Current reservations for each date.
+        const reserved = await reservedStockByDate(
+          tx,
+          listingId,
+          fromDate,
+          toDate
+        );
+
+        // Existing daily overrides / servicing blocks.
+        const allocations =
+          await tx.listingAllocation.findMany({
+            where: {
+              listingId,
+              date: {
+                gte: new Date(
+                  `${fromDate}T00:00:00.000Z`
+                ),
+                lte: new Date(
+                  `${toDate}T00:00:00.000Z`
+                ),
+              },
+            },
+          });
+
+        const allocationMap = new Map(
+          allocations.map((allocation) => [
+            allocation.date
+              .toISOString()
+              .slice(0, 10),
+            allocation,
+          ])
+        );
+
+        // Validate all selected dates before
+        // any database changes are applied.
+        for (const date of dates) {
+          const allocation =
+            allocationMap.get(date);
+
+          const effectiveCapacity =
+            resetToDefault
+              ? defaultQuantity
+              : nextQuantity;
+
+          const reservedCount =
+            reserved.get(date) ?? 0;
+
+          const blockedCount = Number(
+            allocation?.blockedQuantity ?? 0
+          );
+
+          // A fully blocked day cannot hold
+          // an active booking safely.
+          const availableCapacity =
+            allocation?.isBlocked &&
+            blockedCount === 0
+              ? 0
+              : effectiveCapacity - blockedCount;
+
+          if (
+            blockedCount > effectiveCapacity ||
+            reservedCount > availableCapacity
+          ) {
+            const error = new Error(
+              `Cannot set daily stock on ${date}. ` +
+              `${reservedCount} vehicle(s) reserved, ` +
+              `${blockedCount} vehicle(s) blocked. ` +
+              `Requested capacity: ${effectiveCapacity}.`
+            );
+
+            error.statusCode = 409;
+            throw error;
+          }
+        }
+
+        // Update each allocation.
+        // Preserve servicing quantities and notes.
+        for (const date of dates) {
+          const dateValue = new Date(
+            `${date}T00:00:00.000Z`
+          );
+
+          await tx.listingAllocation.upsert({
+            where: {
+              listingId_date: {
+                listingId,
+                date: dateValue,
+              },
+            },
+            create: {
+              listingId,
+              date: dateValue,
+              quantity: nextQuantity,
+              blockedQuantity: 0,
+              isBlocked: false,
+            },
+            update: {
+              quantity: nextQuantity,
+            },
+          });
+        }
+
+        await tx.auditLog.create({
+          data: {
+            userId: req.user.id,
+            action:
+              "LISTING_DAILY_STOCK_UPDATED",
+            entityType: "Listing",
+            entityId: String(listingId),
+            details: {
+              fromDate,
+              toDate,
+              quantity: nextQuantity,
+              resetToDefault,
+              affectedDays: dates.length,
+            },
+          },
+        });
+
+        return {
+          listingId,
+          listingName: listing.name,
+          defaultQuantity,
+          dailyQuantity: nextQuantity,
+          resetToDefault,
+          fromDate,
+          toDate,
+          updatedDates: dates,
+        };
+      },
+      {
+        maxWait: 10000,
+        timeout: 20000,
+      }
+    );
+
+    return res.json({
+      message: resetToDefault
+        ? "Daily allocation reset to default."
+        : "Daily stock allocation updated.",
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function blockListingForServicing(
   req,
   res,
   next
 ) {
   try {
-    const listingId =
-      parseId(
-        req.params.id,
-        "listing id"
-      );
+    const listingId = parseId(
+      req.params.id,
+      "listing id"
+    );
 
     const {
       fromDate,
       toDate,
       blockedQuantity,
       note,
-    } = req.body;
+    } = req.body ?? {};
 
-    // =========================
-    // Validate dates
-    // =========================
+    const dates = stockDateRange(
+      fromDate,
+      toDate
+    );
 
-    if (
-      !isPlainDate(fromDate) ||
-      !isPlainDate(toDate)
-    ) {
-      return res.status(400).json({
-        message:
-          "Valid servicing start and end dates are required.",
-      });
-    }
-
-    if (toDate < fromDate) {
-      return res.status(400).json({
-        message:
-          "Servicing end date cannot be earlier than the start date.",
-      });
-    }
-
-    // =========================
-    // Validate quantity
-    // =========================
-
-    const servicingQuantity =
-      Number(blockedQuantity);
+    const servicingQuantity = Number(
+      blockedQuantity
+    );
 
     if (
-      !Number.isInteger(
-        servicingQuantity
-      ) ||
+      blockedQuantity == null ||
+      !Number.isSafeInteger(servicingQuantity) ||
       servicingQuantity < 1
     ) {
       return res.status(400).json({
         message:
-          "Servicing quantity must be at least 1.",
+          "Servicing quantity must be a positive whole number.",
       });
     }
 
-    // =========================
-    // Find listing
-    // =========================
+    const cleanNote =
+      String(note ?? "Scheduled servicing")
+        .trim()
+        .slice(0, 300) || "Scheduled servicing";
 
-    const listing =
-      await prisma.listing.findFirst({
-        where: {
-          id: listingId,
-          ...listingWhere(req),
-        },
+    const result = await prisma.$transaction(
+      async (tx) => {
+        // Lock the listing to prevent stock conflicts
+        // with simultaneous customer bookings.
+        await tx.$queryRaw`
+          SELECT id FROM "Listing"
+          WHERE id = ${listingId}
+          FOR UPDATE
+        `;
 
-        select: {
-          id: true,
-          name: true,
-          quantity: true,
-        },
-      });
-
-    if (!listing) {
-      return res.status(404).json({
-        message:
-          "Listing not found.",
-      });
-    }
-
-    const totalQuantity =
-      Number(
-        listing.quantity || 0
-      );
-
-    if (
-      servicingQuantity >
-      totalQuantity
-    ) {
-      return res.status(400).json({
-        message:
-          `This listing only has ${totalQuantity} vehicle(s).`,
-      });
-    }
-
-    // =========================
-    // Build selected dates
-    // =========================
-
-    const dates = [];
-
-    for (
-      let current = fromDate;
-      current <= toDate;
-      current =
-        addPlainDateDays(
-          current,
-          1
-        )
-    ) {
-      dates.push(current);
-    }
-
-    const startDate =
-      new Date(
-        `${fromDate}T00:00:00+08:00`
-      );
-
-    const endExclusive =
-      new Date(
-        `${addPlainDateDays(
-          toDate,
-          1
-        )}T00:00:00+08:00`
-      );
-
-    // =========================
-    // Load current allocations
-    // =========================
-
-    const allocations =
-      await prisma
-        .listingAllocation
-        .findMany({
+        // Verify listing ownership.
+        const listing = await tx.listing.findFirst({
           where: {
-            listingId,
-
-            date: {
-              gte:
-                new Date(
-                  `${fromDate}T00:00:00.000Z`
-                ),
-
-              lt:
-                new Date(
-                  `${addPlainDateDays(
-                    toDate,
-                    1
-                  )}T00:00:00.000Z`
-                ),
-            },
+            id: listingId,
+            ...listingWhere(req),
+          },
+          select: {
+            id: true,
+            name: true,
+            quantity: true,
           },
         });
 
-    const allocationMap =
-      new Map(
-        allocations.map(
-          (allocation) => [
+        if (!listing) {
+          const error = new Error(
+            "Listing not found."
+          );
+          error.statusCode = 404;
+          throw error;
+        }
+
+        // Calculate existing reservations.
+        const reserved = await reservedStockByDate(
+          tx,
+          listingId,
+          fromDate,
+          toDate
+        );
+
+        // Load existing daily stock allocations.
+        const allocations =
+          await tx.listingAllocation.findMany({
+            where: {
+              listingId,
+              date: {
+                gte: new Date(
+                  `${fromDate}T00:00:00.000Z`
+                ),
+                lte: new Date(
+                  `${toDate}T00:00:00.000Z`
+                ),
+              },
+            },
+          });
+
+        const allocationMap = new Map(
+          allocations.map((allocation) => [
             allocation.date
               .toISOString()
               .slice(0, 10),
-
             allocation,
-          ]
-        )
-      );
-
-    // =========================
-    // Load bookings
-    // =========================
-
-    const bookings =
-      await prisma.booking.findMany({
-        where: {
-          listingId,
-
-          status: {
-            in:
-              ACTIVE_BOOKING_STATUSES,
-          },
-
-          pickupDate: {
-            lt: endExclusive,
-          },
-
-          returnDate: {
-            gt: startDate,
-          },
-        },
-
-        select: {
-          id: true,
-          bookingCode: true,
-          pickupDate: true,
-          returnDate: true,
-        },
-      });
-
-    // =========================
-    // Validate each day
-    // =========================
-
-    for (const date of dates) {
-      const allocation =
-        allocationMap.get(date);
-
-      const dailyCapacity =
-        Number(
-          allocation?.quantity ??
-            totalQuantity
+          ])
         );
 
-      const bookingCount =
-        bookings.filter(
-          (booking) =>
-            occupiedDates(
-              booking
-            ).includes(date)
-        ).length;
+        const capacities = new Map();
 
-      const remainingAfterServicing =
-        dailyCapacity -
-        servicingQuantity -
-        bookingCount;
+        // Validate all dates before updating.
+        for (const date of dates) {
+          const allocation =
+            allocationMap.get(date);
 
-      if (
-        remainingAfterServicing < 0
-      ) {
-        return res.status(409).json({
-          message:
-            `Cannot service ${servicingQuantity} vehicle(s) on ${date}. ` +
-            `${bookingCount} vehicle(s) are already booked and only ${dailyCapacity} are available in the fleet.`,
-        });
-      }
-    }
-
-    // =========================
-    // Save servicing blocks
-    // =========================
-
-    const cleanNote =
-      String(
-        note ||
-          "Scheduled servicing"
-      ).trim() ||
-      "Scheduled servicing";
-
-    await prisma.$transaction(
-      dates.map((date) => {
-        const allocation =
-          allocationMap.get(date);
-
-        const dailyCapacity =
-          Number(
+          const dailyCapacity = Number(
             allocation?.quantity ??
-              totalQuantity
+            listing.quantity
           );
 
-        return prisma
-          .listingAllocation
-          .upsert({
+          const reservedCount =
+            reserved.get(date) ?? 0;
+
+          if (
+            servicingQuantity > dailyCapacity ||
+            reservedCount + servicingQuantity >
+              dailyCapacity
+          ) {
+            const error = new Error(
+              `Cannot block ${servicingQuantity} ` +
+              `vehicle(s) on ${date}. ` +
+              `${reservedCount} already reserved, ` +
+              `daily capacity ${dailyCapacity}.`
+            );
+
+            error.statusCode = 409;
+            throw error;
+          }
+
+          capacities.set(
+            date,
+            dailyCapacity
+          );
+        }
+
+        // Save allocations atomically.
+        for (const date of dates) {
+          const dateValue = new Date(
+            `${date}T00:00:00.000Z`
+          );
+
+          const isBlocked =
+            servicingQuantity >=
+            capacities.get(date);
+
+          await tx.listingAllocation.upsert({
             where: {
               listingId_date: {
                 listingId,
-
-                date:
-                  new Date(
-                    `${date}T00:00:00.000Z`
-                  ),
+                date: dateValue,
               },
             },
 
             create: {
               listingId,
-
-              date:
-                new Date(
-                  `${date}T00:00:00.000Z`
-                ),
-
+              date: dateValue,
+              quantity: null,
               blockedQuantity:
                 servicingQuantity,
-
-              isBlocked:
-                servicingQuantity >=
-                dailyCapacity,
-
-              note:
-                cleanNote,
+              isBlocked,
+              note: cleanNote,
             },
 
             update: {
               blockedQuantity:
                 servicingQuantity,
-
-              isBlocked:
-                servicingQuantity >=
-                dailyCapacity,
-
-              note:
-                cleanNote,
+              isBlocked,
+              note: cleanNote,
             },
           });
-      })
+        }
+
+        // Record audit history.
+        await tx.auditLog.create({
+          data: {
+            userId: req.user.id,
+            action:
+              "LISTING_SERVICING_BLOCK_UPDATED",
+            entityType: "Listing",
+            entityId: String(listingId),
+            details: {
+              fromDate,
+              toDate,
+              blockedQuantity:
+                servicingQuantity,
+              note: cleanNote,
+            },
+          },
+        });
+
+        return {
+          listingId,
+          totalQuantity: listing.quantity,
+          blockedQuantity:
+            servicingQuantity,
+          fromDate,
+          toDate,
+          blockedDates: dates,
+          note: cleanNote,
+        };
+      },
+      {
+        maxWait: 10000,
+        timeout: 20000,
+      }
     );
 
-    res.json({
+    return res.json({
       message:
         "Servicing allocation saved successfully.",
-
-      listingId,
-
-      totalQuantity,
-
-      blockedQuantity:
-        servicingQuantity,
-
-      fromDate,
-      toDate,
-
-      blockedDates:
-        dates,
-
-      note:
-        cleanNote,
+      ...result,
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 }
+
 
 export async function unblockListingServicing(
   req,
@@ -672,99 +964,99 @@ export async function unblockListingServicing(
   next
 ) {
   try {
-    const listingId =
-      parseId(
-        req.params.id,
-        "listing id"
-      );
+    const listingId = parseId(
+      req.params.id,
+      "listing id"
+    );
 
     const {
       fromDate,
       toDate,
-    } = req.body;
+    } = req.body ?? {};
 
-    if (
-      !isPlainDate(fromDate) ||
-      !isPlainDate(toDate)
-    ) {
-      return res.status(400).json({
-        message:
-          "Valid start and end dates are required.",
-      });
-    }
-
-    if (toDate < fromDate) {
-      return res.status(400).json({
-        message:
-          "End date cannot be earlier than the start date.",
-      });
-    }
-
-    const listing =
-      await prisma.listing.findFirst({
-        where: {
-          id: listingId,
-          ...listingWhere(req),
-        },
-
-        select: {
-          id: true,
-        },
-      });
-
-    if (!listing) {
-      return res.status(404).json({
-        message:
-          "Listing not found.",
-      });
-    }
-
-    const dates = [];
-
-    for (
-      let current = fromDate;
-      current <= toDate;
-      current =
-        addPlainDateDays(
-          current,
-          1
-        )
-    ) {
-      dates.push(current);
-    }
+    const dates = stockDateRange(
+      fromDate,
+      toDate
+    );
 
     await prisma.$transaction(
-      dates.map((date) =>
-        prisma.listingAllocation.updateMany({
+      async (tx) => {
+        // Prevent concurrent stock modifications.
+        await tx.$queryRaw`
+          SELECT id FROM "Listing"
+          WHERE id = ${listingId}
+          FOR UPDATE
+        `;
+
+        // Verify operator permission.
+        const listing = await tx.listing.findFirst({
+          where: {
+            id: listingId,
+            ...listingWhere(req),
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (!listing) {
+          const error = new Error(
+            "Listing not found."
+          );
+          error.statusCode = 404;
+          throw error;
+        }
+
+        // Remove servicing blocks while preserving
+        // explicit daily stock quantity overrides.
+        await tx.listingAllocation.updateMany({
           where: {
             listingId,
-
-            date:
-              new Date(
-                `${date}T00:00:00.000Z`
+            date: {
+              gte: new Date(
+                `${fromDate}T00:00:00.000Z`
               ),
+              lte: new Date(
+                `${toDate}T00:00:00.000Z`
+              ),
+            },
           },
-
           data: {
             blockedQuantity: 0,
             isBlocked: false,
             note: null,
           },
-        })
-      )
+        });
+
+        // Save operator action history.
+        await tx.auditLog.create({
+          data: {
+            userId: req.user.id,
+            action:
+              "LISTING_SERVICING_BLOCK_REMOVED",
+            entityType: "Listing",
+            entityId: String(listingId),
+            details: {
+              fromDate,
+              toDate,
+            },
+          },
+        });
+      },
+      {
+        maxWait: 10000,
+        timeout: 20000,
+      }
     );
 
-    res.json({
+    return res.json({
       message:
         "Servicing block removed successfully.",
-
       listingId,
-
-      unblockedDates:
-        dates,
+      unblockedDates: dates,
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 }
 
@@ -1504,12 +1796,21 @@ export async function updateListing(
       }
     }
 
+    if (data.quantity !== undefined) {
+    const parsedQuantity = Number(data.quantity);
+
     if (
-      data.quantity !== undefined
+      !Number.isSafeInteger(parsedQuantity) ||
+      parsedQuantity < 0
     ) {
-      data.quantity =
-        Number(data.quantity);
+      return res.status(400).json({
+        message:
+          "Quantity must be a non-negative whole number.",
+      });
     }
+
+    data.quantity = parsedQuantity;
+  }
 
     if (
       data.modelYear !== undefined
@@ -1593,13 +1894,34 @@ export async function updateListing(
         branch.id;
     }
 
-    await prisma.listing.update({
-        where: {
-            id,
-        },
+    
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`
+          SELECT id FROM "Listing"
+          WHERE id = ${id}
+          FOR UPDATE
+        `;
 
-        data,
+        if (data.quantity !== undefined) {
+          await assertListingQuantitySafe(
+            tx,
+            id,
+            data.quantity
+          );
+        }
+
+        await tx.listing.update({
+          where: { id },
+          data,
         });
+      },
+      {
+        maxWait: 10000,
+        timeout: 20000,
+      }
+    );
+
 
         // A photo added while editing becomes the primary photo, in front
         // of the existing ones (it used to share position 0 with the old
@@ -1733,17 +2055,35 @@ export async function quickEditListing(
         parsedQuantity;
     }
 
-    const updated =
-      await prisma.listing.update({
-        where: {
-          id,
-        },
+    
+    const updated = await prisma.$transaction(
+      async (tx) => {
+        // Serialize stock edits and booking creation.
+        await tx.$queryRaw`
+          SELECT id FROM "Listing"
+          WHERE id = ${id}
+          FOR UPDATE
+        `;
 
-        data,
+        if (data.quantity !== undefined) {
+          await assertListingQuantitySafe(
+            tx,
+            id,
+            data.quantity
+          );
+        }
 
-        include:
-          includeListingRelations(),
-      });
+        return tx.listing.update({
+          where: { id },
+          data,
+          include: includeListingRelations(),
+        });
+      },
+      {
+        maxWait: 10000,
+        timeout: 20000,
+      }
+    );
 
     res.json({
       message:
