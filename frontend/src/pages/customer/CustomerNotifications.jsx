@@ -12,6 +12,13 @@ export default function CustomerNotifications() {
     const text = `${item.title || ""} ${item.message || ""}`.toLowerCase();
     const type = `${item.type || ""}`.toLowerCase();
 
+  if (
+  type.includes("permit") ||
+  text.includes("international permit")
+  ) {
+    return "/customer/licence";
+  }
+
     // Booking accepted / payment available
     if (
       text.includes("payment available") ||

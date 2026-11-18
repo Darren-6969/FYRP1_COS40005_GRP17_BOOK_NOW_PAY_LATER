@@ -32,7 +32,9 @@ type Notification = {
 /** An icon for the notification's type; unknown types get a bell. */
 function iconFor(type?: string): IconName {
   const t = String(type || "").toUpperCase();
-  if (t.includes("LICENCE")) return "card-outline";
+  if (t.includes("PERMIT") || t.includes("LICENCE")) {
+  return "card-outline";
+  }
   if (t.includes("INVOICE")) return "document-text-outline";
   if (t.includes("REFUND")) return "return-down-back-outline";
   if (t.includes("PAYMENT") || t.includes("RECEIPT")) return "wallet-outline";
@@ -88,6 +90,9 @@ export default function NotificationsScreen() {
     }
 
     const type = String(item.type || "").toUpperCase();
+    if (type.includes("PERMIT")) {
+      return router.push("/customer/permit" as Href);
+    }
     const isInvoice = type.includes("INVOICE");
     const isPayment = type.includes("PAYMENT") || type.includes("RECEIPT") || type.includes("REFUND");
     const isLicence = type.includes("LICENCE");

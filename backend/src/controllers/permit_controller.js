@@ -351,32 +351,6 @@ export async function getPermitQueue(req, res, next) {
         take: 100,
       });
 
-
-    // Inform the customer of the review decision.
-    try {
-      await createInAppNotification({
-        userId: document.customerId,
-        title:
-          decision === "APPROVED"
-            ? "International Permit approved"
-            : "International Permit re-upload required",
-        message:
-          decision === "APPROVED"
-            ? "Your International Driving Permit has been approved."
-            : `Your International Driving Permit needs to be ` +
-              `re-uploaded. Reason: ${reason.replaceAll("_", " ")}.`,
-        type:
-          decision === "APPROVED"
-            ? "PERMIT_APPROVED"
-            : "PERMIT_REUPLOAD_REQUIRED",
-      });
-    } catch (notificationError) {
-      console.error(
-        "[Permit] Customer notification failed:",
-        notificationError
-      );
-    }
-
     return res.json({ documents });
   } catch (error) {
     next(error);
@@ -582,6 +556,35 @@ const updated = await prisma.$transaction(async (tx) => {
 
   return result;
 });
+
+
+    // Notify the customer after a successful review.
+    // This runs only after the database transaction commits.
+    try {
+      await createInAppNotification({
+        userId: document.customerId,
+
+        title:
+          decision === "APPROVED"
+            ? "International Permit Approved"
+            : "International Permit Re-upload Required",
+
+        message:
+          decision === "APPROVED"
+            ? "Your International Driving Permit has been approved by the operator."
+            : `Your International Driving Permit was rejected. Reason: ${reason.replaceAll("_", " ")}. Please upload a new permit.`,
+
+        type:
+          decision === "APPROVED"
+            ? "PERMIT_APPROVED"
+            : "PERMIT_REUPLOAD_REQUIRED",
+      });
+    } catch (notificationError) {
+      console.error(
+        "[Permit] Failed to notify customer:",
+        notificationError
+      );
+    }
 
 
     return res.json({
