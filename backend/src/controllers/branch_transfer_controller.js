@@ -1,6 +1,5 @@
 
 import prisma from "../config/db.js";
-import { parseId } from "../utils/parseId.js";
 import { klToday } from "../services/car_pricing_service.js";
 import {
   assertListingQuantitySafe,

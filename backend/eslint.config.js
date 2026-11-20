@@ -23,7 +23,7 @@ export default [
     },
     rules: {
       // Unused args are usually Express's `next`; allow them when prefixed.
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_|^next$' }],
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_|^next$', ignoreRestSiblings: true }],
     },
   },
 ];

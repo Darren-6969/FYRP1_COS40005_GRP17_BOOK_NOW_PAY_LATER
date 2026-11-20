@@ -11,11 +11,6 @@ import {
   getListingLimit,
 } from "../services/subscription_service.js";
 
-import {
-  ACTIVE_BOOKING_STATUSES,
-  occupiedDates,
-} from "../services/car_availability_service.js";
-
 import { getPlatformSettings } from "../services/platform_settings_service.js";
 import { assertSubscriptionActive } from "../services/subscription_admin_service.js";
 import {
