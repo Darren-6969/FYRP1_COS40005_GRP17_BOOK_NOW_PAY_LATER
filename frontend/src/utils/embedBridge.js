@@ -5,7 +5,9 @@ function parentOrigin() {
   try {
     const fromQuery = new URLSearchParams(window.location.search).get("host");
     if (fromQuery) return new URL(fromQuery).origin;
-  } catch {}
+  } catch {
+    // Not a valid host URL; fall back to the referrer below.
+  }
   try {
     return new URL(document.referrer).origin;
   } catch {

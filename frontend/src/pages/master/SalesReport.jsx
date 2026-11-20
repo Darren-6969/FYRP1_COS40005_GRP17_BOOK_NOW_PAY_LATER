@@ -121,9 +121,12 @@ function InfoBox({ children }) {
 
 // ── Main page ────────────────────────────────────────────
 export default function SalesReport() {
-  const today = new Date().toISOString().slice(0, 10);
-  const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000)
-    .toISOString().slice(0, 10);
+  // Worked out once when the page opens, not on every render.
+  const [{ today, sixMonthsAgo }] = useState(() => ({
+    today: new Date().toISOString().slice(0, 10),
+    sixMonthsAgo: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000)
+      .toISOString().slice(0, 10),
+  }));
 
   const [from, setFrom] = useState(sixMonthsAgo);
   const [to, setTo] = useState(today);

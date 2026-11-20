@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   CreditCard,
-  DollarSign,
-  Receipt,
   Wallet,
   Percent,
 } from "lucide-react";

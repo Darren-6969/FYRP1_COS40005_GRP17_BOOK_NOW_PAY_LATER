@@ -5,7 +5,9 @@
   try {
     var s = document.currentScript && document.currentScript.src;
     if (s) FRONTEND_ORIGIN = new URL(s).origin;
-  } catch (e) {}
+  } catch {
+    // Keep the default origin if the script URL cannot be read.
+  }
 
   function el(tag, style) {
     var e = document.createElement(tag);

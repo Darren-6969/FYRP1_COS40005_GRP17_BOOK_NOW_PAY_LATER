@@ -43,5 +43,5 @@ A failing check only blocks a merge once GitHub is told it is required. This is 
 
 ## Known gaps
 
-- The frontend has existing lint errors. The frontend lint step reports them without failing the check. Remove `continue-on-error: true` from that step in `ci.yml` once `npm run lint` is clean in `frontend`.
+- Frontend lint now fails the check on errors. `react-hooks/set-state-in-effect` is set to a warning in `frontend/eslint.config.js` because most hits are the load-data-on-open pattern; those warnings are still shown in the log.
 - The application role exists only in CI. Production and staging still connect as the `postgres` user that Dokploy creates. Giving them their own role is a separate change: create the role as above, grant it the same rights, and change `DATABASE_URL`. Migrations then need to run as the owner, for example with a separate `DIRECT_URL` or by running `prisma migrate deploy` with the owner's URL.

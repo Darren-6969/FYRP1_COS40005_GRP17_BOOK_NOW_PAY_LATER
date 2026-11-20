@@ -115,12 +115,10 @@ jobs:
       - name: Install
         run: npm ci --no-audit --no-fund
 
-      # The frontend has existing lint errors. Until they are fixed this step
-      # reports them in the log without failing the check. Remove
-      # continue-on-error once `npm run lint` is clean.
+      # Lint errors fail the check. Warnings (react-hooks/set-state-in-effect,
+      # react-hooks/exhaustive-deps) are reported but do not fail it.
       - name: Lint
         run: npm run lint
-        continue-on-error: true
 
       - name: Build
         run: npm run build

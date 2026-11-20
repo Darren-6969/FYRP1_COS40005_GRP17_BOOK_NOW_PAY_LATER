@@ -262,6 +262,14 @@ export default function OperatorReturnBoard() {
     };
 
 
+  // Current time for the late-return checks, refreshed every minute.
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     loadBookings();
     loadListings();
@@ -350,7 +358,7 @@ export default function OperatorReturnBoard() {
           new Date(
             booking.returnDate
           ).getTime() <
-          Date.now()
+          now
         );
       }
     ).length;
@@ -1131,7 +1139,7 @@ const blockedAllocations = allocations.filter(
                           new Date(
                             booking.returnDate
                           ).getTime() <
-                            Date.now();
+                            now;
 
                         return (
                           <tr

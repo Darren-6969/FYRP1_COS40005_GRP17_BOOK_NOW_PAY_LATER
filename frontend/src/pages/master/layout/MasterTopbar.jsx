@@ -12,7 +12,7 @@ export default function MasterTopbar({ onOpenMobileMenu }) {
   const [openNotifications, setOpenNotifications] = useState(false);
   const [showMobileTopbar, setShowMobileTopbar] = useState(true);
   const [hasScrolled, setHasScrolled] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
+  const [isScrolled] = useState(false);
 
   // The page's name is the page's one <h1>; the pages themselves start at <h2>.
   const { pathname } = useLocation();

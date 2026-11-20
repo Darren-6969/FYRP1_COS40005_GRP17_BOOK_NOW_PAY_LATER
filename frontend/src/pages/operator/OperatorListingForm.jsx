@@ -124,10 +124,6 @@ export default function OperatorListingForm() {
   // LOAD PAGE
   // =========================================================
 
-  useEffect(() => {
-    loadPage();
-  }, [id]);
-
   const loadPage = async () => {
     try {
       setLoading(true);
@@ -289,6 +285,10 @@ export default function OperatorListingForm() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadPage();
+  }, [id]);
 
   // =========================================================
   // FORM HANDLERS
@@ -800,28 +800,6 @@ export default function OperatorListingForm() {
     }
   };
 
-  const handleSetPrimaryImage =
-  async (imageId) => {
-    try {
-      setError("");
-
-      const res =
-        await operatorService
-          .setPrimaryListingImage(
-            id,
-            imageId
-          );
-
-      setListingImages(
-        res.data?.listing?.images || []
-      );
-    } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          "Failed to set primary photo."
-      );
-    }
-  };
 
   const handleImagePositionChange =
   async (imageId, newPosition) => {

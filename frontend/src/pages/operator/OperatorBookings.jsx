@@ -23,10 +23,6 @@ const tabs = [
   { label: "Overdue", value: "OVERDUE" },
 ];
 
-const CONFIRMED_STATUSES = new Set([
-  "PAID",
-]);
-
 // Deposit (or the whole amount) is in.
 const DEPOSIT_IN = new Set(["PARTIALLY_PAID", "FINAL_PAYMENT_PENDING_VERIFICATION", "PAID"]);
 

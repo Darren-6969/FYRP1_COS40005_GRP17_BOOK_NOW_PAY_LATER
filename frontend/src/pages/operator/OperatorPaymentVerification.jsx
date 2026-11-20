@@ -275,12 +275,6 @@ export default function OperatorPaymentVerification() {
         {/* Status tabs */}
         <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
           {STATUS_TABS.map((tab) => {
-            const count =
-              tab.key === "ALL"
-                ? payments.length
-                : payments.filter(
-                    (p) => String(p.status).toUpperCase() === tab.key
-                  ).length;
             const isActive = activeTab === tab.key;
             return (
               <button

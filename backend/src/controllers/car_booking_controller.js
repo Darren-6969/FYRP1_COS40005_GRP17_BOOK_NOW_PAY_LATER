@@ -69,7 +69,6 @@ function selectionFrom(body) {
 // use it, so the platform holds no personal data a booking does not need.
 function bookingDetailsToStore(bookingDetails, config) {
   if (config?.driverAgeRulesEnabled) return bookingDetails;
-  // eslint-disable-next-line no-unused-vars
   const { dateOfBirth, ...driver } = bookingDetails.driver;
   return { ...bookingDetails, driver };
 }

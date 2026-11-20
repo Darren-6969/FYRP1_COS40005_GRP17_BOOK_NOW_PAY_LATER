@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye } from "lucide-react";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, Legend, ComposedChart, BarChart, Bar
 } from "recharts";
 import {
@@ -28,7 +28,8 @@ export default function OperatorDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const MetricTitle = ({ title, description }) => (
+  // A plain render helper, not a component, so React does not remount it.
+  const renderMetricTitle = (title, description) => (
   <div style={styles.metricTitleRow}>
     <span style={styles.metricTitleText}>{title}</span>
 
@@ -217,7 +218,7 @@ export default function OperatorDashboard() {
     }));
     
     const combined = [...historical];
-    forecast.forEach((f, idx) => {
+    forecast.forEach((f) => {
       const existingIndex = combined.findIndex(c => c.date === f.date);
       if (existingIndex >= 0) {
         combined[existingIndex].predicted = f.predicted;
@@ -729,12 +730,6 @@ const operationalMetrics = useMemo(() => {
       </div>
     );
   }
-
-  const getMetricCardStyle = () => ({
-    ...styles.metricCard,
-    ...styles.responsiveMetricGrid,
-    gridTemplateColumns: metricColumns
-  });
 
   return (
     <div style={styles.container}>
@@ -1267,10 +1262,7 @@ const operationalMetrics = useMemo(() => {
 >
   {/* Today's Pickups */}
   <div style={styles.metricCard}>
-    <MetricTitle
-      title="Today's Pickups"
-      description="Number of bookings scheduled for vehicle pickup today."
-    />
+    {renderMetricTitle("Today's Pickups", "Number of bookings scheduled for vehicle pickup today.")}
 
     <div style={styles.metricValue}>
       {operationalMetrics.todayPickups.length}
@@ -1283,10 +1275,7 @@ const operationalMetrics = useMemo(() => {
 
   {/* Today's Returns */}
   <div style={styles.metricCard}>
-    <MetricTitle
-      title="Today's Returns"
-      description="Number of vehicles scheduled to be returned today."
-    />
+    {renderMetricTitle("Today's Returns", "Number of vehicles scheduled to be returned today.")}
 
     <div style={styles.metricValue}>
       {operationalMetrics.todayReturns.length}
@@ -1299,10 +1288,7 @@ const operationalMetrics = useMemo(() => {
 
   {/* Month-to-Date Volume */}
   <div style={styles.metricCard}>
-    <MetricTitle
-      title="Month-to-Date Volume"
-      description="Total number of bookings created during the current month."
-    />
+    {renderMetricTitle("Month-to-Date Volume", "Total number of bookings created during the current month.")}
 
     <div style={styles.metricValue}>
       {operationalMetrics.monthToDateVolume}
@@ -1315,10 +1301,7 @@ const operationalMetrics = useMemo(() => {
 
   {/* Revenue */}
   <div style={styles.metricCard}>
-    <MetricTitle
-      title="Revenue"
-      description="Revenue generated from paid and completed bookings."
-    />
+    {renderMetricTitle("Revenue", "Revenue generated from paid and completed bookings.")}
 
     <div
       style={{

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useSearchParams } from "react-router-dom";
 
@@ -9,8 +9,6 @@ import {
   Clock,
 
   CreditCard,
-
-  Eye,
 
   ImagePlus,
 
@@ -419,8 +417,6 @@ export default function OperatorSettings() {
 
   }, [stripeReturn, setSearchParams]);
 
-  const user = settings?.user;
-
   // The platform publishes the payment deadline tiers an operator may choose.
   const deadlineTier = settings?.deadlineTier ?? null;
 
@@ -432,22 +428,6 @@ export default function OperatorSettings() {
   ]
     .filter((days) => Number.isInteger(days) && days > 0)
     .sort((a, b) => a - b);
-
-  const operator = settings?.operator;
-
-  const selectedTemplate = useMemo(() => {
-
-    return (
-
-      EMAIL_TEMPLATES.find(
-
-        (template) => template.value === form.selectedEmailTemplate
-
-      ) || EMAIL_TEMPLATES[0]
-
-    );
-
-  }, [form.selectedEmailTemplate]);
 
   const updateField = (field, value) => {
 

@@ -103,20 +103,6 @@ export default function OperatorBookingRequests() {
     }
   };
 
-  const canAcceptReject = (booking) => {
-  return String(booking.status || "").toUpperCase() === "PENDING";
-};
-
-  const canSendPayment = (booking) => {
-    const status = String(booking.status || "").toUpperCase();
-    const paymentStatus = String(booking.payment?.status || "").toUpperCase();
-
-    return (
-      ["ACCEPTED", "PENDING_PAYMENT"].includes(status) &&
-      paymentStatus !== "PAID"
-    );
-  };
-
   const totalPages = Math.max(1, Math.ceil(bookings.length / rowsPerPage));
 
   const paginatedBookings = bookings.slice(
