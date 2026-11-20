@@ -166,9 +166,18 @@ describe("database guarantees (application role, real PostgreSQL)", { skip }, ()
 
     test("an operator with bookings cannot be deleted", async () => {
       const err = await rejectionOf(prisma.operator.delete({ where: { id: operator.id } }));
-      // PostgreSQL's own refusal (restrict_violation, 23001); Prisma has no friendlier code for it.
       assert.ok(err, "the delete went through");
-      assert.match(err.message, /23001|violates RESTRICT/i);
+      // PostgreSQL refuses it (restrict_violation, 23001). Depending on the
+      // Prisma version this surfaces as P2003 ("Foreign key constraint
+      // violated") or as the raw PostgreSQL message, so accept either.
+      assert.ok(
+        err.code === "P2003" || /23001|violates RESTRICT|Foreign key constraint/i.test(err.message),
+        `unexpected error: ${err.message}`
+      );
+      assert.match(err.message, /Booking_operatorId_fkey|23001|RESTRICT/i);
+      // The operator must still be there.
+      const stillThere = await prisma.operator.findUnique({ where: { id: operator.id } });
+      assert.ok(stillThere, "the operator row was deleted");
     });
   });
 
