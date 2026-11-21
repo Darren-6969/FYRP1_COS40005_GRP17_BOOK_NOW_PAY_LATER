@@ -7,6 +7,8 @@ import {
   formatMoney,
   statusLabel,
 } from "../../utils/customerUtils";
+import { usePagination } from "../../hooks/usePagination";
+import ListPagination from "../../components/customer/ListPagination";
 
 function normalize(value) {
   return String(value || "").toUpperCase();
@@ -111,6 +113,8 @@ export default function CustomerInvoices() {
     });
   }, [invoices, query, filterStatus]);
 
+  const pagination = usePagination(filteredInvoices, 10, `${query}|${filterStatus}`);
+
   const stats = useMemo(() => {
     const paid = invoices.filter((invoice) => getInvoiceStatus(invoice) === "PAID").length;
     const unpaid = invoices.filter((invoice) => canPayInvoice(invoice)).length;
@@ -193,18 +197,18 @@ export default function CustomerInvoices() {
             value={filterStatus}
             onChange={(event) => setFilterStatus(event.target.value)}
           >
-            <option value="ALL">All Status</option>
+            <option value="ALL">All statuses</option>
             <option value="GENERATED">Unpaid</option>
-            <option value="SENT">Sent / Unpaid</option>
-            <option value="PENDING_VERIFICATION">Pending Verification</option>
+            <option value="SENT">Sent, unpaid</option>
+            <option value="PENDING_VERIFICATION">Pending verification</option>
             <option value="PAID">Paid</option>
             <option value="OVERDUE">Overdue</option>
             <option value="VOID">Void</option>
           </select>
         </div>
 
-        <div className="customer-invoice-list">
-          {filteredInvoices.map((invoice) => {
+        <div className="customer-invoice-list" id="invoice-list">
+          {pagination.pageItems.map((invoice) => {
             const invoiceStatus = getInvoiceStatus(invoice);
             const bookingId = invoice.bookingId || invoice.booking?.id;
             const bookingCode =
@@ -297,6 +301,10 @@ export default function CustomerInvoices() {
             );
           })}
         </div>
+
+        {filteredInvoices.length > 0 && (
+          <ListPagination pagination={pagination} label="invoices" listId="invoice-list" />
+        )}
 
         {!filteredInvoices.length && !error && (
           <div className="customer-empty-state compact">

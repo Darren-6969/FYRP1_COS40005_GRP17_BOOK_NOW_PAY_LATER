@@ -13,6 +13,10 @@ import {
   submitPermitDocument,
 } from "../../services/customer_service";
 
+import "../../assets/styles/customer-lists.css";
+import DatePicker from "../common/DatePicker";
+import { klToday } from "../../utils/formatPublic";
+
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = [
   "application/pdf",
@@ -276,9 +280,12 @@ export default function CustomerPermitPanel() {
         </div>
       )}
 
-      <div className="licence-upload-panel">
+      {/* Label above the picker, with space before the status box.
+          It used the upload panel's two-column grid before, which put the
+          picker against the box below. */}
+      <div className="permit-booking-picker">
         <label htmlFor="permit-booking">
-          Related Car Rental Booking
+          Booking this permit is for
         </label>
 
         <select
@@ -292,11 +299,6 @@ export default function CustomerPermitPanel() {
             setMessage("");
           }}
           disabled={loading || saving}
-          style={{
-            width: "100%",
-            padding: "12px",
-            borderRadius: "8px",
-          }}
         >
           {!bookingId && (
             <option value="">Select a booking</option>
@@ -367,30 +369,27 @@ export default function CustomerPermitPanel() {
           )}
 
           {canReupload && (
-            <form
-              className="licence-upload-panel"
-              onSubmit={handleSubmit}
-            >
-              <label htmlFor="permit-expiry">
-                Permit Expiry Date
-              </label>
+            <form onSubmit={handleSubmit}>
+              {/* The site's own date picker, stacked above the upload row
+                  like the booking picker. */}
+              <div className="permit-booking-picker">
+                <label htmlFor="permit-expiry">
+                  Permit valid until
+                </label>
 
-              <input
-                id="permit-expiry"
-                className="form-input"
-                type="date"
-                value={expiryDate}
-                onChange={(event) =>
-                  setExpiryDate(event.target.value)
-                }
-                required
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  borderRadius: "8px",
-                }}
-              />
+                <DatePicker
+                  id="permit-expiry"
+                  value={expiryDate}
+                  min={klToday()}
+                  placeholder="Choose the date"
+                  onChange={(event) =>
+                    setExpiryDate(event.target.value)
+                  }
+                  required
+                />
+              </div>
 
+              <div className="licence-upload-panel">
               <label className="licence-upload-area">
                 <input
                   key={`${bookingId}-${document?.id || "new"}`}
@@ -407,7 +406,7 @@ export default function CustomerPermitPanel() {
                   <strong>
                     {file
                       ? file.name
-                      : "Choose International Permit"}
+                      : "Choose your permit file"}
                   </strong>
 
                   <span>
@@ -423,8 +422,9 @@ export default function CustomerPermitPanel() {
               >
                 {saving
                   ? "Uploading..."
-                  : "Submit International Permit"}
+                  : "Submit permit"}
               </button>
+              </div>
             </form>
           )}
         </>

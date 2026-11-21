@@ -1,12 +1,15 @@
 import { useNavigate } from "react-router-dom";
 import { useCustomerNotifications } from "../../hooks/useNotifications";
 import { formatCustomerDate } from "../../utils/customerUtils";
+import { usePagination } from "../../hooks/usePagination";
+import ListPagination from "../../components/customer/ListPagination";
 
 export default function CustomerNotifications() {
   const navigate = useNavigate();
 
   const { notifications, loading, error, markRead, markAllRead } =
     useCustomerNotifications();
+  const pagination = usePagination(notifications, 10);
 
   function getCustomerNotificationLink(item) {
     const text = `${item.title || ""} ${item.message || ""}`.toLowerCase();
@@ -107,10 +110,10 @@ export default function CustomerNotifications() {
       <section className="customer-hero-card compact">
         <div>
           <p className="customer-eyebrow">Notifications</p>
-          <h1>Real-time and email notification log</h1>
+          <h1>Your notifications</h1>
           <p>
-            Booking and payment events should be sent to the customer
-            simultaneously through WebSocket and email.
+            Updates about your bookings, payments and documents. We also
+            send the important ones by email.
           </p>
         </div>
 
@@ -127,8 +130,8 @@ export default function CustomerNotifications() {
         <div className="customer-alert customer-alert-danger">{error}</div>
       )}
 
-      <section className="customer-list-stack">
-        {notifications.map((item) => (
+      <section className="customer-list-stack" id="notification-list">
+        {pagination.pageItems.map((item) => (
           <button
             key={item.id}
             type="button"
@@ -150,6 +153,8 @@ export default function CustomerNotifications() {
           </button>
         ))}
       </section>
+
+      <ListPagination pagination={pagination} label="notifications" listId="notification-list" />
 
       {!notifications.length && !error && (
         <div className="customer-empty-state">

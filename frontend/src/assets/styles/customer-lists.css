@@ -1,0 +1,294 @@
+/* Customer area lists: pagination, the payment card and the permit
+   booking picker. Colours use the public site tokens for light and dark. */
+
+/* ── Pagination ──────────────────────────────────────────────────── */
+.customer-theme .list-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 4px 2px;
+}
+
+.customer-theme .list-pagination-summary {
+  margin: 0;
+  color: var(--pub-label);
+  font-size: 14px;
+}
+
+.customer-theme .list-pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.customer-theme .list-pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--pub-control-line);
+  border-radius: 999px;
+  background: var(--pub-surface);
+  color: var(--pub-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.customer-theme .list-pagination-btn.number {
+  padding: 0;
+}
+
+.customer-theme .list-pagination-btn:hover:not(:disabled):not(.current) {
+  background: var(--pub-surface-sunk);
+}
+
+.customer-theme .list-pagination-btn.current {
+  border-color: var(--pub-brand);
+  background: var(--pub-brand);
+  color: var(--pub-on-brand);
+}
+
+.customer-theme .list-pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.customer-theme .list-pagination-btn:focus-visible {
+  outline: 2px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+.customer-theme .list-pagination-gap {
+  padding: 0 4px;
+  color: var(--pub-label);
+}
+
+@media (max-width: 560px) {
+  .customer-theme .list-pagination {
+    justify-content: center;
+  }
+
+  .customer-theme .list-pagination-word {
+    display: none;
+  }
+}
+
+/* ── Payment card ────────────────────────────────────────────────── */
+.customer-theme .payment-card {
+  display: grid;
+  gap: 18px;
+}
+
+.customer-theme .payment-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.customer-theme .payment-card-head h3 {
+  margin: 0;
+  color: var(--pub-ink);
+  font-size: 20px;
+}
+
+.customer-theme .payment-card-head p {
+  margin: 4px 0 0;
+  color: var(--pub-label);
+  font-size: 14px;
+}
+
+.customer-theme .payment-card-head .customer-status {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.customer-theme .payment-card-progress {
+  display: grid;
+  gap: 8px;
+}
+
+.customer-theme .payment-card-amounts {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--pub-label);
+  font-size: 14px;
+}
+
+.customer-theme .payment-card-amounts strong {
+  color: var(--pub-ink);
+  font-size: 22px;
+}
+
+.customer-theme .payment-card-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--pub-surface-sunk);
+  overflow: hidden;
+}
+
+.customer-theme .payment-card-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--pub-moss);
+}
+
+.customer-theme .payment-card-parts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.customer-theme .payment-card-part {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: var(--pub-radius-lg);
+  background: var(--pub-surface-sunk);
+}
+
+.customer-theme .payment-card-part-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--pub-label);
+  font-size: 13px;
+}
+
+.customer-theme .payment-card-part-top .customer-status {
+  font-size: 11px;
+}
+
+.customer-theme .payment-card-part strong {
+  color: var(--pub-ink);
+  font-size: 17px;
+}
+
+.customer-theme .payment-card-part small {
+  color: var(--pub-label);
+  font-size: 13px;
+}
+
+.customer-theme .payment-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--pub-line-soft);
+}
+
+.customer-theme .payment-card-method {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--pub-label);
+  font-size: 14px;
+}
+
+.customer-theme .payment-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .customer-theme .payment-card-parts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Permit panel: booking picker above the status box ───────────── */
+.customer-theme .permit-booking-picker {
+  display: grid;
+  gap: 8px;
+  max-width: 520px;
+  margin-bottom: 18px;
+}
+
+.customer-theme .permit-booking-picker label {
+  color: var(--pub-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.customer-theme .permit-booking-picker select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--pub-control-line);
+  border-radius: var(--pub-radius);
+  background: var(--pub-surface);
+  color: var(--pub-ink);
+  font: inherit;
+}
+
+/* ── Licence and permit upload buttons ───────────────────────────────
+   They used the admin dashboard's blue `btn primary`; in the customer
+   area they use the brand green like every other main button. While no
+   file is chosen the button stays readable instead of fading to pale. */
+.customer-theme .btn.primary.licence-upload-button {
+  border: 0;
+  background: var(--pub-brand);
+  color: var(--pub-on-brand);
+  box-shadow: none;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.customer-theme .btn.primary.licence-upload-button:hover:not(:disabled) {
+  background: var(--pub-brand-hover);
+}
+
+.customer-theme .btn.primary.licence-upload-button:disabled {
+  opacity: 1;
+  background: var(--pub-surface-sunk);
+  color: var(--pub-label);
+  border: 1px solid var(--pub-control-line);
+}
+
+.customer-theme .btn.primary.licence-upload-button:focus-visible {
+  outline: 2px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+/* ── My bookings: "Filter by status" label and dropdown ─────────────── */
+.customer-theme .booking-status-filter {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 4px 0 8px;
+  color: var(--pub-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.customer-theme .booking-status-filter select {
+  min-width: 200px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--pub-control-line);
+  border-radius: var(--pub-radius);
+  background: var(--pub-surface);
+  color: var(--pub-ink);
+  font: inherit;
+  font-weight: 400;
+}
+
+.customer-theme .booking-status-filter select:focus-visible {
+  outline: 2px solid var(--pub-focus);
+  outline-offset: 2px;
+}

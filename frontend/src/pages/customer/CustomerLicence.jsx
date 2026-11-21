@@ -311,8 +311,8 @@ export default function CustomerLicence() {
               {saving
                 ? "Uploading..."
                 : isApproved
-                  ? "Upload Renewed Licence"
-                  : "Submit Licence"}
+                  ? "Upload renewed licence"
+                  : "Submit licence"}
             </button>
           </form>
         )}

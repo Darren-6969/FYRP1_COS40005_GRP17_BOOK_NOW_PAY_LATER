@@ -7,6 +7,7 @@ import {
   formatMoney,
   statusLabel,
 } from "../../utils/customerUtils";
+import "../../assets/styles/customer-lists.css";
 
 const bookingTabs = [
   { key: "ACTIVE", label: "Active Bookings" },
@@ -366,7 +367,7 @@ export default function MyBookings() {
             </button>
           ))}
         </div>
-        <label className="customer-field-label" htmlFor="booking-status-filter">
+        <label className="customer-field-label booking-status-filter" htmlFor="booking-status-filter">
           Filter by status
           <select id="booking-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value="ALL">All statuses</option>
