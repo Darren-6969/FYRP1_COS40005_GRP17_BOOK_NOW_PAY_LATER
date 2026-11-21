@@ -11,7 +11,6 @@ import {
 
 import OfferModal from "../../components/operator/OfferModal";
 import RejectBookingModal from "../../components/operator/RejectBookingModal";
-import { openPrivateDocument } from "../../utils/openPrivateDocument";
 import { DateTimePicker } from "../../components/common/DatePicker";
 import OperatorCancelDialog from "../../components/operator/OperatorCancelDialog";
 import OperatorRefundCard from "../../components/operator/OperatorRefundCard";
@@ -27,7 +26,8 @@ import {
   timeLeft,
 } from "../../components/booking/carBookingParts";
 
-import OperatorPermitRequirement from "../../components/operator/OperatorPermitRequirement";
+import BookingAttentionBanner from "../../components/operator/BookingAttentionBanner";
+import BookingDocumentsChecklist from "../../components/operator/BookingDocumentsChecklist";
 import OperatorCounterVerification from "../../components/operator/OperatorCounterVerification";
 
 export default function OperatorBookingDetail() {
@@ -403,27 +403,6 @@ export default function OperatorBookingDetail() {
     booking.customer?.drivingLicense?.status ||
     "NOT_SUBMITTED";
 
-  const licenceNumber =
-    booking.customer?.licenceNumber ||
-    booking.customer?.licenseNumber ||
-    booking.customer?.drivingLicence?.number ||
-    booking.customer?.drivingLicense?.number ||
-    "-";
-
-  const licenceExpiry =
-    booking.customer?.licenceExpiryDate ||
-    booking.customer?.licenseExpiryDate ||
-    booking.customer?.drivingLicence?.expiryDate ||
-    booking.customer?.drivingLicense?.expiryDate ||
-    null;
-
-  const licenceVerifiedAt =
-    booking.customer?.licenceVerifiedAt ||
-    booking.customer?.licenseVerifiedAt ||
-    booking.customer?.drivingLicence?.verifiedAt ||
-    booking.customer?.drivingLicense?.verifiedAt ||
-    null;
-
   const paidToDate =
   (
     booking.payment
@@ -454,6 +433,17 @@ export default function OperatorBookingDetail() {
     canCancel ||
     shouldShowPaymentVerificationLink;
 
+  const attentionItems = buildAttentionItems({
+    booking,
+    bookingStatus,
+    canAcceptReject,
+    canQuoteLocationCharge,
+    responseDueAt,
+    shouldShowPaymentVerificationLink,
+    licenceStatus,
+    permitRequired,
+  });
+
   return (
     <div className="operator-page">
 
@@ -465,6 +455,9 @@ export default function OperatorBookingDetail() {
           ‹ Back to Bookings
         </Link>
       </div>
+
+      {/* Everything waiting for the operator on this booking. */}
+      <BookingAttentionBanner items={attentionItems} />
 
       {/* =====================================================
     Compact Booking Header
@@ -927,91 +920,10 @@ export default function OperatorBookingDetail() {
           </div>
         )}
 
-        <div className="booking-clean-status-row">
-          <div>
-            <span>
-              Driving Licence
-            </span>
-
-            <strong>
-              {getLicenceStatusLabel(
-                licenceStatus
-              )}
-            </strong>
-          </div>
-
-          <span
-            className={`operator-status ${getLicenceStatusClass(
-              licenceStatus
-            )}`}
-          >
-            {getLicenceStatusLabel(
-              licenceStatus
-            )}
-          </span>
-        </div>
-
-        {(licenceNumber !== "-" ||
-          licenceExpiry ||
-          licenceVerifiedAt) && (
-          <div className="booking-clean-licence-details">
-
-            {licenceNumber !== "-" && (
-              <InfoRow
-                label="Licence Number"
-                value={licenceNumber}
-              />
-            )}
-
-            {licenceExpiry && (
-              <InfoRow
-                label="Expiry Date"
-                value={formatOperatorDateTime(
-                  licenceExpiry
-                )}
-              />
-            )}
-
-            {licenceVerifiedAt && (
-              <InfoRow
-                label="Verified At"
-                value={formatOperatorDateTime(
-                  licenceVerifiedAt
-                )}
-              />
-            )}
-
-          </div>
-        )}
-
-        {/* The licence stays viewable after review. Before, it could
-            only be opened from the review queue, which drops it once
-            approved. */}
-        {booking.customer?.licenceDocumentId && (
-          <button
-            type="button"
-            className="operator-secondary-btn"
-            onClick={() =>
-              openPrivateDocument(() =>
-                operatorService.downloadLicenceDocument(
-                  booking.customer.licenceDocumentId
-                )
-              ).catch((err) =>
-                alert(
-                  err.response?.status === 404
-                    ? "This licence can no longer be opened for this booking."
-                    : "Failed to open licence document."
-                )
-              )
-            }
-          >
-            View licence document
-          </button>
-        )}
       </div>
 
-      {/* IDP Document Requirements */}
-      <OperatorPermitRequirement
+      {/* Licence and IDP: status, view, approve or reject. */}
+      <BookingDocumentsChecklist
         key={booking.id}
         booking={booking}
         onUpdated={loadBooking}
@@ -1322,10 +1234,12 @@ export default function OperatorBookingDetail() {
 
     </section>
 
-    <OperatorRefundCard booking={booking} onChanged={loadBooking} />
+    <div id="booking-refund">
+      <OperatorRefundCard booking={booking} onChanged={loadBooking} />
+    </div>
 
     {/* Actions */}
-    <section className="operator-card booking-clean-side-card">
+    <section className="operator-card booking-clean-side-card" id="booking-actions">
 
       <div className="booking-clean-side-head">
         <div>
@@ -2153,84 +2067,6 @@ function AlternativeModal({
 }
 
 // ===========================================================
-// Licence Status Label
-// ===========================================================
-function getLicenceStatusLabel(status) {
-  const normalized = String(
-    status || ""
-  ).toUpperCase();
-
-  const labels = {
-    VERIFIED: "Verified",
-    APPROVED: "Verified",
-
-    PENDING:
-      "Pending Verification",
-
-    PENDING_VERIFICATION:
-      "Pending Verification",
-
-    UNDER_REVIEW:
-      "Pending Verification",
-
-    REUPLOAD_REQUIRED:
-      "Re-upload Required",
-
-    REJECTED: "Rejected",
-
-    FAILED:
-      "Verification Failed",
-
-    NOT_SUBMITTED:
-      "Not Submitted",
-  };
-
-  return (
-    labels[normalized] ||
-    operatorStatusLabel(normalized)
-  );
-}
-
-// ===========================================================
-// Licence Status Class
-// ===========================================================
-function getLicenceStatusClass(status) {
-  const normalized = String(
-    status || ""
-  ).toUpperCase();
-
-  if (
-    ["VERIFIED", "APPROVED"].includes(
-      normalized
-    )
-  ) {
-    return "success";
-  }
-
-  if (
-    [
-      "PENDING",
-      "PENDING_VERIFICATION",
-      "UNDER_REVIEW",
-    ].includes(normalized)
-  ) {
-    return "warning";
-  }
-
-  if (
-    [
-      "REJECTED",
-      "FAILED",
-      "REUPLOAD_REQUIRED",
-    ].includes(normalized)
-  ) {
-    return "danger";
-  }
-
-  return "neutral";
-}
-
-// ===========================================================
 // datetime-local helper
 // ===========================================================
 function toDatetimeLocalValue(value) {
@@ -2448,3 +2284,146 @@ function PaymentDeadlineModal({
   );
 }
 
+// ===========================================================
+// Needs your attention
+//
+// What on this booking is waiting for the operator, most urgent first.
+// Only things the operator must do; anything waiting on the customer
+// shows in its own section instead.
+// ===========================================================
+const HOUR_MS = 60 * 60 * 1000;
+
+function buildAttentionItems({
+  booking,
+  bookingStatus,
+  canAcceptReject,
+  canQuoteLocationCharge,
+  responseDueAt,
+  shouldShowPaymentVerificationLink,
+  licenceStatus,
+  permitRequired,
+}) {
+  const now = Date.now();
+  const items = [];
+
+  if (canAcceptReject) {
+    const dueMs = responseDueAt ? new Date(responseDueAt).getTime() : null;
+    const autoReject = booking.car?.autoRejectOnTimeout !== false;
+    items.push({
+      key: "respond",
+      tone: dueMs && dueMs - now < HOUR_MS ? "danger" : "warning",
+      title: "Respond to this booking request",
+      detail: [
+        responseDueAt
+          ? `Reply by ${formatOperatorDateTime(responseDueAt)}.${
+              autoReject ? " If you don't, it is rejected automatically." : ""
+            }`
+          : null,
+        canQuoteLocationCharge
+          ? "The customer asked for their own pickup or drop-off place."
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      actionLabel: "Accept or reject",
+      targetId: "booking-actions",
+    });
+  }
+
+  if (shouldShowPaymentVerificationLink) {
+    items.push({
+      key: "receipt",
+      tone: "warning",
+      title: "Check the customer's payment receipt",
+      detail: "Confirm the DuitNow payment so the booking can move on.",
+      actionLabel: "Verify payment",
+      to: `/operator/payments?bookingId=${booking.id}`,
+    });
+  }
+
+  if (String(licenceStatus).toUpperCase() === "UNDER_REVIEW") {
+    items.push({
+      key: "licence",
+      tone: "warning",
+      title: "Review the driving licence",
+      detail: "The car can't be handed over until the licence is approved.",
+      actionLabel: "Review licence",
+      targetId: "booking-documents",
+    });
+  }
+
+  if (permitRequired && booking.permit?.status === "UNDER_REVIEW") {
+    items.push({
+      key: "permit",
+      tone: "warning",
+      title: "Review the international driving permit",
+      detail: "The car can't be handed over until the permit is approved.",
+      actionLabel: "Review permit",
+      targetId: "booking-documents",
+    });
+  }
+
+  (booking.refunds || []).forEach((refund) => {
+    const status = String(refund.status || "").toUpperCase();
+    const isCard = refund.method === "STRIPE";
+
+    if (!isCard && status === "PENDING") {
+      const overdue = refund.dueAt && new Date(refund.dueAt).getTime() < now;
+      items.push({
+        key: `refund-${refund.id}`,
+        tone: overdue ? "danger" : "warning",
+        title: overdue ? "The DuitNow refund is overdue" : "Send the DuitNow refund",
+        detail: refund.dueAt
+          ? `Due by ${formatOperatorDateTime(refund.dueAt)}. Record the transfer reference once it is sent.`
+          : "Record the transfer reference once it is sent.",
+        actionLabel: "Go to refund",
+        targetId: "booking-refund",
+      });
+    }
+
+    if (isCard && status === "FAILED") {
+      items.push({
+        key: `refund-${refund.id}`,
+        tone: "danger",
+        title: "The card refund failed",
+        detail: "Retry it so the customer gets their money back.",
+        actionLabel: "Go to refund",
+        targetId: "booking-refund",
+      });
+    }
+  });
+
+  if (bookingStatus === "READY_FOR_PICKUP" && booking.pickupDate) {
+    const pickupMs = new Date(booking.pickupDate).getTime();
+    if (pickupMs - now < 24 * HOUR_MS) {
+      items.push({
+        key: "handover",
+        tone: pickupMs < now ? "danger" : "warning",
+        title: pickupMs < now ? "Pickup time has passed" : "Pickup is within 24 hours",
+        detail: `Pickup at ${formatOperatorDateTime(booking.pickupDate)}. Do the counter check, then mark the car as handed over.`,
+        actionLabel: "Go to handover",
+        targetId: "booking-actions",
+      });
+    }
+  }
+
+  if (
+    bookingStatus === "IN_PROGRESS" &&
+    booking.returnDate &&
+    new Date(booking.returnDate).getTime() < now
+  ) {
+    items.push({
+      key: "return",
+      tone: "danger",
+      title: "The car is past its return time",
+      detail: `It was due back at ${formatOperatorDateTime(booking.returnDate)}. Record the return when the car is back.`,
+      actionLabel: "Record return",
+      targetId: "booking-actions",
+    });
+  }
+
+  // Most urgent first.
+  return items.sort(
+    (a, b) => (a.tone === "danger" ? 0 : 1) - (b.tone === "danger" ? 0 : 1)
+  );
+}

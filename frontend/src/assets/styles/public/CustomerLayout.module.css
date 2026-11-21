@@ -3,6 +3,11 @@
    customer.css, recoloured by customer-theme.css. */
 .root {
   min-height: 100vh;
+  min-height: 100dvh;
+  /* Column layout so main can grow and the footer stays at the bottom
+     on short pages (loading states, empty lists). */
+  display: flex;
+  flex-direction: column;
   background: var(--pub-ground);
   color: var(--pub-ink);
   font-family: var(--pub-font-body);
@@ -36,6 +41,8 @@
 
 /* ── sub-nav ─────────────────────────────────────────────────────── */
 .subnav {
+  box-sizing: border-box;
+  width: 100%;
   max-width: var(--pub-max);
   margin: 0 auto;
   padding: 12px var(--pub-gutter) 4px;
@@ -92,6 +99,8 @@
 .main {
   box-sizing: border-box;
   display: block;
+  flex: 1 0 auto;
+  width: 100%;
   max-width: var(--pub-max);
   margin: 0 auto;
   padding: 16px var(--pub-gutter) 64px;
