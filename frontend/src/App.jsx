@@ -89,6 +89,7 @@ import TestItems from "./pages/public/TestItems"; // TEST-ITEM-MISC: delete with
 import CarBookingForm from "./pages/public/CarBookingForm";
 import NotAvailable from "./pages/public/NotAvailable";
 import InfoPage from "./pages/public/InfoPage";
+import InfoHub from "./pages/public/InfoHub";
 import Assistant from "./pages/public/Assistant";
 import ForOperators from "./pages/public/ForOperators";
 
@@ -105,6 +106,7 @@ export default function App() {
           <Route path="/for-operators" element={<ForOperators />} />
           <Route path="/cars/:listingId" element={<CarDetail />} />
           {/* Terms, privacy, refund rules and contact; other slugs render NotAvailable. */}
+          <Route path="/info" element={<InfoHub />} />
           <Route path="/info/:slug" element={<InfoPage />} />
           {/* Chatbot (Module 10): the same chat as the floating help panel. */}
           <Route path="/assistant" element={<Assistant />} />

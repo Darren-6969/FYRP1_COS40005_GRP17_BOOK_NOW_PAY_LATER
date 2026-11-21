@@ -8,10 +8,11 @@ import { logout } from "../../services/auth_service";
 import NotificationBell from "./NotificationBell";
 import styles from "../../assets/styles/public/PublicHeader.module.css";
 
-// Car rental only (15 Oct 2026): just the links with real pages. How it works
-// and FAQ come back only if they get their own pages.
+// Car rental only (15 Oct 2026): just the links with real pages. Help (/info)
+// lists the help and policy pages, with How it works linked from there.
 const NAV = [
   { to: "/cars", label: "Car rental" },
+  { to: "/info", label: "Help" },
   { to: "/for-operators", label: "Operators" },
 ];
 

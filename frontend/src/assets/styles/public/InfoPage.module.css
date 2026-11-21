@@ -199,3 +199,92 @@
     gap: 2px;
   }
 }
+
+/* Help page (/info): the tiles at full width. */
+.hub {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: clamp(32px, 6vw, 72px) var(--pub-gutter) clamp(64px, 8vw, 104px);
+}
+
+.hub .lead {
+  margin-bottom: 32px !important;
+}
+
+/* "Help home" link above the page list. */
+.sideHome {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pub-link) !important;
+}
+
+/* How it works: numbered steps. */
+.steps {
+  list-style: none;
+  margin: 32px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 16px;
+  padding-bottom: 24px;
+}
+
+/* A thin line joins each number to the next. */
+.step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 19px;
+  top: 44px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--pub-line);
+}
+
+.stepNum {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--pub-brand);
+  color: var(--pub-on-brand);
+  font-family: var(--pub-font-display);
+  font-weight: 700;
+}
+
+.stepTitle {
+  margin: 8px 0 4px !important;
+  font-family: var(--pub-font-display);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--pub-ink);
+}
+
+.stepText {
+  margin: 0 !important;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--pub-text);
+}
+
+.related {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.related a {
+  font-weight: 600;
+}

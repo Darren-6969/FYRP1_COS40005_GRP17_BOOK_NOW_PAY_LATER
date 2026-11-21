@@ -1,0 +1,128 @@
+/* Help page tiles (/info and the customer Help and support tab). */
+.wrap {
+  display: grid;
+  gap: 24px;
+}
+
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.tile {
+  height: 100%;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 20px;
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
+  background: var(--pub-surface);
+  color: var(--pub-ink) !important;
+  text-decoration: none;
+  transition: border-color var(--pub-dur-fast, 150ms) ease, transform var(--pub-dur-fast, 150ms) ease;
+}
+
+.tile:hover {
+  border-color: var(--pub-brand);
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tile:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.icon {
+  color: var(--pub-moss-text);
+  margin-bottom: 6px;
+}
+
+.tileTitle {
+  font-family: var(--pub-font-display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--pub-ink);
+}
+
+.tileText {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--pub-text);
+}
+
+.contact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 20px 24px;
+  border-radius: var(--pub-radius-lg);
+  background: var(--pub-surface-sunk);
+}
+
+.contactTitle {
+  margin: 0 !important;
+  font-weight: 600;
+  color: var(--pub-ink);
+}
+
+.contactText {
+  margin: 4px 0 0 !important;
+  font-size: 14px;
+  color: var(--pub-text);
+}
+
+.contactActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.primary {
+  background: var(--pub-brand);
+  color: var(--pub-on-brand) !important;
+}
+
+.primary:hover {
+  background: var(--pub-brand-hover);
+}
+
+.secondary {
+  border: 1px solid var(--pub-control-line);
+  background: var(--pub-surface);
+  color: var(--pub-ink) !important;
+}
+
+.secondary:hover {
+  background: var(--pub-surface-sunk);
+}
+
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 2px solid var(--pub-focus);
+  outline-offset: 2px;
+}

@@ -28,7 +28,7 @@ const TRUST = ["Verified operators only", "Nothing charged to request", "No cred
 
 const STEPS = [
   { n: "1", title: "Send a booking request", desc: "It's free, and nothing is charged." },
-  { n: "2", title: "The operator confirms", desc: "Usually within 2 hours." },
+  { n: "2", title: "The operator confirms", desc: "Within the reply time shown on the car." },
   { n: "3", title: "Pay the down payment", desc: "This secures the car." },
   { n: "4", title: "Pay the balance before pickup, then collect", desc: "Staff check your original licence at handover." },
 ];
@@ -41,15 +41,15 @@ const PROMPTS = [
 ];
 
 const FAQS = [
-  { q: "How does Book Now Pay Later work here?", a: "Every booking starts as a request. Sending it is free and nothing is charged. Once the operator confirms, usually within 2 hours, you pay a deposit to secure the car. Each operator sets its own deposit, and every car shows it before you send a request. The balance is due before pickup, by a deadline the operator sets. You are shown both amounts, the deadline, and what happens if you miss it before you pay anything." },
+  { q: "How does Book Now Pay Later work here?", a: "Every booking starts as a request. Sending it is free and nothing is charged. Once the operator confirms, within the reply time shown on the car, you pay a deposit to secure the car. Each operator sets its own deposit, and every car shows it before you send a request. The balance is due before pickup, by the deadline shown on your booking. You are shown both amounts, the deadline, and what happens if you miss it before you pay anything." },
   { q: "Why does the operator need to confirm?", a: "Operators accept each booking manually. They check that the car is available and ready for your dates before you pay anything." },
   { q: "What happens if my request is declined?", a: "Nothing is charged, and we show you similar cars." },
-  { q: "What happens if I miss the balance deadline?", a: "The deposit is forfeited in full. That is the default and it is not negotiable after the cutoff. Individual car rental operators may elect a partial refund rule instead, available only on standard listings outside the platform's peak calendar; where they have, the listing and the payment screen say so before you commit." },
-  { q: "When do I submit my driving licence?", a: "After your booking is confirmed, not during checkout. You upload it against that specific order, not once for your account, and it shares the same deadline as the balance. The check is preliminary: rental staff still inspect the original document at handover." },
+  { q: "What happens if I miss the balance deadline?", a: "The booking can be cancelled and the car released, and the deposit is kept by the operator. Some operators choose a partial refund instead, for standard rentals outside the platform's peak dates; where they have, the listing and the payment screen say so before you pay. Any balance you already paid is refunded in full." },
+  { q: "When do I submit my driving licence?", a: "After the operator confirms your booking, from your booking page, by the same deadline as the balance. A licence approved for an earlier booking is reused while it is still valid. If your licence was issued outside Malaysia, you also upload an international driving permit. The upload is a first check only: rental staff still inspect the originals at handover." },
   { q: "What if I return the car late?", a: "The operator records the time you hand the car back. Late hours are charged by the hour and paid at the counter; they are not part of your booking total." },
-  { q: "Is there a minimum driver age?", a: "No. Every driver needs a valid driving licence, uploaded before the balance deadline, with the original brought to pickup." },
+  { q: "Is there a minimum driver age?", a: "Only if the operator sets one. For most cars a valid driving licence is enough. Where an operator has driver age rules, the car shows them and the booking form asks for the driver's date of birth." },
   { q: "Are the operators verified?", a: "Every operator submits their SSM business registration and relevant transport licences, and the platform team reviews the application before any listing goes live. Each operator has a public page showing verified status, branch count, completed bookings and how long they have been active." },
-  { q: "Is my data protected?", a: "The platform operates under Malaysia's Personal Data Protection Act 2010. Your details are shared with the operator you book with and only to the extent needed to fulfil the booking. You can access, correct, and withdraw consent from your personal centre." },
+  { q: "Is my data protected?", a: "The platform operates under Malaysia's Personal Data Protection Act 2010. Your details are shared with the operator you book with and only to the extent needed to fulfil the booking. You can ask to see or correct your data, or withdraw consent for anything optional, through the Contact page." },
 ];
 
 const SEAT_OPTIONS = [

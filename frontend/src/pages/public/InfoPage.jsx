@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { BRAND } from "../../constants/brand";
 import { CONTACT, INFO_PAGES, INFO_UPDATED } from "../../constants/infoPages";
 import NotAvailable from "./NotAvailable";
@@ -7,7 +8,9 @@ import PolicyBody from "../../components/common/PolicyBody";
 import { getPublicPolicy } from "../../services/policy_service";
 import styles from "../../assets/styles/public/InfoPage.module.css";
 
-// Terms, privacy, refund rules and contact (/info/:slug). The section text of
+// Help pages (/info/:slug): deposits and balances, licence and permit,
+// refund rules, terms, privacy, about and contact. The Help page that lists
+// them all is InfoHub (/info). The section text of
 // terms, privacy and refund rules comes from the policy library, edited on
 // the admin Policies and answers page. constants/infoPages.js holds the
 // title, lead and navigation, and its sections are the fallback if the
@@ -84,7 +87,11 @@ export default function InfoPage() {
 
   return (
     <div className={styles.page}>
-      <nav ref={navRef} className={styles.side} aria-label="Policies and contact">
+      <nav ref={navRef} className={styles.side} aria-label="Help pages">
+        <Link to="/info" className={styles.sideHome}>
+          <ArrowLeft size={15} aria-hidden="true" />
+          Help home
+        </Link>
         <ul className={styles.sideList}>
           {ORDER.map((key) => (
             <li key={key}>
@@ -113,6 +120,22 @@ export default function InfoPage() {
 
         {page.contact && <ContactDetails />}
 
+        {page.steps && (
+          <ol className={styles.steps}>
+            {page.steps.map((step, index) => (
+              <li key={step.title} className={styles.step}>
+                <span className={styles.stepNum} aria-hidden="true">
+                  {index + 1}
+                </span>
+                <div>
+                  <h2 className={styles.stepTitle}>{step.title}</h2>
+                  <p className={styles.stepText}>{step.text}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+
         {librarySections
           ? librarySections.map((section) => (
               <section key={section.key} className={styles.section}>
@@ -138,6 +161,21 @@ export default function InfoPage() {
                 ))}
               </section>
             ))}
+
+        {page.related && (
+          <section className={styles.section} aria-labelledby="info-related">
+            <h2 id="info-related" className={styles.heading}>
+              Read next
+            </h2>
+            <ul className={styles.related}>
+              {page.related.map((link) => (
+                <li key={link.to}>
+                  <Link to={link.to}>{link.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {!page.contact && (
           <p className={styles.footnote}>
