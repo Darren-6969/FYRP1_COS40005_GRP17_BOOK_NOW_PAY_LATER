@@ -76,7 +76,7 @@ export default function PaymentStatus() {
         <p className="customer-eyebrow">Payment Status</p>
 
         <h1>
-          {syncing ? "Confirming Payment..." : statusLabel(paymentStatus)}
+          {syncing ? "Confirming payment..." : statusLabel(paymentStatus)}
         </h1>
 
         <p className="customer-muted">

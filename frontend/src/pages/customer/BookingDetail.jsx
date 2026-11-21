@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCustomerBooking } from "../../hooks/useBookings";
 import {
@@ -9,25 +9,16 @@ import {
   formatCustomerDate,
   formatMoney,
   statusLabel,
+  formatStatus,
 } from "../../utils/customerUtils";
 import { refreshNotifications } from "../../utils/notifyRefresh";
 import CarBookingPanel from "../../components/booking/CarBookingPanel";
 import CarAlternativeCard from "../../components/booking/CarAlternativeCard";
 import CancelBookingDialog from "../../components/booking/CancelBookingDialog";
 import RefundSummary, { CancellationNotice } from "../../components/booking/RefundSummary";
-import {
-  getBookingLicenceDocument,
-  getMyPermit,
-  submitBookingLicenceDocument,
-  submitPermitDocument,
-} from "../../services/customer_service";
-
-const PERMIT_STATUS = {
-  UNDER_REVIEW: "Under review",
-  APPROVED: "Approved",
-  REJECTED: "Rejected, please upload again",
-  REUPLOAD_REQUIRED: "Re-upload required",
-};
+import BookingNextStep from "../../components/booking/BookingNextStep";
+import BookingDocumentsCard from "../../components/booking/BookingDocumentsCard";
+import "../../assets/styles/customer-booking-detail.css";
 
 export default function BookingDetail() {
   const { id } = useParams();
@@ -44,77 +35,7 @@ export default function BookingDetail() {
 
   const [alternativeBusy, setAlternativeBusy] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
-  const [licence, setLicence] = useState(null);
-  const [licenceFile, setLicenceFile] = useState(null);
-  const [licenceBusy, setLicenceBusy] = useState(false);
-  const [permit, setPermit] = useState(null);
-  const [permitFile, setPermitFile] = useState(null);
-  const [permitExpiry, setPermitExpiry] = useState("");
-  const [permitBusy, setPermitBusy] = useState(false);
-
   const gocarThankYouUrl = import.meta.env.VITE_GOCAR_THANK_YOU_URL;
-
-  useEffect(() => {
-    let active = true;
-    getBookingLicenceDocument(id)
-      .then((response) => {
-        if (active) setLicence(response.data.document);
-      })
-      .catch(() => {
-        if (active) setLicence(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [id]);
-
-  // International Driving Permit uploaded for this booking, if any.
-  useEffect(() => {
-    let active = true;
-    getMyPermit(id)
-      .then((response) => {
-        if (active) setPermit(response.data.document || null);
-      })
-      .catch(() => {
-        if (active) setPermit(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [id]);
-
-  const handlePermitSubmit = async (event) => {
-    event.preventDefault();
-    if (!permitFile || !permitExpiry) return;
-    try {
-      setPermitBusy(true);
-      await submitPermitDocument(id, permitFile, permitExpiry);
-      setPermitFile(null);
-      setPermitExpiry("");
-      const response = await getMyPermit(id);
-      setPermit(response.data.document || null);
-    } catch (err) {
-      alert(err.response?.data?.message || "Could not upload the permit.");
-    } finally {
-      setPermitBusy(false);
-    }
-  };
-
-  const handleLicenceSubmit = async (event) => {
-    event.preventDefault();
-    if (!licenceFile) return;
-    try {
-      setLicenceBusy(true);
-      await submitBookingLicenceDocument(id, licenceFile);
-      setLicenceFile(null);
-      const response = await getBookingLicenceDocument(id);
-      setLicence(response.data.document);
-    } catch (err) {
-      alert(err.response?.data?.message || "Could not upload the licence.");
-    } finally {
-      setLicenceBusy(false);
-    }
-  };
 
   // A car alternative is re-checked when accepted: it may have sold out, or
   // its price may have changed (the card then reloads with the new price).
@@ -170,11 +91,12 @@ export default function BookingDetail() {
   return (
     <div className="customer-page customer-booking-detail-page">
       <Link className="customer-text-btn" to="/customer/bookings">
-        ← Back to My Bookings
+        ← Back to my bookings
       </Link>
 
-      <section className="customer-booking-detail-grid with-alternative">
-        <article className="customer-glass-card customer-booking-detail-card">
+      {/* One column with even spacing; each card is a direct child. */}
+      <section className="booking-detail-stack">
+        <article className="customer-glass-card customer-booking-detail-card booking-detail-header">
           <div className="customer-card-head">
             <span
               className={`customer-status status-${customerStatusClass(
@@ -236,34 +158,15 @@ export default function BookingDetail() {
           </div>
           )}
 
-          <div className="customer-card-actions">
+          {isCarBooking && <BookingNextStep booking={booking} />}
+
+          <div className="customer-card-actions booking-detail-actions">
             {!isCarBooking && canCustomerPay(booking) && (
               <Link
                 className="customer-primary-btn"
                 to={`/customer/checkout/${booking.id}`}
               >
-                Proceed to Payment
-              </Link>
-            )}
-
-            {canCustomerCancel(booking) && (
-              <button
-                className="customer-secondary-btn"
-                onClick={() => setShowCancel(true)}
-              >
-                Cancel booking
-              </button>
-            )}
-
-            {cancellationClosedByPickup(booking) && (
-              <p className="customer-muted">
-                Pickup time has passed, so this booking can no longer be cancelled.
-              </p>
-            )}
-
-            {["NO_SHOW", "NO_SHOW_UNPAID"].includes(booking.status) && (
-              <Link className="customer-secondary-btn" to={`/customer/credit?booking=${booking.id}`}>
-                Appeal no-show decision
+                Proceed to payment
               </Link>
             )}
 
@@ -272,7 +175,13 @@ export default function BookingDetail() {
                 className="customer-secondary-btn"
                 to={`/customer/invoices/${booking.invoice.id}`}
               >
-                View Invoice
+                View invoice
+              </Link>
+            )}
+
+            {["NO_SHOW", "NO_SHOW_UNPAID"].includes(booking.status) && (
+              <Link className="customer-secondary-btn" to={`/customer/credit?booking=${booking.id}`}>
+                Appeal no-show decision
               </Link>
             )}
 
@@ -286,51 +195,37 @@ export default function BookingDetail() {
                 Return to GoCar
               </a>
             )}
-          </div>
-          <div className="customer-info-box">
-            <strong>Driving licence for this booking</strong>
-            <p className="customer-muted">
-              Status: {licence?.status?.replaceAll("_", " ") || "Not submitted"}
-            </p>
-            {!["COMPLETED", "CANCELLED", "REJECTED", "EXPIRED"].includes(booking.status) && (
-              <form onSubmit={handleLicenceSubmit}>
-                <input type="file" accept=".pdf,image/jpeg,image/png" onChange={(event) => setLicenceFile(event.target.files?.[0] || null)} />
-                <button className="customer-secondary-btn" disabled={!licenceFile || licenceBusy}>
-                  {licenceBusy ? "Uploading..." : "Upload licence"}
-                </button>
-              </form>
+
+            {/* Kept quiet so it is not pressed instead of the main action. */}
+            {canCustomerCancel(booking) && (
+              <button
+                type="button"
+                className="booking-detail-cancel"
+                onClick={() => setShowCancel(true)}
+              >
+                Cancel booking
+              </button>
             )}
           </div>
-          {isCarBooking && (booking.internationalPermitRequired || permit) && (
-            <div className="customer-info-box">
-              <strong>International driving permit for this booking</strong>
-              <p className="customer-muted">
-                {booking.internationalPermitRequired
-                  ? "Your licence was issued outside Malaysia, so this booking needs an international driving permit (IDP). Bring the original to pickup."
-                  : "Not required for this booking."}
-              </p>
-              <p className="customer-muted">
-                Status: {permit ? PERMIT_STATUS[permit.status] || permit.status : "Not submitted"}
-                {permit?.permitExpiryDate && ` · valid until ${String(permit.permitExpiryDate).slice(0, 10)}`}
-              </p>
-              {booking.internationalPermitRequired &&
-                permit?.status !== "UNDER_REVIEW" &&
-                permit?.status !== "APPROVED" &&
-                !["COMPLETED", "CANCELLED", "REJECTED", "EXPIRED", "NO_SHOW", "NO_SHOW_UNPAID"].includes(booking.status) && (
-                  <form onSubmit={handlePermitSubmit}>
-                    <input type="file" accept=".pdf,image/jpeg,image/png" onChange={(event) => setPermitFile(event.target.files?.[0] || null)} />
-                    <label>
-                      Permit expiry date{" "}
-                      <input type="date" value={permitExpiry} onChange={(event) => setPermitExpiry(event.target.value)} />
-                    </label>
-                    <button className="customer-secondary-btn" disabled={!permitFile || !permitExpiry || permitBusy}>
-                      {permitBusy ? "Uploading..." : "Upload permit"}
-                    </button>
-                  </form>
-                )}
-            </div>
+
+          {cancellationClosedByPickup(booking) && (
+            <p className="customer-muted">
+              Pickup time has passed, so this booking can no longer be cancelled.
+            </p>
           )}
         </article>
+
+        {/* An offer waiting for the customer comes straight after the header. */}
+        {booking.status === "ALTERNATIVE_SUGGESTED" && booking.car?.alternative && (
+          <CarAlternativeCard
+            booking={booking}
+            onAccept={handleAcceptAlternative}
+            onDecline={handleRejectAlternative}
+            busy={alternativeBusy}
+          />
+        )}
+
+        <BookingDocumentsCard booking={booking} />
 
         {isCarBooking && <CarBookingPanel booking={booking} />}
         <CancellationNotice booking={booking} />
@@ -344,15 +239,6 @@ export default function BookingDetail() {
               await reload();
               refreshNotifications();
             }}
-          />
-        )}
-
-        {booking.status === "ALTERNATIVE_SUGGESTED" && booking.car?.alternative && (
-          <CarAlternativeCard
-            booking={booking}
-            onAccept={handleAcceptAlternative}
-            onDecline={handleRejectAlternative}
-            busy={alternativeBusy}
           />
         )}
 
@@ -455,7 +341,7 @@ export default function BookingDetail() {
         )}
 
         <article className="customer-glass-card customer-timeline-card">
-          <h2>Booking Timeline</h2>
+          <h2>Booking timeline</h2>
 
           <div className="customer-timeline">
             {activity.length ? (
@@ -463,7 +349,7 @@ export default function BookingDetail() {
                 <div key={item.id} className="customer-timeline-item">
                   <span />
                   <div>
-                    <strong>{item.action.replaceAll("_", " ")}</strong>
+                    <strong>{formatStatus(item.action)}</strong>
                     <p>{formatCustomerDate(item.createdAt)}</p>
                   </div>
                 </div>
@@ -473,7 +359,7 @@ export default function BookingDetail() {
                 <div className="customer-timeline-item">
                   <span />
                   <div>
-                    <strong>Booking Created</strong>
+                    <strong>Booking created</strong>
                     <p>{formatCustomerDate(booking.createdAt)}</p>
                   </div>
                 </div>
@@ -481,7 +367,7 @@ export default function BookingDetail() {
                 <div className="customer-timeline-item">
                   <span />
                   <div>
-                    <strong>Current Status</strong>
+                    <strong>Current status</strong>
                     <p>{statusLabel(booking.status)}</p>
                   </div>
                 </div>

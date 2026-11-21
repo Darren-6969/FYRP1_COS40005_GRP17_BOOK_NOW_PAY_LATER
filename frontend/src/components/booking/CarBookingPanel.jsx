@@ -1,81 +1,19 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatCustomerDate, formatMoney } from "../../utils/customerUtils";
-import { getMyLicenceDocument } from "../../services/customer_service";
 import { durationText } from "../../utils/carPricing";
-import { priceBreakdownRows, timeLeft } from "./carBookingParts";
+import { priceBreakdownRows } from "./carBookingParts";
 
 // Car rental sections of the customer booking detail page (SRS 4.2.6).
+// The next step sits in the page header (BookingNextStep) and the licence
+// and permit in BookingDocumentsCard.
 // Everything shown comes from the booking record and its pricing snapshot;
 // nothing is recalculated here.
 
 const sen = (n) => formatMoney((n || 0) / 100);
 
-function useNow(intervalMs = 30000) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(t);
-  }, [intervalMs]);
-  return now;
-}
-
 function pointText(point) {
   if (!point) return "-";
   return point.address ? `${point.label}, ${point.address}` : point.label;
-}
-
-function StatusBanner({ booking, now }) {
-  const car = booking.car;
-  const op = booking.operator?.companyName || "The operator";
-  const payment = booking.payment;
-
-  if (booking.status === "PENDING") {
-    return (
-      <div className="customer-alert car-booking-banner" role="status">
-        <strong>Waiting for {op} to accept your request.</strong>
-        <span>
-          {car.responseDueAt && car.autoRejectOnTimeout
-            ? `They respond by ${formatCustomerDate(car.responseDueAt)} (${timeLeft(car.responseDueAt, now)}). If they don't, the request closes automatically and you can book another car. `
-            : car.responseDueAt
-            ? `They aim to respond by ${formatCustomerDate(car.responseDueAt)} (${timeLeft(car.responseDueAt, now)}). `
-            : ""}
-          Nothing is charged until they accept, and the car is held for you meanwhile.
-        </span>
-      </div>
-    );
-  }
-  if (booking.status === "PENDING_PAYMENT" && payment) {
-    const next =
-      payment.downPaymentStatus !== "PAID"
-        ? `Pay the ${formatMoney(payment.downPaymentAmount)} deposit by ${formatCustomerDate(payment.downPaymentDueDate)}.`
-        : payment.finalPaymentStatus !== "PAID"
-        ? `Pay the ${formatMoney(payment.finalPaymentAmount)} balance by ${formatCustomerDate(payment.finalPaymentDueDate)}.`
-        : "";
-    return (
-      <div className="customer-alert car-booking-banner" role="status">
-        <strong>{op} accepted your booking.</strong>
-        <span>{next}</span>
-      </div>
-    );
-  }
-  if (booking.status === "PAID") {
-    return (
-      <div className="customer-alert car-booking-banner" role="status">
-        <strong>Fully paid.</strong>
-        <span>Bring your driving licence to pickup. The operator checks the original at handover.</span>
-      </div>
-    );
-  }
-  if (booking.status === "REJECTED") {
-    return (
-      <div className="customer-alert customer-alert-danger car-booking-banner" role="status">
-        <strong>{op} couldn&apos;t take this booking.</strong>
-        <span>Nothing was charged. <Link to="/cars">Find another car</Link></span>
-      </div>
-    );
-  }
-  return null;
 }
 
 function PriceBreakdown({ pricing }) {
@@ -193,72 +131,16 @@ function PaymentSchedulePanel({ booking }) {
   );
 }
 
-// Account-level licence (Farah's verification queue). The per-booking check
-// against this licence is BNPLB-104; until then the card shows the account
-// status and links to the upload page.
-const LICENCE_STATE = {
-  APPROVED: ["Approved", "Your licence is checked. Bring the original to pickup."],
-  UNDER_REVIEW: ["Under review", "The platform checks it within 48 hours."],
-  REJECTED: ["Rejected", "Upload a clearer photo of the front and back."],
-  REUPLOAD_REQUIRED: ["New upload needed", "Upload a clearer photo of the front and back."],
-};
-
-function LicenceCard({ dueAt }) {
-  const [doc, setDoc] = useState(undefined);
-
-  useEffect(() => {
-    let alive = true;
-    getMyLicenceDocument()
-      .then((r) => alive && setDoc(r.data?.document || null))
-      .catch(() => alive && setDoc(null));
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const [label, note] = doc ? LICENCE_STATE[doc.status] || [doc.status, ""] : ["Not uploaded", ""];
-  const needsAction = !doc || ["REJECTED", "REUPLOAD_REQUIRED"].includes(doc.status);
-
-  return (
-    <article className="customer-glass-card">
-      <h2>Driving licence</h2>
-      {doc !== undefined && (
-        <div className="customer-info-list">
-          <div>
-            <span>Status</span>
-            <strong>{label}</strong>
-          </div>
-        </div>
-      )}
-      <p className="customer-muted">
-        {needsAction
-          ? `Upload your driving licence before ${formatCustomerDate(dueAt)}. `
-          : ""}
-        {note || "A licence already approved on your account is reused for later bookings."}
-      </p>
-      <div className="customer-card-actions">
-        <Link className={needsAction ? "customer-primary-btn" : "customer-secondary-btn"} to="/customer/licence">
-          {needsAction ? "Upload licence" : "View licence"}
-        </Link>
-      </div>
-    </article>
-  );
-}
-
 export default function CarBookingPanel({ booking }) {
-  const now = useNow();
   const car = booking.car;
   const listing = car.listing;
   const pricing = car.pricing;
   const pickup = booking.alternativePickupDate || booking.pickupDate;
   const ret = booking.alternativeReturnDate || booking.returnDate;
   const sameReturn = car.dropoffPoint && car.pickupPoint && car.dropoffPoint.id === car.pickupPoint.id;
-  const accepted = ["PENDING_PAYMENT", "ACCEPTED", "PAID", "IN_PROGRESS"].includes(booking.status);
 
   return (
     <>
-      <StatusBanner booking={booking} now={now} />
-
       <article className="customer-glass-card">
         <div className="car-booking-head">
           {listing?.imageUrl && <img src={listing.imageUrl} alt="" className="car-booking-thumb" />}
@@ -273,7 +155,7 @@ export default function CarBookingPanel({ booking }) {
             </p>
           </div>
         </div>
-        <div className="customer-info-list detail customer-booking-info-grid">
+        <div className="customer-info-list detail customer-booking-info-grid car-trip-grid">
           <div>
             <span>Pickup</span>
             <strong>{formatCustomerDate(pickup)}</strong>
@@ -337,8 +219,6 @@ export default function CarBookingPanel({ booking }) {
 
       <PaymentSchedulePanel booking={booking} />
       <PriceBreakdown pricing={pricing} />
-
-      {accepted && <LicenceCard dueAt={booking.payment?.finalPaymentDueDate || pickup} />}
     </>
   );
 }

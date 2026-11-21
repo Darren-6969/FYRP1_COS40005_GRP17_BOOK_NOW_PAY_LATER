@@ -123,10 +123,10 @@ export default function CustomerLicence() {
       "Approved",
 
     UNDER_REVIEW:
-      "Under Review",
+      "Under review",
 
     REUPLOAD_REQUIRED:
-      "Re-upload Required",
+      "Re-upload required",
 
     REJECTED:
       "Rejected",

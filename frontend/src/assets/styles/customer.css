@@ -545,7 +545,7 @@
 }
 
 .customer-timeline-item strong {
-  text-transform: capitalize;
+  text-transform: none; /* formatStatus already capitalises the first letter */
 }
 
 .customer-timeline-item p {

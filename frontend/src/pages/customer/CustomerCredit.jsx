@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { createCreditAppeal, getCustomerCreditHistory } from "../../services/customer_service";
-import { formatCustomerDate } from "../../utils/customerUtils";
+import { formatCustomerDate, formatStatus } from "../../utils/customerUtils";
 
 const tierMeaning = {
   Normal: "Your standard starting tier. Full payment is due within 24 hours.",
@@ -85,7 +85,7 @@ export default function CustomerCredit() {
           <article key={event.id} className="customer-glass-card customer-row-card">
             <div>
               <h3>{event.reason}</h3>
-              <p>{event.eventType.replaceAll("_", " ")} · {formatCustomerDate(event.createdAt)}</p>
+              <p>{formatStatus(event.eventType)} · {formatCustomerDate(event.createdAt)}</p>
               <p><strong>{event.beforeTier}</strong> → <strong>{event.afterTier}</strong></p>
             </div>
             <button type="button" className="customer-secondary-btn small" onClick={() => setAppealEvent(event)}>

@@ -17,23 +17,29 @@ export function formatCustomerDate(value) {
   }).format(new Date(value));
 }
 
+// Any status code from the database shown in sentence case:
+// "UNDER_REVIEW" -> "Under review", "READY_FOR_PICKUP" -> "Ready for pickup".
+export function formatStatus(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  const text = String(value)
+    .trim()
+    .replace(/[_\s]+/g, " ")
+    .toLowerCase()
+    .replace(/\breupload\b/g, "re-upload");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+// Booking and payment statuses. A few codes have friendlier customer
+// wording; everything else is the database word in sentence case.
 export function statusLabel(status) {
   const labels = {
     PENDING: "Processing",
     ACCEPTED: "Confirmed",
-    REJECTED: "Rejected",
-    PENDING_PAYMENT: "Awaiting Payment",
-    PAID: "Paid",
+    PENDING_PAYMENT: "Awaiting payment",
     OVERDUE: "Expired",
-    CANCELLED: "Cancelled",
-    COMPLETED: "Completed",
-
-    UNPAID: "Unpaid",
-    PENDING_VERIFICATION: "Pending Verification",
-    FAILED: "Failed",
   };
 
-  return labels[status] || status || "-";
+  return labels[status] || formatStatus(status);
 }
 
 export function customerStatusClass(status) {

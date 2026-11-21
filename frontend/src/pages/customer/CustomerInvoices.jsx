@@ -59,7 +59,7 @@ function canPayInvoice(invoice) {
 function invoiceStatusLabel(status) {
   const value = normalize(status);
 
-  if (value === "PENDING_VERIFICATION") return "Pending Verification";
+  if (value === "PENDING_VERIFICATION") return "Pending verification";
   if (value === "GENERATED") return "Unpaid";
   if (value === "SENT") return "Unpaid";
   if (value === "PAID") return "Paid";

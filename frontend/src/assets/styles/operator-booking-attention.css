@@ -335,3 +335,160 @@
     justify-content: flex-start;
   }
 }
+
+/* ── Licence Checks page: review queues ──────────────────────────── */
+.doc-review-head {
+  margin-bottom: 14px;
+}
+
+.doc-review-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 18px;
+  color: #0f172a;
+}
+
+.doc-review-head p {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+
+.doc-review-count {
+  min-width: 24px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.doc-review-count.empty {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.doc-review-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 4px 6px;
+  border-top: 1px solid #edf1f5;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.doc-review-empty p {
+  margin: 0;
+}
+
+.doc-review-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.doc-review-table th {
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  border-bottom: 1px solid #e5eaf0;
+}
+
+.doc-review-table td {
+  padding: 14px 12px;
+  vertical-align: top;
+  color: #1e293b;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.doc-review-table td strong,
+.doc-review-table td small {
+  display: block;
+}
+
+.doc-review-table td small {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.doc-review-table tr.doc-review-row-open td {
+  border-bottom: 0;
+}
+
+.doc-review-file {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-review-booking {
+  color: #2563eb;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.doc-review-booking:hover {
+  text-decoration: underline;
+}
+
+.doc-review-table td small.doc-review-late {
+  color: #be123c;
+  font-weight: 700;
+}
+
+.doc-review-actions-head {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.doc-review-actions {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.doc-review-table td small.doc-review-hint {
+  margin-top: 6px;
+}
+
+.doc-review-reject-row td {
+  padding-top: 0;
+  background: #f8fafc;
+}
+
+.doc-review-reject {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.doc-review-reject select {
+  min-height: 36px;
+  min-width: 240px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  font: inherit;
+  font-weight: 400;
+}
+
+.booking-docs-btn.reject-solid {
+  border-color: #be123c;
+  background: #be123c;
+  color: #ffffff;
+}

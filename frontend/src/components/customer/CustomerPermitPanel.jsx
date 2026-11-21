@@ -31,10 +31,10 @@ const TERMINAL_STATUSES = [
 
 const STATUS_LABELS = {
   APPROVED: "Approved",
-  UNDER_REVIEW: "Under Review",
-  REUPLOAD_REQUIRED: "Re-upload Required",
+  UNDER_REVIEW: "Under review",
+  REUPLOAD_REQUIRED: "Re-upload required",
   REJECTED: "Rejected",
-  NOT_SUBMITTED: "Not Submitted",
+  NOT_SUBMITTED: "Not submitted",
 };
 
 function formatDate(value) {

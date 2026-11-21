@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getCustomerInvoiceById } from "../../services/customer_service";
 import { downloadElementAsPdf } from "../../utils/pdfUtils";
-import { formatCustomerDate, formatMoney } from "../../utils/customerUtils";
+import { formatCustomerDate, formatMoney, formatStatus } from "../../utils/customerUtils";
 
 function normalize(value) {
   return String(value || "").toUpperCase();
@@ -74,13 +74,9 @@ function statusClass(status) {
 function statusLabel(status) {
   const value = normalize(status);
 
-  if (value === "PENDING_VERIFICATION") return "Pending Verification";
   if (value === "SENT" || value === "GENERATED") return "Unpaid";
-  if (value === "PAID") return "Paid";
-  if (value === "OVERDUE") return "Overdue";
-  if (value === "VOID") return "Void";
 
-  return value.replaceAll("_", " ");
+  return formatStatus(value);
 }
 
 export default function CustomerInvoiceDetail() {
