@@ -1,11 +1,40 @@
 import crypto from "crypto";
 import prisma from "../config/db.js";
-import { sendEmail } from "./email_service.js";
+import { isReservedTestAddress, sendEmail } from "./email_service.js";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
 
 export class OtpDeliveryError extends Error {}
+
+export function resolveOtpRecipient(email, env = process.env) {
+  if (!isReservedTestAddress(email)) return email;
+
+  if ((env.NODE_ENV || "").trim().toLowerCase() === "production") {
+    throw new OtpDeliveryError(
+      "This account uses a reserved test email address. Update it to a real email address before signing in."
+    );
+  }
+
+  const override = (env.AUTH_OTP_TEST_RECIPIENT || "").trim();
+  if (!override) {
+    throw new OtpDeliveryError(
+      "This demo account uses a reserved test email address and cannot receive email. Set AUTH_OTP_TEST_RECIPIENT to a real inbox in development."
+    );
+  }
+
+  if (
+    override.length > 254
+    || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(override)
+    || isReservedTestAddress(override)
+  ) {
+    throw new OtpDeliveryError(
+      "AUTH_OTP_TEST_RECIPIENT must be a deliverable, non-test email address."
+    );
+  }
+
+  return override;
+}
 
 export function generateOtpCode() {
   return crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
@@ -20,6 +49,7 @@ export function hashOtp(userId, purpose, code, secret = process.env.JWT_SECRET) 
 }
 
 export async function sendOtp({ user, purpose }) {
+  const recipient = resolveOtpRecipient(user.email);
   const code = generateOtpCode();
   const codeHash = hashOtp(user.id, purpose, code);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
@@ -32,7 +62,7 @@ export async function sendOtp({ user, purpose }) {
 
   const isEmailVerification = purpose === "EMAIL_VERIFICATION";
   const result = await sendEmail({
-    to: user.email,
+    to: recipient,
     subject: isEmailVerification
       ? "Verify your Book Now Pay Later email"
       : "Your Book Now Pay Later sign-in code",
