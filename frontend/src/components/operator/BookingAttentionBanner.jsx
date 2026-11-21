@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle, ChevronRight } from "lucide-react";
+import { AlertCircle, ArrowRight } from "lucide-react";
 
 import "../../assets/styles/operator-booking-attention.css";
 
@@ -11,8 +11,6 @@ import "../../assets/styles/operator-booking-attention.css";
 //         to? (route) | targetId? (element id on this page) }
 export default function BookingAttentionBanner({ items }) {
   if (!items?.length) return null;
-
-  const urgent = items.some((item) => item.tone === "danger");
 
   const goTo = (targetId) => {
     const element = document.getElementById(targetId);
@@ -27,24 +25,28 @@ export default function BookingAttentionBanner({ items }) {
 
   return (
     <section
-      className={`booking-attention ${urgent ? "danger" : "warning"}`}
+      className="booking-attention"
       role="status"
-      aria-label="Needs your attention"
+      aria-label={`${items.length} ${items.length === 1 ? "thing needs" : "things need"} your attention`}
     >
       <div className="booking-attention-head">
-        <AlertTriangle size={20} aria-hidden="true" />
-        <strong>
-          {items.length === 1
-            ? "1 thing needs your attention"
-            : `${items.length} things need your attention`}
-        </strong>
+        <AlertCircle size={18} aria-hidden="true" />
+        <strong>Needs your attention</strong>
+        <span className="booking-attention-count">{items.length}</span>
       </div>
 
       <ul className="booking-attention-list">
         {items.map((item) => (
           <li key={item.key} className={`booking-attention-item ${item.tone}`}>
-            <div>
-              <p className="booking-attention-title">{item.title}</p>
+            <span className="booking-attention-dot" aria-hidden="true" />
+            <div className="booking-attention-text">
+              <p className="booking-attention-title">
+                {item.title}
+                {/* Urgency is said in words too, not only by the red dot. */}
+                {item.tone === "danger" && (
+                  <span className="booking-attention-urgent">Urgent</span>
+                )}
+              </p>
               {item.detail && (
                 <p className="booking-attention-detail">{item.detail}</p>
               )}
@@ -53,7 +55,7 @@ export default function BookingAttentionBanner({ items }) {
             {item.to ? (
               <Link className="booking-attention-action" to={item.to}>
                 {item.actionLabel}
-                <ChevronRight size={16} aria-hidden="true" />
+                <ArrowRight size={15} aria-hidden="true" />
               </Link>
             ) : (
               <button
@@ -62,7 +64,7 @@ export default function BookingAttentionBanner({ items }) {
                 onClick={() => goTo(item.targetId)}
               >
                 {item.actionLabel}
-                <ChevronRight size={16} aria-hidden="true" />
+                <ArrowRight size={15} aria-hidden="true" />
               </button>
             )}
           </li>

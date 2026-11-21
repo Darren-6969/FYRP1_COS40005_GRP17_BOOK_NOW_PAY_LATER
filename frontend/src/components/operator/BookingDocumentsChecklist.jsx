@@ -103,11 +103,14 @@ function Checklist({ booking, onUpdated }) {
     (licenceStatus === "APPROVED" ? 1 : 0) +
     (permitRequired && permit?.status === "APPROVED" ? 1 : 0);
 
+  // Short reason shown under the permit row.
   const permitReason =
     savedOverride !== null
-      ? "Set by your team for this booking."
-      : driver?.licenceIssuedIn
-        ? `Licence issued in: ${licenceIssuedInLabel(driver.licenceIssuedIn)}.`
+      ? "Set by your team"
+      : driver?.licenceIssuedIn && driver.licenceIssuedIn !== "MY"
+        ? driver.licenceIssuedIn === "OTHER"
+          ? "Licence from another country"
+          : `Licence from ${licenceIssuedInLabel(driver.licenceIssuedIn)}`
         : null;
 
   return (
@@ -167,7 +170,11 @@ function Checklist({ booking, onUpdated }) {
           status={permit?.status || "NOT_SUBMITTED"}
           notRequired={!permitRequired}
           meta={[
-            permitRequired ? `Required. ${permitReason || ""}`.trim() : "Not required for this booking.",
+            permitRequired
+              ? permitReason
+                ? `Required: ${permitReason.toLowerCase()}`
+                : "Required"
+              : "Not required for this booking",
             permit?.permitExpiryDate
               ? `Valid until ${String(permit.permitExpiryDate).slice(0, 10)}`
               : null,
@@ -265,7 +272,7 @@ function DocumentRow({
   };
 
   return (
-    <div className={`booking-docs-row ${canReview ? "needs-review" : ""}`}>
+    <div className="booking-docs-row">
       <div className="booking-docs-icon">{icon}</div>
 
       <div className="booking-docs-body">

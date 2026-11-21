@@ -1,74 +1,108 @@
 /* Operator booking page: "needs your attention" banner and the
-   documents-before-handover checklist. Colours follow .operator-status. */
+   documents-before-handover checklist. Same white card as the rest of the
+   booking page; colour is kept to small dots and status badges, and always
+   comes with a word (status label or "Urgent"). */
 
 .booking-attention {
-  border-radius: 18px;
-  padding: 16px 20px;
   margin: 0 0 18px;
-  border: 1px solid #fcd34d;
-  background: #fffbeb;
-  color: #92400e;
-}
-
-.booking-attention.danger {
-  border-color: #fda4af;
-  background: #fff1f2;
-  color: #9f1239;
+  padding: 18px 24px 8px;
+  background: #ffffff;
+  border: 1px solid #e5eaf0;
+  border-radius: 18px;
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.035);
 }
 
 .booking-attention-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  color: #0f172a;
   font-size: 15px;
+}
+
+.booking-attention-head svg {
+  color: #d97706;
+}
+
+.booking-attention-count {
+  min-width: 22px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .booking-attention-list {
   list-style: none;
-  margin: 12px 0 0;
+  margin: 10px 0 0;
   padding: 0;
-  display: grid;
-  gap: 8px;
 }
 
 .booking-attention-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: #ffffff;
-  border-left: 4px solid #f59e0b;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid #edf1f5;
 }
 
-.booking-attention-item.danger {
-  border-left-color: #e11d48;
+.booking-attention-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #f59e0b;
+}
+
+.booking-attention-item.danger .booking-attention-dot {
+  background: #e11d48;
+}
+
+.booking-attention-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .booking-attention-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin: 0;
   font-weight: 700;
   font-size: 14px;
   color: #1e293b;
 }
 
+.booking-attention-urgent {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #ffe4e6;
+  color: #be123c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .booking-attention-detail {
   margin: 2px 0 0;
   font-size: 13px;
-  color: #475569;
+  color: #64748b;
 }
 
 .booking-attention-action {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
-  padding: 8px 14px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
   border-radius: 10px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #1d4ed8;
+  background: transparent;
+  color: #2563eb;
   font-size: 13px;
   font-weight: 700;
   text-decoration: none;
@@ -79,14 +113,31 @@
   background: #eff6ff;
 }
 
+.booking-attention-action:focus-visible,
+.booking-docs-btn:focus-visible,
+.booking-docs-link:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .booking-attention-action svg {
+    transition: transform 150ms ease-out;
+  }
+
+  .booking-attention-action:hover svg {
+    transform: translateX(2px);
+  }
+}
+
 /* Brief highlight on the section the banner scrolled to. */
 .booking-attention-flash {
   animation: booking-attention-flash 1.6s ease-out;
 }
 
 @keyframes booking-attention-flash {
-  0% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.55); }
-  100% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
+  0% { box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.35); }
+  100% { box-shadow: 0 0 0 4px rgba(37, 99, 235, 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -113,17 +164,10 @@
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 14px;
-  margin-top: 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  background: #ffffff;
+  padding: 14px 0;
+  border-top: 1px solid #edf1f5;
 }
 
-.booking-docs-row.needs-review {
-  border-color: #fcd34d;
-  background: #fffbeb;
-}
 
 .booking-docs-icon {
   flex-shrink: 0;
@@ -171,7 +215,8 @@
 }
 
 .booking-docs-btn {
-  padding: 7px 14px;
+  min-height: 36px;
+  padding: 0 14px;
   border-radius: 10px;
   border: 1px solid #cbd5e1;
   background: #ffffff;
@@ -181,15 +226,26 @@
   cursor: pointer;
 }
 
+/* One main button per row: Approve in the portal blue. Reject stays
+   quiet so it is not pressed by accident. */
 .booking-docs-btn.approve {
-  border-color: #15803d;
-  background: #15803d;
+  border-color: #2563eb;
+  background: #2563eb;
   color: #ffffff;
 }
 
+.booking-docs-btn.approve:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
 .booking-docs-btn.reject {
-  border-color: #fda4af;
+  border-color: transparent;
+  background: transparent;
   color: #be123c;
+}
+
+.booking-docs-btn.reject:hover:not(:disabled) {
+  background: #fff1f2;
 }
 
 .booking-docs-btn:disabled {
