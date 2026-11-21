@@ -29,6 +29,7 @@ import { acceptBookingAndRequestPayment } from "../services/booking_accept_servi
 import { enforceConcurrentExposureCap } from "../services/concurrent_exposure_service.js";
 import { assertOperatorTakingBookings } from "../services/subscription_admin_service.js";
 import { carListingSelect, mapCarBooking } from "../services/car_booking_view.js";
+import { isInternationalPermitRequired } from "../services/booking_status_service.js";
 import { quoteAlternative } from "../services/car_requote_service.js";
 import { fromSen } from "../services/car_pricing_service.js";
 import { dynamicQrFor, staticQrFor } from "./duitnow_account_controller.js";
@@ -88,6 +89,10 @@ function mapBooking(booking) {
     // Public platform car bookings (SRS 4.2.6). Null for host and legacy
     // bookings, which keep the fields above.
     car: booking.listingId ? mapCarBooking(booking) : null,
+
+    // Whether this booking needs an International Driving Permit (the
+    // operator's decision, else a licence issued outside Malaysia).
+    internationalPermitRequired: isInternationalPermitRequired(booking),
 
     // Audit fields
     createdAt: booking.createdAt,

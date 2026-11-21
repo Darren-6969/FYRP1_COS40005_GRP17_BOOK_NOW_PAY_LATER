@@ -10,6 +10,8 @@ import {
 } from "../../services/operator_service";
 
 import OfferModal from "../../components/operator/OfferModal";
+import RejectBookingModal from "../../components/operator/RejectBookingModal";
+import { openPrivateDocument } from "../../utils/openPrivateDocument";
 import { DateTimePicker } from "../../components/common/DatePicker";
 import OperatorCancelDialog from "../../components/operator/OperatorCancelDialog";
 import OperatorRefundCard from "../../components/operator/OperatorRefundCard";
@@ -321,12 +323,16 @@ export default function OperatorBookingDetail() {
 
   const counter = bookingDetails.counterVerification;
 
+  // The backend works this out (operator decision, else the driver's
+  // licence country) so the page and the handover check always agree.
   const permitRequired =
-    bookingDetails.internationalPermitRequired === true ||
-    (
-      bookingDetails.internationalPermitRequired == null &&
-      bookingDetails.driver?.internationalPermitRequired === true
-    );
+    typeof booking.internationalPermitRequired === "boolean"
+      ? booking.internationalPermitRequired
+      : bookingDetails.internationalPermitRequired === true ||
+        (
+          bookingDetails.internationalPermitRequired == null &&
+          bookingDetails.driver?.internationalPermitRequired === true
+        );
 
   const counterCompleted =
     counter?.identityMatched === true &&
@@ -976,6 +982,31 @@ export default function OperatorBookingDetail() {
             )}
 
           </div>
+        )}
+
+        {/* The licence stays viewable after review. Before, it could
+            only be opened from the review queue, which drops it once
+            approved. */}
+        {booking.customer?.licenceDocumentId && (
+          <button
+            type="button"
+            className="operator-secondary-btn"
+            onClick={() =>
+              openPrivateDocument(() =>
+                operatorService.downloadLicenceDocument(
+                  booking.customer.licenceDocumentId
+                )
+              ).catch((err) =>
+                alert(
+                  err.response?.status === 404
+                    ? "This licence can no longer be opened for this booking."
+                    : "Failed to open licence document."
+                )
+              )
+            }
+          >
+            View licence document
+          </button>
         )}
       </div>
 
@@ -1886,108 +1917,6 @@ function InfoRow({
     </div>
   );
 }
-
-function RejectBookingModal({
-    booking,
-    onClose,
-    onDone,
-  }) {
-    const [reason, setReason] =
-      useState("");
-
-    const [loading, setLoading] =
-      useState(false);
-
-    const handleReject = async () => {
-      const cleanReason =
-        reason.trim();
-
-      if (cleanReason.length < 5) {
-        alert(
-          "Please provide a rejection reason of at least 5 characters."
-        );
-        return;
-      }
-
-      try {
-        setLoading(true);
-
-        await operatorService.rejectBooking(
-          booking.id,
-          cleanReason
-        );
-
-        await onDone();
-        onClose();
-      } catch (err) {
-        alert(
-          err.response?.data?.message ||
-            "Failed to reject booking"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    return (
-      <div className="operator-modal-backdrop">
-        <div className="operator-modal">
-          <div className="operator-card-head">
-            <div>
-              <h2>Reject Booking</h2>
-
-              <p>
-                Please provide a reason for
-                rejecting{" "}
-                {booking.bookingCode}.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-            >
-              ×
-            </button>
-          </div>
-
-          <label className="operator-field">
-            Rejection Reason *
-
-            <textarea
-              placeholder="Example: The selected vehicle is unavailable."
-              value={reason}
-              onChange={(e) =>
-                setReason(e.target.value)
-              }
-            />
-          </label>
-
-          <div className="operator-modal-actions">
-            <button
-              type="button"
-              className="operator-secondary-btn"
-              onClick={onClose}
-              disabled={loading}
-            >
-              Cancel
-            </button>
-
-            <button
-              type="button"
-              className="operator-danger-btn"
-              onClick={handleReject}
-              disabled={loading}
-            >
-              {loading
-                ? "Rejecting..."
-                : "Reject Booking"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
 function AlternativeModal({
   booking,

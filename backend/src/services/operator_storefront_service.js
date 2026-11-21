@@ -333,6 +333,14 @@ export async function updateOwnStorefront(operatorId, body) {
     if (about && about.length > 2000) throw fail(400, "ABOUT_TOO_LONG", "Keep the description under 2,000 characters");
     data.about = about;
   }
+  // Company logo, shown on the storefront, home page and emails. The
+  // operator Profile page sets it when the owner changes their photo.
+  if (body.logoUrl !== undefined) {
+    const url = body.logoUrl ? String(body.logoUrl).trim() : null;
+    const logoRule = process.env.NODE_ENV === "production" ? /^https:\/\//i : /^https?:\/\//i;
+    if (url && !logoRule.test(url)) throw fail(400, "LOGO_INVALID", "The logo must be an https link");
+    data.logoUrl = url;
+  }
   let replacedCoverUrl = null;
   if (body.coverImageUrl !== undefined) {
     const url = body.coverImageUrl ? String(body.coverImageUrl).trim() : null;

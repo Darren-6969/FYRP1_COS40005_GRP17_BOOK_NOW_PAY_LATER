@@ -15,6 +15,7 @@ import {
   FloatingActionBar,
   GlassCard,
   IconButton,
+  SegmentedControl,
   SkeletonText,
   TextField,
 } from "@/components/ui";
@@ -25,6 +26,13 @@ import { formatMYT, mytToIso } from "@/utils/datetime";
 import { formatSen } from "@/utils/money";
 import { normaliseMalaysianPhone } from "@/utils/phone";
 import { startAsync } from "@/utils/start-async";
+
+type LicenceCountry = "MY" | "OTHER";
+
+const LICENCE_COUNTRY_OPTIONS = [
+  { value: "MY", label: "Malaysia" },
+  { value: "OTHER", label: "Another country" },
+] as const;
 
 type Point = {
   id: string;
@@ -78,7 +86,9 @@ export default function BookingRequest() {
   const [driverName, setDriverName] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [dobOpen, setDobOpen] = useState(false);
-  const [licenceIssuedIn, setLicenceIssuedIn] = useState("Malaysia");
+  // Same choice as the web booking form: "MY" or "OTHER". The backend reads
+  // "OTHER" as needing an international driving permit.
+  const [licenceIssuedIn, setLicenceIssuedIn] = useState<LicenceCountry>("MY");
 
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [rentalTermsAccepted, setRentalTermsAccepted] = useState(false);
@@ -135,7 +145,7 @@ export default function BookingRequest() {
         : null,
     driverName: !driverIsBooker && driverName.trim().length < 2 ? "Enter the driver's full name." : null,
     dateOfBirth: ageRulesOn && !dateOfBirth ? "This operator asks for the driver's date of birth." : null,
-    licence: !licenceIssuedIn.trim() ? "Enter the country that issued the licence." : null,
+    licence: !licenceIssuedIn ? "Choose where the licence was issued." : null,
     points: !pickupPointId || !dropoffPointId ? "Choose a pick-up and a drop-off point." : null,
     agreements:
       !termsAccepted || !rentalTermsAccepted || !forfeitureAccepted ? "Accept all three to send a request." : null,
@@ -166,7 +176,7 @@ export default function BookingRequest() {
         driverIsBooker: String(driverIsBooker),
         driverName: (driverIsBooker ? fullName : driverName).trim(),
         dateOfBirth: ageRulesOn ? dateOfBirth : "",
-        licenceIssuedIn: licenceIssuedIn.trim(),
+        licenceIssuedIn,
         termsAccepted: String(termsAccepted),
         rentalTermsAccepted: String(rentalTermsAccepted),
         forfeitureAccepted: String(forfeitureAccepted),
@@ -343,12 +353,23 @@ export default function BookingRequest() {
                 ) : null}
               </View>
             ) : null}
-            <TextField
-              label="Licence issued in"
-              value={licenceIssuedIn}
-              onChangeText={setLicenceIssuedIn}
-              error={shown(errors.licence)}
-            />
+            <View style={{ gap: 8 }}>
+              <AppText variant="label" color="label">
+                Licence issued in
+              </AppText>
+              <SegmentedControl
+                options={LICENCE_COUNTRY_OPTIONS}
+                value={licenceIssuedIn}
+                onChange={setLicenceIssuedIn}
+                accessibilityLabel="Licence issued in"
+              />
+              {licenceIssuedIn === "OTHER" ? (
+                <AppText variant="body" color="label">
+                  {"You'll need to upload an international driving permit together with your licence after booking, and bring the original to pickup."}
+                </AppText>
+              ) : null}
+              <FieldError message={shown(errors.licence)} />
+            </View>
           </Section>
 
           <Section title="Agreements">

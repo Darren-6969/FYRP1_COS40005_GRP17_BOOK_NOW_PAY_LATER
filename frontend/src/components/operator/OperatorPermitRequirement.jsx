@@ -3,7 +3,17 @@ import { ShieldCheck } from "lucide-react";
 
 import {
   operatorService,
+  formatOperatorDateTime,
 } from "../../services/operator_service";
+import { licenceIssuedInLabel } from "../booking/carBookingParts";
+import { openPrivateDocument } from "../../utils/openPrivateDocument";
+
+const PERMIT_STATUS_LABELS = {
+  UNDER_REVIEW: "Under Review",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  REUPLOAD_REQUIRED: "Re-upload Required",
+};
 
 const EDITABLE_STATUSES = [
   "PENDING",
@@ -26,6 +36,16 @@ const savedRequired =
   typeof details.internationalPermitRequired === "boolean"
     ? details.internationalPermitRequired
     : null;
+
+// What applies now: the operator's decision, else the backend's rule
+// (a licence issued outside Malaysia needs an IDP).
+const effectiveRequired =
+  savedRequired !== null
+    ? savedRequired
+    : booking.internationalPermitRequired === true;
+
+const licenceIssuedIn = details.driver?.licenceIssuedIn || null;
+const permit = booking.permit || null;
 
 const [required, setRequired] = useState(
   savedRequired
@@ -115,13 +135,58 @@ useEffect(() => {
           <p>
             Current requirement:{" "}
             <strong>
-              {savedRequired === null
-                ? "Not Assessed"
-                : savedRequired
-                    ? "Required"
-                    : "Not Required"}
+              {effectiveRequired ? "Required" : "Not Required"}
             </strong>
+            {savedRequired === null && (
+              <>
+                {" "}
+                <small>
+                  ({licenceIssuedIn
+                    ? `licence issued in: ${licenceIssuedInLabel(licenceIssuedIn)}`
+                    : "not assessed by you yet"})
+                </small>
+              </>
+            )}
           </p>
+
+          {(effectiveRequired || permit) && (
+            <p>
+              Uploaded permit:{" "}
+              <strong>
+                {permit
+                  ? PERMIT_STATUS_LABELS[permit.status] || permit.status
+                  : "Not uploaded yet"}
+              </strong>
+              {permit?.permitExpiryDate && (
+                <>
+                  {" "}· valid until{" "}
+                  {String(permit.permitExpiryDate).slice(0, 10)}
+                </>
+              )}
+              {permit?.submittedAt && (
+                <>
+                  {" "}· submitted{" "}
+                  {formatOperatorDateTime(permit.submittedAt)}
+                </>
+              )}
+            </p>
+          )}
+
+          {permit && (
+            <button
+              type="button"
+              className="operator-secondary-btn"
+              onClick={() =>
+                openPrivateDocument(() =>
+                  operatorService.downloadPermitDocument(permit.id)
+                ).catch(() =>
+                  alert("Failed to open the permit document.")
+                )
+              }
+            >
+              View permit document
+            </button>
+          )}
         </div>
       </div>
 

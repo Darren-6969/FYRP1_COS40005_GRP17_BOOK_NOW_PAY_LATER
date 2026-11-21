@@ -189,7 +189,7 @@ export default function ReviewBooking() {
             // Sent only when the operator's age rules asked for it; an
             // empty string would fail the server's date check.
             ...(params.dateOfBirth ? { dateOfBirth: params.dateOfBirth } : {}),
-            licenceIssuedIn: params.licenceIssuedIn || "Malaysia",
+            licenceIssuedIn: params.licenceIssuedIn || "MY",
           },
           chauffeur: { requested: false, note: null },
         },
@@ -287,7 +287,15 @@ export default function ReviewBooking() {
           {params.dateOfBirth ? (
             <Row icon="calendar-outline" label="Date of birth" value={formatMYT(mytToIso(params.dateOfBirth, "12:00"), "date")} />
           ) : null}
-          <Row icon="globe-outline" label="Licence issued in" value={params.licenceIssuedIn || "Malaysia"} />
+          <Row
+            icon="globe-outline"
+            label="Licence issued in"
+            value={
+              (params.licenceIssuedIn || "MY") === "MY"
+                ? "Malaysia"
+                : "Another country (international driving permit needed)"
+            }
+          />
           {cdwSelected ? <Row icon="shield-checkmark-outline" label="Collision damage waiver" value="Included" /> : null}
         </Card>
 

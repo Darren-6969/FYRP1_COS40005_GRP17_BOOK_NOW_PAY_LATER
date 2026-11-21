@@ -15,7 +15,19 @@ import CarBookingPanel from "../../components/booking/CarBookingPanel";
 import CarAlternativeCard from "../../components/booking/CarAlternativeCard";
 import CancelBookingDialog from "../../components/booking/CancelBookingDialog";
 import RefundSummary, { CancellationNotice } from "../../components/booking/RefundSummary";
-import { getBookingLicenceDocument, submitBookingLicenceDocument } from "../../services/customer_service";
+import {
+  getBookingLicenceDocument,
+  getMyPermit,
+  submitBookingLicenceDocument,
+  submitPermitDocument,
+} from "../../services/customer_service";
+
+const PERMIT_STATUS = {
+  UNDER_REVIEW: "Under review",
+  APPROVED: "Approved",
+  REJECTED: "Rejected, please upload again",
+  REUPLOAD_REQUIRED: "Re-upload required",
+};
 
 export default function BookingDetail() {
   const { id } = useParams();
@@ -35,6 +47,10 @@ export default function BookingDetail() {
   const [licence, setLicence] = useState(null);
   const [licenceFile, setLicenceFile] = useState(null);
   const [licenceBusy, setLicenceBusy] = useState(false);
+  const [permit, setPermit] = useState(null);
+  const [permitFile, setPermitFile] = useState(null);
+  const [permitExpiry, setPermitExpiry] = useState("");
+  const [permitBusy, setPermitBusy] = useState(false);
 
   const gocarThankYouUrl = import.meta.env.VITE_GOCAR_THANK_YOU_URL;
 
@@ -51,6 +67,38 @@ export default function BookingDetail() {
       active = false;
     };
   }, [id]);
+
+  // International Driving Permit uploaded for this booking, if any.
+  useEffect(() => {
+    let active = true;
+    getMyPermit(id)
+      .then((response) => {
+        if (active) setPermit(response.data.document || null);
+      })
+      .catch(() => {
+        if (active) setPermit(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const handlePermitSubmit = async (event) => {
+    event.preventDefault();
+    if (!permitFile || !permitExpiry) return;
+    try {
+      setPermitBusy(true);
+      await submitPermitDocument(id, permitFile, permitExpiry);
+      setPermitFile(null);
+      setPermitExpiry("");
+      const response = await getMyPermit(id);
+      setPermit(response.data.document || null);
+    } catch (err) {
+      alert(err.response?.data?.message || "Could not upload the permit.");
+    } finally {
+      setPermitBusy(false);
+    }
+  };
 
   const handleLicenceSubmit = async (event) => {
     event.preventDefault();
@@ -253,6 +301,35 @@ export default function BookingDetail() {
               </form>
             )}
           </div>
+          {isCarBooking && (booking.internationalPermitRequired || permit) && (
+            <div className="customer-info-box">
+              <strong>International driving permit for this booking</strong>
+              <p className="customer-muted">
+                {booking.internationalPermitRequired
+                  ? "Your licence was issued outside Malaysia, so this booking needs an international driving permit (IDP). Bring the original to pickup."
+                  : "Not required for this booking."}
+              </p>
+              <p className="customer-muted">
+                Status: {permit ? PERMIT_STATUS[permit.status] || permit.status : "Not submitted"}
+                {permit?.permitExpiryDate && ` · valid until ${String(permit.permitExpiryDate).slice(0, 10)}`}
+              </p>
+              {booking.internationalPermitRequired &&
+                permit?.status !== "UNDER_REVIEW" &&
+                permit?.status !== "APPROVED" &&
+                !["COMPLETED", "CANCELLED", "REJECTED", "EXPIRED", "NO_SHOW", "NO_SHOW_UNPAID"].includes(booking.status) && (
+                  <form onSubmit={handlePermitSubmit}>
+                    <input type="file" accept=".pdf,image/jpeg,image/png" onChange={(event) => setPermitFile(event.target.files?.[0] || null)} />
+                    <label>
+                      Permit expiry date{" "}
+                      <input type="date" value={permitExpiry} onChange={(event) => setPermitExpiry(event.target.value)} />
+                    </label>
+                    <button className="customer-secondary-btn" disabled={!permitFile || !permitExpiry || permitBusy}>
+                      {permitBusy ? "Uploading..." : "Upload permit"}
+                    </button>
+                  </form>
+                )}
+            </div>
+          )}
         </article>
 
         {isCarBooking && <CarBookingPanel booking={booking} />}

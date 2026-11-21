@@ -45,6 +45,7 @@ import {
   promoteToReadyForPickup,
   isLicenceSatisfied,
   isPermitSatisfied,
+  isInternationalPermitRequired,
   TERMINAL_BOOKING_STATUSES,
 } from "../services/booking_status_service.js";
 import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_service.js";
@@ -115,11 +116,28 @@ function includeBookingRelations() {
           orderBy: { submittedAt: "desc" },
           take: 1,
           select: {
+            // id lets the booking page open the document after review,
+            // when it is no longer in the review queue.
+            id: true,
             status: true,
             submittedAt: true,
             reviewedAt: true,
           },
         },
+      },
+    },
+    // Latest International Driving Permit uploaded for this booking.
+    permitDocuments: {
+      orderBy: { submittedAt: "desc" },
+      take: 1,
+      select: {
+        id: true,
+        status: true,
+        submittedAt: true,
+        reviewedAt: true,
+        rejectionReason: true,
+        permitExpiryDate: true,
+        originalName: true,
       },
     },
     operator: {
@@ -215,6 +233,7 @@ function mapBookingCustomer(customer) {
   return {
     ...rest,
     licenceStatus: latest?.status || "NOT_SUBMITTED",
+    licenceDocumentId: latest?.id || null,
     licenceSubmittedAt: latest?.submittedAt || null,
     licenceVerifiedAt:
       latest?.status === "APPROVED"
@@ -226,13 +245,21 @@ function mapBookingCustomer(customer) {
 function mapBooking(booking) {
   if (!booking) return null;
 
+  const { permitDocuments, ...bookingRest } = booking;
+
   return {
-    ...booking,
+    ...bookingRest,
 
     customer:
       mapBookingCustomer(
         booking.customer
       ),
+
+    // IDP: whether this booking needs one (operator decision, else the
+    // driver's licence country) and the latest upload for it.
+    internationalPermitRequired:
+      isInternationalPermitRequired(booking),
+    permit: permitDocuments?.[0] || null,
 
     // Public platform car bookings (SRS 4.2.6): the same car, driver and
     // pricing snapshot view the customer sees. Null for tour and host bookings.
@@ -2162,7 +2189,7 @@ export async function updateBookingPermitRequirement(
             : {};
 
         const previousRequired =
-          details.internationalPermitRequired === true;
+          isInternationalPermitRequired(current);
 
         // Preserve all existing contact, driver and
         // agreement details.
@@ -2348,12 +2375,9 @@ export async function verifyBookingAtCounter(req, res, next) {
             ? current.bookingDetails
             : {};
 
-        const permitRequired =
-          details.internationalPermitRequired === true ||
-          (
-            details.internationalPermitRequired == null &&
-            details.driver?.internationalPermitRequired === true
-          );
+        // Same rule as the handover check (operator decision, else the
+        // driver's licence country).
+        const permitRequired = isInternationalPermitRequired(current);
 
         if (permitRequired && !permitSighted) {
           const error = new Error(
@@ -2508,12 +2532,7 @@ const updatedBooking = await prisma.$transaction(
 
       const counter = details.counterVerification;
 
-      const permitRequired =
-        details.internationalPermitRequired === true ||
-        (
-          details.internationalPermitRequired == null &&
-          details.driver?.internationalPermitRequired === true
-        );
+      const permitRequired = isInternationalPermitRequired(current);
 
       const counterComplete =
         counter?.identityMatched === true &&

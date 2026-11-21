@@ -444,10 +444,24 @@ export async function downloadLicenceDocument(
           /*
            * Operator can only open
            * licences belonging to
-           * customers who have a
+           * customers who have an active
            * booking with their company.
+           *
+           * The licence is held on the customer account and a valid one
+           * is reused, so an approved licence may be linked to another
+           * booking. It stays viewable while the customer still has an
+           * active booking with this operator.
            */
-          booking: { ...licenceBookingScope(operatorId) },
+          OR: [
+            { booking: { ...licenceBookingScope(operatorId) } },
+            {
+              customer: {
+                bookings: {
+                  some: licenceBookingScope(operatorId),
+                },
+              },
+            },
+          ],
         },
       });
 

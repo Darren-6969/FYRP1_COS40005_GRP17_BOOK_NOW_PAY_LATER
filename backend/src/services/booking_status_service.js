@@ -149,9 +149,23 @@ export function isInternationalPermitRequired(booking) {
     return details.internationalPermitRequired;
   }
 
-  return (
-    details.driver?.internationalPermitRequired === true
-  );
+  if (details.driver?.internationalPermitRequired === true) {
+    return true;
+  }
+
+  // The booking form records where the driver's licence was issued
+  // ("MY" or "OTHER"; older mobile builds sent a country name). A licence
+  // from outside Malaysia needs an IDP unless the operator decided otherwise.
+  return licenceNeedsInternationalPermit(details.driver?.licenceIssuedIn);
+}
+
+const MALAYSIA_LICENCE = new Set(["MY", "MYS", "MALAYSIA"]);
+
+export function licenceNeedsInternationalPermit(licenceIssuedIn) {
+  if (typeof licenceIssuedIn !== "string") return false;
+  const code = licenceIssuedIn.trim().toUpperCase();
+  if (!code) return false;
+  return !MALAYSIA_LICENCE.has(code);
 }
 
 

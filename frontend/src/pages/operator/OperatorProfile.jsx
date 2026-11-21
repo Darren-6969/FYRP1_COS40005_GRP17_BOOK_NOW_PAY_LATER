@@ -8,6 +8,7 @@ import {
   updateProfile,
 } from "../../services/auth_service";
 import { clearSession, getUser as getStoredUser, saveUser } from "../../utils/session";
+import { operatorService } from "../../services/operator_service";
 import "../../assets/styles/operator.css";
 import { useDirtyState } from "../../hooks/useDirtyState";
 import {
@@ -43,6 +44,36 @@ function fileToDataUrl(file) {
   });
 }
 
+// Shrink a chosen photo to a square-ish avatar size before it is saved.
+// The profile endpoint refuses images over about 1 MB and the logo upload
+// over 500 KB, so a normal phone photo would otherwise be rejected.
+async function shrinkImage(file, maxEdge = 512) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+  const width = Math.round(bitmap.width * scale);
+  const height = Math.round(bitmap.height * scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  // JPEG has no transparency; give transparent PNG logos a white background.
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close?.();
+
+  const blob = await new Promise((resolve, reject) =>
+    canvas.toBlob(
+      (result) => (result ? resolve(result) : reject(new Error("Failed to process image"))),
+      "image/jpeg",
+      0.85
+    )
+  );
+
+  return { blob, dataUrl: await fileToDataUrl(blob) };
+}
+
 export default function OperatorProfile() {
   const navigate = useNavigate();
 
@@ -76,6 +107,7 @@ export default function OperatorProfile() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [savingNotifications, setSavingNotifications] = useState(false);
+  const [savingPhoto, setSavingPhoto] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -83,6 +115,12 @@ export default function OperatorProfile() {
   const displayName = user?.name || user?.fullName || "Operator";
   const displayEmail = user?.email || "-";
   const avatarInitial = displayName?.[0]?.toUpperCase() || "O";
+
+  // The company owner's photo is also the company logo shown on the seller
+  // page, storefront and home page (Operator.logoUrl).
+  const isCompanyOwner =
+    user?.role === "NORMAL_SELLER" &&
+    String(user?.operatorAccessLevel || "").toUpperCase() === "OWNER";
 
   const tabs = useMemo(
     () => [
@@ -185,13 +223,17 @@ export default function OperatorProfile() {
     }));
   };
 
+  // The photo is saved as soon as it is chosen. It used to wait for the
+  // Save button inside Personal Information, so a photo picked with that
+  // panel closed was never saved and vanished on reload.
   const handleProfileImageChange = async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
 
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      setError("Please upload an image file.");
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setError("Please upload a PNG, JPG or WebP image.");
       return;
     }
 
@@ -200,17 +242,58 @@ export default function OperatorProfile() {
       return;
     }
 
-    try {
-      const dataUrl = await fileToDataUrl(file);
+    setSavingPhoto(true);
+    setError("");
 
+    try {
+      const { blob, dataUrl } = await shrinkImage(file);
+
+      // Save the photo with the name and phone already on the server, so
+      // unsaved edits in the Personal Information form are not saved here.
+      const res = await updateProfile({
+        name: (user?.name || profileForm.name).trim(),
+        phone: user?.phone || "",
+        profileImageUrl: dataUrl,
+      });
+
+      const nextUser = res.data?.user;
+
+      setUser(nextUser);
+      updateStoredUser(nextUser);
       setProfileForm((prev) => ({
         ...prev,
-        profileImageUrl: dataUrl,
+        profileImageUrl: nextUser?.profileImageUrl || dataUrl,
       }));
+      profileState.markClean({
+        name: nextUser?.name || "",
+        phone: nextUser?.phone || "",
+        profileImageUrl: nextUser?.profileImageUrl || "",
+      });
 
-      setError("");
-    } catch {
-      setError("Failed to load selected profile picture.");
+      if (isCompanyOwner) {
+        try {
+          const logoFile = new File([blob], "logo.jpg", { type: "image/jpeg" });
+          const upload = await operatorService.uploadOperatorLogo(logoFile);
+          await operatorService.updateStorefront({ logoUrl: upload.data.url });
+          showSuccess("Photo updated. It is also your company logo now.");
+        } catch (logoErr) {
+          setError(
+            `Photo saved, but the company logo could not be updated: ${
+              logoErr.response?.data?.message || logoErr.message
+            }`
+          );
+        }
+      } else {
+        showSuccess("Profile photo updated.");
+      }
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to update profile picture."
+      );
+    } finally {
+      setSavingPhoto(false);
     }
   };
 
@@ -354,11 +437,12 @@ export default function OperatorProfile() {
             )}
 
             <label className="operator-profile-upload-btn">
-              Upload Photo
+              {savingPhoto ? "Saving..." : "Upload Photo"}
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
                 onChange={handleProfileImageChange}
+                disabled={savingPhoto}
               />
             </label>
           </div>

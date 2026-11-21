@@ -12,6 +12,30 @@ import {
   operatorStatusLabel,
 } from "../../services/operator_service";
 import RefundsToSend from "../../components/operator/RefundsToSend";
+import RejectBookingModal from "../../components/operator/RejectBookingModal";
+
+// Same prompt as the booking detail page: accepting a request with a
+// customer-requested place provides it at no charge (Module 4).
+function acceptConfirmText(booking) {
+  const code = booking.bookingCode || `#${booking.id}`;
+  const requestedLocation =
+    booking.car?.requestedLocation || booking.requestedLocation || null;
+  const requestedDropoffLocation =
+    booking.car?.requestedDropoffLocation || booking.requestedDropoffLocation || null;
+
+  const places = [
+    requestedLocation && `pickup at "${requestedLocation}"`,
+    requestedDropoffLocation && `drop-off at "${requestedDropoffLocation}"`,
+  ]
+    .filter(Boolean)
+    .join(" and ");
+
+  if (places) {
+    return `Accept ${code} and provide ${places} at no extra charge? To charge for it, open the booking and choose Make an offer instead.`;
+  }
+
+  return `Accept booking ${code}? The customer will be asked to pay the down payment.`;
+}
 
 const tabs = [
   { label: "Pending", value: "PENDING" },
@@ -42,6 +66,8 @@ export default function OperatorBookings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState("");
+  // Booking whose reject dialog is open (quick action in the table).
+  const [rejectTarget, setRejectTarget] = useState(null);
 
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -105,9 +131,25 @@ setBookings(res.data.bookings || []);
   }, []);
 
   const handleBookingAction = async (
-  bookingId,
+  booking,
   action
     ) => {
+      const bookingId = booking.id;
+
+      // Reject always goes through the reason dialog, like the detail page.
+      // It used to call the API straight away with no reason.
+      if (action === "reject") {
+        setRejectTarget(booking);
+        return;
+      }
+
+      if (
+        action === "accept" &&
+        !window.confirm(acceptConfirmText(booking))
+      ) {
+        return;
+      }
+
       try {
         setActionLoading(
           `${action}-${bookingId}`
@@ -115,12 +157,6 @@ setBookings(res.data.bookings || []);
 
         if (action === "accept") {
           await operatorService.acceptBooking(
-            bookingId
-          );
-        }
-
-        if (action === "reject") {
-          await operatorService.rejectBooking(
             bookingId
           );
         }
@@ -950,7 +986,7 @@ const renderUpcomingTable = (
                                   disabled={!!actionLoading}
                                   onClick={() =>
                                     handleBookingAction(
-                                      booking.id,
+                                      booking,
                                       "accept"
                                     )
                                   }
@@ -968,7 +1004,7 @@ const renderUpcomingTable = (
                                   disabled={!!actionLoading}
                                   onClick={() =>
                                     handleBookingAction(
-                                      booking.id,
+                                      booking,
                                       "reject"
                                     )
                                   }
@@ -1083,6 +1119,14 @@ const renderUpcomingTable = (
           </>
         )}
       </section>
+
+      {rejectTarget && (
+        <RejectBookingModal
+          booking={rejectTarget}
+          onClose={() => setRejectTarget(null)}
+          onDone={loadBookings}
+        />
+      )}
     </div>
   );
 }
