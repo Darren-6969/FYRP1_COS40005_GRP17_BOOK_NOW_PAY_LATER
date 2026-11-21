@@ -246,11 +246,17 @@ enum OperatorAccessLevel {
   STAFF
 }
 
+enum OtpPurpose {
+  EMAIL_VERIFICATION
+  OPERATOR_LOGIN
+}
+
 model User {
   id       Int      @id @default(autoincrement())
   userCode String   @unique
   name     String
   email    String   @unique
+  emailVerifiedAt DateTime? @default(now())
   password String
   role     UserRole @default(CUSTOMER)
 
@@ -283,6 +289,7 @@ model User {
   auditLogs                AuditLog[]
   refreshTokens            RefreshToken[]
   passwordSetupTokens      PasswordSetupToken[]
+  otpChallenges            OtpChallenge[]
   applicationReviews       OperatorApplicationReview[] @relation("ApplicationReviewer")
   documentReviews          OperatorDocument[]          @relation("DocumentReviewer")
   reviewedApplications     OperatorApplication[]       @relation("ApplicationReviewerUser")
@@ -390,6 +397,20 @@ model PasswordSetupToken {
   @@index([expiresAt])
 }
 
+model OtpChallenge {
+  id        Int        @id @default(autoincrement())
+  userId    Int
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   OtpPurpose
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int        @default(0)
+  createdAt DateTime   @default(now())
+
+  @@unique([userId, purpose])
+  @@index([expiresAt])
+}
+
 model Operator {
   id           Int           @id @default(autoincrement())
   operatorCode String        @unique
@@ -398,6 +419,7 @@ model Operator {
   phone        String?
   logoUrl      String?
   status       CompanyStatus @default(ACTIVE)
+  mfaEnabled   Boolean       @default(false)
 
   subscriptionPlan      SubscriptionPlan @default(FREE)
   subscriptionStartedAt DateTime?

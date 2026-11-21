@@ -251,6 +251,7 @@ async function provisionCustomerForIntent(intent) {
           email,
           password: hashedPassword,
           role: "CUSTOMER",
+          emailVerifiedAt: null,
           provisionedVia: "HOST",
           customerStatus: "RESTRICTED",
         },

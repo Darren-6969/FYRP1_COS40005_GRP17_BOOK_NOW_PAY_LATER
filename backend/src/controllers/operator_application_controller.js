@@ -124,6 +124,7 @@ export async function submitOperatorApplication(req, res, next) {
           email: normalizedEmail,
           password: unusablePassword,
           role: "NORMAL_SELLER",
+          emailVerifiedAt: null,
           operatorAccessLevel: "OWNER",
           operatorUserStatus: "SUSPENDED",
           operatorId: operator.id,

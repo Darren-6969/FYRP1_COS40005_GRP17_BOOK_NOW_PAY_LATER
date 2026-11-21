@@ -4,6 +4,11 @@ import crypto from "crypto";
 import prisma from "../config/db.js";
 import { generateUserCode } from "../services/userCode.js";
 import { sendEmail } from "../services/email_service.js";
+import {
+  consumeOtp,
+  OtpDeliveryError,
+  sendOtp,
+} from "../services/auth_otp_service.js";
 
 // ── Token configuration ───────────────────────────────────────────────────────
 // Access token: short-lived (OWASP 2025 A07 / NIST SP 800-63B)
@@ -81,6 +86,7 @@ async function createCustomerWithRetry({ name, email, password, consent }) {
       const user = await prisma.user.create({
         data: {
           userCode, name, email, password: hashedPassword, role: safeRole,
+          emailVerifiedAt: null,
           privacyPolicyAcceptedAt: consent.acceptedAt,
           privacyPolicyAcceptedIp: consent.ip,
           termsAcceptedAt: consent.acceptedAt,
@@ -131,8 +137,20 @@ export async function register(req, res, next) {
       },
     });
 
-    res.status(201).json(sanitizeUser(user));
+    await sendOtp({ user, purpose: "EMAIL_VERIFICATION" });
+    res.status(201).json({
+      message: "We sent a verification code to your email address.",
+      requiresEmailVerification: true,
+      email: user.email,
+    });
   } catch (err) {
+    if (err instanceof OtpDeliveryError) {
+      return res.status(503).json({
+        message: err.message,
+        code: "OTP_DELIVERY_FAILED",
+      });
+    }
+
     if (err.code === "P2002") {
       return res.status(409).json({ message: "Duplicate value detected. Please try again." });
     }
@@ -261,6 +279,24 @@ export async function login(req, res, next) {
       });
     }
 
+    if (!user.emailVerifiedAt) {
+      await sendOtp({ user, purpose: "EMAIL_VERIFICATION" });
+      return res.status(403).json({
+        message: "Verify your email address before signing in.",
+        code: "EMAIL_VERIFICATION_REQUIRED",
+      });
+    }
+
+    if (user.role === "NORMAL_SELLER" && user.operator?.mfaEnabled) {
+      await sendOtp({ user, purpose: "OPERATOR_LOGIN" });
+      return res.json({
+        message: "We sent a sign-in code to your email address.",
+        requiresOtp: true,
+        code: "OTP_REQUIRED",
+        email: user.email,
+      });
+    }
+
     const { accessToken, refreshToken } = await issueTokenPair(
       user.id,
       user.role,
@@ -273,6 +309,122 @@ export async function login(req, res, next) {
         action: "USER_LOGIN",
         entityType: "User",
         entityId: String(user.id),
+      },
+    });
+
+    res.json({ token: accessToken, refreshToken, user: sanitizeUser(user) });
+  } catch (err) {
+    if (err instanceof OtpDeliveryError) {
+      return res.status(503).json({
+        message: err.message,
+        code: "OTP_DELIVERY_FAILED",
+      });
+    }
+
+    next(err);
+  }
+}
+
+export async function verifyEmailOtp(req, res, next) {
+  try {
+    const { email, code } = req.body;
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      return res.status(400).json({ message: "The code is invalid or expired." });
+    }
+
+    const result = await consumeOtp({
+      userId: user.id,
+      purpose: "EMAIL_VERIFICATION",
+      code,
+    });
+
+    if (!result.verified) {
+      return res.status(result.reason === "locked" ? 429 : 400).json({
+        message: result.reason === "locked"
+          ? "Too many incorrect codes. Sign in again to request a new code."
+          : "The code is invalid or expired.",
+      });
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "USER_EMAIL_VERIFIED",
+        entityType: "User",
+        entityId: String(user.id),
+      },
+    });
+
+    res.json({ message: "Email verified successfully." });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function verifyOperatorLoginOtp(req, res, next) {
+  try {
+    const { email, code } = req.body;
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { operator: true },
+    });
+
+    if (
+      !user
+      || !user.emailVerifiedAt
+      || user.role !== "NORMAL_SELLER"
+      || !user.operator?.mfaEnabled
+    ) {
+      return res.status(400).json({ message: "The sign-in challenge is invalid or expired." });
+    }
+
+    if (user.operatorUserStatus === "SUSPENDED") {
+      await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+      return res.status(403).json({
+        message: "Your operator account has been suspended. Please contact the administrator.",
+      });
+    }
+
+    if (user.operator.status !== "ACTIVE") {
+      return res.status(403).json({
+        message: user.operator.status === "PENDING"
+          ? "Your operator application is awaiting administrator approval."
+          : "Your operator account is not active. Please contact the administrator.",
+        code: user.operator.status === "PENDING"
+          ? "OPERATOR_APPLICATION_PENDING"
+          : "OPERATOR_ACCOUNT_INACTIVE",
+      });
+    }
+
+    const result = await consumeOtp({
+      userId: user.id,
+      purpose: "OPERATOR_LOGIN",
+      code,
+    });
+
+    if (!result.verified) {
+      return res.status(result.reason === "locked" ? 429 : 400).json({
+        message: result.reason === "locked"
+          ? "Too many incorrect codes. Sign in again to request a new code."
+          : "The code is invalid or expired.",
+      });
+    }
+
+    const { accessToken, refreshToken } = await issueTokenPair(
+      user.id,
+      user.role,
+      user.operatorAccessLevel
+    );
+
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "USER_LOGIN",
+        entityType: "User",
+        entityId: String(user.id),
+        details: { authenticationMethod: "EMAIL_OTP" },
       },
     });
 

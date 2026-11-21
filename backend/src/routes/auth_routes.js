@@ -11,6 +11,8 @@ import {
   resetPassword,
   updateNotificationPreferences,
   updateProfile,
+  verifyEmailOtp,
+  verifyOperatorLoginOtp,
 } from "../controllers/auth_controller.js";
 import { verifyToken } from "../middlewares/auth_middleware.js";
 import { authLimiter, refreshLimiter } from "../middlewares/rate_limit_middleware.js";
@@ -23,6 +25,8 @@ import {
   refreshTokenSchema,
   registerSchema,
   resetPasswordSchema,
+  verifyEmailOtpSchema,
+  verifyOperatorLoginOtpSchema,
 } from "../validators/auth_validator.js";
 
 const router = express.Router();
@@ -30,6 +34,8 @@ const router = express.Router();
 // Public – rate-limited and validated
 router.post("/register", authLimiter, validate(registerSchema),    register);
 router.post("/login",    authLimiter, validate(loginSchema),       login);
+router.post("/verify-email-otp", authLimiter, validate(verifyEmailOtpSchema), verifyEmailOtp);
+router.post("/verify-login-otp", authLimiter, validate(verifyOperatorLoginOtpSchema), verifyOperatorLoginOtp);
 router.post("/forgot-password", authLimiter, validate(forgotPasswordSchema), forgotPassword);
 router.post("/reset-password", authLimiter, validate(resetPasswordSchema), resetPassword);
 router.post("/refresh",  refreshLimiter, validate(refreshTokenSchema), refreshAccessToken);

@@ -45,6 +45,14 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required").max(128),
 });
 
+const otpSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Invalid email address").max(254),
+  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
+});
+
+export const verifyEmailOtpSchema = otpSchema;
+export const verifyOperatorLoginOtpSchema = otpSchema;
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "Current password is required").max(128),

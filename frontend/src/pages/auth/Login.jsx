@@ -100,7 +100,7 @@ export default function Login() {
     password: "",
   });
 
-  const [rememberMe, setRememberMe] = useState(true);
+  const [rememberMe, setRememberMe] = useState(searchParams.get("remember") !== "false");
   const [loading, setLoading] = useState(false);
   const errors = useFormErrors();
   const setError = errors.fail;
@@ -147,6 +147,15 @@ export default function Login() {
     return true;
   };
 
+  const navigateToOtp = (purpose, email) => {
+    const params = new URLSearchParams({ purpose, email });
+    if (hostToken) params.set("hostToken", hostToken);
+    if (redirectParam) params.set("redirect", redirectParam);
+    if (savingCar) params.set("reason", "save");
+    params.set("remember", String(rememberMe));
+    navigate(`/verify-otp?${params.toString()}`, { replace: true });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -166,6 +175,11 @@ export default function Login() {
     try {
       const response = await login({ email, password });
       const data = response.data;
+
+      if (data?.requiresOtp || data?.code === "OTP_REQUIRED") {
+        navigateToOtp("login", data.email || email);
+        return;
+      }
 
       const token = extractToken(data);
       const refreshToken = extractRefreshToken(data);
@@ -245,7 +259,11 @@ export default function Login() {
 
       navigate(defaultRedirectPath, { replace: true });
     } catch (err) {
-      console.error("Login error:", err);
+      const code = err.response?.data?.code;
+      if (code === "EMAIL_VERIFICATION_REQUIRED") {
+        navigateToOtp("email", email);
+        return;
+      }
 
       setError(requestError(err, "That email and password don't match an account. Check them, or reset your password."));
     } finally {

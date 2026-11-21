@@ -357,6 +357,9 @@ export default function OperatorSettings() {
 
           emailFooterText:
             config?.emailFooterText || "",
+
+          mfaEnabled:
+            operator?.mfaEnabled ?? prev.mfaEnabled,
         });
 
         // What is on screen once loading ends. The save buttons stay disabled
@@ -574,6 +577,7 @@ const handleSave = async () => {
         form.operatorReminderBeforeAutoRejectMinutes,
 
       enableOperatorReminderAlerts: form.enableOperatorReminderAlerts,
+      mfaEnabled: form.mfaEnabled,
       companyLogo: form.companyLogo,
       invoiceFooterText: form.invoiceFooterText || null,
       bookingRejectedEmailText: form.bookingRejectedEmailText,
@@ -1237,7 +1241,7 @@ const activeMenu = SETTINGS_MENU.find(
             <div className="operator-security-grid">
               <ToggleField
                 label="Enable 2FA / MFA"
-                helper="Add an extra verification step when signing in."
+                helper="Require an email verification code each time an operator account signs in."
                 checked={form.mfaEnabled}
                 onChange={(checked) =>
                   updateField("mfaEnabled", checked)

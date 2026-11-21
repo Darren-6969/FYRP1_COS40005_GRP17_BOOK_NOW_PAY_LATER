@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { login, register } from "../../services/auth_service";
-import { saveSession, unbindTab } from "../../utils/session";
+import { register } from "../../services/auth_service";
 import AuthShell, {
   AuthField,
   AuthMessage,
@@ -13,29 +12,6 @@ import AuthShell, {
 import styles from "../../assets/styles/public/Auth.module.css";
 import { backLinkFor } from "../../components/auth/backLink";
 import { emailProblem, passwordProblem, requestError, useFormErrors } from "../../components/auth/authForm";
-
-// Only same-site paths, never "//host" or a full URL.
-function isSafeRedirectPath(path) {
-  return typeof path === "string" && path.startsWith("/") && !path.startsWith("//");
-}
-
-// Sign the new customer in with the details they just registered.
-// Returns false when sign-in fails so the caller can fall back to the
-// login page.
-async function signInAfterRegister(email, password) {
-  const { data } = await login({ email, password });
-  const token = data?.token || data?.accessToken || data?.data?.token || null;
-  const user = data?.user || data?.data?.user || null;
-  if (!token || !user?.id) return false;
-  const role = String(user.role || "CUSTOMER").toUpperCase();
-  saveSession({
-    token,
-    refreshToken: data?.refreshToken || data?.refresh_token || null,
-    user: { ...user, role },
-    role,
-  });
-  return role === "CUSTOMER";
-}
 
 export default function Register() {
   const navigate = useNavigate();
@@ -102,32 +78,15 @@ export default function Register() {
         termsAccepted: consent,
       });
 
-      // Host (GoCar) sign-ups keep the login step, which claims the booking.
-      if (!hostToken) {
-        let signedIn = false;
-        try {
-          unbindTab();
-          signedIn = await signInAfterRegister(email, password);
-        } catch {
-          signedIn = false;
-        }
-        if (signedIn) {
-          // Signed up from the booking form: straight back to it, with the
-          // trip in the URL and the form draft restored. Otherwise home.
-          const target = redirectParam && isSafeRedirectPath(redirectParam) ? redirectParam : "/";
-          navigate(target, { replace: true });
-          return;
-        }
-      }
-
       const params = new URLSearchParams();
 
+      params.set("purpose", "email");
+      params.set("email", email);
       if (hostToken) params.set("hostToken", hostToken);
       if (redirectParam) params.set("redirect", redirectParam);
       if (savingCar) params.set("reason", "save");
-      params.set("email", email);
 
-      navigate(`/login?${params.toString()}`, {
+      navigate(`/verify-otp?${params.toString()}`, {
         replace: true,
       });
     } catch (err) {

@@ -6,6 +6,7 @@ import OperatorRegister from "./pages/auth/OperatorRegister";
 import SetupPassword from "./pages/auth/SetupPassword";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
+import VerifyOtp from "./pages/auth/VerifyOtp";
 
 // Master Pages
 import MasterLayout from "./pages/master/layout/MasterLayout";
@@ -126,6 +127,7 @@ export default function App() {
           <Route path="/setup-password" element={<SetupPassword />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-otp" element={<VerifyOtp />} />
         </Route>
         <Route path="/embed" element={<EmbedEntry />} />
         {/* Protected Routes */}

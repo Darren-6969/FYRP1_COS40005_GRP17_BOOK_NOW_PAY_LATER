@@ -443,6 +443,7 @@ export async function createOperator(req, res, next) {
             email,
             password: hashedPassword,
             role: "NORMAL_SELLER",
+            emailVerifiedAt: null,
             operatorAccessLevel: "OWNER",
             operatorId: operator.id,
           },
@@ -4840,6 +4841,7 @@ export async function createOperatorUser(req, res, next) {
         email,
         password: hashedPassword,
         role: "NORMAL_SELLER",
+        emailVerifiedAt: null,
         operatorAccessLevel: accessLevel,
         operatorUserStatus: "ACTIVE",
         operatorId: operator.id,
@@ -4970,6 +4972,7 @@ export async function getOperatorSettings(req, res, next) {
         phone: operator.phone,
         logoUrl: operator.logoUrl,
         status: operator.status,
+        mfaEnabled: operator.mfaEnabled,
       },
       config: {
         ...config,
@@ -5028,6 +5031,7 @@ export async function updateOperatorSettings(req, res, next) {
       allowReceiptUpload,
       partialRefundElected,
       partialRefundPercent,
+      mfaEnabled,
       } = req.body || {};
 
     const parsedBookingDeadline = Number(bookingResponseDeadlineMinutes);
@@ -5065,12 +5069,16 @@ export async function updateOperatorSettings(req, res, next) {
       });
     }
 
+    if (mfaEnabled !== undefined && typeof mfaEnabled !== "boolean") {
+      return res.status(400).json({ message: "MFA setting must be true or false." });
+    }
+
     const config = configForValidation;
-    const operatorBefore = companyLogo === undefined
+    const operatorBefore = companyLogo === undefined && mfaEnabled === undefined
       ? null
       : await prisma.operator.findUnique({
           where: { id: operatorId },
-          select: { logoUrl: true },
+          select: { logoUrl: true, mfaEnabled: true },
         });
 
     // #12 fix: PATCH semantics — only overwrite a field when the request actually
@@ -5361,19 +5369,19 @@ export async function updateOperatorSettings(req, res, next) {
       data: configData,
     });
 
-    // Only touch the operator logo when the client actually sent companyLogo,
-    // otherwise leave the existing operator.logoUrl untouched.
-    let updatedOperator;
+    const operatorUpdates = {};
     if (companyLogo !== undefined) {
-      updatedOperator = await prisma.operator.update({
-        where: { id: operatorId },
-        data: { logoUrl: companyLogo || null },
-      });
-    } else {
-      updatedOperator = await prisma.operator.findUnique({
-        where: { id: operatorId },
-      });
+      operatorUpdates.logoUrl = companyLogo || null;
     }
+    if (mfaEnabled !== undefined) {
+      operatorUpdates.mfaEnabled = mfaEnabled;
+    }
+    const updatedOperator = Object.keys(operatorUpdates).length
+      ? await prisma.operator.update({
+          where: { id: operatorId },
+          data: operatorUpdates,
+        })
+      : await prisma.operator.findUnique({ where: { id: operatorId } });
 
     await createAuditLog({
       req,
@@ -5382,11 +5390,17 @@ export async function updateOperatorSettings(req, res, next) {
       entityId: updatedConfig.id,
       before: {
         ...Object.fromEntries(Object.keys(configData).map((key) => [key, config[key]])),
-        ...(operatorBefore ? { operatorLogoUrl: operatorBefore.logoUrl } : {}),
+        ...(operatorBefore ? {
+          operatorLogoUrl: operatorBefore.logoUrl,
+          operatorMfaEnabled: operatorBefore.mfaEnabled,
+        } : {}),
       },
       after: {
         ...Object.fromEntries(Object.keys(configData).map((key) => [key, updatedConfig[key]])),
-        ...(operatorBefore ? { operatorLogoUrl: updatedOperator.logoUrl } : {}),
+        ...(operatorBefore ? {
+          operatorLogoUrl: updatedOperator.logoUrl,
+          operatorMfaEnabled: updatedOperator.mfaEnabled,
+        } : {}),
       },
       details: {
         operatorId,
