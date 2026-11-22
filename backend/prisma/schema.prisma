@@ -13,6 +13,20 @@ enum UserRole {
   CUSTOMER
 }
 
+// What kind of business the operator is. It decides which listing categories
+// the operator can create (operator_type_rules.js). Chosen at registration.
+enum OperatorType {
+  CAR_RENTAL // rental company: car rental and charter tour listings
+  TOUR_GUIDE // licensed independent tour guide: tour packages only
+  DRIVER // licensed independent driver: driver service (Phase 4)
+}
+
+// How a tour listing is charged. Never per person.
+enum TourPriceUnit {
+  PER_CAR // charter tour by a car rental operator
+  PER_PACKAGE // tour guide package, capped by maxGroupSize
+}
+
 enum CompanyStatus {
   ACTIVE
   SUSPENDED
@@ -105,6 +119,9 @@ enum ListingCategory {
   // TEST-ITEM-MISC (see backend/TEST_ITEM_MISCELLANEOUS.md). A Postgres enum value
   // cannot be dropped, so after deleting the listings it is harmless to leave.
   MISCELLANEOUS
+  // Independent driver service (operator type DRIVER). Not listable until
+  // Phase 4 of the operator types plan.
+  DRIVER_SERVICE
 }
 
 enum ListingStatus {
@@ -419,6 +436,7 @@ model Operator {
   phone        String?
   logoUrl      String?
   status       CompanyStatus @default(ACTIVE)
+  operatorType OperatorType  @default(CAR_RENTAL)
   mfaEnabled   Boolean       @default(false)
 
   subscriptionPlan      SubscriptionPlan @default(FREE)
@@ -478,6 +496,7 @@ model Operator {
   @@index([status])
   @@index([subscriptionStatus, subscriptionPaidUntil])
   @@index([status, lastActivityAt])
+  @@index([operatorType])
 }
 
 model SubscriptionUpgradeRequest {
@@ -1359,7 +1378,13 @@ model Listing {
 
   cancellationPolicy String? @db.Text
   meetingPoint       String?
-  maxGroupSize       Int?
+  maxGroupSize       Int? // tours: maximum passengers
+
+  // Tours: departure times offered each day ("HH:mm", Malaysia time, sorted)
+  // and how the price is charged. priceUnit is set by the server from the
+  // operator type, never taken from the client.
+  pickupTimes String[]       @default([])
+  priceUnit   TourPriceUnit?
 
   // Common policies
   refundPolicy       String? @db.Text

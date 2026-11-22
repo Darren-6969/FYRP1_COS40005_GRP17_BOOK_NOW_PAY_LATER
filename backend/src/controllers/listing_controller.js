@@ -12,6 +12,11 @@ import {
 } from "../services/subscription_service.js";
 
 import { getPlatformSettings } from "../services/platform_settings_service.js";
+import {
+  assertCategoryAllowed,
+  normalisePickupTimes,
+  tourPriceUnitFor,
+} from "../services/operator_type_rules.js";
 import { assertSubscriptionActive } from "../services/subscription_admin_service.js";
 import {
   assertListingQuantitySafe,
@@ -1159,6 +1164,7 @@ export async function createListing(
       cancellationPolicy,
       meetingPoint,
       maxGroupSize,
+      pickupTimes,
 
       refundPolicy,
       termsAndConditions,
@@ -1249,6 +1255,11 @@ export async function createListing(
           id: Number(branchId),
           ...listingWhere(req),
         },
+        include: {
+          operator: {
+            select: { operatorType: true },
+          },
+        },
       });
 
     if (!branch) {
@@ -1257,6 +1268,28 @@ export async function createListing(
           "Branch not found.",
       });
     }
+
+    // The operator's type decides which categories it can list. Checked
+    // against the branch's operator so an admin creating on an operator's
+    // behalf is held to the same rule.
+    const operatorType =
+      branch.operator?.operatorType;
+
+    assertCategoryAllowed(
+      operatorType,
+      category
+    );
+
+    // Tours: departure times from the operator, price unit from the server.
+    const tourFields =
+      category === "TOUR"
+        ? {
+            pickupTimes:
+              normalisePickupTimes(pickupTimes),
+            priceUnit:
+              tourPriceUnitFor(operatorType),
+          }
+        : {};
 
     if (
       category ===
@@ -1400,6 +1433,8 @@ export async function createListing(
             maxGroupSize
               ? Number(maxGroupSize)
               : null,
+
+          ...tourFields,
 
           refundPolicy:
             refundPolicy || null,
@@ -1752,6 +1787,38 @@ export async function updateListing(
     delete data.updatedAt;
     delete data.images;
     delete data.branch;
+
+    // Set by the server from the operator type, never by the client.
+    delete data.priceUnit;
+
+    const { operatorType } =
+      (await prisma.operator.findUnique({
+        where: { id: existing.operatorId },
+        select: { operatorType: true },
+      })) || {};
+
+    if (
+      data.category !== undefined &&
+      data.category !== existing.category
+    ) {
+      assertCategoryAllowed(
+        operatorType,
+        data.category
+      );
+    }
+
+    if (data.pickupTimes !== undefined) {
+      data.pickupTimes =
+        normalisePickupTimes(data.pickupTimes);
+    }
+
+    if (
+      (data.category ?? existing.category) ===
+      "TOUR"
+    ) {
+      data.priceUnit =
+        tourPriceUnitFor(operatorType);
+    }
 
     const rates =
       validateRateCard(
