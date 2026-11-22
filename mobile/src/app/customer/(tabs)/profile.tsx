@@ -182,6 +182,12 @@ export default function ProfileScreen() {
           <Row icon="chatbubbles-outline" title="Help and support" onPress={() => go("/customer/support-chat")} />
           <Row icon="document-text-outline" title="Terms and conditions" onPress={() => go("/customer/terms")} />
           <Row icon="shield-checkmark-outline" title="Privacy policy" onPress={() => go("/customer/privacy")} />
+          <Row
+            icon="trash-outline"
+            title="Delete account"
+            subtitle="Ask us to delete your account and data"
+            onPress={() => go("/customer/account/delete-account")}
+          />
         </Group>
 
         <Button label="Sign out" variant="line" icon="log-out-outline" onPress={() => setSignOutOpen(true)} />

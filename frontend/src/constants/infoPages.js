@@ -269,9 +269,81 @@ export const INFO_PAGES = {
         heading: "Your rights",
         paragraphs: [
           "You can ask to see the personal data we hold about you, ask us to correct it, or withdraw consent for anything optional. Use the contact details on the Contact page.",
+          "You can also ask us to delete your account and the personal data linked to it. Deleting your account explains how, and what we have to keep.",
         ],
       },
     ],
+    related: [{ to: "/info/delete-account", label: "Deleting your account" }],
+  },
+
+  // Google Play requires a web page where users can ask for their account and
+  // data to be deleted without the app installed. The app's operator
+  // Account sheet opens this page. Signed-in customers send the
+  // request from their profile (POST /customer/account-deletion-request).
+  // The button here is for people who cannot sign in: it goes through the
+  // Assistant's "contact support" hand-off. Either way it lands in the admin
+  // support queue as a "My account" ticket.
+  // The 30 day target and "as long as Malaysian law requires" were confirmed
+  // by the client on 23 Nov 2026. Keep the same wording in the customer
+  // profile tab, the in-app privacy policy and the deletion email.
+  "delete-account": {
+    nav: "Delete your account",
+    title: "Deleting your account",
+    summary: "How to ask us to delete your account and personal data.",
+    lead: `You can ask ${SITE} to delete your account and the personal data linked to it at any time, whether you signed up on the website or in the app.`,
+    action: {
+      label: "Request account deletion",
+      to: "/assistant?q=" + encodeURIComponent("Contact support: please delete my account and personal data"),
+    },
+    steps: [
+      {
+        title: "Send a deletion request",
+        text: "If you can sign in, open Profile on the website or in the app and choose Delete account. Confirm, and the request goes straight to our team. If you cannot sign in, press Request account deletion above and give the email address your account uses.",
+      },
+      {
+        title: "We confirm it is you",
+        text: "We only delete an account when the request comes from you while signed in, or from the email address on the account, so nobody else can delete it for you.",
+      },
+      {
+        title: "We delete your account",
+        text: "We aim to finish within 30 days of your request and email you when it is done. You will no longer be able to sign in.",
+      },
+    ],
+    sections: [
+      {
+        heading: "What we delete",
+        list: [
+          "Your email address, phone number, profile photo and password. You are signed out on every device.",
+          "Your driving licence and any international driving permit you uploaded.",
+          "Your saved cars, notifications and notification settings.",
+          "Your Assistant chats and support requests.",
+          "Your booking history on the platform, such as a missed balance or a no-show.",
+        ],
+      },
+      {
+        heading: "What we keep, and for how long",
+        list: [
+          "Booking, payment, refund and invoice records, with your name on them. Malaysian law requires businesses to keep financial records, so we keep these for as long as the law requires, and then delete them. The phone number, email and driver's date of birth on each booking are removed.",
+          "Payment receipts you uploaded for a DuitNow payment, kept with the payment record they belong to.",
+        ],
+        paragraphs: ["Kept records are not used for anything else, such as marketing."],
+      },
+      {
+        heading: "Before you ask",
+        list: [
+          "Finish or cancel any booking that is still going on. We cannot delete an account with a booking in progress, a payment due, a refund still on its way to you or a credit appeal waiting for a decision.",
+          "Download any invoices you want to keep. You cannot get them from us after the account is deleted.",
+          "You can sign up again later with the same email address. It will be a new account without your old bookings.",
+        ],
+      },
+      {
+        heading: "Operator accounts",
+        paragraphs: [
+          "If you run a rental business on the platform, use the same request. Our team closes operator accounts with you directly, because accepted bookings must be completed or cancelled and payouts owed to you settled first.",
+        ],
+      },
+    ],
+    related: [{ to: "/info/privacy", label: "Privacy and personal data" }],
   },
 
   "refund-rules": {

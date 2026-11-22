@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
@@ -6,6 +7,7 @@ import { AppText, BottomSheet, Button, ConfirmSheet, SegmentedControl, type Segm
 import { useTheme } from "@/hooks/use-theme";
 import type { ThemePreference } from "@/providers/theme-provider";
 import { clearSession } from "@/services/session";
+import { ACCOUNT_DELETION_URL } from "@/utils/chat-links";
 
 const APPEARANCE: readonly SegmentOption<ThemePreference>[] = [
   { value: "system", label: "System" },
@@ -51,6 +53,13 @@ export function AccountSheet({
           <AppText variant="caption">System follows your phone&apos;s light or dark setting.</AppText>
         </View>
         <Button label="Sign out" variant="line" icon="log-out-outline" style={styles.signOut} onPress={() => setSignOutOpen(true)} />
+        <Button
+          label="Delete account"
+          variant="line"
+          icon="trash-outline"
+          style={styles.deleteAccount}
+          onPress={() => WebBrowser.openBrowserAsync(ACCOUNT_DELETION_URL).catch(() => {})}
+        />
       </BottomSheet>
 
       <ConfirmSheet
@@ -72,5 +81,8 @@ const styles = StyleSheet.create({
   },
   signOut: {
     marginTop: 20,
+  },
+  deleteAccount: {
+    marginTop: 8,
   },
 });

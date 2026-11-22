@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Clock, Inbox, RefreshCw, Send, UserRound } from "lucide-react";
 import {
   getSupportTicket,
@@ -8,7 +8,7 @@ import {
   replyToSupportTicket,
   resolveSupportTicket,
 } from "../../services/support_service";
-import { getOperators } from "../../services/admin_service";
+import { getOperators, lookupCustomerByEmail } from "../../services/admin_service";
 import styles from "../../assets/styles/support/TicketWorkspace.module.css";
 
 // The ticket list and the open ticket, shared by the operator Customer
@@ -206,6 +206,7 @@ function TicketDetail({ detail, mode, operators, bookingHref, onChanged }) {
           <dd>
             <UserRound size={14} aria-hidden="true" /> {ticket.customer.name}
             {ticket.customer.email ? ` · ${ticket.customer.email}` : ""}
+            {mode === "admin" && <CustomerLink customer={ticket.customer} />}
           </dd>
         </div>
         <div>
@@ -255,6 +256,43 @@ function TicketDetail({ detail, mode, operators, bookingHref, onChanged }) {
         </form>
       )}
     </section>
+  );
+}
+
+// Admin only: open the customer behind a ticket, for example to delete an
+// account on request. A visitor's ticket is matched by the email they gave.
+function CustomerLink({ customer }) {
+  const navigate = useNavigate();
+  const [state, setState] = useState("");
+
+  if (customer.signedIn && customer.id) {
+    return (
+      <>
+        {" · "}
+        <Link to={`/master/customers/${customer.id}`}>Open customer</Link>
+      </>
+    );
+  }
+  if (!customer.email) return null;
+
+  const find = async () => {
+    setState("Looking...");
+    try {
+      const res = await lookupCustomerByEmail(customer.email);
+      navigate(`/master/customers/${res.data.id}`);
+    } catch (err) {
+      setState(err.response?.status === 404 ? "No account uses this email" : "Could not look it up");
+    }
+  };
+
+  return (
+    <>
+      {" · "}
+      <button type="button" className={styles.linkButton} onClick={find}>
+        Find account
+      </button>
+      {state && <span role="status"> ({state})</span>}
+    </>
   );
 }
 

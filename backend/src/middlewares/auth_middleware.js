@@ -33,6 +33,10 @@ export async function verifyToken(req, res, next) {
       return res.status(401).json({ message: "Invalid token user" });
     }
 
+    if (user.customerStatus === "DELETED") {
+      return res.status(401).json({ message: "This account has been deleted.", code: "ACCOUNT_DELETED" });
+    }
+
     if (user.role === "NORMAL_SELLER" && user.operator?.status !== "ACTIVE") {
       await prisma.refreshToken.deleteMany({ where: { userId: user.id } });
       return res.status(403).json({

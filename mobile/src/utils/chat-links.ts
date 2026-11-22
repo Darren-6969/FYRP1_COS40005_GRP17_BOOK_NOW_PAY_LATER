@@ -8,6 +8,13 @@ import type { Href } from "expo-router";
 
 export const WEBSITE_URL = "https://fypbnplquma.tech";
 
+/**
+ * Public page where customers and operators ask for their account and data
+ * to be deleted (Google Play account deletion requirement). The same URL is
+ * entered in the Data safety form in Play Console.
+ */
+export const ACCOUNT_DELETION_URL = `${WEBSITE_URL}/info/delete-account`;
+
 /** Trip and search keys the car screens read (cars.tsx, car-details.tsx Params). */
 const TRIP_KEYS = ["city", "from", "ft", "to", "tt"];
 

@@ -537,3 +537,18 @@ export async function uploadPermitFile(input: {
   return response.json();
 }
 
+
+export type AccountDeletionStatus = {
+  request: { reference: string; status: string; requestedAt: string } | null;
+  blockers: string[];
+};
+
+/** Whether the customer has an open account deletion request, and what they must finish first. */
+export async function getAccountDeletionRequest(): Promise<AccountDeletionStatus> {
+  return apiRequest("/customer/account-deletion-request", { method: "GET" });
+}
+
+/** Sends the deletion request to the platform team (a support ticket). Safe to repeat. */
+export async function requestAccountDeletion(): Promise<AccountDeletionStatus & { existing: boolean }> {
+  return apiRequest("/customer/account-deletion-request", { method: "POST" });
+}

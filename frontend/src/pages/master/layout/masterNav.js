@@ -21,6 +21,7 @@ import {
   BookOpen,
   LifeBuoy,
   Bot,
+  UserSearch,
 } from "lucide-react";
 
 // The admin pages, grouped as the sidebar shows them. The sidebar draws its
@@ -56,6 +57,7 @@ export const masterNavGroups = [
     links: [
       { to: "/master/operator-applications", label: "Application Review", icon: ClipboardCheck },
       { to: "/master/operators", label: "Operators", icon: Users },
+      { to: "/master/customers", label: "Customers", icon: UserSearch },
       { to: "/master/listings", label: "Listings", icon: Store },
     ],
   },

@@ -120,6 +120,14 @@ export default function InfoPage() {
 
         {page.contact && <ContactDetails />}
 
+        {page.action && (
+          <p className={styles.actionRow}>
+            <Link to={page.action.to} className={styles.action}>
+              {page.action.label}
+            </Link>
+          </p>
+        )}
+
         {page.steps && (
           <ol className={styles.steps}>
             {page.steps.map((step, index) => (

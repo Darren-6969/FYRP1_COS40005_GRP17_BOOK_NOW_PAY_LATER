@@ -32,6 +32,8 @@ import MasterHelp from "./pages/master/MasterHelp";
 import CreditAppeals from "./pages/master/CreditAppeals";
 import Policies from "./pages/master/Policies";
 import MasterSupport from "./pages/master/MasterSupport";
+import Customers from "./pages/master/Customers";
+import CustomerDetail from "./pages/master/CustomerDetail";
 import AiModels from "./pages/master/AiModels";
 
 // Customer Pages
@@ -145,6 +147,8 @@ export default function App() {
               <Route path="receipts" element={<Receipts />} />
               <Route path="invoices" element={<Invoices />} />
               <Route path="operators" element={<Operators />} />
+              <Route path="customers" element={<Customers />} />
+              <Route path="customers/:id" element={<CustomerDetail />} />
               <Route path="listings" element={<Listings />} />
               <Route path="operator-applications" element={<OperatorApplicationReview />} />
               <Route path="sales-report" element={<SalesReport />} />

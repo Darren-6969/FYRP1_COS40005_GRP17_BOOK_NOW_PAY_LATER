@@ -68,7 +68,7 @@ const SECTIONS: LegalSection[] = [
   },
   {
     title: "Customer Choices",
-    body: "Customers can manage supported account information and notification preferences through the Profile section of the mobile application.",
+    body: "Customers can manage supported account information and notification preferences through the Profile section of the mobile application. Customers can also ask for their account and the personal data linked to it to be deleted, through Delete account in the Profile section or at fypbnplquma.tech/info/delete-account. Booking, payment and invoice records are kept for as long as Malaysian law requires.",
   },
   {
     title: "Policy Updates",
