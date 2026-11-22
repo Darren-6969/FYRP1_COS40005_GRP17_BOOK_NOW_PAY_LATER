@@ -1189,3 +1189,66 @@
   outline: 3px solid var(--pub-focus);
   outline-offset: 2px;
 }
+
+/* Operator register: choose car rental, tour guide or driver first. */
+.typeList {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.root .typeCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  padding: 16px 18px;
+  border: 1px solid var(--auth-control);
+  border-radius: 18px;
+  background: var(--pub-surface);
+  color: var(--pub-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--pub-t-control);
+}
+
+.root .typeCard:hover {
+  border-color: var(--pub-moss-text);
+}
+
+.root .typeCard:focus-visible,
+.root .typeChange:focus-visible {
+  outline: 3px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+.typeTitle {
+  font-family: var(--pub-font-display);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.typeDetail {
+  font-size: 14px;
+  color: var(--pub-text);
+}
+
+.typeChosen {
+  margin: 4px 0 0;
+  font-size: 15px;
+  color: var(--pub-text);
+}
+
+.root .typeChange {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--pub-link);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}

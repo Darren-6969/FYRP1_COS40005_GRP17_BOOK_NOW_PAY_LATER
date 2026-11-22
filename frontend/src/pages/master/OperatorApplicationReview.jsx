@@ -5,6 +5,29 @@ import {
   reviewOperatorApplication,
 } from "../../services/admin_service";
 
+const TYPE_LABELS = {
+  CAR_RENTAL: "Car rental company",
+  TOUR_GUIDE: "Tour guide",
+  DRIVER: "Driver",
+};
+
+// Same names as DOCUMENT_LABELS in backend/src/services/operator_type_rules.js.
+const DOCUMENT_LABELS = {
+  BUSINESS_REGISTRATION: "Business registration (SSM)",
+  BUSINESS_LICENSE: "Business licence",
+  OWNER_IDENTITY: "Identity card or passport",
+  TOURIST_GUIDE_LICENCE: "Tourist guide licence (MOTAC)",
+  DRIVING_LICENCE: "Driving licence",
+  PSV_LICENCE: "PSV licence",
+};
+
+// The documents to check before approving each type.
+const APPROVAL_CHECK = {
+  CAR_RENTAL: "Check the business licence and every submitted document.",
+  TOUR_GUIDE: "Check the MOTAC tourist guide licence is valid and matches the ID.",
+  DRIVER: "Check the driving licence and PSV licence are valid and match the ID.",
+};
+
 export default function OperatorApplicationReview() {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +85,7 @@ export default function OperatorApplicationReview() {
         <div className="section-header">
           <div>
             <h3>Operator Application Review</h3>
-            <p>Check the business licence and every submitted document before approval creates the organisation and first manager account.</p>
+            <p>Check the documents for the applicant's type before approval creates the organisation and first manager account.</p>
             <p className="text-danger">Approval publishes every listing this operator holds.</p>
           </div>
           <button className="btn" type="button" onClick={load}>Refresh</button>
@@ -74,12 +97,19 @@ export default function OperatorApplicationReview() {
           <div className="list-row" key={application.id}>
             <div>
               <strong>{application.operator?.companyName}</strong>
-              <p>{application.operator?.email} · {application.businessRegistrationNumber}</p>
+              <p>
+                <span className="badge">{TYPE_LABELS[application.operator?.operatorType] || TYPE_LABELS.CAR_RENTAL}</span>{" "}
+                {APPROVAL_CHECK[application.operator?.operatorType] || APPROVAL_CHECK.CAR_RENTAL}
+              </p>
+              <p>
+                {application.operator?.email}
+                {application.businessRegistrationNumber ? ` · ${application.businessRegistrationNumber}` : " · No registration number"}
+              </p>
               <p>Status: {application.status} · Submitted: {new Date(application.submittedAt).toLocaleString()}</p>
               {(application.documents || []).map((document) => (
                 <div key={document.id}>
                   <button className="btn link" type="button" onClick={() => viewDocument(document)}>
-                    {document.documentType}: {document.originalName}
+                    {DOCUMENT_LABELS[document.documentType] || document.documentType}: {document.originalName}
                   </button>
                   <span> ({document.status})</span>
                 </div>

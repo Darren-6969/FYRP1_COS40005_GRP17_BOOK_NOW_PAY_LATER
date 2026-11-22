@@ -149,9 +149,9 @@ function RoadPanel({ back }) {
 }
 
 const JOIN_STEPS = [
-  ["Apply with your business documents", "Registration, licence and owner ID."],
-  ["We verify your business", "You hear back by email."],
-  ["Set up branches, points and cars", "Set your rates and deposit."],
+  ["Apply with your documents", "Registration or licence, and your ID."],
+  ["We verify your application", "You hear back by email."],
+  ["Set up your listings", "Set your rates and deposit."],
   ["Accept booking requests", "Get paid through the platform."],
 ];
 

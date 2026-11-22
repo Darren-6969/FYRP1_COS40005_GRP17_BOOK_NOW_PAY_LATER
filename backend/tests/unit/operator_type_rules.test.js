@@ -2,7 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   allowedCategoriesFor,
+  applicationRulesFor,
   assertCategoryAllowed,
+  checkApplicationDocuments,
+  missingApprovalDocuments,
+  parseOperatorType,
   isCategoryAllowed,
   normalisePickupTimes,
   tourPriceUnitFor,
@@ -60,4 +64,55 @@ test("bad pickup times are refused", () => {
   }
   const tooMany = Array.from({ length: 13 }, (_, i) => `${String(i + 6).padStart(2, "0")}:00`);
   assert.throws(() => normalisePickupTimes(tooMany), (error) => error.statusCode === 400);
+});
+
+test("operator type defaults to car rental and refuses unknown values", () => {
+  assert.equal(parseOperatorType(undefined), "CAR_RENTAL");
+  assert.equal(parseOperatorType(""), "CAR_RENTAL");
+  assert.equal(parseOperatorType("tour_guide"), "TOUR_GUIDE");
+  assert.throws(() => parseOperatorType("BOAT"), (error) => error.appCode === "INVALID_OPERATOR_TYPE");
+});
+
+test("registration number is required for car rental only", () => {
+  assert.equal(applicationRulesFor("CAR_RENTAL").businessRegistrationNumberRequired, true);
+  assert.equal(applicationRulesFor("TOUR_GUIDE").businessRegistrationNumberRequired, false);
+  assert.equal(applicationRulesFor("DRIVER").businessRegistrationNumberRequired, false);
+});
+
+test("car rental application keeps its old documents", () => {
+  assert.doesNotThrow(() => checkApplicationDocuments("CAR_RENTAL", ["BUSINESS_REGISTRATION", "OWNER_IDENTITY"]));
+  assert.throws(
+    () => checkApplicationDocuments("CAR_RENTAL", ["OWNER_IDENTITY"]),
+    (error) => error.appCode === "APPLICATION_DOCUMENT_MISSING" && error.details.missing.includes("BUSINESS_REGISTRATION")
+  );
+});
+
+test("tour guide needs the guide licence and ID, SSM is optional", () => {
+  assert.doesNotThrow(() => checkApplicationDocuments("TOUR_GUIDE", ["TOURIST_GUIDE_LICENCE", "OWNER_IDENTITY"]));
+  assert.doesNotThrow(() =>
+    checkApplicationDocuments("TOUR_GUIDE", ["TOURIST_GUIDE_LICENCE", "OWNER_IDENTITY", "BUSINESS_REGISTRATION"])
+  );
+  assert.throws(() => checkApplicationDocuments("TOUR_GUIDE", ["OWNER_IDENTITY"]), (error) => error.statusCode === 400);
+});
+
+test("driver needs driving licence, PSV licence and ID", () => {
+  assert.doesNotThrow(() => checkApplicationDocuments("DRIVER", ["DRIVING_LICENCE", "PSV_LICENCE", "OWNER_IDENTITY"]));
+  assert.throws(
+    () => checkApplicationDocuments("DRIVER", ["DRIVING_LICENCE", "OWNER_IDENTITY"]),
+    (error) => error.details.missing.join() === "PSV_LICENCE"
+  );
+});
+
+test("documents from another type are refused", () => {
+  assert.throws(
+    () => checkApplicationDocuments("DRIVER", ["DRIVING_LICENCE", "PSV_LICENCE", "OWNER_IDENTITY", "BUSINESS_LICENSE"]),
+    (error) => error.appCode === "APPLICATION_DOCUMENT_NOT_ACCEPTED"
+  );
+});
+
+test("approval needs the type's key documents", () => {
+  assert.deepEqual(missingApprovalDocuments("CAR_RENTAL", ["BUSINESS_REGISTRATION"]), ["BUSINESS_LICENSE"]);
+  assert.deepEqual(missingApprovalDocuments("TOUR_GUIDE", ["TOURIST_GUIDE_LICENCE"]), []);
+  assert.deepEqual(missingApprovalDocuments("DRIVER", ["DRIVING_LICENCE"]), ["PSV_LICENCE"]);
+  assert.deepEqual(missingApprovalDocuments(null, ["BUSINESS_LICENSE"]), []);
 });

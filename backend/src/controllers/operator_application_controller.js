@@ -9,8 +9,19 @@ import { escapeHtml } from "../utils/escapeHTML.js";
 import {validateSecureDocument,} from "../utils/secure_upload.js";
 import { getPlatformSettings } from "../services/platform_settings_service.js";
 import { initialTermData } from "../services/subscription_rules.js";
+import {
+  applicationRulesFor,
+  approvalDocumentsMessage,
+  checkApplicationDocuments,
+  missingApprovalDocuments,
+  parseOperatorType,
+} from "../services/operator_type_rules.js";
 
-const DOCUMENT_TYPES = new Set(["BUSINESS_REGISTRATION", "BUSINESS_LICENSE", "OWNER_IDENTITY"]);
+const TYPE_NAMES = { CAR_RENTAL: "car rental company", TOUR_GUIDE: "tour guide", DRIVER: "driver" };
+
+function documentTypeOf(file) {
+  return String(file.fieldname || "").replace(/^document_/, "").toUpperCase();
+}
 const APPLICATION_DECISIONS = new Set(["APPROVED", "REJECTED", "NEEDS_INFORMATION"]);
 const SETUP_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
@@ -57,14 +68,20 @@ export async function submitOperatorApplication(req, res, next) {
   try {
     const { companyName, applicantName, email, phone, businessRegistrationNumber, businessAddress } = req.body;
     const files = req.files || [];
+    const operatorType = parseOperatorType(req.body.operatorType);
+    const rules = applicationRulesFor(operatorType);
+    const registrationNumber = String(businessRegistrationNumber || "").trim() || null;
 
-    if (!companyName || !applicantName || !email || !businessRegistrationNumber || !businessAddress) {
-      return res.status(400).json({ message: "Company, applicant, registration number, and business address are required." });
+    if (!companyName || !applicantName || !email || !businessAddress) {
+      return res.status(400).json({ message: "Name, applicant, email and address are required." });
     }
 
-    if (!files.length) {
-      return res.status(400).json({ message: "At least one business document is required." });
+    if (rules.businessRegistrationNumberRequired && !registrationNumber) {
+      return res.status(400).json({ message: "A business registration number is required for car rental companies." });
     }
+
+    // Each type sends its own documents (operator_type_rules.js).
+    checkApplicationDocuments(operatorType, files.map(documentTypeOf));
 
     const validatedFiles =
   await Promise.all(
@@ -114,6 +131,7 @@ export async function submitOperatorApplication(req, res, next) {
           email: normalizedEmail,
           phone: phone ? String(phone).trim() : null,
           status: "PENDING",
+          operatorType,
         },
       });
 
@@ -134,7 +152,7 @@ export async function submitOperatorApplication(req, res, next) {
       const createdApplication = await tx.operatorApplication.create({
         data: {
           operatorId: operator.id,
-          businessRegistrationNumber: String(businessRegistrationNumber).trim(),
+          businessRegistrationNumber: registrationNumber,
           businessAddress: String(businessAddress).trim(),
           status: "SUBMITTED",
         },
@@ -146,10 +164,7 @@ export async function submitOperatorApplication(req, res, next) {
           validated,
         } of validatedFiles
       ) {
-        const documentType = String(file.fieldname || "").replace(/^document_/, "").toUpperCase();
-        if (!DOCUMENT_TYPES.has(documentType)) {
-          throw new Error(`Unsupported document type: ${documentType}`);
-        }
+        const documentType = documentTypeOf(file);
 
         const storageKey = `${operator.id}/${crypto.randomUUID()}-${safeDocumentName(file.originalname)}`;
         await tx.operatorDocument.create({
@@ -177,17 +192,17 @@ export async function submitOperatorApplication(req, res, next) {
         action: "OPERATOR_APPLICATION_SUBMITTED",
         entityType: "OperatorApplication",
         entityId: String(application.id),
-        details: { operatorCode, email: normalizedEmail },
+        details: { operatorCode, email: normalizedEmail, operatorType },
       },
     });
 
     await notifyMasterUsers({
       title: "New operator application submitted",
-      message: `${companyName} submitted an operator application for review.`,
+      message: `${companyName} (${TYPE_NAMES[operatorType]}) submitted an operator application for review.`,
       type: "OPERATOR_APPLICATION_SUBMITTED",
       emailSubject: `New Operator Application - ${companyName}`,
       emailText: `${companyName} submitted an operator application for administrator review.`,
-      emailHtml: `<p><strong>${escapeHtml(companyName)}</strong> submitted an operator application for administrator review.</p><p>Applicant: ${escapeHtml(applicantName)}<br>Email: ${escapeHtml(normalizedEmail)}<br>Documents: ${files.length}</p>`,
+      emailHtml: `<p><strong>${escapeHtml(companyName)}</strong> submitted an operator application for administrator review.</p><p>Applicant: ${escapeHtml(applicantName)}<br>Type: ${TYPE_NAMES[operatorType]}<br>Email: ${escapeHtml(normalizedEmail)}<br>Documents: ${files.length}</p>`,
       relatedEntityType: "OperatorApplication",
       relatedEntityId: application.id,
     });
@@ -207,7 +222,9 @@ export async function getOperatorApplications(req, res, next) {
       where: { status: { in: ["SUBMITTED", "UNDER_REVIEW", "NEEDS_INFORMATION"] } },
       orderBy: { submittedAt: "desc" },
       include: {
-        operator: { select: { id: true, operatorCode: true, companyName: true, email: true, phone: true, status: true } },
+        operator: {
+          select: { id: true, operatorCode: true, companyName: true, email: true, phone: true, status: true, operatorType: true },
+        },
         documents: {
           select: {
             id: true,
@@ -261,9 +278,12 @@ export async function reviewOperatorApplication(req, res, next) {
     }
 
     if (decision === "APPROVED") {
-      const businessLicence = application.documents.find((document) => document.documentType === "BUSINESS_LICENSE");
-      if (!businessLicence) {
-        return res.status(400).json({ message: "A business licence must be submitted and checked before approval." });
+      const missing = missingApprovalDocuments(
+        application.operator.operatorType,
+        application.documents.map((document) => document.documentType)
+      );
+      if (missing.length) {
+        return res.status(400).json({ message: approvalDocumentsMessage(missing) });
       }
       if (application.documents.some((document) => document.status !== "UNDER_REVIEW" && document.status !== "APPROVED")) {
         return res.status(400).json({ message: "All submitted documents must be reviewable before approval." });

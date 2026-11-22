@@ -25,6 +25,7 @@ import {
 } from "./car_pricing_service.js";
 import {calendarAvailability, horizonAvailability, loadAvailability, loadPeakDates } from "./car_availability_service.js";
 import { availabilityWindow, searchFleet } from "./car_search_service.js";
+import { VERIFICATION_DOCUMENT_TYPES } from "./operator_type_rules.js";
 
 const DEFAULT_DOWN_PAYMENT_PCT = 30;
 const ACCEPTANCE_WINDOW_DAYS = 180;
@@ -63,7 +64,8 @@ function notFound() {
 // ── Operator facts ───────────────────────────────────────────────────
 
 // "Verified" means the business licence check passed (FR-COMP-002): the
-// application was approved and no business document is unapproved or past
+// application was approved and no business document (or, for guides and
+// drivers, their licence) is unapproved or past
 // its expiry date. Operators created without an application are not shown
 // as verified until they go through the check.
 async function verifiedOperatorIds(ids) {
@@ -73,7 +75,7 @@ async function verifiedOperatorIds(ids) {
     prisma.operatorDocument.findMany({
       where: {
         operatorId: { in: ids },
-        documentType: { in: ["BUSINESS_REGISTRATION", "BUSINESS_LICENSE"] },
+        documentType: { in: VERIFICATION_DOCUMENT_TYPES },
         OR: [{ status: { not: "APPROVED" } }, { expiresAt: { lte: now } }],
       },
       select: { operatorId: true },

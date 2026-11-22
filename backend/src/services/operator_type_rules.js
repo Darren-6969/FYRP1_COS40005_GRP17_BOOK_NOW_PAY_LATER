@@ -89,3 +89,106 @@ export function normalisePickupTimes(value) {
 
   return unique;
 }
+
+// ── Operator applications ─────────────────────────────────────────────
+// What each type of applicant sends. Car rental keeps the documents it had
+// before operator types existed. Guides and drivers are often individuals,
+// so a business registration number is optional for them.
+
+export const DOCUMENT_LABELS = {
+  BUSINESS_REGISTRATION: "Business registration (SSM)",
+  BUSINESS_LICENSE: "Business licence",
+  OWNER_IDENTITY: "Identity card or passport",
+  TOURIST_GUIDE_LICENCE: "Tourist guide licence (MOTAC)",
+  DRIVING_LICENCE: "Driving licence",
+  PSV_LICENCE: "PSV licence",
+};
+
+export const APPLICATION_RULES = {
+  CAR_RENTAL: {
+    businessRegistrationNumberRequired: true,
+    documents: [
+      { type: "BUSINESS_REGISTRATION", required: true },
+      { type: "BUSINESS_LICENSE", required: false },
+      { type: "OWNER_IDENTITY", required: true },
+    ],
+    // Checked before approval (FR-COMP-002): unchanged from before.
+    approvalRequires: ["BUSINESS_LICENSE"],
+  },
+  TOUR_GUIDE: {
+    businessRegistrationNumberRequired: false,
+    documents: [
+      { type: "TOURIST_GUIDE_LICENCE", required: true },
+      { type: "BUSINESS_REGISTRATION", required: false },
+      { type: "OWNER_IDENTITY", required: true },
+    ],
+    approvalRequires: ["TOURIST_GUIDE_LICENCE"],
+  },
+  DRIVER: {
+    businessRegistrationNumberRequired: false,
+    documents: [
+      { type: "DRIVING_LICENCE", required: true },
+      { type: "PSV_LICENCE", required: true },
+      { type: "OWNER_IDENTITY", required: true },
+    ],
+    approvalRequires: ["DRIVING_LICENCE", "PSV_LICENCE"],
+  },
+};
+
+// Documents behind the Verified badge: everything except the owner's ID.
+export const VERIFICATION_DOCUMENT_TYPES = [
+  "BUSINESS_REGISTRATION",
+  "BUSINESS_LICENSE",
+  "TOURIST_GUIDE_LICENCE",
+  "DRIVING_LICENCE",
+  "PSV_LICENCE",
+];
+
+function documentList(types) {
+  return types.map((type) => DOCUMENT_LABELS[type] || type).join(", ");
+}
+
+// The type an applicant picked. Empty means car rental, which keeps older
+// clients (and the mobile app, if it ever submits) working.
+export function parseOperatorType(value) {
+  const type = String(value ?? "").trim().toUpperCase();
+  if (!type) return "CAR_RENTAL";
+  if (!isOperatorType(type)) {
+    throw fail(400, "Choose car rental, tour guide or driver.", "INVALID_OPERATOR_TYPE");
+  }
+  return type;
+}
+
+export function applicationRulesFor(operatorType) {
+  return APPLICATION_RULES[typeOrDefault(operatorType)];
+}
+
+// Refuses documents this type does not send and lists required ones that
+// are missing. documentTypes are the upload field types, e.g. OWNER_IDENTITY.
+export function checkApplicationDocuments(operatorType, documentTypes) {
+  const rules = applicationRulesFor(operatorType);
+  const accepted = new Set(rules.documents.map((doc) => doc.type));
+  const sent = new Set(documentTypes);
+
+  const notAccepted = [...sent].filter((type) => !accepted.has(type));
+  if (notAccepted.length) {
+    throw fail(400, "Some uploaded documents are not part of this application.", "APPLICATION_DOCUMENT_NOT_ACCEPTED", {
+      notAccepted,
+    });
+  }
+
+  const missing = rules.documents.filter((doc) => doc.required && !sent.has(doc.type)).map((doc) => doc.type);
+  if (missing.length) {
+    throw fail(400, `Please upload: ${documentList(missing)}.`, "APPLICATION_DOCUMENT_MISSING", { missing });
+  }
+}
+
+// Documents that must be on file before an administrator can approve.
+export function missingApprovalDocuments(operatorType, documentTypes) {
+  const sent = new Set(documentTypes);
+  return applicationRulesFor(operatorType).approvalRequires.filter((type) => !sent.has(type));
+}
+
+export function approvalDocumentsMessage(missing) {
+  return `${documentList(missing)} must be submitted and checked before approval.`;
+}

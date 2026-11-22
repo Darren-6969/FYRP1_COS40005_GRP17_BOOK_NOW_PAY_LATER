@@ -568,7 +568,7 @@ model OperatorApplication {
   operatorId                 Int                       @unique
   operator                   Operator                  @relation(fields: [operatorId], references: [id], onDelete: Cascade)
   status                     OperatorApplicationStatus @default(SUBMITTED)
-  businessRegistrationNumber String
+  businessRegistrationNumber String? // optional for tour guides and drivers
   businessAddress            String                    @db.Text
   submittedAt                DateTime                  @default(now())
   reviewedAt                 DateTime?
