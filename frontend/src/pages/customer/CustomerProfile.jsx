@@ -9,13 +9,16 @@ import {
 } from "../../services/auth_service";
 import { clearSession, getUser as getStoredUser, saveUser } from "../../utils/session";
 import "../../assets/styles/customer.css";
+import DeleteAccountPanel from "../../components/customer/DeleteAccountPanel";
 import {
   UserRound,
   LockKeyhole,
   Bell,
   CircleHelp,
-  LogOut
+  LogOut,
+  Trash2
 } from "lucide-react";
+
 
 function updateStoredUser(user) {
   saveUser(user);
@@ -100,6 +103,11 @@ export default function CustomerProfile() {
       id: "help",
       label: "Help & Support",
       icon: <CircleHelp size={18} />,
+    },
+    {
+      id: "delete",
+      label: "Delete Account",
+      icon: <Trash2 size={18} />,
     },
   ],
   []
@@ -611,6 +619,8 @@ export default function CustomerProfile() {
                 </div>
               </div>
             )}
+
+            {activeTab === "delete" && <DeleteAccountPanel />}
           </div>
         </main>
       </section>

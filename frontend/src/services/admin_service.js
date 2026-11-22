@@ -122,3 +122,11 @@ export const runCompletionCheck = () => api.post("/cron/run-completion-check");
 export const runPaymentReminderCheck = () => api.post("/cron/run-payment-reminders");
 export const runNoResponseCheck = () => api.post("/cron/run-no-response-check");
 export const runMaintenanceChecks = () => api.post("/cron/run-maintenance-checks");
+// Customers page: list, detail, and deleting an account on the customer's
+// request (Google Play account deletion requirement).
+export const getCustomers = (params = {}) => api.get("/admin/customers", { params });
+export const lookupCustomerByEmail = (email) => api.get("/admin/customers/lookup", { params: { email } });
+export const getCustomer = (id) => api.get(`/admin/customers/${id}`);
+export const getCustomerDeletionPreview = (id) => api.get(`/admin/customers/${id}/deletion`);
+export const deleteCustomerAccount = (id, confirmEmail) =>
+  api.post(`/admin/customers/${id}/deletion`, { confirmEmail });

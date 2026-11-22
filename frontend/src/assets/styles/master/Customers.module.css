@@ -1,0 +1,344 @@
+/* Admin Customers page and customer detail.
+   Colours are set once here as tokens; every rule below reads them. */
+
+.page {
+  --ink: #0f172a;
+  --ink-2: #334155;
+  --muted: #475569; /* 7.5:1 on white */
+  --line: #e2e8f0;
+  --surface: #fff;
+  --surface-2: #f8fafc;
+  --accent: #1d4ed8;
+  --ok: #166534;
+  --ok-bg: #effbf3;
+  --ok-line: #b7e4c7;
+  --warn: #92400e;
+  --warn-bg: #fff8eb;
+  --warn-line: #f6d79c;
+  --bad: #9f1d1d;
+  --bad-bg: #fef2f2;
+  --bad-line: #f5c2c2;
+  --bad-mark: #dc2626;
+  --radius: 16px;
+  --radius-s: 10px;
+
+  display: grid;
+  gap: 18px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── list ── */
+
+.filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.filters input,
+.filters select {
+  min-height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-s);
+  padding: 0 12px;
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.filters input:focus-visible,
+.filters select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.tableWrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.rowLink {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.rowLink:hover,
+.rowLink:focus-visible {
+  text-decoration: underline;
+}
+
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.emptyHint {
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+/* ── detail ── */
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+  width: fit-content;
+}
+
+.back:hover,
+.back:focus-visible {
+  text-decoration: underline;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.header h3 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px 20px;
+  margin: 18px 0 0;
+}
+
+.facts dt {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sectionTitle {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+/* status pill: text and colour, never colour alone */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.statusActive {
+  color: var(--ok);
+  background: var(--ok-bg);
+  border-color: var(--ok-line);
+}
+
+.statusRestricted {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn-line);
+}
+
+.statusDeleted {
+  color: var(--muted);
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+/* open deletion request */
+.requestBanner {
+  border: 1px solid var(--warn-line);
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  line-height: 1.6;
+}
+
+/* ── danger zone ── */
+
+.danger {
+  border: 1px solid var(--bad-line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  background: var(--surface);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.danger h4 {
+  margin: 0 0 4px;
+  color: var(--bad);
+  font-size: 15px;
+}
+
+.danger p {
+  margin: 0;
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+
+.deletedNote {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 16px 20px;
+  color: var(--ink-2);
+}
+
+/* ── delete dialog ── */
+
+.dialog {
+  width: min(620px, 96vw);
+}
+
+.lists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 6px 0 16px;
+}
+
+.listBox {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  padding: 12px 14px;
+}
+
+.listBox h5 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.listBox ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.removed h5 {
+  color: var(--bad);
+}
+
+.kept h5 {
+  color: var(--ok);
+}
+
+.blockers {
+  border: 1px solid var(--warn-line);
+  background: var(--warn-bg);
+  border-radius: var(--radius-s);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  color: var(--warn);
+}
+
+.blockers h5 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.blockers ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.blockers a {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.confirmField {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.confirmField span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.confirmField input {
+  min-height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-s);
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.confirmField input:focus-visible {
+  outline: 2px solid var(--bad-mark);
+  outline-offset: 1px;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialogActions button {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .filters,
+  .lists {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page * {
+    transition: none !important;
+  }
+}

@@ -288,3 +288,25 @@
 .related a {
   font-weight: 600;
 }
+
+/* ── call to action (account deletion page) ── */
+.actionRow {
+  margin: 20px 0 8px !important;
+}
+
+.article a.action {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 18px;
+  border-radius: 10px;
+  background: var(--pub-brand);
+  color: var(--pub-on-brand);
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.article a.action:hover {
+  filter: brightness(1.06);
+}

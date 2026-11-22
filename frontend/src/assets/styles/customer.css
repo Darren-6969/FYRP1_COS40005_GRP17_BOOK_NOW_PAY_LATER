@@ -3374,3 +3374,55 @@
   display: grid;
   gap: 14px;
 }
+
+/* Profile: Delete Account tab */
+.customer-profile-delete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.customer-primary-btn.customer-danger-btn {
+  background: linear-gradient(180deg, #dc2626, #b91c1c);
+  box-shadow: 0 14px 35px rgba(185, 28, 28, 0.2);
+}
+
+.customer-profile-delete-actions a:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+.customer-delete-blockers {
+  background: #fff8eb;
+  color: #92400e;
+  border: 1px solid #f6d79c;
+}
+
+.customer-delete-blockers ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.customer-delete-confirm {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid #f5c2c2;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+.customer-delete-confirm p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.customer-delete-confirm:focus-visible,
+.customer-alert-success:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}

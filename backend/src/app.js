@@ -30,6 +30,7 @@ import carsxeRoutes from "./routes/carsxe_routes.js";
 import publicRoutes from "./routes/public_routes.js";
 import policyRoutes from "./routes/policy_routes.js";
 import supportRoutes from "./routes/support_routes.js";
+import adminCustomerRoutes from "./routes/admin_customer_routes.js";
 import aiAdminRoutes from "./routes/ai_admin_routes.js";
 
 import { errorHandler }  from "./middlewares/errorHandler.js";
@@ -300,6 +301,7 @@ app.use("/api/carsxe",    carsxeRoutes);
 app.use("/api/public",    publicRoutes);
 app.use("/api/policies",  policyRoutes);
 app.use("/api/support",   supportRoutes);
+app.use("/api/admin/customers", adminCustomerRoutes);
 app.use("/api/ai-admin",  aiAdminRoutes);
 
 // ── Error handler ────────────────────────────────────────────────────────────

@@ -29,6 +29,10 @@ import { createCarBooking } from "../controllers/car_booking_controller.js";
 import { requireIdempotencyKey } from "../services/idempotency_service.js";
 import { getCancellationQuoteHandler } from "../controllers/refund_controller.js";
 import {
+  getAccountDeletionRequest,
+  postAccountDeletionRequest,
+} from "../controllers/account_deletion_request_controller.js";
+import {
   deleteSavedListing,
   getSavedListingIds,
   getSavedListings,
@@ -70,6 +74,11 @@ function receiptFile(req, res, next) {
 
 router.use(verifyToken);
 router.use(allowRoles("CUSTOMER"));
+
+// Asking for the account to be deleted (Google Play account deletion). The
+// request goes to the admin as a support ticket; the admin deletes it.
+router.get("/account-deletion-request", getAccountDeletionRequest);
+router.post("/account-deletion-request", postAccountDeletionRequest);
 
 router.get("/bookings", getCustomerBookings);
 // Vuln 3 fix: Zod validation blocks negative/zero totalAmount and malformed dates

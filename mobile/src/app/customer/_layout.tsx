@@ -158,6 +158,13 @@ export default function CustomerLayout() {
       />
 
       <Stack.Screen
+        name="account/delete-account"
+        options={{
+          animation: "slide_from_right",
+        }}
+      />
+
+      <Stack.Screen
         name="saved-cars"
         options={{
             animation: "slide_from_right",

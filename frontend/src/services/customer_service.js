@@ -167,3 +167,8 @@ export const getSavedListings = () => api.get("/customer/saved");
 export const getSavedListingIds = () => api.get("/customer/saved/ids");
 export const saveListing = (listingId) => api.put(`/customer/saved/${listingId}`);
 export const unsaveListing = (listingId) => api.delete(`/customer/saved/${listingId}`);
+
+// Asking for the account to be deleted. The request goes to the platform
+// team as a support ticket; they delete the account and email the customer.
+export const getAccountDeletionRequest = () => api.get("/customer/account-deletion-request");
+export const requestAccountDeletion = () => api.post("/customer/account-deletion-request");

@@ -232,7 +232,9 @@ const LIST_INCLUDE = {
 };
 
 function customerOf(conversation) {
-  if (conversation?.customer) return { name: conversation.customer.name, email: conversation.customer.email, signedIn: true };
+  if (conversation?.customer) {
+    return { id: conversation.customerId, name: conversation.customer.name, email: conversation.customer.email, signedIn: true };
+  }
   return { name: "Visitor (not signed in)", email: conversation?.contactEmail || null, signedIn: false };
 }
 
