@@ -14,6 +14,7 @@ import {
 import { refreshNotifications } from "../../utils/notifyRefresh";
 import CarBookingPanel from "../../components/booking/CarBookingPanel";
 import TourBookingPanel from "../../components/booking/TourBookingPanel";
+import { CarDriverCard, DriverJobPanel, hasAcceptedDriver } from "../../components/booking/DriverPanels";
 import CarAlternativeCard from "../../components/booking/CarAlternativeCard";
 import CancelBookingDialog from "../../components/booking/CancelBookingDialog";
 import RefundSummary, { CancellationNotice } from "../../components/booking/RefundSummary";
@@ -115,8 +116,8 @@ export default function BookingDetail() {
             {booking.operator?.companyName || "Host"}
           </p>
 
-          {/* Car and tour bookings have their own panels below. */}
-          {!isCarBooking && !booking.tour && (
+          {/* Car, tour and driver bookings have their own panels below. */}
+          {!isCarBooking && !booking.tour && !booking.driverJob && (
           <div className="customer-info-list detail customer-booking-info-grid">
             <div>
               <span>Service Type</span>
@@ -227,11 +228,15 @@ export default function BookingDetail() {
           />
         )}
 
-        {/* Tours need no driving licence: the operator drives. */}
-        {!booking.tour && <BookingDocumentsCard booking={booking} />}
+        {/* Tours need no driving licence: the operator drives. Nor does a
+            driver's job, and an accepted independent driver's licence is
+            checked instead of the customer's. */}
+        {!booking.tour && !booking.driverJob && !hasAcceptedDriver(booking) && <BookingDocumentsCard booking={booking} />}
 
+        {isCarBooking && <CarDriverCard booking={booking} onChanged={reload} />}
         {isCarBooking && <CarBookingPanel booking={booking} />}
         {booking.tour && <TourBookingPanel booking={booking} />}
+        {booking.driverJob && <DriverJobPanel booking={booking} />}
         <CancellationNotice booking={booking} />
         <RefundSummary booking={booking} />
 

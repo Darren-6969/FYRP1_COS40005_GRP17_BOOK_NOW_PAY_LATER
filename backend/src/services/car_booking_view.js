@@ -20,6 +20,11 @@ export function carListingSelect() {
     modelYear: true,
     transmission: true,
     seats: true,
+    // Independent drivers (Phase 4): the car's consent, and a driver
+    // listing's profile when the booking is a driver's job.
+    allowIndependentDrivers: true,
+    languages: true,
+    yearsDriving: true,
     images: {
       orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
       take: 1,
@@ -27,6 +32,53 @@ export function carListingSelect() {
     },
     branch: {
       select: { name: true, address: true, phone: true, openTime: true, closeTime: true },
+    },
+  };
+}
+
+// The car booking a driver's job serves, and the driver bookings a car
+// booking has, for the detail pages (operator types plan, Phase 4).
+export function linkedBookingsInclude() {
+  const operator = { select: { id: true, companyName: true, phone: true } };
+  const listing = {
+    select: {
+      id: true,
+      name: true,
+      vehicleMake: true,
+      vehicleModel: true,
+      languages: true,
+      yearsDriving: true,
+      images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], take: 1, select: { imageUrl: true } },
+    },
+  };
+  return {
+    linkedBooking: {
+      select: {
+        id: true,
+        bookingCode: true,
+        status: true,
+        pickupDate: true,
+        returnDate: true,
+        location: true,
+        serviceName: true,
+        operator,
+        listing,
+      },
+    },
+    driverBookings: {
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        bookingCode: true,
+        status: true,
+        totalAmount: true,
+        pickupDate: true,
+        returnDate: true,
+        serviceName: true,
+        operator,
+        listing,
+      },
     },
   };
 }
@@ -111,6 +163,7 @@ export function mapCarBooking(booking) {
     driver: details.driver ?? null,
     contact: details.contact ?? null,
     chauffeur: details.chauffeur ?? null,
+    independentDriver: mapCarDriver(booking),
     responseDueAt: responseDueAt(booking),
     autoRejectOnTimeout: autoRejectsOnTimeout(booking),
     alternative: mapAlternative(booking),
@@ -122,8 +175,74 @@ export function isTourBooking(booking) {
   return booking?.serviceType === "TOUR";
 }
 
+export function isDriverBooking(booking) {
+  return booking?.serviceType === "DRIVER";
+}
+
 export function isCarBooking(booking) {
-  return Boolean(booking?.listingId) && !isTourBooking(booking);
+  return Boolean(booking?.listingId) && !isTourBooking(booking) && !isDriverBooking(booking);
+}
+
+// Statuses where a driver booking is no longer serving the car.
+const ENDED = new Set(["REJECTED", "CANCELLED", "EXPIRED", "NO_SHOW", "NO_SHOW_UNPAID", "COMPLETED"]);
+
+function mapLinkedSummary(linked) {
+  if (!linked) return null;
+  return {
+    id: linked.id,
+    bookingCode: linked.bookingCode,
+    status: linked.status,
+    name: linked.listing?.name ?? linked.serviceName,
+    photoUrl: linked.listing?.images?.[0]?.imageUrl ?? null,
+    languages: linked.listing?.languages ?? [],
+    yearsDriving: linked.listing?.yearsDriving ?? null,
+    startAt: linked.pickupDate,
+    endAt: linked.returnDate,
+    location: linked.location ?? null,
+    totalAmount: linked.totalAmount == null ? null : toNumber(linked.totalAmount),
+    operator: linked.operator
+      ? { id: linked.operator.id, name: linked.operator.companyName, phone: linked.operator.phone ?? null }
+      : null,
+  };
+}
+
+// On a car booking: the independent driver, chosen or booked.
+export function mapCarDriver(booking) {
+  const details = booking.bookingDetails || {};
+  const drivers = booking.driverBookings || [];
+  const current = drivers.find((d) => !ENDED.has(d.status)) || null;
+  return {
+    allowed: Boolean(booking.listing?.allowIndependentDrivers),
+    requested: details.requestedDriver ?? null,
+    current: mapLinkedSummary(current),
+    past: drivers.filter((d) => d !== current).map(mapLinkedSummary),
+    licenceCheck: details.driverLicenceCheck ?? null,
+  };
+}
+
+// A driver's job: the driver profile and the car booking it serves.
+export function mapDriverBooking(booking) {
+  const details = booking.bookingDetails || {};
+  const listing = booking.listing;
+  return {
+    driver: listing
+      ? {
+          id: listing.id,
+          name: listing.name,
+          photoUrl: listing.images?.[0]?.imageUrl ?? null,
+          languages: listing.languages ?? [],
+          yearsDriving: listing.yearsDriving ?? null,
+        }
+      : null,
+    startAt: booking.pickupDate,
+    endAt: booking.returnDate,
+    location: booking.location ?? null,
+    pricing: booking.pricingSnapshot ?? null,
+    contact: details.contact ?? null,
+    car: mapLinkedSummary(booking.linkedBooking),
+    responseDueAt: responseDueAt(booking),
+    autoRejectOnTimeout: autoRejectsOnTimeout(booking),
+  };
 }
 
 // Read-only view of a tour booking for the customer and operator detail

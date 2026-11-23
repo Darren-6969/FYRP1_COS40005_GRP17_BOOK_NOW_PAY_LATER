@@ -271,6 +271,8 @@ export function toCarDto(listing, facts, availability, faqs = []) {
     insuranceInfo: listing.insuranceInfo,
     refundPolicy: listing.refundPolicy,
     termsAndConditions: listing.termsAndConditions,
+    // The operator lets an independent driver drive this car (Phase 4).
+    allowIndependentDrivers: Boolean(listing.allowIndependentDrivers),
     images: listing.images.map((i) => ({ id: i.id, imageUrl: i.imageUrl, isPrimary: i.isPrimary, sortOrder: i.sortOrder })),
     createdAt: listing.createdAt,
     operator: {

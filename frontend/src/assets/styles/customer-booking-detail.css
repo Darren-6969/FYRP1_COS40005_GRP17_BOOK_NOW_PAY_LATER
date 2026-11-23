@@ -343,3 +343,23 @@
     transition: none;
   }
 }
+
+/* Independent driver card (operator types plan, Phase 4) */
+.booking-driver-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.customer-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.customer-alert-warning {
+  border: 1px solid #f5d48a;
+  background: #fff8e6;
+  color: #7a4b00;
+}

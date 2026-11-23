@@ -30,6 +30,10 @@ export const REFUND_CAUSES = {
   ADMIN_CUSTOMER_FAULT: "ADMIN_CUSTOMER_FAULT",
   ADMIN_OPERATOR_FAULT: "ADMIN_OPERATOR_FAULT",
   ADMIN_PLATFORM_FAULT: "ADMIN_PLATFORM_FAULT",
+  // An independent driver's booking ends because the car booking it serves
+  // was rejected, cancelled by the operator or expired: not the customer's
+  // doing, so everything comes back (operator types plan, Phase 4).
+  LINKED_BOOKING_ENDED: "LINKED_BOOKING_ENDED",
 };
 
 // Causes where everything the customer paid goes back.
@@ -38,6 +42,7 @@ const EVERYTHING_BACK = new Set([
   REFUND_CAUSES.PLATFORM_FAULT,
   REFUND_CAUSES.ADMIN_OPERATOR_FAULT,
   REFUND_CAUSES.ADMIN_PLATFORM_FAULT,
+  REFUND_CAUSES.LINKED_BOOKING_ENDED,
 ]);
 
 export const ACTIVE_REFUND_STATUSES = ["PENDING", "PROCESSING", "REFUNDED"];

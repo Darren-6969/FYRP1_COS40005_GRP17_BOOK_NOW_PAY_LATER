@@ -27,6 +27,7 @@ import {
 } from "../../components/booking/carBookingParts";
 
 import TourBookingPanel from "../../components/booking/TourBookingPanel";
+import { DriverJobPanel, OperatorCarDriverSection } from "../../components/booking/DriverPanels";
 import BookingAttentionBanner from "../../components/operator/BookingAttentionBanner";
 import BookingDocumentsChecklist from "../../components/operator/BookingDocumentsChecklist";
 import OperatorCounterVerification from "../../components/operator/OperatorCounterVerification";
@@ -272,7 +273,8 @@ export default function OperatorBookingDetail() {
   const canSuggestAlternative =
   bookingStatus === "PENDING" &&
   !booking.alternativeUsed &&
-  !booking.tour;
+  !booking.tour &&
+  !booking.driverJob;
 
   // Module 4: a customer-requested location is free until the operator
   // prices it. The operator can quote a charge, accept as is (no charge) or
@@ -574,6 +576,7 @@ export default function OperatorBookingDetail() {
 
 
       <TourBookingPanel booking={booking} variant="operator" />
+      <DriverJobPanel booking={booking} variant="operator" />
 
       {/* =========================
           Trip
@@ -926,6 +929,9 @@ export default function OperatorBookingDetail() {
         )}
 
       </div>
+
+      {/* An independent driver on this car: their licence check. */}
+      <OperatorCarDriverSection booking={booking} onChanged={loadBooking} />
 
       {/* Licence and IDP: status, view, approve or reject. */}
       <BookingDocumentsChecklist

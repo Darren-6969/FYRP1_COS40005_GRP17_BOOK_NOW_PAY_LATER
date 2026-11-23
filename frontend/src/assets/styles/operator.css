@@ -6801,3 +6801,11 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
 }
+
+/* Independent driver on a car booking (operator types plan, Phase 4) */
+.operator-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}

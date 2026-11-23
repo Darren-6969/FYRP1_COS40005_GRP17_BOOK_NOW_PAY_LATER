@@ -188,8 +188,9 @@ async function findOperator(handle) {
  */
 export async function getStorefront(handle) {
   const operator = await findOperator(handle);
-  // Pending and rejected applicants have no public page at all.
-  if (!operator || !["ACTIVE", "SUSPENDED"].includes(operator.status)) {
+  // Pending and rejected applicants have no public page at all, and nor do
+  // independent drivers: customers only meet them on the car booking form.
+  if (!operator || !["ACTIVE", "SUSPENDED"].includes(operator.status) || operator.operatorType === "DRIVER") {
     throw fail(404, "OPERATOR_NOT_FOUND", "Operator not found");
   }
 

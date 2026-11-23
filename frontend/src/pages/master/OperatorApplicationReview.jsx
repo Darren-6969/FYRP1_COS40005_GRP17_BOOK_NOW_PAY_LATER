@@ -12,6 +12,17 @@ import styles from "../../assets/styles/master/ApplicationReview.module.css";
 // the real rules (operator_type_rules.js); this page mirrors them so the
 // administrator sees what is needed before pressing Approve.
 
+// Drivers can only be booked while these are valid, so the expiry date is
+// recorded on approval.
+const EXPIRY_DOCUMENTS = ["DRIVING_LICENCE", "PSV_LICENCE"];
+
+function malaysiaDate(offsetDays = 0) {
+  const now = new Date(Date.now() + 8 * 3600 * 1000 + offsetDays * 86400 * 1000);
+  return now.toISOString().slice(0, 10);
+}
+const todayIso = () => malaysiaDate(0);
+const tomorrowIso = () => malaysiaDate(1);
+
 const TYPES = {
   CAR_RENTAL: {
     label: "Car rental company",
@@ -171,6 +182,8 @@ export default function OperatorApplicationReview() {
   const [decision, setDecision] = useState(null);
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
+  // Expiry dates typed off the licence documents, by document id.
+  const [expiry, setExpiry] = useState({});
 
   const load = useCallback(async () => {
     try {
@@ -209,6 +222,7 @@ export default function OperatorApplicationReview() {
     setDecision(null);
     setReason("");
     setNotice(null);
+    setExpiry({});
   };
 
   const viewDocument = async (document) => {
@@ -227,7 +241,12 @@ export default function OperatorApplicationReview() {
     try {
       setSaving(true);
       setError("");
-      const response = await reviewOperatorApplication(selected.id, decision, reason.trim());
+      const documentExpiry = Object.fromEntries(
+        selected.documents
+          .filter((doc) => EXPIRY_DOCUMENTS.includes(doc.documentType) && expiry[doc.id])
+          .map((doc) => [doc.id, expiry[doc.id]])
+      );
+      const response = await reviewOperatorApplication(selected.id, decision, reason.trim(), documentExpiry);
       setNotice({
         tone: decision === "APPROVED" ? "approved" : decision === "REJECTED" ? "rejected" : "info",
         text: `${selected.operator?.companyName}: ${response.data.message || "Decision saved."}`,
@@ -250,7 +269,10 @@ export default function OperatorApplicationReview() {
   const key = (row) => `${selected?.id}:${row.type}`;
   const sent = rows.filter((row) => row.document);
   const checkedCount = sent.filter((row) => checked[key(row)]).length;
-  const approveReady = rows.filter((row) => row.required).every((row) => row.document && checked[key(row)]);
+  const needsExpiry = (row) => typeOf(selected) === "DRIVER" && EXPIRY_DOCUMENTS.includes(row.type) && row.document;
+  const approveReady =
+    rows.filter((row) => row.required).every((row) => row.document && checked[key(row)]) &&
+    rows.filter(needsExpiry).every((row) => expiry[row.document.id] > todayIso());
   const missingRequired = rows.some((row) => row.required && !row.document);
   const type = selected ? TYPES[typeOf(selected)] || TYPES.CAR_RENTAL : null;
   const status = selected ? STATUS[selected.status] || STATUS.SUBMITTED : null;
@@ -429,6 +451,18 @@ export default function OperatorApplicationReview() {
                             />
                             Checked
                           </label>
+                          {needsExpiry(row) && (
+                            <label className={styles.expiry}>
+                              Expires
+                              <input
+                                type="date"
+                                min={tomorrowIso()}
+                                value={expiry[row.document.id] || ""}
+                                onChange={(e) => setExpiry((x) => ({ ...x, [row.document.id]: e.target.value }))}
+                                aria-label={`${row.label} expiry date`}
+                              />
+                            </label>
+                          )}
                         </span>
                       )}
                     </li>
@@ -463,7 +497,9 @@ export default function OperatorApplicationReview() {
                 <p className={styles.warn}>
                   {missingRequired
                     ? "A required document is missing. Ask for more information, or reject."
-                    : "Tick every required document as checked to approve."}
+                    : typeOf(selected) === "DRIVER"
+                      ? "Tick every required document as checked and enter the licence and PSV expiry dates to approve."
+                      : "Tick every required document as checked to approve."}
                 </p>
               )}
 

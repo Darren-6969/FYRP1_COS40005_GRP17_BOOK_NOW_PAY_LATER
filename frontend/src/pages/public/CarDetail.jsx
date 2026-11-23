@@ -396,11 +396,17 @@ export default function CarDetail() {
     { k: "Roadside assistance", ...listing.policy.roadside },
     {
       k: "Drivers",
-      value: "Self-drive · 1 authorised driver (you)",
-      note:
+      value: listing.allowIndependentDrivers
+        ? "Self-drive, or book a licensed driver"
+        : "Self-drive · 1 authorised driver (you)",
+      note: [
         b.additionalDriverSen !== null
           ? `Additional drivers: ${formatSen(b.additionalDriverSen)} / day`
           : "Ask the operator about additional drivers",
+        listing.allowIndependentDrivers ? "Choose a driver on the booking form, paid separately" : null,
+      ]
+        .filter(Boolean)
+        .join(". "),
     },
 
       {

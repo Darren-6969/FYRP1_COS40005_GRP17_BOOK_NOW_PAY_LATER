@@ -71,7 +71,7 @@ const OPERATOR_TYPES = [
     value: "DRIVER",
     slug: "driver",
     title: "Driver",
-    detail: "Licensed driver customers can hire for their trip.",
+    detail: "Licensed driver who drives the cars customers rent here.",
     heading: "Apply as a driver",
     lede: "We check your licences before customers can hire you.",
     aboutHeading: "About you",

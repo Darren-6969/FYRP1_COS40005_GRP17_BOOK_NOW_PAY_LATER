@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, Plus } from "lucide-react";
+import { ArrowRight, CarFront, Check, Map as MapIcon, Plus, UserRound } from "lucide-react";
 import RequestDemo from "../../components/public/recruit/RequestDemo";
 import DashboardShowcase from "../../components/public/recruit/DashboardShowcase";
 import { getRecruitPlans } from "../../services/platform_public_service";
@@ -11,8 +11,9 @@ import useReveal from "../../hooks/useReveal";
 import useHeaderOverlay from "../../hooks/useHeaderOverlay";
 
 // Operator recruitment page, /for-operators (SRS 4.2.8, FR-CUST-010, BNPLB-126).
-// Sells the platform to rental companies; every apply button opens the
-// existing application form. Tiers, commission and the activity rule come
+// Sells the platform to the three kinds of operator: car rental companies,
+// licensed tour guides and licensed drivers. Every apply button opens the
+// existing application form, on the right type where the button names one. Tiers, commission and the activity rule come
 // from the server, so an admin change shows here with no frontend deploy.
 
 const APPLY_PATH = "/operator-register";
@@ -26,51 +27,149 @@ function ApplyButton({ className = "" }) {
   );
 }
 
+/* ── who can join ────────────────────────────────────────────────── */
+
+// Must match OPERATOR_TYPES in pages/auth/OperatorRegister.jsx (the slugs)
+// and APPLICATION_RULES in backend/src/services/operator_type_rules.js.
+const OPERATOR_KINDS = [
+  {
+    slug: "car-rental",
+    Icon: CarFront,
+    title: "Car rental companies",
+    lead: "Rent out the cars you can spare, and run charter tours with your own cars and drivers.",
+    list: [
+      "Cars with hourly, daily, weekly and monthly rates",
+      "Charter tours: one price per car, with the car named",
+      "Your own branches, pickup points and deposit split",
+      "Choose which cars an independent driver may drive",
+    ],
+    docs: "Business registration (SSM), owner identity, and a business licence if you have one.",
+    cta: "Apply as a car rental company",
+  },
+  {
+    slug: "tour-guide",
+    Icon: MapIcon,
+    title: "Tour guides",
+    lead: "Sell private tour packages as a licensed guide. One price for the group, never per person.",
+    list: [
+      "Tour packages with itinerary, inclusions and duration",
+      "Pickup times and pickup points you choose",
+      "A passenger limit for each package",
+      "No business registration needed",
+    ],
+    docs: "Your MOTAC tourist guide licence and your IC or passport.",
+    cta: "Apply as a tour guide",
+  },
+  {
+    slug: "driver",
+    Icon: UserRound,
+    title: "Drivers",
+    lead: "Drive the cars customers rent on the platform. You don't need a car of your own.",
+    list: [
+      "One driver profile: languages and the towns you cover",
+      "Your hourly and daily rates",
+      "Customers add you on the car booking form",
+      "Paid through the platform, separately from the car",
+    ],
+    docs: "Your driving licence, PSV permit, and IC or passport.",
+    cta: "Apply as a driver",
+  },
+];
+
+function WhoCanJoin() {
+  return (
+    <section id="who" className={styles.section} aria-labelledby="who-title">
+      <div className={styles.wrap}>
+        <div data-reveal className={styles.sectionHead}>
+          <div>
+            <p className={styles.kicker}>Who can join</p>
+            <h2 id="who-title" className={styles.h2}>
+              Three ways to earn on the platform.
+            </h2>
+          </div>
+          <p className={styles.headText}>
+            Pick the one that fits you when you apply. Each type lists different things and sends different
+            documents, and every application is checked before anything goes live.
+          </p>
+        </div>
+        <div className={styles.kinds}>
+          {OPERATOR_KINDS.map(({ slug, Icon, title, lead, list, docs, cta }) => (
+            <article key={slug} data-reveal className={styles.kind} aria-labelledby={`kind-${slug}`}>
+              <span className={styles.kindIcon} aria-hidden="true">
+                <Icon size={22} />
+              </span>
+              <h3 id={`kind-${slug}`} className={styles.kindTitle}>
+                {title}
+              </h3>
+              <p className={styles.kindLead}>{lead}</p>
+              <ul className={styles.feats}>
+                {list.map((item) => (
+                  <li key={item} className={styles.feat}>
+                    <Check size={18} className={styles.featIcon} aria-hidden="true" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className={styles.kindDocs}>
+                <strong>You send:</strong> {docs}
+              </p>
+              <Link to={`${APPLY_PATH}?type=${slug}`} className={styles.kindLink}>
+                {cta}
+                <ArrowRight size={16} className={styles.arrow} aria-hidden="true" />
+              </Link>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ── how joining works ───────────────────────────────────────────── */
 
 const STEPS = [
   {
     title: "Apply",
-    short: "Send your business details and documents.",
-    why: "Tell us who you are and where you operate.",
+    short: "Choose your type and send your documents.",
+    why: "Tell us who you are, what you offer and where you operate.",
     points: [
-      "Business registration number and address",
-      "Business registration document",
-      "Owner identity document",
-      "Business licence, if your business needs one",
+      "Car rental company, tour guide or driver",
+      "Car rental: business registration document and number",
+      "Tour guides: MOTAC guide licence. Drivers: driving licence and PSV permit",
+      "Owner identity document, for every type",
     ],
   },
   {
     title: "We verify",
-    short: "The platform checks your business.",
+    short: "The platform checks your documents.",
     why: "Every application is reviewed by the platform before anything goes live.",
     points: [
       "We check your documents and contact you if something is missing",
       "On approval you set your account password",
-      "Your seller page shows a Verified badge",
+      "Car rental companies and guides get a seller page with a Verified badge",
       "Your listings go live as soon as you publish them",
     ],
   },
   {
     title: "Set up",
-    short: "Branches, handover points and cars.",
-    why: "Put up only the cars you want on the platform. The rest of your fleet stays yours.",
+    short: "Your base, prices and listings.",
+    why: "Put up only what you want on the platform. The rest of your business stays yours.",
     points: [
-      "Add branches with opening hours and phone numbers",
-      "Add pick-up and drop-off points, each with its own charge",
-      "Set hourly, daily, weekly and monthly rates for each car",
-      "Choose your deposit, overtime charge and night handover rule",
+      "Add your branch or base location, and pick-up points with their own charges",
+      "Car rental: cars with hourly, daily, weekly and monthly rates, and charter tours",
+      "Tour guides: packages with pickup times. Drivers: one profile with hourly and daily rates",
+      "Choose your deposit split and payment deadline",
     ],
   },
   {
     title: "Take requests",
-    short: "Accept, reject or make an offer.",
+    short: "Accept or reject each request.",
     why: "Nothing is confirmed until you say so. Customers pay through the platform once you accept.",
     points: [
       "Each request shows a countdown to your response deadline",
-      "Offer another car, new dates or a charge for a requested place",
+      "Car rental: offer another car, new dates or a charge for a requested place",
       "The customer pays the deposit, then the balance, online",
-      "Check the driving licence before you hand over the keys",
+      "Car rental: check the driving licence, or the driver's, before handover",
     ],
   },
 ];
@@ -90,7 +189,7 @@ function JoiningSteps() {
             </h2>
           </div>
           <p className={styles.headText}>
-            You decide which cars go on the platform and keep the rest for your counter, other sites and regular
+            You decide what goes on the platform and keep the rest for your counter, other sites and regular
             customers.
           </p>
         </div>
@@ -209,12 +308,12 @@ function Plans({ status, data, onRetry }) {
     .map((p, i, all) => describePlan(p, all[i - 1]));
   const maxLimit = Math.max(...plans.map((p) => p.listingLimit), 1);
   const sliderMax = maxLimit + 5;
-  const unit = cars === 1 ? "car" : "cars";
+  const unit = cars === 1 ? "listing" : "listings";
   const fitIndex = plans.findIndex((p) => cars <= p.listingLimit);
   const fitMsg =
     fitIndex >= 0
       ? `${plans[fitIndex].label} covers ${cars} ${unit}.`
-      : `${plans[plans.length - 1].label} holds up to ${maxLimit} listings. Mention a larger fleet when you apply.`;
+      : `${plans[plans.length - 1].label} holds up to ${maxLimit} listings. Mention a larger business when you apply.`;
   const sliderPct = ((cars - 1) / (sliderMax - 1)) * 100;
   const markerPct = (Math.min(cars, maxLimit) / maxLimit) * 100;
   const ticks = [...new Set([1, ...plans.map((p) => p.listingLimit), sliderMax])];
@@ -224,7 +323,7 @@ function Plans({ status, data, onRetry }) {
       <div className={styles.sizer}>
         <div>
           <label htmlFor={sliderId} className={styles.sizerLabel}>
-            How many cars will you put on the platform?
+            How many listings will you put on the platform?
           </label>
           <input
             id={sliderId}
@@ -329,7 +428,15 @@ function buildFaqs(data) {
     },
     {
       q: "What documents do I need to apply?",
-      a: "Your business registration number and address, the business registration document, an identity document for the owner, and a business licence if your business needs one.",
+      a: "It depends on your type. Car rental companies send the business registration number and document, an owner identity document, and a business licence if they need one. Tour guides send their MOTAC tourist guide licence and IC or passport. Drivers send their driving licence, PSV permit and IC or passport.",
+    },
+    {
+      q: "Do drivers need their own car?",
+      a: "No. A driver drives a car the customer rents on the platform, from a car rental company that allows independent drivers on that car. The driver's job is its own booking: the customer pays the driver through the platform, separately from the car, and the car rental company checks the driver's licence before handover.",
+    },
+    {
+      q: "Can tour guides and drivers join without a registered business?",
+      a: "Yes. Business registration is optional for tour guides and drivers. Your licence and identity document are what we check.",
     },
     {
       q: "How do customer payments reach me?",
@@ -427,7 +534,7 @@ export default function ForOperators() {
   useReveal(rootRef, [plans.status]);
 
   useEffect(() => {
-    document.title = `List your cars · ${BRAND.name}${BRAND.suffix}`;
+    document.title = `Join as an operator · ${BRAND.name}${BRAND.suffix}`;
   }, []);
 
   return (
@@ -438,25 +545,27 @@ export default function ForOperators() {
           <div>
             <p className={`${styles.eyebrow} ${styles.rise}`}>
               <span className={styles.pulse} aria-hidden="true" />
-              For car rental companies in Malaysia
+              For car rental companies, tour guides and drivers
             </p>
             <h1 id="ops-hero-title" className={`${styles.h1} ${styles.rise} ${styles.d1}`}>
-              Rent out your spare cars <span className={styles.h1Accent}>to more customers.</span>
+              Reach more customers <span className={styles.h1Accent}>on your own terms.</span>
             </h1>
             <p className={`${styles.lede} ${styles.rise} ${styles.d2}`}>
-              List the cars you choose, set your own rates, and accept each booking request yourself. Payments come
-              through the platform.
+              Rent out your cars, sell tour packages or drive the cars customers rent. Set your own rates, and accept
+              each booking request yourself. Payments come through the platform.
             </p>
             <div className={`${styles.heroCtas} ${styles.rise} ${styles.d3}`}>
               <ApplyButton />
-              <a href="#plans" className={`${styles.btn} ${styles.btnGhost}`}>
-                See plans
+              <a href="#who" className={`${styles.btn} ${styles.btnGhost}`}>
+                Who can join
               </a>
             </div>
           </div>
           <RequestDemo />
         </div>
       </section>
+
+      <WhoCanJoin />
 
       <JoiningSteps />
 
@@ -466,12 +575,12 @@ export default function ForOperators() {
             <div>
               <p className={styles.kicker}>Plans</p>
               <h2 id="plans-title" className={styles.h2}>
-                Start free. Move up as you list more cars.
+                Start free. Move up as you list more.
               </h2>
             </div>
             <p className={styles.headText}>
               Plans differ only in how many listings you can have live. Every plan gets the full dashboard and the same
-              commission.
+              commission, whichever type you are.
             </p>
           </div>
           <Plans status={plans.status} data={plans.data} onRetry={retry} />
@@ -500,10 +609,10 @@ export default function ForOperators() {
           <div data-reveal className={styles.cta}>
             <div>
               <h2 id="ops-cta-title" className={styles.ctaTitle}>
-                Ready to list your first car?
+                Ready to take your first booking?
               </h2>
               <p className={styles.ctaText}>
-                The application takes a few minutes. We review every business before its listings go live.
+                The application takes a few minutes. We review every operator before their listings go live.
               </p>
             </div>
             <ApplyButton />

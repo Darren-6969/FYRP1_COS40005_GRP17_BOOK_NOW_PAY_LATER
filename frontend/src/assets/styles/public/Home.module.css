@@ -1294,3 +1294,42 @@
     transform: translateY(-2px);
   }
 }
+
+/* ── drivers ────────────────────────────────────────────────────── */
+.drivers {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(28px, 5vw, 64px);
+  align-items: start;
+}
+
+.driversCopy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.driverPoints {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.driverPoint {
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
+  background: var(--pub-surface);
+  padding: 20px 22px;
+}
+
+@media (max-width: 860px) {
+  .drivers {
+    grid-template-columns: 1fr;
+  }
+}
+
+.driversCopy .h2 {
+  margin-bottom: 16px !important;
+}

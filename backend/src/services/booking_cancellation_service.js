@@ -45,6 +45,9 @@ const BEFORE_ACCEPTANCE = ["PENDING", "ALTERNATIVE_SUGGESTED"];
 const CUSTOMER_STATUSES = [...BEFORE_ACCEPTANCE, "ACCEPTED", "PENDING_PAYMENT", "CONFIRMED", "PAID", "READY_FOR_PICKUP"];
 const OPERATOR_STATUSES = ["ACCEPTED", "PENDING_PAYMENT", "CONFIRMED", "PAID", "READY_FOR_PICKUP", "OVERDUE"];
 const ADMIN_STATUSES = [...CUSTOMER_STATUSES, "OVERDUE"];
+// The system cancels an independent driver's booking when the car booking it
+// serves ends (driver_job_handlers.js), at any point before the job ends.
+const SYSTEM_STATUSES = [...ADMIN_STATUSES];
 
 function cancellationError(message, statusCode = 400, appCode) {
   const error = new Error(message);
@@ -78,7 +81,10 @@ export async function getPartialRefundTerms(booking, database = prisma, peakChec
   };
 }
 
-export function resolveCause({ canceller, booking, fault = null, platformFault = false }) {
+export function resolveCause({ canceller, booking, fault = null, platformFault = false, systemCause = null }) {
+  if (canceller === CANCELLERS.SYSTEM) {
+    return systemCause || REFUND_CAUSES.LINKED_BOOKING_ENDED;
+  }
   if (canceller === CANCELLERS.ADMIN) {
     return {
       CUSTOMER: REFUND_CAUSES.ADMIN_CUSTOMER_FAULT,
@@ -103,6 +109,7 @@ function assertCanCancel({ booking, canceller, now }) {
     CUSTOMER: CUSTOMER_STATUSES,
     OPERATOR: OPERATOR_STATUSES,
     ADMIN: ADMIN_STATUSES,
+    SYSTEM: SYSTEM_STATUSES,
   }[canceller];
   if (!allowed) throw cancellationError("This cancellation is not allowed.", 403);
 
@@ -115,7 +122,7 @@ function assertCanCancel({ booking, canceller, now }) {
   // After pickup time the customer cannot cancel and the operator marks a
   // no-show instead. An administrator may still force a cancellation before the
   // rental starts.
-  if (canceller !== CANCELLERS.ADMIN && booking.pickupDate && now >= new Date(booking.pickupDate)) {
+  if (![CANCELLERS.ADMIN, CANCELLERS.SYSTEM].includes(canceller) && booking.pickupDate && now >= new Date(booking.pickupDate)) {
     throw cancellationError(
       canceller === CANCELLERS.CUSTOMER
         ? "Pickup time has passed, so this booking can no longer be cancelled."
@@ -128,7 +135,12 @@ function assertCanCancel({ booking, canceller, now }) {
 
 function describeReason({ canceller, reasonCode, note }) {
   const labels = canceller === CANCELLERS.OPERATOR ? OPERATOR_REASONS : CUSTOMER_REASONS;
-  const label = canceller === CANCELLERS.ADMIN ? "Administrator decision" : labels[reasonCode] || null;
+  const label =
+    canceller === CANCELLERS.ADMIN
+      ? "Administrator decision"
+      : canceller === CANCELLERS.SYSTEM
+        ? null
+        : labels[reasonCode] || null;
   return [label, note].filter(Boolean).join(": ");
 }
 
@@ -142,6 +154,8 @@ function validateReason({ canceller, reasonCode, note, fault }) {
   } else if (canceller === CANCELLERS.ADMIN) {
     if (!ADMIN_FAULTS.includes(fault)) throw cancellationError("Say who was at fault: customer, operator or platform.");
     if (cleanNote.length < 5) throw cancellationError("A reason of at least 5 characters is required.");
+  } else if (canceller === CANCELLERS.SYSTEM) {
+    if (cleanNote.length < 5) throw cancellationError("The system must say why it cancelled.");
   }
   return cleanNote;
 }
@@ -404,6 +418,8 @@ export async function cancelBooking({
   fault = null,
   operatorId = null,
   customerId = null,
+  // SYSTEM only: the refund cause (default LINKED_BOOKING_ENDED, all back).
+  systemCause = null,
   now = new Date(),
   database = prisma,
   deps = {},
@@ -425,7 +441,7 @@ export async function cancelBooking({
       const platformFault = canceller === CANCELLERS.CUSTOMER
         ? Boolean((await resolvePolicy({ booking, now, database: tx })).platformFault)
         : false;
-      const cause = resolveCause({ canceller, booking, fault, platformFault });
+      const cause = resolveCause({ canceller, booking, fault, platformFault, systemCause });
       const partialRefund = await getPartialRefundTerms(booking, tx, deps.peakCheck);
       const quote = computeRefundQuote({ payment: booking.payment, refunds: booking.refunds, cause, partialRefund });
       const settings = await getSettings(tx);
@@ -466,6 +482,7 @@ export async function cancelBooking({
             CUSTOMER: "CUSTOMER_BOOKING_CANCELLED",
             OPERATOR: "OPERATOR_BOOKING_CANCELLED",
             ADMIN: "ADMIN_BOOKING_FORCE_CANCELLED",
+            SYSTEM: "SYSTEM_BOOKING_CANCELLED",
           }[canceller],
           entityType: "Booking",
           entityId: booking.id,

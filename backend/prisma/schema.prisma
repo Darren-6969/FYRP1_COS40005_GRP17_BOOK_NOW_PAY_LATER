@@ -834,6 +834,13 @@ model Booking {
   alternativeListing         Listing? @relation("BookingAlternativeListing", fields: [alternativeListingId], references: [id])
   alternativePricingSnapshot Json?
 
+  // Driver bookings (serviceType "DRIVER"): the car booking this driver is
+  // booked for. Each side is its own booking with its own operator, payment
+  // and commission; a car booking that ends cancels its driver booking.
+  linkedBookingId Int?
+  linkedBooking   Booking?  @relation("BookingLinkedDriver", fields: [linkedBookingId], references: [id])
+  driverBookings  Booking[] @relation("BookingLinkedDriver")
+
   payment                 Payment?
   refunds                 Refund[]
   commissionLedgerEntries CommissionLedgerEntry[]
@@ -859,6 +866,7 @@ model Booking {
   @@index([alternativeListingId, status])
   @@index([pickupDate, returnDate])
   @@index([dropoffPointId])
+  @@index([linkedBookingId])
 }
 
 model BookingStatusHistory {
@@ -1385,6 +1393,16 @@ model Listing {
   // operator type, never taken from the client.
   pickupTimes String[]       @default([])
   priceUnit   TourPriceUnit?
+
+  // Driver service (operator type DRIVER). The driver drives a car the
+  // customer rents on the platform, priced with hourlyRate and price (daily).
+  languages    String[] @default([])
+  serviceAreas String[] @default([]) // towns the driver covers
+  yearsDriving Int?
+
+  // Car listings: whether the operator lets an independent driver drive
+  // this car. Off by default, because their insurance may not cover it.
+  allowIndependentDrivers Boolean @default(false)
 
   // Common policies
   refundPolicy       String? @db.Text

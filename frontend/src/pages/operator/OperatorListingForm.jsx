@@ -34,7 +34,7 @@ const CATEGORY_OPTIONS = {
     { value: "MISCELLANEOUS", label: "Miscellaneous (test item)" },
   ],
   TOUR_GUIDE: [{ value: "TOUR", label: "Tour Package" }],
-  DRIVER: [],
+  DRIVER: [{ value: "DRIVER_SERVICE", label: "Driver Service" }],
 };
 
 const MAX_PHOTOS = 5;
@@ -66,6 +66,7 @@ const DRIVETRAINS = [
 const ALL_CATEGORY_OPTIONS = [
   { value: "CAR_RENTAL", label: "Car Rental" },
   { value: "TOUR", label: "Tour" },
+  { value: "DRIVER_SERVICE", label: "Driver Service" },
   // TEST-ITEM-MISC: delete this option when testing is finished
   { value: "MISCELLANEOUS", label: "Miscellaneous (test item)" },
 ];
@@ -122,6 +123,14 @@ const initialForm = {
   meetingPoint: "",
   maxGroupSize: "",
   pickupTimes: "",
+
+  // Driver service (comma separated in the form)
+  languages: "",
+  serviceAreas: "",
+  yearsDriving: "",
+
+  // Car listings: let an independent driver drive this car
+  allowIndependentDrivers: false,
 
   refundPolicy: "",
   termsAndConditions: "",
@@ -194,6 +203,10 @@ export default function OperatorListingForm() {
 
   const isTour =
     form.category === "TOUR";
+
+  // A driver's one listing: their profile and rates, no vehicle.
+  const isDriver =
+    form.category === "DRIVER_SERVICE";
 
   // A charter tour bundles the operator's car with the tour package, so it
   // lists the car too. Guides list the package only. (Admins: not enforced.)
@@ -364,6 +377,11 @@ export default function OperatorListingForm() {
         pickupTimes:
           (listing.pickupTimes || []).join(", "),
 
+        languages: (listing.languages || []).join(", "),
+        serviceAreas: (listing.serviceAreas || []).join(", "),
+        yearsDriving: listing.yearsDriving ?? "",
+        allowIndependentDrivers: Boolean(listing.allowIndependentDrivers),
+
         refundPolicy:
           listing.refundPolicy || "",
 
@@ -442,7 +460,7 @@ export default function OperatorListingForm() {
 
     useEffect(() => {
   if (
-    !isCar ||
+    !(isCar || isDriver) ||
     !form.price
   ) {
     setRatePreview({
@@ -527,6 +545,7 @@ export default function OperatorListingForm() {
         clearTimeout(timer);
     }, [
       isCar,
+      isDriver,
       form.price,
       form.hourlyRate,
       form.weeklyRate,
@@ -574,9 +593,28 @@ export default function OperatorListingForm() {
   }
 }
 
+    if (isDriver) {
+      if (!form.hourlyRate || Number(form.hourlyRate) <= 0) {
+        return "Enter your hourly rate.";
+      }
+      if (!commaList(form.languages).length) {
+        return "Add at least one language you speak.";
+      }
+      if (!commaList(form.serviceAreas).length) {
+        return "Add at least one town or area you cover.";
+      }
+      if (
+        form.yearsDriving !== "" &&
+        (!Number.isInteger(Number(form.yearsDriving)) || Number(form.yearsDriving) < 0 || Number(form.yearsDriving) > 60)
+      ) {
+        return "Years driving must be a whole number from 0 to 60.";
+      }
+    }
+
     // TEST-ITEM-MISC: the test item has no quantity (it is always 1)
     if (
       !isMisc &&
+      !isDriver &&
       (
         !Number.isInteger(
           Number(form.quantity)
@@ -794,6 +832,20 @@ export default function OperatorListingForm() {
         cancellationPolicy: null,
         meetingPoint: null,
         maxGroupSize: null,
+      });
+    }
+
+    if (isCar) {
+      payload.allowIndependentDrivers = form.allowIndependentDrivers;
+    }
+
+    if (isDriver) {
+      Object.assign(payload, {
+        quantity: 1,
+        hourlyRate: Number(form.hourlyRate),
+        languages: commaList(form.languages),
+        serviceAreas: commaList(form.serviceAreas),
+        yearsDriving: form.yearsDriving !== "" ? Number(form.yearsDriving) : null,
       });
     }
 
@@ -1286,15 +1338,15 @@ export default function OperatorListingForm() {
                   </option>
                 ))}
               </select>
-              {operatorType === "DRIVER" && (
+              {isDriver && (
                 <small>
-                  Driver listings are not open yet. We will let you know when you can add one.
+                  Your driver profile. Customers who rent a car here can book you to drive it.
                 </small>
               )}
             </label>
 
             <label className="operator-field">
-              Branch *
+              {isDriver || isGuide ? "Base location *" : "Branch *"}
 
               <select
                 name="branchId"
@@ -1340,6 +1392,8 @@ export default function OperatorListingForm() {
                 placeholder={
                   isCar
                     ? "Example: Perodua Axia 1.0 G Automatic"
+                    : isDriver
+                      ? "Example: Ahmad, driver in Kuching and Samarahan"
                     : isMisc // TEST-ITEM-MISC
                       ? "Example: Test item"
                       : "Example: Kuching Heritage Day Tour"
@@ -1364,6 +1418,64 @@ export default function OperatorListingForm() {
             </label>
           </div>
         </section>
+
+        {/* ===================================================
+            DRIVER PROFILE
+        ==================================================== */}
+
+        {isDriver && (
+          <section className="operator-card">
+            <div className="operator-card-head">
+              <div>
+                <h2>Driver Profile</h2>
+                <p>
+                  Customers see this when they add a driver to a car they rent. Your driving
+                  licence and PSV permit are the ones from your approved application.
+                </p>
+              </div>
+            </div>
+
+            <div className="operator-form-grid">
+              <label className="operator-field operator-field-full">
+                Languages you speak *
+                <input
+                  name="languages"
+                  value={form.languages}
+                  onChange={handleChange}
+                  placeholder="Example: Malay, English, Mandarin"
+                />
+                <small>Separate with commas. Up to 8.</small>
+              </label>
+
+              <label className="operator-field operator-field-full">
+                Towns and areas you cover *
+                <input
+                  name="serviceAreas"
+                  value={form.serviceAreas}
+                  onChange={handleChange}
+                  placeholder="Example: Kuching, Samarahan, Bau"
+                />
+                <small>
+                  Separate with commas. You are offered for cars picked up in these places. Up to 15.
+                </small>
+              </label>
+
+              <label className="operator-field">
+                Years driving
+                <input
+                  type="number"
+                  name="yearsDriving"
+                  min="0"
+                  max="60"
+                  step="1"
+                  value={form.yearsDriving}
+                  onChange={handleChange}
+                  placeholder="Example: 8"
+                />
+              </label>
+            </div>
+          </section>
+        )}
 
         {/* ===================================================
             CAR DETAILS
@@ -1791,6 +1903,8 @@ export default function OperatorListingForm() {
       <p>
         {isCar
           ? "Set rental rates and the number of cars available under this listing."
+          : isDriver
+            ? "Under 6 hours is charged by the hour, 6 hours or more is a day. Hourly charges never go over your daily rate."
           : isMisc // TEST-ITEM-MISC
             ? "Set the fixed price of the item."
             : "Set the package price and available quantity."}
@@ -1803,6 +1917,42 @@ export default function OperatorListingForm() {
     {/* ===============================================
         CAR RENTAL PRICING
     =============================================== */}
+
+    {isDriver && (
+      <>
+        <label className="operator-field">
+          Hourly Rate (RM) *
+          <input
+            type="number"
+            name="hourlyRate"
+            min="0.01"
+            step="0.01"
+            value={form.hourlyRate}
+            onChange={handleChange}
+            placeholder="Example: 25.00"
+          />
+          {rateErrors.hourlyRate && (
+            <small className="operator-rate-error">{rateErrors.hourlyRate}</small>
+          )}
+        </label>
+
+        <label className="operator-field">
+          Daily Rate (RM) *
+          <input
+            type="number"
+            name="price"
+            min="0.01"
+            step="0.01"
+            value={form.price}
+            onChange={handleChange}
+            placeholder="Example: 180.00"
+          />
+          {rateErrors.price && (
+            <small className="operator-rate-error">{rateErrors.price}</small>
+          )}
+        </label>
+      </>
+    )}
 
     {isCar && (
       <>
@@ -1967,8 +2117,9 @@ export default function OperatorListingForm() {
         QUANTITY
     =============================================== */}
 
-    {/* TEST-ITEM-MISC: the test item has no quantity, so this field is hidden for it */}
-    {!isMisc && (
+    {/* TEST-ITEM-MISC: the test item has no quantity, so this field is hidden for it.
+        A driver is one person, so there is no count either. */}
+    {!isMisc && !isDriver && (
 
     <label className="operator-field">
       {isCar
@@ -1987,13 +2138,33 @@ export default function OperatorListingForm() {
       />
     </label>
     )}
+
+    {isCar && (
+      <label className="operator-checkbox-card operator-field-full">
+        <input
+          type="checkbox"
+          name="allowIndependentDrivers"
+          checked={form.allowIndependentDrivers}
+          onChange={(event) =>
+            setForm((current) => ({ ...current, allowIndependentDrivers: event.target.checked }))
+          }
+        />
+        <span>
+          <strong>Allow independent drivers</strong>
+          <br />
+          Customers can book a licensed driver from another operator to drive this car. Check
+          that your insurance covers another driver first. The driver is paid separately; you
+          check their licence instead of the customer&apos;s.
+        </span>
+      </label>
+    )}
   </div>
 
   {/* ===============================================
       SERVER PRICE PREVIEW
   =============================================== */}
 
-  {isCar && (
+  {(isCar || isDriver) && (
     <div className="operator-rate-preview">
       <h3>
         Duration Price Preview
@@ -2605,6 +2776,14 @@ function ListField({
       </small>
     </label>
   );
+}
+
+// "Malay, English" -> ["Malay", "English"]; the server trims and dedupes.
+function commaList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function textToList(value) {

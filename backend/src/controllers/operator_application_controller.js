@@ -9,6 +9,7 @@ import { escapeHtml } from "../utils/escapeHTML.js";
 import {validateSecureDocument,} from "../utils/secure_upload.js";
 import { getPlatformSettings } from "../services/platform_settings_service.js";
 import { initialTermData } from "../services/subscription_rules.js";
+import { DRIVER_LICENCE_DOCUMENTS } from "../services/driver_service_rules.js";
 import {
   applicationRulesFor,
   approvalDocumentsMessage,
@@ -265,6 +266,33 @@ export async function getOperatorApplications(req, res, next) {
   }
 }
 
+// { [documentId]: "YYYY-MM-DD" } from the review form. Only this
+// application's documents are accepted, and a date must be in the future.
+function readDocumentExpiry(input, documents) {
+  const dates = new Map();
+  if (input === undefined || input === null) return { dates, error: null };
+  if (typeof input !== "object" || Array.isArray(input)) {
+    return { dates, error: "Document expiry dates are not in the right format." };
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  for (const [key, value] of Object.entries(input)) {
+    if (value === null || value === "") continue;
+    const documentId = Number(key);
+    if (!documents.some((document) => document.id === documentId)) {
+      return { dates, error: "An expiry date was sent for a document that is not on this application." };
+    }
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(value))) {
+      return { dates, error: "Enter expiry dates as a full date." };
+    }
+    if (value <= today) {
+      return { dates, error: "A document that has already expired cannot be accepted." };
+    }
+    // End of that day in Malaysia time (UTC+8): 23:59:59 local is 15:59:59 UTC.
+    dates.set(documentId, new Date(`${value}T15:59:59.000Z`));
+  }
+  return { dates, error: null };
+}
+
 export async function reviewOperatorApplication(req, res, next) {
   try {
     const applicationId = Number(req.params.id);
@@ -302,6 +330,28 @@ export async function reviewOperatorApplication(req, res, next) {
       }
     }
 
+    // Expiry dates the administrator read off the documents. A driver can
+    // only be booked while their driving licence and PSV permit are valid,
+    // so both dates are required to approve a driver.
+    const expiry = readDocumentExpiry(req.body.documentExpiry, application.documents);
+    if (expiry.error) {
+      return res.status(400).json({ code: "DOCUMENT_EXPIRY_INVALID", message: expiry.error });
+    }
+    if (decision === "APPROVED" && application.operator.operatorType === "DRIVER") {
+      const missingExpiry = DRIVER_LICENCE_DOCUMENTS.filter(
+        (type) =>
+          !application.documents.some(
+            (document) => document.documentType === type && expiry.dates.has(document.id)
+          )
+      );
+      if (missingExpiry.length) {
+        return res.status(400).json({
+          code: "DOCUMENT_EXPIRY_REQUIRED",
+          message: "Enter the expiry date of the driving licence and the PSV permit before approving a driver.",
+        });
+      }
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const updated = await tx.operatorApplication.update({
         where: { id: applicationId },
@@ -331,6 +381,9 @@ export async function reviewOperatorApplication(req, res, next) {
         });
         await tx.user.updateMany({ where: { operatorId: application.operatorId, operatorAccessLevel: "OWNER" }, data: { operatorUserStatus: "ACTIVE" } });
         await tx.operatorDocument.updateMany({ where: { applicationId }, data: { status: "APPROVED", reviewedAt: new Date(), reviewedById: req.user.id } });
+        for (const [documentId, expiresAt] of expiry.dates) {
+          await tx.operatorDocument.update({ where: { id: documentId }, data: { expiresAt } });
+        }
       } else if (decision === "REJECTED") {
         await tx.operator.update({ where: { id: application.operatorId }, data: { status: "SUSPENDED" } });
         await tx.user.updateMany({ where: { operatorId: application.operatorId }, data: { operatorUserStatus: "SUSPENDED" } });

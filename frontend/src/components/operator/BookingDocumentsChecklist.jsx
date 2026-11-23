@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { hasAcceptedDriver } from "../booking/DriverPanels";
 import {
   ChevronDown,
   ChevronUp,
@@ -78,6 +79,8 @@ function documentNote(status, kind) {
 
 export default function BookingDocumentsChecklist({ booking, onUpdated }) {
   if (booking.serviceType !== "CAR_RENTAL") return null;
+  // An accepted independent driver's licence is checked in their own section.
+  if (hasAcceptedDriver(booking)) return null;
 
   return <Checklist booking={booking} onUpdated={onUpdated} />;
 }

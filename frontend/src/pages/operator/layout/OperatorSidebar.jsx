@@ -25,10 +25,14 @@ import {
   MessagesSquare,
 } from "lucide-react";
 import { getUser as getStoredUser } from "../../../utils/session";
+import { getOperatorType, operatorWording } from "../../../utils/operatorType";
 import { useSupportCounts } from "../../../hooks/useSupportCounts";
 
 const OWNER_AND_STAFF = ["OWNER", "STAFF"];
 const OWNER_ONLY = ["OWNER"];
+// Pages that only make sense when the operator hands over cars. A link with
+// no `types` is shown to every operator type.
+const CAR_RENTAL_ONLY = ["CAR_RENTAL"];
 
 // The sidebar is grouped by what the operator is doing. A group whose links
 // are all hidden for this access level is not shown at all. Notifications has
@@ -49,6 +53,7 @@ const groups = [
   {
     id: "rentals",
     label: "Rentals",
+    labelKey: "bookingsGroup",
     links: [
       {
         to: "/operator/bookings",
@@ -61,12 +66,14 @@ const groups = [
         label: "Licence Checks",
         icon: <BadgeCheck size={20} />,
         allowedAccess: OWNER_AND_STAFF,
+        types: CAR_RENTAL_ONLY,
       },
       {
         to: "/operator/returns",
         label: "Return Board",
         icon: <RotateCcw size={20} />,
         allowedAccess: OWNER_AND_STAFF,
+        types: CAR_RENTAL_ONLY,
       },
       {
         to: "/operator/customer-messages",
@@ -90,12 +97,14 @@ const groups = [
       {
         to: "/operator/listings",
         label: "Listings",
+        labelKey: "listings",
         icon: <PackageSearch size={20} />,
         allowedAccess: OWNER_AND_STAFF,
       },
       {
         to: "/operator/branches",
         label: "Branches",
+        labelKey: "branches",
         icon: <MapPin size={20} />,
         allowedAccess: OWNER_AND_STAFF,
       },
@@ -104,6 +113,8 @@ const groups = [
         label: "Seller Page",
         icon: <Store size={20} />,
         allowedAccess: OWNER_ONLY,
+        // Drivers have no public page: customers pick them on the car form.
+        types: ["CAR_RENTAL", "TOUR_GUIDE"],
       },
     ],
   },
@@ -184,15 +195,24 @@ export default function OperatorSidebar({
 }) {
   const user = getStoredUser();
   const accessLevel = user?.operatorAccessLevel || "STAFF";
+  const operatorType = getOperatorType(user);
+  const wording = operatorWording(operatorType);
   // Open chat requests waiting for this operator (Step 9).
   const supportCounts = useSupportCounts();
 
   const visibleGroups = groups
     .map((group) => ({
       ...group,
-      links: group.links.filter((link) =>
-        link.allowedAccess.includes(accessLevel)
-      ),
+      label: group.labelKey ? wording[group.labelKey] : group.label,
+      links: group.links
+        .filter(
+          (link) =>
+            link.allowedAccess.includes(accessLevel) &&
+            (!link.types || link.types.includes(operatorType))
+        )
+        .map((link) =>
+          link.labelKey ? { ...link, label: wording[link.labelKey] } : link
+        ),
     }))
     .filter((group) => group.links.length > 0);
 

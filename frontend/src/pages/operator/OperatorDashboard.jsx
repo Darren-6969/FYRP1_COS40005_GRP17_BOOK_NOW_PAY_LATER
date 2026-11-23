@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye } from "lucide-react";
+import { operatorWording } from "../../utils/operatorType";
 import {
   Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, Legend, ComposedChart, BarChart, Bar
@@ -16,6 +17,7 @@ import {
 const POLL_INTERVAL_MS = 8000;
 
 export default function OperatorDashboard() {
+  const wording = operatorWording();
   const [summary, setSummary] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [recentBookings, setRecentBookings] = useState([]);
@@ -1262,27 +1264,27 @@ const operationalMetrics = useMemo(() => {
 >
   {/* Today's Pickups */}
   <div style={styles.metricCard}>
-    {renderMetricTitle("Today's Pickups", "Number of bookings scheduled for vehicle pickup today.")}
+    {renderMetricTitle(wording.pickupsToday, wording.pickupsTodayHint)}
 
     <div style={styles.metricValue}>
       {operationalMetrics.todayPickups.length}
     </div>
 
     <div style={styles.metricSub}>
-      Vehicles scheduled for pickup
+      {wording.pickupsTodaySub}
     </div>
   </div>
 
   {/* Today's Returns */}
   <div style={styles.metricCard}>
-    {renderMetricTitle("Today's Returns", "Number of vehicles scheduled to be returned today.")}
+    {renderMetricTitle(wording.returnsToday, wording.returnsTodayHint)}
 
     <div style={styles.metricValue}>
       {operationalMetrics.todayReturns.length}
     </div>
 
     <div style={styles.metricSub}>
-      Vehicles due for return
+      {wording.returnsTodaySub}
     </div>
   </div>
 
@@ -1427,11 +1429,11 @@ const operationalMetrics = useMemo(() => {
       <div style={styles.outstandingItem}>
         <div>
           <div style={styles.outstandingTitle}>
-            Vehicles awaiting return confirmation
+            {wording.awaitingReturn}
           </div>
 
           <div style={styles.outstandingDescription}>
-            Return date has arrived but booking is not completed.
+            {wording.awaitingReturnHint}
           </div>
         </div>
 

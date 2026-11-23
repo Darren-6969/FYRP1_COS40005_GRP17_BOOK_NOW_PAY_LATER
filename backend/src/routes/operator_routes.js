@@ -1,5 +1,6 @@
 import express from "express";
 import { getMyStorefront, updateMyStorefront } from "../controllers/storefront_controller.js";
+import { downloadDriverLicence, reviewDriverLicence } from "../controllers/driver_controller.js";
 import {
   clearDuitnowAccount,
   getDuitnowAccount,
@@ -179,6 +180,9 @@ router.post("/subscription-upgrade-request", ...ownerOnlyAccess, requestSubscrip
  */
 router.get("/bookings", ...ownerOrStaffAccess, getOperatorBookings);
 router.get("/bookings/:id", ...ownerOrStaffAccess, getOperatorBookingById);
+// The independent driver on a car booking: the car operator checks their licence.
+router.get("/bookings/:id/driver-licence/:kind", ...ownerOrStaffAccess, downloadDriverLicence);
+router.post("/bookings/:id/driver-licence", ...ownerOrStaffAccess, reviewDriverLicence);
 router.patch("/bookings/:id/permit-requirement", ...ownerOrStaffAccess, updateBookingPermitRequirement);
 router.post("/bookings/bulk-action", ...ownerOrStaffAccess, bulkBookingAction);
 

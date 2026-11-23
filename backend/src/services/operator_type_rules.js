@@ -3,8 +3,7 @@
 //
 // CAR_RENTAL  rental company: car rental listings and charter tours
 // TOUR_GUIDE  licensed independent guide: tour packages only
-// DRIVER      licensed independent driver: driver service, not listable
-//             until Phase 4 of the operator types plan
+// DRIVER      licensed independent driver: one driver service listing
 //
 // MISCELLANEOUS is the TEST-ITEM-MISC test listing and stays with car rental
 // operators, as it was before operator types existed.
@@ -14,7 +13,7 @@ export const OPERATOR_TYPES = ["CAR_RENTAL", "TOUR_GUIDE", "DRIVER"];
 const ALLOWED_CATEGORIES = {
   CAR_RENTAL: ["CAR_RENTAL", "TOUR", "MISCELLANEOUS"],
   TOUR_GUIDE: ["TOUR"],
-  DRIVER: [],
+  DRIVER: ["DRIVER_SERVICE"],
 };
 
 const TYPE_LABELS = {

@@ -11,6 +11,7 @@ import {
 } from "../controllers/public_car_controller.js";
 import { getPublicPolicy } from "../controllers/policy_controller.js";
 import { getTour, listTours, quoteTour } from "../controllers/public_tour_controller.js";
+import { listDriversForCar } from "../controllers/driver_controller.js";
 import { tourQuoteSchema } from "../validators/tour_booking_validator.js";
 
 import {
@@ -110,6 +111,9 @@ router.get(
   getAvailability
 );
 
+// Independent drivers the booking form can offer for this car.
+router.get("/cars/:id/drivers", searchLimiter, listDriversForCar);
+
 router.get(
   "/cars/:id",
   getCar
@@ -127,6 +131,7 @@ router.post(
 router.get("/tours", searchLimiter, listTours);
 router.get("/tours/:id", getTour);
 router.post("/tours/:id/quote", quoteLimiter, validate(tourQuoteSchema), quoteTour);
+
 
 // Operator seller pages
 // (FR-CUST-007)

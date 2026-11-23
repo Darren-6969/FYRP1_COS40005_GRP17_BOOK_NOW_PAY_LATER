@@ -25,6 +25,7 @@ import {
 } from "../services/idempotency_service.js";
 import { createBookingOrchestrator } from "../services/booking_creation_orchestrator.js";
 import { bookingLocationText } from "../services/car_booking_snapshot.js";
+import { assertDriverForCar, carPlaces } from "../services/driver_booking_service.js";
 import { trackBookingEvent, trackEvent } from "../services/analytics_service.js";
 
 const ENDPOINT = "POST /customer/car-bookings";
@@ -125,6 +126,20 @@ export async function createCarBooking(req, res, next) {
 
     const p = r.priced;
     const location = bookingLocationText(listing, r);
+
+    // An independent driver chosen on the form: checked now, sent to the
+    // driver when the operator accepts the car (driver_job_handlers.js).
+    let requestedDriver = null;
+    if (body.driverListingId) {
+      const driver = await assertDriverForCar({
+        driverListingId: body.driverListingId,
+        carListing: listing,
+        pickupAt,
+        returnAt,
+        places: carPlaces({ location, requestedLocation: body.requestedLocation, branch: listing.branch }),
+      });
+      requestedDriver = { listingId: driver.id, name: driver.name, chosenAt: new Date().toISOString() };
+    }
     const platformSettings = await prisma.platformSettings.findUnique({ where: { id: 1 } })
       || { exposureLimits: {} };
     const creditProfile = await prisma.customerCreditProfile.findUnique({
@@ -141,7 +156,10 @@ export async function createCarBooking(req, res, next) {
       pricing: { ...p, dates: r.dates, refundRule: r.refundRule, point: r.point, dropoff: r.dropoff, requestedLocation: r.requestedLocation, requestedDropoffLocation: r.requestedDropoffLocation },
       selection: sel,
       location,
-      bookingDetails: bookingDetailsToStore(body.bookingDetails, facts.config),
+      bookingDetails: {
+        ...bookingDetailsToStore(body.bookingDetails, facts.config),
+        ...(requestedDriver ? { requestedDriver } : {}),
+      },
       cdwId: CDW_ID,
       platformSettings,
       customerTier,

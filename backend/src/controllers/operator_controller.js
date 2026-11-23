@@ -52,8 +52,11 @@ import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_serv
 import {
   carListingSelect,
   isCarBooking,
+  isDriverBooking,
   isTourBooking,
+  linkedBookingsInclude,
   mapCarBooking,
+  mapDriverBooking,
   mapTourBooking,
   operatorResponseConfigSelect,
 } from "../services/car_booking_view.js";
@@ -166,6 +169,9 @@ function includeBookingRelations() {
     alternativeListing: {
       select: carListingSelect(),
     },
+    // Independent drivers (Phase 4): the car a driver's job serves, and the
+    // drivers a car booking has.
+    ...linkedBookingsInclude(),
     refunds: {
       orderBy: {
         createdAt: "desc",
@@ -274,6 +280,12 @@ function mapBooking(booking) {
     tour:
       isTourBooking(booking)
         ? mapTourBooking(booking)
+        : null,
+
+    // An independent driver's job (Phase 4), with the car it serves.
+    driverJob:
+      isDriverBooking(booking)
+        ? mapDriverBooking(booking)
         : null,
 
     totalAmount:
@@ -3476,6 +3488,15 @@ export async function suggestAlternative(req, res, next) {
 
     // Tours: accept or reject with a reason. Suggesting another tour or date
     // is not built yet, so the stock rules for it don't exist either.
+    // Drivers: the job is tied to the customer's car booking, so there is no
+    // other driver or date to offer. Reject with a reason instead.
+    if (isDriverBooking(booking)) {
+      return res.status(400).json({
+        code: "ALTERNATIVE_NOT_FOR_DRIVERS",
+        message: "Suggesting an alternative is not available for driver bookings. Reject with a reason instead.",
+      });
+    }
+
     if (isTourBooking(booking)) {
       return res.status(400).json({
         code: "ALTERNATIVE_NOT_FOR_TOURS",

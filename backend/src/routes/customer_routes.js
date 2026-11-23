@@ -26,6 +26,7 @@ import { validate } from "../middlewares/validate_middleware.js";
 import { createBookingSchema } from "../validators/booking_validator.js";
 import { carBookingSchema } from "../validators/car_booking_validator.js";
 import { createCarBooking } from "../controllers/car_booking_controller.js";
+import { addDriver, getDriverOptions } from "../controllers/driver_controller.js";
 import { tourBookingSchema } from "../validators/tour_booking_validator.js";
 import { createTourBooking } from "../controllers/tour_booking_controller.js";
 import { requireIdempotencyKey } from "../services/idempotency_service.js";
@@ -95,6 +96,9 @@ router.patch("/bookings/:id/accept-alternative", acceptAlternativeBooking);
 router.patch("/bookings/:id/reject-alternative", rejectAlternativeBooking);
 router.patch("/bookings/:id/cancel", cancelCustomerBooking);
 router.get("/bookings/:id/activity", getCustomerBookingActivity);
+// Independent drivers for a car booking (operator types plan, Phase 4).
+router.get("/bookings/:id/drivers", getDriverOptions);
+router.post("/bookings/:id/driver", requireVerifiedCustomer, requireIdempotencyKey, addDriver);
 
 router.post("/bookings/:id/pay", requireVerifiedCustomer, requireIdempotencyKey, payCustomerBooking);
 router.post("/bookings/:id/receipt", requireIdempotencyKey, uploadCustomerReceipt);

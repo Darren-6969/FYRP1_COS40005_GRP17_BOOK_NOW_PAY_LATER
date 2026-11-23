@@ -24,9 +24,10 @@ test("tour guides list tour packages only", () => {
   assert.equal(isCategoryAllowed("TOUR_GUIDE", "CAR_RENTAL"), false);
 });
 
-test("drivers cannot list anything until Phase 4", () => {
-  assert.deepEqual(allowedCategoriesFor("DRIVER"), []);
-  assert.equal(isCategoryAllowed("DRIVER", "DRIVER_SERVICE"), false);
+test("drivers list one driver service and nothing else", () => {
+  assert.deepEqual(allowedCategoriesFor("DRIVER"), ["DRIVER_SERVICE"]);
+  assert.equal(isCategoryAllowed("DRIVER", "DRIVER_SERVICE"), true);
+  assert.equal(isCategoryAllowed("DRIVER", "CAR_RENTAL"), false);
 });
 
 test("a missing type counts as car rental", () => {

@@ -16,6 +16,13 @@ import {
   voidOutstandingScheduleEntries,
 } from "../services/payment_schedule_entry_service.js";
 import { transitionBookingStatus } from "../services/booking_status_service.js";
+import { ACCEPTED_DRIVER_STATUSES, DRIVER_SERVICE_TYPE } from "../services/driver_service_rules.js";
+
+// The driver's licence is on file from their approved application, so a
+// check still waiting for the car operator is not the customer's default.
+function driverLicenceStatus(booking) {
+  return booking.bookingDetails?.driverLicenceCheck?.status === "APPROVED" ? "APPROVED" : "UNDER_REVIEW";
+}
 import { trackBookingEvent } from "../services/analytics_service.js";
 
 const ACTIVE_STATUSES = ["PENDING", "ACCEPTED", "PENDING_PAYMENT", "CONFIRMED", "PAID"];
@@ -108,6 +115,13 @@ export function runPaymentExpiryJob() {
           paymentScheduleEntries: {
             where: { status: "DUE", dueAt: { lt: now } },
           },
+          // An independent driver who has accepted drives instead of the
+          // customer: the car operator checks the driver's licence then.
+          driverBookings: {
+            where: { serviceType: DRIVER_SERVICE_TYPE, status: { in: ACCEPTED_DRIVER_STATUSES } },
+            select: { id: true },
+            take: 1,
+          },
         },
       });
 
@@ -136,7 +150,9 @@ export function runPaymentExpiryJob() {
         isScheduleEntryOwed(entry, {
           serviceType: booking.serviceType,
           payment: booking.payment,
-          licenceStatus: booking.customer.licenceDocuments[0]?.status ?? null,
+          licenceStatus: booking.driverBookings?.length
+            ? driverLicenceStatus(booking)
+            : booking.customer.licenceDocuments[0]?.status ?? null,
         })
       );
       if (!owed.length) continue;

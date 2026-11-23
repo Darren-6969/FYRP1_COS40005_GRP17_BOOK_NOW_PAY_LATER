@@ -4,6 +4,8 @@ import { AlertCircle, Check, CircleAlert, CircleDot, Info, MapPin, TriangleAlert
 import { getCarListing, quoteCarBooking } from "../../services/listing_public_service";
 import { reportClientEvent } from "../../services/analytics";
 import { requestCarBooking } from "../../services/car_booking_service";
+import { getDriversForCar } from "../../services/driver_service";
+import DriverPicker from "../../components/booking/DriverPicker";
 import { parseBookingSelection, toBookingParams, tripParams } from "../../utils/carSearchParams";
 import { formatDateList, formatSen, formatShortDateTime, klToday } from "../../utils/formatPublic";
 import { getUser } from "../../utils/session";
@@ -22,11 +24,10 @@ const FIELD_ID = {
   driverDob: "bf-driver-dob",
   location: "bf-location",
   dropoffLocation: "bf-dropoff-location",
-  chauffeurNote: "bf-chauffeur-note",
   agree: "bf-agree",
   forfeit: "bf-forfeit",
 };
-const ORDER = ["name", "phone", "driverName","driverDob", "location", "dropoffLocation", "chauffeurNote", "agree", "forfeit"];
+const ORDER = ["name", "phone", "driverName","driverDob", "location", "dropoffLocation", "agree", "forfeit"];
 
 // Pickup and drop-off are requested separately: each end is either a listed
 // point or a location the customer types.
@@ -62,7 +63,6 @@ function migrateDraft(draft) {
     requestedDropoffLocation: sameBoth ? rest.requestedLocation || "" : rest.requestedDropoffLocation || "",
   };
 }
-const MAX_NOTE = 500;
 const DRAFT_PREFIX = "bnpl_booking_draft:";
 
 // ── validation ───────────────────────────────────────────────────────
@@ -105,7 +105,6 @@ function validate(key, f, agreed, forfeitAgreed, opts = {}) {
       ? ""
       : "Enter the place you'd like to return the car to, for example a hotel name.";
   }
-  if (key === "chauffeurNote") return f.chauffeurNote.length <= MAX_NOTE ? "" : `Keep the note under ${MAX_NOTE} characters.`;
   if (key === "agree") return agreed ? "" : "Tick to agree to the Terms of Service and rental terms.";
   if (key === "forfeit") return forfeitAgreed ? "" : "Tick to confirm you understand what happens if a payment or your licence is late.";
   return "";
@@ -159,8 +158,6 @@ function initialForm(listingId) {
     requestDropoff: false,
     requestedLocation: "",
     requestedDropoffLocation: "",
-    chauffeur: false,
-    chauffeurNote: "",
   };
   // Drafts saved before the V2.9 fields existed still restore.
   const draft = migrateDraft(readDraft(listingId));
@@ -302,6 +299,10 @@ export default function CarBookingForm() {
   const [termsOpen, setTermsOpen] = useState(false);
   const [listingRes, setListingRes] = useState({ id: null, data: null });
   const [quoteRes, setQuoteRes] = useState({ key: null, data: null });
+  // Independent drivers (Phase 4): the drivers offered for the quoted times
+  // and place, and the one the customer picked.
+  const [driversRes, setDriversRes] = useState({ key: null, drivers: [], failed: false });
+  const [driverChoiceId, setDriverChoiceId] = useState(null);
   const summaryRef = useRef(null);
   const bannerRef = useRef(null);
   const termsButtonRef = useRef(null);
@@ -364,6 +365,24 @@ export default function CarBookingForm() {
     };
   }, [listingId, key, quotedPlaces, quotedDriverDob, quoteKey]);
 
+  const allowsDrivers = Boolean(listingRes.data?.allowIndependentDrivers);
+  const quotedTimes = quoteRes.data?.quote || null;
+  const driverPickupAt = quotedTimes?.pickupAt || "";
+  const driverReturnAt = quotedTimes?.returnAt || "";
+  const driverLocation = quotedPlaces.pickup || quotedTimes?.pickupPoint?.label || "";
+  const driversKey = `${listingId}|${driverPickupAt}|${driverReturnAt}|${driverLocation}`;
+
+  useEffect(() => {
+    if (!allowsDrivers || !driverPickupAt || !driverReturnAt) return undefined;
+    let alive = true;
+    getDriversForCar(listingId, { pickupAt: driverPickupAt, returnAt: driverReturnAt, location: driverLocation })
+      .then((r) => alive && setDriversRes({ key: driversKey, drivers: r.data.drivers || [], failed: false }))
+      .catch(() => alive && setDriversRes({ key: driversKey, drivers: [], failed: true }));
+    return () => {
+      alive = false;
+    };
+  }, [allowsDrivers, listingId, driverPickupAt, driverReturnAt, driverLocation, driversKey]);
+
   useEffect(() => {
     writeDraft(listingId, form);
   }, [listingId, form]);
@@ -400,6 +419,14 @@ export default function CarBookingForm() {
   const q = quoteRes.data;
   const quote = q?.quote || null;
   const sending = status.kind === "sending";
+  // Drivers are looked up once the trip has times; until then there is
+  // nothing to look up.
+  const driverTimesSet = Boolean(driverPickupAt && driverReturnAt);
+  const driversLoading = allowsDrivers && driverTimesSet && driversRes.key !== driversKey;
+  // A choice only counts while that driver is still offered for these times.
+  const chosenDriver = driversLoading || !driverTimesSet || driversRes.key !== driversKey
+    ? null
+    : driversRes.drivers.find((d) => String(d.id) === String(driverChoiceId)) || null;
   const pickupPointId = sel.pickupPointId || b.pickupPoints[0]?.id || "";
   const dropoffPointId = sel.dropoffPointId || "";
   // The listed drop-off point when only the pickup place is requested: the
@@ -545,6 +572,7 @@ export default function CarBookingForm() {
       requestedDropoffLocation: places.dropoff || null,
       returnToRequested: places.returnToRequested,
       cdw: Boolean(sel.cdw),
+      driverListingId: chosenDriver?.id ?? null,
       addOns: Object.entries(sel.addOns)
         .filter(([, n]) => n > 0)
         .map(([id, quantity]) => ({ id, quantity })),
@@ -567,7 +595,6 @@ export default function CarBookingForm() {
           licenceIssuedIn:
             form.licence,
         },
-        chauffeur: { requested: form.chauffeur, note: form.chauffeur ? form.chauffeurNote.trim() || null : null },
         agreements: {
           termsOfServiceAcceptedAt: agreedAt,
           rentalTermsAcceptedAt: agreedAt,
@@ -1214,40 +1241,37 @@ export default function CarBookingForm() {
                 </p>
               )}
 
-              <div className={styles.switchRow}>
-                <span id="bf-chauffeur-switch" className={styles.label}>
-                  Ask about a chauffeur
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={form.chauffeur}
-                  aria-labelledby="bf-chauffeur-switch"
-                  className={`${styles.switch} ${form.chauffeur ? styles.switchOn : ""}`}
-                  onClick={() => setForm((f) => ({ ...f, chauffeur: !f.chauffeur }))}
-                >
-                  <span className={styles.switchKnob} />
-                </button>
-              </div>
-              {form.chauffeur && (
-                <div className={styles.field}>
-                  <label htmlFor={FIELD_ID.chauffeurNote} className={styles.label}>
-                    Note for {op} (optional)
-                  </label>
-                  <textarea
-                    id={FIELD_ID.chauffeurNote}
-                    rows={3}
-                    maxLength={MAX_NOTE}
-                    value={form.chauffeurNote}
-                    onChange={(e) => change("chauffeurNote", "chauffeurNote", e.target.value)}
-                    onBlur={() => blur("chauffeurNote")}
-                    aria-describedby="bf-chauffeur-hint"
-                    className={styles.input}
-                  />
-                  <p id="bf-chauffeur-hint" className={styles.hint}>
-                    Not included in the price. {op} arranges the chauffeur and any charge with you directly.
+              {allowsDrivers && (
+                <div className={styles.field} aria-labelledby="bf-driver-h">
+                  <span id="bf-driver-h" className={styles.label}>
+                    Book an independent driver (optional)
+                  </span>
+                  <p className={styles.hint}>
+                    A licensed driver drives this car for you. The driver is paid separately, through the
+                    platform, once they accept. Your request goes to the driver when {op} accepts the car, and{" "}
+                    {op} checks the driver&apos;s licence instead of yours.
                   </p>
-                  <FieldError id="bf-chauffeur-err">{errors.chauffeurNote}</FieldError>
+                  {!driverTimesSet ? (
+                    <p className={styles.hint}>Choose your pickup and return times to see the drivers available.</p>
+                  ) : driversLoading ? (
+                    <p className={styles.hint}>Finding drivers for these times...</p>
+                  ) : driversRes.failed ? (
+                    <p className={styles.hint}>Drivers could not be loaded. You can add one later from your booking.</p>
+                  ) : driversRes.drivers.length ? (
+                    <DriverPicker
+                      drivers={driversRes.drivers}
+                      selectedId={chosenDriver?.id ?? null}
+                      onSelect={(driver) => setDriverChoiceId(driver?.id ?? null)}
+                    />
+                  ) : (
+                    <p className={styles.hint}>No drivers cover this pickup place for these times yet.</p>
+                  )}
+                  {chosenDriver && (
+                    <p className={styles.hint}>
+                      {chosenDriver.name}: {formatSen(chosenDriver.quote?.totalSen)} for this rental, paid to the
+                      driver separately from the car. Tap the driver again to remove them.
+                    </p>
+                  )}
                 </div>
               )}
             </section>

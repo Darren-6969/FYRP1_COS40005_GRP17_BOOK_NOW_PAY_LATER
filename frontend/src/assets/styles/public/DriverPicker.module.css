@@ -1,0 +1,135 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  display: grid;
+  grid-template-columns: auto 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1.5px solid var(--pub-line, #e2e8f0);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: var(--pub-surface, #fff);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.card:hover {
+  border-color: var(--pub-control-line, #94a3b8);
+}
+
+.card:focus-within {
+  outline: 2px solid var(--pub-focus, #2563eb);
+  outline-offset: 2px;
+}
+
+.cardOn {
+  border-color: var(--pub-brand, #1e4f44);
+  background: var(--pub-ok-bg, #e3efe9);
+}
+
+.radio {
+  margin: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--pub-brand, #1e4f44);
+}
+
+.radio:focus-visible {
+  outline: none;
+}
+
+.photo {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--pub-surface-sunk, #f1f5f9);
+  color: var(--pub-text, #475569);
+}
+
+.photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--pub-ink, #0f172a);
+  font-size: 15px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pub-ok-fg, #1e4f44);
+  background: var(--pub-ok-bg, #e3efe9);
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--pub-text, #475569);
+}
+
+.meta svg {
+  flex-shrink: 0;
+}
+
+.price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+  color: var(--pub-ink, #0f172a);
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.price small {
+  font-size: 12px;
+  color: var(--pub-text, #475569);
+}
+
+@media (max-width: 520px) {
+  .card {
+    grid-template-columns: auto 44px minmax(0, 1fr);
+  }
+
+  .photo {
+    width: 44px;
+    height: 44px;
+  }
+
+  .price {
+    grid-column: 2 / -1;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+  }
+}

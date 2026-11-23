@@ -1,5 +1,12 @@
 import prisma from "../config/db.js";
 import { trackBookingEvent } from "./analytics_service.js";
+import { enqueueJob, requestDrain } from "./job_queue_service.js";
+import {
+  ACCEPTED_DRIVER_STATUSES,
+  CAR_END_STATUSES,
+  DRIVER_SERVICE_TYPE,
+  OPEN_DRIVER_STATUSES,
+} from "./driver_service_rules.js";
 
 export const TERMINAL_BOOKING_STATUSES = new Set([
   "COMPLETED",
@@ -77,7 +84,7 @@ export async function transitionBookingStatus({
 
   const booking = await database.booking.findUnique({
     where: { id: bookingId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, serviceType: true, bookingDetails: true, linkedBookingId: true },
   });
   if (!booking) throw Object.assign(new Error("Booking not found"), { statusCode: 404 });
   if (!isValidBookingTransition(booking.status, newStatus)) {
@@ -101,7 +108,50 @@ export async function transitionBookingStatus({
   // Never blocks or fails the transition: it only schedules the event.
   trackOutcome({ bookingId, from: booking.status, to: newStatus });
 
+  // Independent drivers: the follow-up work goes on the job queue, written in
+  // the same transaction as the status change.
+  const driverJob = await driverFollowUp({ booking, newStatus, database });
+  if (driverJob) {
+    await enqueueJob({ ...driverJob, database });
+    requestDrain();
+  }
+
   return updated;
+}
+
+export const DRIVER_JOB_TYPES = {
+  REQUEST_FOR_CAR: "driver.request_for_car",
+  CAR_ENDED: "driver.car_ended",
+  DRIVER_ENDED: "driver.driver_ended",
+};
+
+// The driver job a status change needs, or null:
+// - a car accepted with a driver chosen on the booking form sends that
+//   driver the request;
+// - a car that ends before anyone drove cancels its open driver booking;
+// - a driver booking that ends tells the car booking (the customer's own
+//   licence counts again).
+async function driverFollowUp({ booking, newStatus, database }) {
+  if (booking.serviceType === "CAR_RENTAL") {
+    if (newStatus === "PENDING_PAYMENT" && booking.bookingDetails?.requestedDriver?.listingId && !booking.bookingDetails.requestedDriver.outcome) {
+      return { jobType: DRIVER_JOB_TYPES.REQUEST_FOR_CAR, payload: { carBookingId: booking.id } };
+    }
+    if (CAR_END_STATUSES.includes(newStatus)) {
+      const open = await database.booking.findFirst({
+        where: { linkedBookingId: booking.id, serviceType: DRIVER_SERVICE_TYPE, status: { in: OPEN_DRIVER_STATUSES } },
+        select: { id: true },
+      });
+      if (open) return { jobType: DRIVER_JOB_TYPES.CAR_ENDED, payload: { carBookingId: booking.id } };
+    }
+    return null;
+  }
+  if (booking.serviceType === DRIVER_SERVICE_TYPE && booking.linkedBookingId && TERMINAL_BOOKING_STATUSES.has(newStatus)) {
+    return {
+      jobType: DRIVER_JOB_TYPES.DRIVER_ENDED,
+      payload: { carBookingId: booking.linkedBookingId, driverBookingId: booking.id, status: newStatus },
+    };
+  }
+  return null;
 }
 
 export async function getBookingStatusHistory(bookingId, database = prisma) {
@@ -110,6 +160,16 @@ export async function getBookingStatusHistory(bookingId, database = prisma) {
     orderBy: { createdAt: "asc" },
     include: { actor: { select: { id: true, name: true, role: true } } },
   });
+}
+
+// Whether an independent driver has accepted the job on this car booking.
+async function hasAcceptedDriver(bookingId, database = prisma) {
+  if (!bookingId) return false;
+  const driver = await database.booking.findFirst({
+    where: { linkedBookingId: bookingId, serviceType: DRIVER_SERVICE_TYPE, status: { in: ACCEPTED_DRIVER_STATUSES } },
+    select: { id: true },
+  });
+  return Boolean(driver);
 }
 
 // FR-OP-002, FR-COMP-003: a booking is ready for pickup once the balance is
@@ -121,6 +181,18 @@ export async function getBookingStatusHistory(bookingId, database = prisma) {
 // Stripe webhook already used; Task 5 changes it here, in one place.
 export async function isLicenceSatisfied(booking, database = prisma) {
   if (booking.serviceType !== "CAR_RENTAL") return true;
+
+  // Phase 4: once an independent driver has accepted, the car operator checks
+  // the driver's licence (from their approved application) instead.
+  if (await hasAcceptedDriver(booking.id, database)) {
+    const details =
+      booking.bookingDetails !== undefined
+        ? booking.bookingDetails
+        : (await database.booking.findUnique({ where: { id: booking.id }, select: { bookingDetails: true } }))
+            ?.bookingDetails;
+    return details?.driverLicenceCheck?.status === "APPROVED";
+  }
+
   const licence = await database.customerLicenceDocument.findFirst({
     where: { customerId: booking.customerId, status: "APPROVED" },
     select: { id: true },
@@ -177,6 +249,11 @@ export async function isPermitSatisfied(
   database = prisma
 ) {
   if (!isInternationalPermitRequired(booking)) {
+    return true;
+  }
+
+  // An independent driver holds a Malaysian licence and PSV permit.
+  if (booking.serviceType === "CAR_RENTAL" && (await hasAcceptedDriver(booking.id, database))) {
     return true;
   }
 

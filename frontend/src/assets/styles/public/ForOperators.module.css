@@ -1580,3 +1580,78 @@ a.btnGhost:hover {
     transition: none !important;
   }
 }
+
+/* ── who can join ───────────────────────────────────────────────── */
+.kinds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.kind {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 28px;
+  border-radius: 16px;
+  border: 1px solid var(--pub-line);
+  background: var(--pub-surface);
+}
+
+.kindIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--pub-ok-bg);
+  color: var(--pub-ok-fg);
+}
+
+.kindTitle {
+  margin: 0;
+  font-family: var(--pub-font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--pub-ink);
+}
+
+.kindLead {
+  margin: 0;
+  color: var(--pub-text);
+  line-height: 1.55;
+}
+
+.kindDocs {
+  margin: auto 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--pub-line);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--pub-text);
+}
+
+.kindDocs strong {
+  color: var(--pub-ink);
+}
+
+.kindLink,
+a.kindLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-weight: 700;
+  color: var(--pub-link);
+}
+
+.kindLink:hover .arrow {
+  transform: translateX(4px);
+}
+
+@media (max-width: 960px) {
+  .kinds {
+    grid-template-columns: 1fr;
+  }
+}

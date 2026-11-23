@@ -6,6 +6,7 @@ import {
 } from "../services/listing_image_order_service.js";
 import { deletePublicFile } from "../services/media_storage.js";
 import { parseId } from "../utils/parseId.js";
+import { normaliseDriverFields } from "../services/driver_service_rules.js";
 
 import {
   validateRateCard,
@@ -1132,6 +1133,11 @@ export async function getListingById(
 // CREATE LISTING
 // ==========================================================
 
+// Form fields arrive as booleans (JSON) or "true"/"false" (multipart).
+function parseBooleanField(value) {
+  return value === true || value === "true" || value === "1" || value === 1;
+}
+
 export async function createListing(
   req,
   res,
@@ -1235,6 +1241,7 @@ export async function createListing(
       ![
         "CAR_RENTAL",
         "TOUR",
+        "DRIVER_SERVICE",
         // TEST-ITEM-MISC: delete this line to stop accepting the test item.
         "MISCELLANEOUS",
       ].includes(category)
@@ -1339,6 +1346,32 @@ export async function createListing(
       }
       vehicleFields = checked.data;
     }
+
+    // Driver service: profile fields, and one listing per driver.
+    let driverFields = {};
+    if (category === "DRIVER_SERVICE") {
+      const checked = normaliseDriverFields(req.body);
+      if (checked.error) {
+        return res.status(400).json({ code: "DRIVER_FIELDS_INVALID", message: checked.error });
+      }
+      const existingDriverListing = await prisma.listing.findFirst({
+        where: { operatorId: branch.operatorId, category: "DRIVER_SERVICE" },
+        select: { id: true },
+      });
+      if (existingDriverListing) {
+        return res.status(409).json({
+          code: "DRIVER_LISTING_EXISTS",
+          message: "You already have a driver profile. Edit that one instead.",
+        });
+      }
+      driverFields = checked.data;
+    }
+
+    // Car listings only: the operator's consent to an outside driver.
+    const consentFields =
+      category === "CAR_RENTAL"
+        ? { allowIndependentDrivers: parseBooleanField(req.body.allowIndependentDrivers) }
+        : {};
 
     const listing =
       await prisma.listing.create({
@@ -1469,6 +1502,10 @@ export async function createListing(
           ...tourFields,
 
           ...vehicleFields,
+
+          ...driverFields,
+
+          ...consentFields,
 
           refundPolicy:
             refundPolicy || null,
@@ -1868,6 +1905,33 @@ export async function updateListing(
       ...existing,
       ...data,
     });
+
+    const savedCategory = data.category ?? existing.category;
+
+    // Driver profile fields belong to driver listings, and the outside
+    // driver switch to car listings; anything else in the body is dropped.
+    if (savedCategory === "DRIVER_SERVICE") {
+      const checked = normaliseDriverFields(req.body, {
+        partial: true,
+        current: existing,
+      });
+      if (checked.error) {
+        return res.status(400).json({ code: "DRIVER_FIELDS_INVALID", message: checked.error });
+      }
+      Object.assign(data, checked.data);
+    } else {
+      delete data.languages;
+      delete data.serviceAreas;
+      delete data.yearsDriving;
+    }
+
+    if (savedCategory === "CAR_RENTAL") {
+      if (data.allowIndependentDrivers !== undefined) {
+        data.allowIndependentDrivers = parseBooleanField(data.allowIndependentDrivers);
+      }
+    } else if (savedCategory !== "DRIVER_SERVICE") {
+      delete data.allowIndependentDrivers;
+    }
 
     if ((data.category ?? existing.category) === "CAR_RENTAL") {
       const checked = normaliseVehicleFields(req.body, {

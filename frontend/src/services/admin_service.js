@@ -35,8 +35,8 @@ export const voidInvoice = (id) => api.patch(`/invoices/${id}/void`);
 
 export const getOperators = () => api.get("/operators");
 export const getOperatorApplications = () => api.get("/operators/applications");
-export const reviewOperatorApplication = (id, decision, reason) =>
-  api.patch(`/operators/applications/${id}/review`, { decision, reason });
+export const reviewOperatorApplication = (id, decision, reason, documentExpiry) =>
+  api.patch(`/operators/applications/${id}/review`, { decision, reason, documentExpiry });
 export const getOperatorDocument = (id) =>
   api.get(`/operators/applications/documents/${id}`, { responseType: "blob" });
 export const getPeakDates = () => api.get("/licence-verification/peak-dates");

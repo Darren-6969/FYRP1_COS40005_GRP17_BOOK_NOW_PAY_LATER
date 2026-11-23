@@ -26,6 +26,23 @@ const DEP_MAX = 500;
 
 const TRUST = ["Verified operators only", "Nothing charged to request", "No credit card at booking", "No hidden charges"];
 
+// Independent drivers (operator types plan, Phase 4). They have no pages of
+// their own: customers pick one on the car booking form.
+const DRIVER_POINTS = [
+  {
+    title: "Licensed and checked",
+    desc: "Every driver holds a driving licence and a PSV permit. The platform checks them when the driver joins, and the car operator checks them again before handover.",
+  },
+  {
+    title: "Priced for your trip",
+    desc: "By the hour for short trips, by the day for 6 hours or more. You see the driver's price for your dates before you ask.",
+  },
+  {
+    title: "Paid separately",
+    desc: "The driver is a separate booking with its own deposit and balance, paid through the platform once they accept. If the operator rejects or cancels your car, what you paid the driver comes back.",
+  },
+];
+
 const STEPS = [
   { n: "1", title: "Send a booking request", desc: "It's free, and nothing is charged." },
   { n: "2", title: "The operator confirms", desc: "Within the reply time shown on the car." },
@@ -537,6 +554,32 @@ function Landing() {
         </div>
       </section>
 
+      <section id="drivers" className={`${styles.section} ${styles.sectionTight}`} aria-labelledby="drivers-title">
+        <div className={`${styles.container} ${styles.drivers}`}>
+          <div className={styles.driversCopy}>
+            <p className={styles.eyebrow}>Drivers</p>
+            <h2 id="drivers-title" className={styles.h2}>
+              Rather not drive? Add a licensed driver.
+            </h2>
+            <p className={styles.howLead}>
+              Some cars let you book an independent driver who drives the car you rent. Choose your car and dates,
+              then pick a driver on the booking form.
+            </p>
+            <Link to="/cars" className={styles.outlineButton}>
+              Find a car
+            </Link>
+          </div>
+          <ul className={styles.driverPoints}>
+            {DRIVER_POINTS.map((point) => (
+              <li key={point.title} data-reveal className={styles.driverPoint}>
+                <h3 className={styles.stepTitle}>{point.title}</h3>
+                <p className={styles.stepDesc}>{point.desc}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
       {operators.status === "ready" && operators.data.length > 0 && (
         <section className={`${styles.section} ${styles.sectionTight}`} aria-labelledby="ops-title">
           <div className={styles.container}>
@@ -577,11 +620,12 @@ function Landing() {
       <section id="operators" className={styles.operators} aria-label="For operators">
         <div className={styles.operatorsInner}>
           <p className={styles.operatorsText}>
-            <strong className={styles.operatorsStrong}>Run a car rental business?</strong> List only the vehicles you
-            can spare, set your own deposit split, and keep the rest of your yard on your own counter.
+            <strong className={styles.operatorsStrong}>Rent out cars, guide tours or drive for hire?</strong> Car
+            rental companies, licensed tour guides and licensed drivers can all join, set their own prices and
+            deposit split, and get paid through the platform.
           </p>
           <Link to="/for-operators" className={styles.outlineButton}>
-            List your fleet
+            Join as an operator
           </Link>
         </div>
       </section>

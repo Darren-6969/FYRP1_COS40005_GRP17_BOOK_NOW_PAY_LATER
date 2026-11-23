@@ -34,6 +34,9 @@ export const carBookingSchema = z.object({
   requestedDropoffLocation: z.string().trim().min(3).max(300).optional().nullable(),
   returnToRequested: z.boolean().optional().nullable(),
   cdw: z.boolean().default(false),
+  // An independent driver chosen on the form (Phase 4). Saved on the booking;
+  // the driver request is sent when the operator accepts the car.
+  driverListingId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]).optional().nullable(),
   addOns: z
     .array(z.object({ id: z.union([z.string(), z.number()]), quantity: z.number().int().min(1).max(20) }))
     .max(20)

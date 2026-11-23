@@ -31,8 +31,11 @@ import { assertOperatorTakingBookings } from "../services/subscription_admin_ser
 import {
   carListingSelect,
   isCarBooking,
+  isDriverBooking,
   isTourBooking,
+  linkedBookingsInclude,
   mapCarBooking,
+  mapDriverBooking,
   mapTourBooking,
 } from "../services/car_booking_view.js";
 import { isInternationalPermitRequired } from "../services/booking_status_service.js";
@@ -96,6 +99,8 @@ function mapBooking(booking) {
     // bookings, which keep the fields above.
     car: isCarBooking(booking) ? mapCarBooking(booking) : null,
     tour: isTourBooking(booking) ? mapTourBooking(booking) : null,
+    // An independent driver's job (Phase 4), with the car it serves.
+    driverJob: isDriverBooking(booking) ? mapDriverBooking(booking) : null,
 
     // Whether this booking needs an International Driving Permit (the
     // operator's decision, else a licence issued outside Malaysia).
@@ -200,6 +205,7 @@ async function assertCustomerBooking(bookingId, customerId) {
       dropoffPoint: { select: { id: true, label: true, address: true, note: true } },
       addons: { select: { id: true, name: true, unit: true, unitPrice: true, quantity: true, totalPrice: true } },
       paymentScheduleEntries: { orderBy: { dueAt: "asc" } },
+      ...linkedBookingsInclude(),
     },
   });
 
