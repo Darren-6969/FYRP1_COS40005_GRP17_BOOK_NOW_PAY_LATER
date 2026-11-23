@@ -6789,3 +6789,15 @@
     transform: none;
   }
 }
+
+/* Equal space on both sides of the sidebar. The thin scrollbar (10px in
+   Chrome, 8px in Firefox) always has its gutter reserved on the right, so
+   the right padding is smaller to match the left's 18px. scrollbar-width
+   replaces the ::-webkit-scrollbar rules in current Chrome, so the colour
+   is set here too. */
+.operator-sidebar {
+  padding-right: 8px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}

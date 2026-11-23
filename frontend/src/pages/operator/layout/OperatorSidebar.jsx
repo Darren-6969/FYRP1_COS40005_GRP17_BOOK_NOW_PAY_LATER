@@ -1,5 +1,7 @@
 import { NavLink } from "react-router-dom";
-import logo from "../../../assets/logo.png";
+// Trimmed, resized copy of public/logoBnpl.png (the wordmark is in the image).
+import logo from "../../../assets/logo-bnpl.webp";
+import logoMark from "../../../assets/logo-bnpl-mark.webp";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -15,6 +17,8 @@ import {
   Settings,
   CircleHelp,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   UserRound,
   BadgeCheck,
   Store,
@@ -175,6 +179,8 @@ export default function OperatorSidebar({
   onLogout,
   isMobileOpen = false,
   onCloseMobile,
+  collapsed = false,
+  onToggleCollapse,
 }) {
   const user = getStoredUser();
   const accessLevel = user?.operatorAccessLevel || "STAFF";
@@ -197,21 +203,35 @@ export default function OperatorSidebar({
   };
 
   return (
-    <aside className={`operator-sidebar ${isMobileOpen ? "mobile-open" : ""}`}>
+    <aside id="operator-sidebar" className={`operator-sidebar ${isMobileOpen ? "mobile-open" : ""}`}>
       <div>
         <div className="operator-brand">
-          <img
-            src={logo}
-            alt="BNPL Logo"
-            className="operator-brand-logo"
-          />
-
-          <div>
-            <strong>BNPL</strong>
-            <span>
-              {accessLevel === "OWNER" ? "Operator Owner" : "Operator Staff"}
+          <div className="brand-stack">
+            <img
+              src={logo}
+              alt="Book Now Pay Later"
+              className="brand-logo-wide"
+              width="415"
+              height="160"
+            />
+            {/* Shown instead of the full logo while the sidebar is folded. */}
+            <img src={logoMark} alt="Book Now Pay Later" className="brand-mark" width="128" height="128" />
+            <span className="brand-pill brand-pill-operator">
+              Operator · {accessLevel === "OWNER" ? "Owner" : "Staff"}
             </span>
           </div>
+
+          <button
+            type="button"
+            className="sidebar-toggle-btn"
+            onClick={onToggleCollapse}
+            aria-expanded={!collapsed}
+            aria-controls="operator-sidebar"
+            aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+            title={collapsed ? "Expand menu" : "Collapse menu"}
+          >
+            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
 
           <button
             type="button"
@@ -250,6 +270,7 @@ export default function OperatorSidebar({
                       isActive ? "operator-nav-link active" : "operator-nav-link"
                     }
                     onClick={handleNavClick}
+                    title={collapsed ? link.label : undefined}
                   >
                     <span className="operator-nav-icon">{link.icon}</span>
                     <span className="operator-nav-label">{link.label}</span>
@@ -275,6 +296,7 @@ export default function OperatorSidebar({
           type="button"
           className="customer-sidebar-logout"
           onClick={onLogout}
+          title={collapsed ? "Log out" : undefined}
         >
           <LogOut size={20} />
           <span>LOGOUT</span>

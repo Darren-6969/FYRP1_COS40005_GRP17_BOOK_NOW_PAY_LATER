@@ -4,6 +4,7 @@ import OperatorSidebar from "./OperatorSidebar";
 import { useOperatorNotifications } from "../../../hooks/useNotifications";
 import { clearSession, getUser as getStoredUser } from "../../../utils/session";
 import { logout } from "../../../services/auth_service";
+import useSidebarCollapsed from "../../../hooks/useSidebarCollapsed";
 
 export default function OperatorLayout() {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export default function OperatorLayout() {
 
   const [openNotifications, setOpenNotifications] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, toggleSidebar] = useSidebarCollapsed("operator");
   const [isScrolled, setIsScrolled] = useState(false);
   const [showOperatorHeader, setShowOperatorHeader] = useState(true);
 
@@ -165,7 +167,7 @@ export default function OperatorLayout() {
   }
 
   return (
-    <div className="operator-shell">
+    <div className={`operator-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       {mobileMenuOpen && (
         <button
           type="button"
@@ -179,6 +181,8 @@ export default function OperatorLayout() {
         onLogout={handleLogout}
         isMobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
       />
 
       <main className="operator-main">

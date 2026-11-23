@@ -225,7 +225,17 @@ export async function getOperatorApplications(req, res, next) {
       orderBy: { submittedAt: "desc" },
       include: {
         operator: {
-          select: { id: true, operatorCode: true, companyName: true, email: true, phone: true, status: true, operatorType: true },
+          select: {
+            id: true,
+            operatorCode: true,
+            companyName: true,
+            email: true,
+            phone: true,
+            status: true,
+            operatorType: true,
+            // The applicant: the owner account created with the application.
+            users: { where: { operatorAccessLevel: "OWNER" }, select: { name: true }, take: 1 },
+          },
         },
         documents: {
           select: {
@@ -329,12 +339,11 @@ export async function reviewOperatorApplication(req, res, next) {
           data: { status: "REJECTED", rejectionReason: reason, reviewedAt: new Date(), reviewedById: req.user.id },
         });
       } else if (decision === "NEEDS_INFORMATION") {
+        // The documents stay reviewable: applicants reply by email (there is
+        // no re-upload page yet), and the administrator can still approve.
+        // Marking them REJECTED here made a later approval impossible.
         await tx.operator.update({ where: { id: application.operatorId }, data: { status: "PENDING" } });
         await tx.user.updateMany({ where: { operatorId: application.operatorId }, data: { operatorUserStatus: "SUSPENDED" } });
-        await tx.operatorDocument.updateMany({
-          where: { applicationId },
-          data: { status: "REJECTED", rejectionReason: reason, reviewedAt: new Date(), reviewedById: req.user.id },
-        });
       }
 
       return updated;
@@ -376,7 +385,9 @@ export async function reviewOperatorApplication(req, res, next) {
         select: { id: true, email: true, name: true },
       });
       const title = decision === "REJECTED" ? "Operator application rejected" : "Operator documents need attention";
-      const message = `Your operator application was ${decision === "REJECTED" ? "rejected" : "returned for more information"}. Please re-upload the required documents. Reason: ${reason}`;
+      const message = decision === "REJECTED"
+        ? `Your operator application was rejected. Reason: ${reason}`
+        : `We need more information about your operator application: ${reason} Please reply to this email with what is asked.`;
 
       if (owner) {
         await createInAppNotification({ userId: owner.id, title, message, type: "OPERATOR_APPLICATION_REJECTED" });
@@ -388,7 +399,7 @@ export async function reviewOperatorApplication(req, res, next) {
           relatedEntityId: applicationId,
           userId: owner.id,
           text: message,
-          html: `<p>Hello ${escapeHtml(owner.name)},</p><p>${escapeHtml(message)}</p><p>Administrator message: ${escapeHtml(reason)}</p>`,
+          html: `<p>Hello ${escapeHtml(owner.name)},</p><p>${escapeHtml(message)}</p>`,
         });
       }
     }

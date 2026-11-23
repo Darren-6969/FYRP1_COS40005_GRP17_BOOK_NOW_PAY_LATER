@@ -293,3 +293,254 @@
   gap: 4px;
 }
 
+
+
+/* Dashboard sidebars (admin and operator): the Book Now Pay Later logo
+   carries the wordmark, with the console name under it. */
+/* Centred in the sidebar, so the logo has the same space on both sides. */
+.brand-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.brand-logo-wide {
+  display: block;
+  width: 100%;
+  max-width: 190px;
+  height: auto;
+}
+
+/* Which console this is: a small tag centred under the logo. Text and tint
+   pass 4.5:1. */
+.brand-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.brand-pill-admin {
+  background: #e6f1fb;
+  color: #0c447c;
+}
+
+/* The logo's green, for the operator dashboard. */
+.brand-pill-operator {
+  background: #e3efe9;
+  color: #1e4f44;
+}
+
+/* =========================
+   Collapsible dashboard sidebar (admin and operator)
+   Desktop only: on phones the sidebar is already a drawer.
+   ========================= */
+
+.brand-mark {
+  display: none;
+  width: 52px;
+  height: 52px;
+}
+
+/* Fold button: top right corner of the sidebar, always in view. */
+.master-brand,
+.operator-brand {
+  position: relative;
+}
+
+.sidebar-toggle-btn {
+  position: absolute;
+  top: -10px;
+  right: -4px;
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-toggle-btn:hover {
+  background: #e8f0fe;
+  color: #1d4ed8;
+}
+
+.sidebar-toggle-btn svg {
+  transition: transform 0.25s ease;
+}
+
+.sidebar-toggle-btn:hover svg {
+  transform: scale(1.15);
+}
+
+.sidebar-toggle-btn:focus-visible,
+.master-sidebar a:focus-visible,
+.operator-sidebar a:focus-visible,
+.master-sidebar button:focus-visible,
+.operator-sidebar button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .sidebar-toggle-btn {
+    display: none !important;
+  }
+}
+
+@media (min-width: 861px) {
+  .master-shell,
+  .operator-shell {
+    transition: grid-template-columns 0.22s ease;
+  }
+
+  .master-shell.sidebar-collapsed,
+  .operator-shell.sidebar-collapsed {
+    grid-template-columns: 92px minmax(0, 1fr);
+  }
+
+  .sidebar-collapsed .master-sidebar,
+  .sidebar-collapsed .operator-sidebar {
+    padding-left: 14px;
+    padding-right: 14px;
+    scrollbar-gutter: auto;
+    scrollbar-width: none;
+    overflow-x: hidden;
+  }
+
+  /* The rail scrolls but shows no bar, so the icons stay centred. */
+  .sidebar-collapsed .master-sidebar::-webkit-scrollbar,
+  .sidebar-collapsed .operator-sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar-collapsed .master-sidebar .brand-stack,
+  .sidebar-collapsed .operator-sidebar .brand-stack {
+    width: 100%;
+    align-items: center;
+    padding-left: 0;
+  }
+
+  .sidebar-collapsed .master-brand,
+  .sidebar-collapsed .operator-brand {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sidebar-collapsed .sidebar-toggle-btn {
+    position: static;
+  }
+
+  /* Brand: the round mark replaces the wide logo and the pill. */
+  .sidebar-collapsed .brand-logo-wide,
+  .sidebar-collapsed .brand-pill {
+    display: none;
+  }
+
+  .sidebar-collapsed .brand-mark {
+    display: block;
+  }
+
+  /* Group headings become a thin divider so groups stay visible. */
+  .sidebar-collapsed .master-nav-group-label,
+  .sidebar-collapsed .operator-nav-group-label {
+    display: block;
+    height: 1px;
+    margin: 10px 12px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+    background: rgba(148, 163, 184, 0.35);
+  }
+
+  /* Links, toggle and logout: icon only, centred. */
+  .sidebar-collapsed .master-nav-link,
+  .sidebar-collapsed .master-logout-btn,
+  .sidebar-collapsed .operator-nav-link,
+  .sidebar-collapsed .customer-sidebar-logout {
+    position: relative;
+    justify-content: center;
+    gap: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .sidebar-collapsed .master-nav-link > span:not(.master-nav-icon),
+  .sidebar-collapsed .master-logout-btn > span:not(.master-nav-icon),
+  .sidebar-collapsed .operator-nav-label,
+  .sidebar-collapsed .customer-sidebar-logout > span {
+    display: none;
+  }
+
+  .sidebar-collapsed .master-nav-link:hover {
+    transform: none;
+  }
+
+  /* Folded rail: plain icons. Only the active page keeps a filled tile,
+     and hover is a light tint so it never looks like the active page. */
+  .sidebar-collapsed .master-nav-link .master-nav-icon,
+  .sidebar-collapsed .operator-nav-link .operator-nav-icon {
+    background: transparent;
+  }
+
+  .sidebar-collapsed .master-nav-link:not(.active):hover,
+  .sidebar-collapsed .operator-nav-link:not(.active):hover {
+    background: #e8f0fe;
+    color: #1d4ed8;
+    box-shadow: none;
+  }
+
+  /* Keep the original icon hover animation, just without the tile. */
+  .sidebar-collapsed .master-nav-link:hover .master-nav-icon,
+  .sidebar-collapsed .operator-nav-link:hover .operator-nav-icon {
+    transform: scale(1.15) rotate(8deg);
+    background: transparent;
+  }
+
+  /* Unread count sits on the icon's corner. */
+  .sidebar-collapsed .operator-nav-count {
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    margin: 0;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 0.66rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .master-shell,
+  .operator-shell,
+  .sidebar-toggle-btn svg {
+    transition: none;
+  }
+}
+
+/* Expanded sidebar: logo and role pill sit on the left, leaving the
+   top right corner for the fold button. */
+.master-sidebar .brand-stack,
+.operator-sidebar .brand-stack {
+  align-items: flex-start;
+  padding-left: 6px;
+}
+
+.master-sidebar .brand-logo-wide,
+.operator-sidebar .brand-logo-wide {
+  max-width: 170px;
+}

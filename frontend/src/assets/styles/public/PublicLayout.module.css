@@ -1,5 +1,10 @@
+/* A column, so the footer sits at the bottom of the window even when a page
+   (or its loading state) is shorter than the screen. */
 .root {
   min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
   background: var(--pub-ground);
   color: var(--pub-ink);
   font-family: var(--pub-font-body);
@@ -40,10 +45,12 @@
 
 .main {
   display: block;
+  flex: 1 0 auto;
 }
 
 /* Room for the fixed header on pages without a dark hero. */
 .headerSpacer {
+  flex: 0 0 auto;
   height: var(--pub-header-h);
 }
 

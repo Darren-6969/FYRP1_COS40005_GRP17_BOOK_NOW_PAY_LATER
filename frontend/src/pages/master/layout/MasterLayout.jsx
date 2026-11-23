@@ -4,10 +4,12 @@ import MasterSidebar from "./MasterSidebar";
 import MasterTopbar from "./MasterTopbar";
 import { clearSession } from "../../../utils/session";
 import { logout } from "../../../services/auth_service";
+import useSidebarCollapsed from "../../../hooks/useSidebarCollapsed";
 
 export default function MasterLayout() {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, toggleSidebar] = useSidebarCollapsed("admin");
 
   useEffect(() => {
     document.body.classList.toggle("master-menu-lock", mobileMenuOpen);
@@ -24,7 +26,7 @@ export default function MasterLayout() {
   };
 
   return (
-    <div className="master-shell">
+    <div className={`master-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       {mobileMenuOpen && (
         <button
           type="button"
@@ -38,6 +40,8 @@ export default function MasterLayout() {
         onLogout={handleLogout}
         isMobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
       />
 
       <main className="master-main">

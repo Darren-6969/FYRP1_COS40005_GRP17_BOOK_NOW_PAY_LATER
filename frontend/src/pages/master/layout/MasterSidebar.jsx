@@ -1,12 +1,16 @@
 import { NavLink } from "react-router-dom";
-import logo from "../../../assets/logo.png";
-import { LogOut } from "lucide-react";
+// Trimmed, resized copy of public/logoBnpl.png (the wordmark is in the image).
+import logo from "../../../assets/logo-bnpl.webp";
+import logoMark from "../../../assets/logo-bnpl-mark.webp";
+import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { masterNavGroups as groups } from "./masterNav";
 
 export default function MasterSidebar({
   onLogout,
   isMobileOpen = false,
   onCloseMobile,
+  collapsed = false,
+  onToggleCollapse,
 }) {
   const handleNavClick = () => {
     if (onCloseMobile) {
@@ -15,19 +19,33 @@ export default function MasterSidebar({
   };
 
   return (
-    <aside className={`master-sidebar ${isMobileOpen ? "mobile-open" : ""}`}>
+    <aside id="admin-sidebar" className={`master-sidebar ${isMobileOpen ? "mobile-open" : ""}`}>
       <div>
         <div className="master-brand">
-          <img
-            src={logo}
-            alt="BNPL Logo"
-            className="master-brand-logo"
-          />
+          <div className="brand-stack">
+            <img
+              src={logo}
+              alt="Book Now Pay Later"
+              className="brand-logo-wide"
+              width="415"
+              height="160"
+            />
+            {/* Shown instead of the full logo while the sidebar is folded. */}
+            <img src={logoMark} alt="Book Now Pay Later" className="brand-mark" width="128" height="128" />
+            <span className="brand-pill brand-pill-admin">Admin console</span>
+          </div>
 
-          <div className="master-brand-text">
-            <strong>BNPL</strong>
-            <span>Administrator Console</span>
-        </div>
+          <button
+            type="button"
+            className="sidebar-toggle-btn"
+            onClick={onToggleCollapse}
+            aria-expanded={!collapsed}
+            aria-controls="admin-sidebar"
+            aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+            title={collapsed ? "Expand menu" : "Collapse menu"}
+          >
+            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
 
           <button
             type="button"
@@ -65,6 +83,7 @@ export default function MasterSidebar({
                         isActive ? "master-nav-link active" : "master-nav-link"
                       }
                       onClick={handleNavClick}
+                      title={collapsed ? item.label : undefined}
                     >
                       <span className="master-nav-icon">
                         <Icon size={20} />
@@ -80,7 +99,7 @@ export default function MasterSidebar({
       </div>
 
       <div>
-      <button type="button" className="master-logout-btn" onClick={onLogout}>
+      <button type="button" className="master-logout-btn" onClick={onLogout} title={collapsed ? "Log out" : undefined}>
         <span className="master-nav-icon">
         <LogOut size={20} />
         </span>
