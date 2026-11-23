@@ -237,7 +237,16 @@ export default function OperatorSidebar({
             {/* Shown instead of the full logo while the sidebar is folded. */}
             <img src={logoMark} alt="Book Now Pay Later" className="brand-mark" width="128" height="128" />
             <span className="brand-pill brand-pill-operator">
-              Operator · {accessLevel === "OWNER" ? "Owner" : "Staff"}
+              {/* Drivers and guides work alone, so their pill names the
+                  operator type; car rental shops show Owner or Staff. */}
+              Operator ·{" "}
+              {operatorType === "DRIVER"
+                ? "Driver"
+                : operatorType === "TOUR_GUIDE"
+                  ? "Guide"
+                  : accessLevel === "OWNER"
+                    ? "Owner"
+                    : "Staff"}
             </span>
           </div>
 

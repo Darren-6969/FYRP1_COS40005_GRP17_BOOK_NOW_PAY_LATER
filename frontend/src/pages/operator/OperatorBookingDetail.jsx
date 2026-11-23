@@ -14,7 +14,7 @@ import RejectBookingModal from "../../components/operator/RejectBookingModal";
 import { DateTimePicker } from "../../components/common/DatePicker";
 import OperatorCancelDialog from "../../components/operator/OperatorCancelDialog";
 import OperatorRefundCard from "../../components/operator/OperatorRefundCard";
-import { pickupHasPassed } from "../../utils/customerUtils";
+import { pickupHasPassed, statusLabel } from "../../utils/customerUtils";
 
 import {
   carTitle,
@@ -1003,17 +1003,33 @@ export default function OperatorBookingDetail() {
             )
           )}
 
-          <div className="booking-clean-simple-row">
-            <span>
-              Chauffeur
-            </span>
+          {/* Independent driver (Phase 4). Details and the licence check
+              are in the Independent driver section above. */}
+          {car && (
+            <div className="booking-clean-simple-row">
+              <span>
+                Independent driver
+              </span>
 
-            <strong>
-              {chauffeurRequested
-                ? "Requested"
-                : "Not requested"}
-            </strong>
-          </div>
+              <strong>
+                {independentDriverText(car.independentDriver)}
+              </strong>
+            </div>
+          )}
+
+          {/* The chauffeur request was removed from the booking form; older
+              bookings that asked for one still show it. */}
+          {chauffeurRequested && (
+            <div className="booking-clean-simple-row">
+              <span>
+                Chauffeur
+              </span>
+
+              <strong>
+                Requested
+              </strong>
+            </div>
+          )}
 
           {chauffeurRequested && (
             <div className="booking-clean-note">
@@ -1821,6 +1837,19 @@ const hourlyRate =
       </div>
     </div>
   );
+}
+
+// One line for the Add-ons & requests list: whether the customer asked for an
+// independent driver, and where that request stands.
+function independentDriverText(info) {
+  if (info?.current) {
+    return `${info.current.name} (${info.current.bookingCode}, ${statusLabel(info.current.status)})`;
+  }
+  if (info?.requested) {
+    if (info.requested.outcome === "UNAVAILABLE") return `${info.requested.name}: not available`;
+    return `${info.requested.name}: sent when you accept`;
+  }
+  return "Not requested";
 }
 
 function InfoRow({
