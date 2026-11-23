@@ -229,6 +229,9 @@ export type CreateCarBookingInput = {
 
   cdw?: boolean;
 
+  /** An independent driver chosen on the form (Phase 4). */
+  driverListingId?: number | null;
+
   addOns?: {
     id: string | number;
     quantity: number;
@@ -249,7 +252,8 @@ export type CreateCarBookingInput = {
       licenceIssuedIn: string;
     };
 
-    chauffeur: {
+    // No longer offered on the form; older servers still read it.
+    chauffeur?: {
       requested: boolean;
       note?: string | null;
     };

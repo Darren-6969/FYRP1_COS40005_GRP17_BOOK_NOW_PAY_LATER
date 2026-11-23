@@ -67,7 +67,20 @@ export function bookingRef(booking: any) {
 }
 
 export function bookingImage(booking: any): string | null {
-  return booking?.car?.listing?.imageUrl ?? null;
+  return booking?.car?.listing?.imageUrl ?? booking?.tour?.listing?.imageUrl ?? booking?.driverJob?.driver?.photoUrl ?? null;
+}
+
+/**
+ * What kind of booking this is (operator types plan): a car rental, a tour
+ * (charter or guide package) or an independent driver's job for a car the
+ * customer rents. Lists label tours and drivers so they don't read as cars.
+ */
+export function bookingKind(booking: any): { kind: 'car' | 'tour' | 'driver'; label: string | null; icon: 'car-sport-outline' | 'map-outline' | 'person-outline' } {
+  if (booking?.tour || booking?.serviceType === 'TOUR') return { kind: 'tour', label: 'Tour', icon: 'map-outline' };
+  if (booking?.driverJob || booking?.serviceType === 'DRIVER') {
+    return { kind: 'driver', label: 'Driver for your car rental', icon: 'person-outline' };
+  }
+  return { kind: 'car', label: null, icon: 'car-sport-outline' };
 }
 
 /** "Automatic · 5 seats" from a car listing ("AUTOMATIC" in the data). */

@@ -22,6 +22,14 @@ import {
   replyByText,
 } from "@/utils/operator-booking";
 import CounterVerificationCard from "@/components/operator/CounterVerificationCard";
+import {
+  DetailLine,
+  DriverJobLines,
+  OperatorDriverCard,
+  TourTripLines,
+  independentDriverText,
+} from "@/components/booking/DriverSections";
+import { hasAcceptedDriver } from "@/services/driverApi";
 
 /**
  * One booking for the operator (plan phase 4): what to do next first, then
@@ -116,6 +124,12 @@ export default function OperatorBookingDetailScreen() {
   const dropoff = car?.dropoffPoint?.label || car?.requestedDropoffLocation || null;
   const p = booking.payment;
   const noShow = mayMarkNoShow(booking, now);
+  // Tours and independent drivers (operator types plan, Phases 3 and 4).
+  const tour = booking.tour;
+  const driverJob = booking.driverJob;
+  const driverInfo = car?.independentDriver;
+  const driverAccepted = hasAcceptedDriver(driverInfo);
+  const tripImage = tour?.listing?.imageUrl ?? driverJob?.driver?.photoUrl ?? listing?.imageUrl ?? null;
 
   return (
     <View style={styles.screen}>
@@ -135,29 +149,45 @@ export default function OperatorBookingDetailScreen() {
           onUpdated={() => load(true)}
         />
 
-        <Section title="Trip">
+        <Section title={tour ? "Tour" : driverJob ? "Driving job" : "Trip"}>
           <GlassCard>
             <View style={styles.carRow}>
               <View style={[styles.photo, { backgroundColor: tokens.glassStrong }]}>
-                {listing?.imageUrl ? (
-                  <Image source={{ uri: listing.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" accessible={false} />
+                {tripImage ? (
+                  <Image source={{ uri: tripImage }} style={StyleSheet.absoluteFill} contentFit="cover" accessible={false} />
                 ) : (
-                  <Ionicons name="car-sport-outline" size={24} color={tokens.label} />
+                  <Ionicons name={tour ? "map-outline" : driverJob ? "person-outline" : "car-sport-outline"} size={24} color={tokens.label} />
                 )}
               </View>
               <View style={styles.flex}>
                 <AppText variant="bodyStrong">{operatorBookingTitle(booking)}</AppText>
                 {listing?.branch?.name ? <AppText variant="caption">{listing.branch.name}</AppText> : null}
+                {driverJob ? <AppText variant="caption">You drive the customer&apos;s rented car</AppText> : null}
               </View>
             </View>
-            <Line label="Pick-up" value={formatMYT(booking.pickupDate, "dayDateTime")} first />
-            <Line label="Return" value={formatMYT(booking.returnDate, "dayDateTime")} />
-            {place ? <Line label="Pick-up place" value={place} /> : null}
-            {dropoff ? <Line label="Drop-off place" value={dropoff} /> : null}
+            {tour ? (
+              <TourTripLines tour={tour} />
+            ) : driverJob ? (
+              <DriverJobLines job={driverJob} audience="operator" />
+            ) : (
+              <>
+                <Line label="Pick-up" value={formatMYT(booking.pickupDate, "dayDateTime")} first />
+                <Line label="Return" value={formatMYT(booking.returnDate, "dayDateTime")} />
+                {place ? <Line label="Pick-up place" value={place} /> : null}
+                {dropoff ? <Line label="Drop-off place" value={dropoff} /> : null}
+                <DetailLine label="Independent driver" value={independentDriverText(driverInfo)} />
+              </>
+            )}
             {booking.pickedUpAt ? <Line label="Handed over" value={formatMYT(booking.pickedUpAt, "dayDateTime")} /> : null}
             {booking.returnedAt ? <Line label="Returned" value={formatMYT(booking.returnedAt, "dayDateTime")} /> : null}
           </GlassCard>
         </Section>
+
+        {driverInfo && (driverInfo.current || driverInfo.requested) ? (
+          <Section title="Independent driver">
+            <OperatorDriverCard booking={booking} onChanged={() => load(true)} />
+          </Section>
+        ) : null}
 
         <Section title="Customer">
           <GlassCard>
@@ -167,12 +197,19 @@ export default function OperatorBookingDetailScreen() {
                 {booking.customer.email}
               </AppText>
             ) : null}
-            <View style={[styles.lineRow, styles.firstLine, { borderTopColor: tokens.line }]}>
-              <AppText variant="caption" style={styles.flex}>
-                Driving licence
-              </AppText>
-              <StatusPill kind="licence" status={booking.customer?.licenceStatus} />
-            </View>
+            {/* Only car rentals need the customer's licence, and not once an
+                independent driver has accepted: their licence is checked instead. */}
+            {car && !driverAccepted ? (
+              <View style={[styles.lineRow, styles.firstLine, { borderTopColor: tokens.line }]}>
+                <AppText variant="caption" style={styles.flex}>
+                  Driving licence
+                </AppText>
+                <StatusPill kind="licence" status={booking.customer?.licenceStatus} />
+              </View>
+            ) : null}
+            {(tour || driverJob)?.contact?.phone ? (
+              <Line label="Phone" value={(tour || driverJob).contact.phone} first />
+            ) : null}
             {car?.driver?.name ? <Line label="Driver" value={car.driver.name} /> : null}
             {car?.driver?.phone ? (
               <View style={[styles.lineRow, { borderTopColor: tokens.line }]}>
@@ -276,6 +313,9 @@ function NextStep({
 }) {
   const { tokens } = useTheme();
   const status = booking.status;
+  // Tours and driver jobs can only be accepted or declined (no alternative).
+  const kind = booking.tour ? "tour" : booking.driverJob ? "driver" : "car";
+  const driverInfo = booking.car?.independentDriver;
 
   let title: string | null = null;
   let body: string | null = null;
@@ -283,11 +323,18 @@ function NextStep({
 
   if (status === "PENDING") {
     title = replyByText(booking.car?.responseDueAt, now) || "Answer this request";
-    body = `${customerName(booking)} asked for this car. Accept it, suggest another car, or decline with a reason.`;
+    body =
+      kind === "tour"
+        ? `${customerName(booking)} asked for this tour. Accept it, or decline with a reason.`
+        : kind === "driver"
+          ? `${customerName(booking)} asked you to drive their rented car. Accept the job, or decline with a reason.`
+          : `${customerName(booking)} asked for this car. Accept it, suggest another car, or decline with a reason.`;
     actions = (
       <View style={styles.actions}>
         <Button label="Accept" variant="brand" size="sm" grow onPress={() => onRespond("accept")} />
-        <Button label="Suggest" variant="line" size="sm" grow onPress={() => onRespond("suggest")} />
+        {kind === "car" ? (
+          <Button label="Suggest" variant="line" size="sm" grow onPress={() => onRespond("suggest")} />
+        ) : null}
         <Button label="Decline" variant="line" size="sm" grow onPress={() => onRespond("reject")} />
       </View>
     );
@@ -301,7 +348,9 @@ function NextStep({
     actions = <Button label="Record return" variant="brand" icon="return-down-back-outline" onPress={onReturn} />;
   } else if (status === "PAID") {
     title = "Paid, waiting on the licence";
-    body = "The booking becomes ready for pick-up once the customer's driving licence is verified.";
+    body = hasAcceptedDriver(driverInfo)
+      ? "The booking becomes ready for pick-up once you approve the independent driver's licence below."
+      : "The booking becomes ready for pick-up once the customer's driving licence is verified.";
   } else if (["ACCEPTED", "PENDING_PAYMENT", "CONFIRMED"].includes(status)) {
     title = "Waiting for the customer to pay";
     body = "You'll be notified when a payment arrives. DuitNow receipts appear in Payments for you to check.";

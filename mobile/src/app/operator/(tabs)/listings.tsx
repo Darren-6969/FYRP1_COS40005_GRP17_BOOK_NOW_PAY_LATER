@@ -81,7 +81,7 @@ export default function OperatorListingsScreen() {
           Listings
         </AppText>
         <IconButton icon="business-outline" label="Branches and pick-up points" onPress={() => router.push("/operator/branches" as Href)} />
-        <IconButton icon="add" label="Add a car" onPress={() => router.push("/operator/listing/form" as Href)} />
+        <IconButton icon="add" label="Add a listing" onPress={() => router.push("/operator/listing/form" as Href)} />
       </View>
 
       {subscription ? (
@@ -90,7 +90,7 @@ export default function OperatorListingsScreen() {
             <View style={styles.flex}>
               <AppText variant="micro">{subscription.plan} plan</AppText>
               <AppText variant="bodyStrong">
-                {subscription.publishedCount} of {subscription.listingLimit} cars published
+                {subscription.publishedCount} of {subscription.listingLimit} listings published
               </AppText>
             </View>
             <StatusPill
@@ -151,12 +151,12 @@ export default function OperatorListingsScreen() {
             listings.length === 0 ? (
               <EmptyState
                 icon="car-sport-outline"
-                title="No cars yet"
-                message="Add your first car. It starts as a draft until you publish it."
-                action={<Button label="Add a car" variant="brand" onPress={() => router.push("/operator/listing/form" as Href)} />}
+                title="No listings yet"
+                message="Add your first listing. It starts as a draft until you publish it."
+                action={<Button label="Add a listing" variant="brand" onPress={() => router.push("/operator/listing/form" as Href)} />}
               />
             ) : (
-              <EmptyState icon="search-outline" title="No cars match" message="Try another search or filter." />
+              <EmptyState icon="search-outline" title="No listings match" message="Try another search or filter." />
             )
           ) : (
             <View style={styles.list}>
@@ -174,6 +174,10 @@ export default function OperatorListingsScreen() {
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => {
           const cover = coverOf(item);
+          // Cars, tours and driver profiles (operator types plan).
+          const category = (item as any).category as string | undefined;
+          const isTour = category === "TOUR";
+          const isDriver = category === "DRIVER_SERVICE";
           const specs = [item.vehicleType, item.transmission === "AUTOMATIC" ? "Auto" : item.transmission === "MANUAL" ? "Manual" : item.transmission, item.seats ? `${item.seats} seats` : null]
             .filter(Boolean)
             .join(" · ");
@@ -184,7 +188,7 @@ export default function OperatorListingsScreen() {
                   <Image source={{ uri: cover }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={String(item.id)} accessible={false} />
                 ) : (
                   <View style={styles.noPhoto}>
-                    <Ionicons name="car-sport-outline" size={36} color={tokens.label} />
+                    <Ionicons name={isTour ? "map-outline" : isDriver ? "person-outline" : "car-sport-outline"} size={36} color={tokens.label} />
                     <AppText variant="caption">No photos yet</AppText>
                   </View>
                 )}
@@ -203,12 +207,16 @@ export default function OperatorListingsScreen() {
                   <View style={styles.flex}>
                     <View style={styles.inline}>
                       <Money value={item.price} variant="title" />
-                      <AppText variant="caption"> / day</AppText>
+                      <AppText variant="caption">{isTour ? " per tour" : " / day"}</AppText>
                     </View>
                   </View>
-                  <AppText variant="caption">
-                    {item.quantity} {item.quantity === 1 ? "car" : "cars"}
-                  </AppText>
+                  {isDriver ? (
+                    <AppText variant="caption">Driver profile</AppText>
+                  ) : (
+                    <AppText variant="caption">
+                      {item.quantity} {isTour ? (item.quantity === 1 ? "group a day" : "groups a day") : item.quantity === 1 ? "car" : "cars"}
+                    </AppText>
+                  )}
                 </View>
                 <View style={styles.actions}>
                   <Button label="Quick edit" variant="line" size="sm" grow icon="create-outline" onPress={() => setEditing(item)} />

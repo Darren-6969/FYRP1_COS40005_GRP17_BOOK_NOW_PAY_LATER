@@ -197,6 +197,8 @@ export default function CustomerHome() {
         onPress={() => setTripOpen(true)}
       />
 
+      <ToursEntry onPress={() => router.push("/customer/tours" as unknown as Href)} />
+
       <View style={styles.searchRow}>
         <SearchField value={search} onChange={setSearch} onSubmit={() => openResults(filters, search)} />
         <IconButton icon="options-outline" label="Filters" onPress={() => setFiltersOpen(true)} style={styles.filterButton} />
@@ -282,6 +284,32 @@ export default function CustomerHome() {
         }}
       />
     </View>
+  );
+}
+
+/** Tours (operator types plan, Phase 3): charter tours and guide packages. */
+function ToursEntry({ onPress }: { onPress: () => void }) {
+  const { tokens } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Tours. Private tours with a car and driver, or with a licensed guide"
+      style={({ pressed }) => [
+        styles.toursEntry,
+        { backgroundColor: tokens.glass, borderColor: tokens.glassLine },
+        pressed && { opacity: 0.85 },
+      ]}
+    >
+      <View style={[styles.toursIcon, { backgroundColor: tokens.okBg }]}>
+        <Ionicons name="map-outline" size={22} color={tokens.leafInk} />
+      </View>
+      <View style={styles.flexOne}>
+        <AppText variant="bodyStrong">Tours</AppText>
+        <AppText variant="caption">With a car and driver, or a licensed guide. One price for your group.</AppText>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={tokens.label} />
+    </Pressable>
   );
 }
 
@@ -422,6 +450,25 @@ function HowItWorksHero() {
 }
 
 const styles = StyleSheet.create({
+  toursEntry: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: Radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 64,
+  },
+  toursIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  flexOne: {
+    flex: 1,
+  },
   screen: {
     flex: 1,
   },

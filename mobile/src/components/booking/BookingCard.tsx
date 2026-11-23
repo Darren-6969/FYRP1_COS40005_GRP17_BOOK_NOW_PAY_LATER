@@ -10,6 +10,7 @@ import { formatMYT } from '@/utils/datetime';
 import { formatRM } from '@/utils/money';
 import {
   bookingImage,
+  bookingKind,
   bookingRef,
   bookingTitle,
   isActiveBooking,
@@ -52,6 +53,7 @@ export const BookingCard = memo(function BookingCard({
   const { tokens } = useTheme();
   const title = bookingTitle(booking);
   const image = bookingImage(booking);
+  const kind = bookingKind(booking);
   const owed = owedPart(booking);
   const status = booking?.status;
   const offer = status === 'ALTERNATIVE_SUGGESTED';
@@ -84,7 +86,9 @@ export const BookingCard = memo(function BookingCard({
       ? `${operator} replies by ${formatMYT(replyBy, 'dayDateTime')}`
       : `Waiting for ${operator === 'The operator' ? 'the operator' : operator} to reply.`;
   } else if (status === 'IN_PROGRESS') {
-    nextLine = booking?.returnDate ? `Return by ${formatMYT(booking.returnDate, 'dayDateTime')}` : null;
+    nextLine = booking?.returnDate
+      ? `${kind.kind === 'car' ? 'Return by' : 'Ends'} ${formatMYT(booking.returnDate, 'dayDateTime')}`
+      : null;
   } else if (status === 'OVERDUE') {
     nextLine = 'The balance deadline has passed.';
   } else if (isActiveBooking(booking) && booking?.pickupDate) {
@@ -112,10 +116,15 @@ export const BookingCard = memo(function BookingCard({
             {image ? (
               <Image source={{ uri: image }} style={styles.thumbImage} contentFit="cover" transition={150} />
             ) : (
-              <Ionicons name="car-sport-outline" size={24} color={tokens.label} />
+              <Ionicons name={kind.icon} size={24} color={tokens.label} />
             )}
           </View>
           <View style={styles.flex}>
+            {kind.label ? (
+              <AppText variant="micro" color="leafInk">
+                {kind.label}
+              </AppText>
+            ) : null}
             <AppText variant="headline" numberOfLines={1}>
               {title}
             </AppText>

@@ -33,6 +33,11 @@ export default function CustomerLayout() {
         }}
       />
 
+      {/* Tours (operator types plan, Phase 3) */}
+      <Stack.Screen name="tours" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="tour-details" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="tour-booking" options={{ animation: "slide_from_right" }} />
+
       <Stack.Screen
         name="booking-request"
         options={{

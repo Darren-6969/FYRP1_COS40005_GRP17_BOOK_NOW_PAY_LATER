@@ -41,7 +41,7 @@ export default function OperatorDashboardScreen() {
   const [dashboard, setDashboard] = useState<OperatorDashboard | null>(null);
   const [bookings, setBookings] = useState<OperatorBooking[]>([]);
   const [unread, setUnread] = useState(0);
-  const [user, setUser] = useState<{ name?: string; email?: string } | null>(null);
+  const [user, setUser] = useState<{ name?: string; email?: string; operator?: { operatorType?: string } | null } | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -197,6 +197,8 @@ export default function OperatorDashboardScreen() {
               </GlassCard>
             </View>
 
+            {/* Only car rental operators check customers' licences. */}
+            {(user?.operator?.operatorType ?? "CAR_RENTAL") === "CAR_RENTAL" ? (
             <Pressable
               onPress={() => router.push("/operator/licence-checks" as Href)}
               accessibilityRole="button"
@@ -216,6 +218,7 @@ export default function OperatorDashboardScreen() {
                 </View>
               </GlassCard>
             </Pressable>
+            ) : null}
           </>
         )}
       </ScrollView>

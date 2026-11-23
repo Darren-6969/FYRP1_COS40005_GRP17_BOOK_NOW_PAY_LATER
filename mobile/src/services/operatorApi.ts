@@ -139,7 +139,14 @@ lateReturnPaidAt?: string | null;
     /** When the operator should answer a pending request. */
     responseDueAt?: string | null;
     autoRejectOnTimeout?: boolean;
+    /** Independent drivers (Phase 4): see services/driverApi.ts. */
+    independentDriver?: import("./driverApi").CarDriverInfo | null;
   } | null;
+
+  /** Tour bookings (Phase 3): car_booking_view.mapTourBooking. */
+  tour?: any | null;
+  /** Driver bookings (Phase 4): car_booking_view.mapDriverBooking. */
+  driverJob?: any | null;
 };
 
 
@@ -622,33 +629,18 @@ export async function getOperatorBranchTransfers(
   );
 }
 
+/** What the operator sends for a listing. Which fields apply depends on the
+ *  category (operator types plan): a car, a tour (charter or guide package)
+ *  or a driver's profile. The server checks the category against the
+ *  operator's type and prices everything itself. */
+export type ListingCategory = "CAR_RENTAL" | "TOUR" | "DRIVER_SERVICE";
+
 export type OperatorListingFormPayload = {
   branchId: number;
-  category: "CAR_RENTAL";
+  category: ListingCategory;
   name: string;
   description: string | null;
-
-  vehicleMake: string;
-  vehicleModel: string;
-  vehicleType: string;
-  transmission: string;
-
-  modelYear: number | null;
-  seats: number | null;
-  luggageCapacity: number | null;
-  quantity: number;
-
-  price: string;
-  hourlyRate: string | null;
-  weeklyRate: string | null;
-  monthlyRate: string | null;
-  cdwDailyPrice: string | null;
-
-  pickupRules: string | null;
-  returnRules: string | null;
-  insuranceInfo: string | null;
-  refundPolicy: string | null;
-  termsAndConditions: string | null;
+  [field: string]: unknown;
 };
 
 export async function createOperatorListing(

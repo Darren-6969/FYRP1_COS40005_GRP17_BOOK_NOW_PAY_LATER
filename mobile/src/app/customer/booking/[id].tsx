@@ -6,6 +6,8 @@ import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CancelSheet } from "@/components/booking/CancelSheet";
+import { CustomerDriverCard, DriverJobLines, TourTripLines } from "@/components/booking/DriverSections";
+import { hasAcceptedDriver } from "@/services/driverApi";
 import { offerSummary } from "@/components/booking/BookingCard";
 import { OfferSheet } from "@/components/booking/OfferSheet";
 import { ReceiptViewer, isViewableReceipt } from "@/components/booking/ReceiptViewer";
@@ -164,6 +166,9 @@ function scheduleSteps(booking: any): ScheduleStep[] {
 function licenceDue(booking: any) {
   if (!isActiveBooking(booking)) return false;
   if ((booking?.serviceType ?? "CAR_RENTAL") !== "CAR_RENTAL") return false;
+  // An independent driver who has accepted drives instead: the operator
+  // checks the driver's licence, not the customer's.
+  if (hasAcceptedDriver(booking?.car?.independentDriver)) return false;
   const entries: any[] = booking?.paymentSchedule ?? [];
   return entries.some((e: any) => e.type === "LICENCE" && (e.status === "DUE" || e.status === "EXPIRED"));
 }
@@ -171,9 +176,12 @@ function licenceDue(booking: any) {
 /** One line on what happens next, for bookings with nothing to pay. */
 function nextStepText(booking: any) {
   const status = booking?.status;
+  // Tours and driver jobs have no car to return or collect.
+  const kind = booking?.tour ? "tour" : booking?.driverJob ? "driver" : "car";
   const pickup = booking?.pickupDate ? formatMYT(booking.pickupDate, "dayDateTime") : null;
   switch (status) {
     case "IN_PROGRESS":
+      if (kind !== "car") return "Enjoy your trip.";
       return booking?.returnDate ? `Return the car by ${formatMYT(booking.returnDate, "dayDateTime")}.` : "Enjoy your trip.";
     case "OVERDUE":
       return "The balance wasn't paid by its deadline. Contact the operator about this booking.";
@@ -190,7 +198,7 @@ function nextStepText(booking: any) {
       return "This request expired without a reply. Nothing was charged.";
     case "NO_SHOW":
     case "NO_SHOW_UNPAID":
-      return "The car wasn't collected at pick-up time.";
+      return kind === "car" ? "The car wasn't collected at pick-up time." : "You weren't at the pickup at the agreed time.";
     default:
       if (receiptInReview(booking)) return "Your receipt is with the operator for review.";
       if (paidInFull(booking)) return pickup ? `Paid in full. Pick up ${pickup}.` : "Paid in full.";
@@ -295,6 +303,13 @@ export default function BookingDetailScreen() {
   const listing = car?.listing;
   const place = car?.pickupPoint?.label || car?.requestedLocation || booking.location || listing?.branch?.name || null;
   const specs = carSpecs(listing);
+  // Tours and independent drivers (operator types plan, Phases 3 and 4).
+  const tour = booking.tour;
+  const driverJob = booking.driverJob;
+  const driverInfo = car?.independentDriver;
+  const showDriverCard = Boolean(driverInfo && (driverInfo.allowed || driverInfo.current || driverInfo.requested));
+  const tripIcon: IconName = tour ? "map-outline" : driverJob ? "person-outline" : "car-sport-outline";
+  const tripImage: string | null = tour?.listing?.imageUrl ?? driverJob?.driver?.photoUrl ?? listing?.imageUrl ?? null;
   // https links and older base64 data URLs both open in the in-app viewer.
   const receiptUrl: string | null = isViewableReceipt(booking.receipt?.imageUrl) ? booking.receipt.imageUrl : null;
 
@@ -459,27 +474,47 @@ export default function BookingDetailScreen() {
           </Section>
         ) : null}
 
-        <Section title="Your trip">
+        <Section title={tour ? "Your tour" : driverJob ? "Your driver" : "Your trip"}>
           <GlassCard>
             <View style={styles.carRow}>
               <View style={[styles.thumb, { backgroundColor: tokens.glassStrong, borderColor: tokens.glassLine }]}>
-                {listing?.imageUrl ? (
-                  <Image source={{ uri: listing.imageUrl }} style={styles.fill} contentFit="cover" transition={150} />
+                {tripImage ? (
+                  <Image source={{ uri: tripImage }} style={styles.fill} contentFit="cover" transition={150} />
                 ) : (
-                  <Ionicons name="car-sport-outline" size={26} color={tokens.label} />
+                  <Ionicons name={tripIcon} size={26} color={tokens.label} />
                 )}
               </View>
               <View style={styles.flex}>
-                <AppText variant="headline">{bookingTitle(booking)}</AppText>
-                {specs ? <AppText variant="caption">{specs}</AppText> : null}
+                <AppText variant="headline">{driverJob?.driver?.name || bookingTitle(booking)}</AppText>
+                {tour ? (
+                  <AppText variant="caption">{tour.pricing?.priceUnit === "PER_PACKAGE" ? "Tour package" : "Charter tour"}</AppText>
+                ) : driverJob ? (
+                  <AppText variant="caption">Independent driver</AppText>
+                ) : specs ? (
+                  <AppText variant="caption">{specs}</AppText>
+                ) : null}
               </View>
             </View>
             <View style={[styles.divider, { backgroundColor: tokens.line }]} />
-            <InfoRow icon="calendar-outline" label="Pick-up" value={formatMYT(booking.pickupDate, "dayDateTime")} />
-            <InfoRow icon="flag-outline" label="Return" value={formatMYT(booking.returnDate, "dayDateTime")} />
-            {place ? <InfoRow icon="location-outline" label="Place" value={place} /> : null}
+            {tour ? (
+              <TourTripLines tour={tour} />
+            ) : driverJob ? (
+              <DriverJobLines job={driverJob} audience="customer" />
+            ) : (
+              <>
+                <InfoRow icon="calendar-outline" label="Pick-up" value={formatMYT(booking.pickupDate, "dayDateTime")} />
+                <InfoRow icon="flag-outline" label="Return" value={formatMYT(booking.returnDate, "dayDateTime")} />
+                {place ? <InfoRow icon="location-outline" label="Place" value={place} /> : null}
+              </>
+            )}
           </GlassCard>
         </Section>
+
+        {showDriverCard ? (
+          <Section title="Independent driver">
+            <CustomerDriverCard booking={booking} now={now} onChanged={() => load()} />
+          </Section>
+        ) : null}
 
         <Section title="Cost">
           <GlassCard>
@@ -492,6 +527,12 @@ export default function BookingDetailScreen() {
                 <AppText style={styles.flex}>Paid so far</AppText>
                 <Money value={booking.payment.paidAmount} />
               </View>
+            ) : null}
+            {driverJob ? (
+              <AppText variant="caption" style={styles.mt8}>
+                Paid to the driver, separately from the car. If the car booking is rejected, expires or is cancelled
+                by the operator, everything you paid the driver is refunded.
+              </AppText>
             ) : null}
             {!booking.payment && isActiveBooking(booking) ? (
               <AppText variant="caption" style={styles.mt8}>

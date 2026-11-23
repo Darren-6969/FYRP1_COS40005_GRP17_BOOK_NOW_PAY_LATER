@@ -22,6 +22,8 @@ import { useIdempotentAttempt } from "@/hooks/use-idempotent-attempt";
 import { useTheme } from "@/hooks/use-theme";
 import { getPublicCarById, quotePublicCar } from "@/services/carApi";
 import { createCarBooking } from "@/services/customerApi";
+import { getDriversForCar, type DriverOption } from "@/services/driverApi";
+import { DriverOptionRow } from "@/components/booking/DriverSections";
 import { formatMYT, mytToIso } from "@/utils/datetime";
 import { logger } from "@/utils/logger";
 import { startAsync } from "@/utils/start-async";
@@ -143,6 +145,36 @@ export default function ReviewBooking() {
     }
   }, [loadQuote, params.listingId]);
 
+  // Independent drivers (Phase 4): offered when the car's operator allows
+  // them, for the quoted times and pickup point. The choice is saved on the
+  // booking and sent to the driver when the operator accepts the car.
+  const allowsDrivers = Boolean(car?.allowIndependentDrivers);
+  const driversKey = JSON.stringify([params.listingId, params.from, params.ft, params.to, params.tt, quote?.pickupPoint?.label]);
+  const [drivers, setDrivers] = useState<{ key: string; list: DriverOption[]; failed: boolean }>({ key: "", list: [], failed: false });
+  const [driverId, setDriverId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!allowsDrivers || !quote || !params.listingId || !params.from || !params.to) return;
+    let active = true;
+    getDriversForCar(params.listingId, {
+      pickupAt: mytToIso(params.from, params.ft || "10:00"),
+      returnAt: mytToIso(params.to, params.tt || "10:00"),
+      location: quote.pickupPoint?.label || null,
+    })
+      .then((data) => active && setDrivers({ key: driversKey, list: data.drivers || [], failed: false }))
+      .catch((err) => {
+        logger.debug("Failed to load drivers:", err);
+        if (active) setDrivers({ key: driversKey, list: [], failed: true });
+      });
+    return () => {
+      active = false;
+    };
+  }, [allowsDrivers, quote, driversKey, params.listingId, params.from, params.ft, params.to, params.tt]);
+
+  const driversLoading = allowsDrivers && Boolean(quote) && drivers.key !== driversKey;
+  // A choice only counts while that driver is still offered.
+  const chosenDriver = drivers.key === driversKey ? drivers.list.find((d) => d.id === driverId) ?? null : null;
+
   const quoteLoading = !missingInputs && quoteFor !== quoteKey;
   const quoteError = missingInputs
     ? new Error("The pick-up, drop-off or dates are missing. Go back and check them.")
@@ -177,6 +209,7 @@ export default function ReviewBooking() {
         returnToRequested: false,
         cdw: cdwSelected,
         addOns: [],
+        driverListingId: chosenDriver?.id ?? null,
         bookingDetails: {
           contact: {
             fullName: params.fullName || "",
@@ -191,7 +224,6 @@ export default function ReviewBooking() {
             ...(params.dateOfBirth ? { dateOfBirth: params.dateOfBirth } : {}),
             licenceIssuedIn: params.licenceIssuedIn || "MY",
           },
-          chauffeur: { requested: false, note: null },
         },
       };
 
@@ -299,10 +331,42 @@ export default function ReviewBooking() {
           {cdwSelected ? <Row icon="shield-checkmark-outline" label="Collision damage waiver" value="Included" /> : null}
         </Card>
 
+        {allowsDrivers ? (
+          <GlassCard>
+            <AppText variant="headline" style={styles.cardTitle}>
+              Book an independent driver (optional)
+            </AppText>
+            <AppText variant="caption" style={styles.cardTitle}>
+              A licensed driver drives this car for you. They&apos;re paid separately, through the app, once they
+              accept. Your request goes to the driver when the operator accepts the car, and the operator checks the
+              driver&apos;s licence instead of yours.
+            </AppText>
+            {!quote || driversLoading ? (
+              <SkeletonText lines={2} />
+            ) : drivers.failed ? (
+              <AppText variant="caption">Drivers couldn&apos;t be loaded. You can add one later from your booking.</AppText>
+            ) : drivers.list.length ? (
+              <View style={styles.gap10}>
+                {drivers.list.map((driver) => (
+                  <DriverOptionRow
+                    key={driver.id}
+                    driver={driver}
+                    selected={driverId === driver.id}
+                    onPress={() => setDriverId(driverId === driver.id ? null : driver.id)}
+                  />
+                ))}
+              </View>
+            ) : (
+              <AppText variant="caption">No drivers cover this pickup place for these times yet.</AppText>
+            )}
+          </GlassCard>
+        ) : null}
+
         <View style={[styles.notice, { backgroundColor: tokens.infoBg }]}>
           <Ionicons name="information-circle-outline" size={20} color={tokens.infoFg} />
           <AppText variant="caption" style={[styles.flex, { color: tokens.infoFg }]}>
             This sends a request to the operator. You pay nothing until they accept.
+            {chosenDriver ? ` ${chosenDriver.name} is paid separately, once they accept.` : ""}
           </AppText>
         </View>
 
