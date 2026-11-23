@@ -10,6 +10,8 @@ import {
   searchCars,
 } from "../controllers/public_car_controller.js";
 import { getPublicPolicy } from "../controllers/policy_controller.js";
+import { getTour, listTours, quoteTour } from "../controllers/public_tour_controller.js";
+import { tourQuoteSchema } from "../validators/tour_booking_validator.js";
 
 import {
   validate,
@@ -120,6 +122,11 @@ router.post(
   validate(carQuoteSchema),
   quoteCar
 );
+
+// Tours: charter tours by car rental operators and guide packages.
+router.get("/tours", searchLimiter, listTours);
+router.get("/tours/:id", getTour);
+router.post("/tours/:id/quote", quoteLimiter, validate(tourQuoteSchema), quoteTour);
 
 // Operator seller pages
 // (FR-CUST-007)

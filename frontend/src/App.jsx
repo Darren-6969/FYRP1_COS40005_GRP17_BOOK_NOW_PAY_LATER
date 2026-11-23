@@ -89,6 +89,9 @@ import CarResults from "./pages/public/CarResults";
 import CarDetail from "./pages/public/CarDetail";
 import TestItems from "./pages/public/TestItems"; // TEST-ITEM-MISC: delete with the test item
 import CarBookingForm from "./pages/public/CarBookingForm";
+import TourResults from "./pages/public/TourResults";
+import TourDetail from "./pages/public/TourDetail";
+import TourBookingForm from "./pages/public/TourBookingForm";
 import NotAvailable from "./pages/public/NotAvailable";
 import InfoPage from "./pages/public/InfoPage";
 import InfoHub from "./pages/public/InfoHub";
@@ -113,11 +116,12 @@ export default function App() {
           {/* Chatbot (Module 10): the same chat as the floating help panel. */}
           <Route path="/assistant" element={<Assistant />} />
           {/* Tours are out of scope for now (15 Oct 2026); old links land on car search. */}
-          <Route path="/tours" element={<Navigate to="/cars" replace />} />
-          <Route path="/tours/*" element={<Navigate to="/cars" replace />} />
+          <Route path="/tours" element={<TourResults />} />
+          <Route path="/tours/:tourId" element={<TourDetail />} />
           {/* Signed-out visitors go to /login?redirect=<this URL>, which keeps every selection. */}
           <Route element={<ProtectedRoute allowedRoles={["CUSTOMER"]} />}>
             <Route path="/cars/:listingId/book" element={<CarBookingForm />} />
+            <Route path="/tours/:tourId/book" element={<TourBookingForm />} />
             {/* TEST-ITEM-MISC: the bookable test item. Delete this route when testing is finished. */}
             <Route path="/test-items" element={<TestItems />} />
           </Route>

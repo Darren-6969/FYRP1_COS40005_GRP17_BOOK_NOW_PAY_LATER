@@ -4,6 +4,7 @@ import {
   allowedCategoriesFor,
   applicationRulesFor,
   assertCategoryAllowed,
+  charterTourProblem,
   checkApplicationDocuments,
   missingApprovalDocuments,
   parseOperatorType,
@@ -115,4 +116,17 @@ test("approval needs the type's key documents", () => {
   assert.deepEqual(missingApprovalDocuments("TOUR_GUIDE", ["TOURIST_GUIDE_LICENCE"]), []);
   assert.deepEqual(missingApprovalDocuments("DRIVER", ["DRIVING_LICENCE"]), ["PSV_LICENCE"]);
   assert.deepEqual(missingApprovalDocuments(null, ["BUSINESS_LICENSE"]), []);
+});
+
+test("a charter tour must name its car, and passengers fit beside the driver", () => {
+  const car = { category: "TOUR", vehicleMake: "Toyota", vehicleModel: "Innova", vehicleType: "MPV", seats: 7 };
+  assert.equal(charterTourProblem("CAR_RENTAL", { ...car, maxGroupSize: 6 }), null);
+  assert.match(charterTourProblem("CAR_RENTAL", { ...car, maxGroupSize: 7 }), /up to 6 passengers/);
+  assert.match(charterTourProblem("CAR_RENTAL", { ...car, vehicleModel: "" }), /make and model/);
+  assert.match(charterTourProblem("CAR_RENTAL", { ...car, seats: null }), /seats/);
+});
+
+test("guide packages and car listings skip the charter check", () => {
+  assert.equal(charterTourProblem("TOUR_GUIDE", { category: "TOUR" }), null);
+  assert.equal(charterTourProblem("CAR_RENTAL", { category: "CAR_RENTAL" }), null);
 });

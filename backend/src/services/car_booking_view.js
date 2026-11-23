@@ -116,3 +116,40 @@ export function mapCarBooking(booking) {
     alternative: mapAlternative(booking),
   };
 }
+// Tour bookings (operator types plan, Phase 3) also carry a listing, so the
+// views tell them apart by service type rather than by listingId.
+export function isTourBooking(booking) {
+  return booking?.serviceType === "TOUR";
+}
+
+export function isCarBooking(booking) {
+  return Boolean(booking?.listingId) && !isTourBooking(booking);
+}
+
+// Read-only view of a tour booking for the customer and operator detail
+// pages. No driver, CDW or add-ons: a tour is one flat price.
+export function mapTourBooking(booking) {
+  const details = booking.bookingDetails || {};
+  const listing = booking.listing;
+  return {
+    listing: listing
+      ? {
+          id: listing.id,
+          name: listing.name,
+          imageUrl: listing.images?.[0]?.imageUrl ?? null,
+          branch: listing.branch ?? null,
+        }
+      : null,
+    startAt: booking.pickupDate,
+    endAt: booking.returnDate,
+    pickupTime: details.tour?.pickupTime ?? booking.pricingSnapshot?.pickupTime ?? null,
+    passengers: details.tour?.passengers ?? booking.pricingSnapshot?.passengers ?? null,
+    durationDays: details.tour?.durationDays ?? booking.pricingSnapshot?.durationDays ?? 1,
+    pickupPoint: booking.pickupPoint ?? booking.pricingSnapshot?.pickupPoint ?? null,
+    pricing: booking.pricingSnapshot ?? null,
+    contact: details.contact ?? null,
+    note: details.note ?? null,
+    responseDueAt: responseDueAt(booking),
+    autoRejectOnTimeout: autoRejectsOnTimeout(booking),
+  };
+}

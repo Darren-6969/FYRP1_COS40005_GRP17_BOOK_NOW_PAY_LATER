@@ -967,4 +967,4 @@ export async function quotePublicCar(id, sel, customerId = null) {
   };
 }
 
-export { loadPublicListing, loadOperatorFacts };
+export { loadPublicListing, loadOperatorFacts, pickupPointsFor };

@@ -177,12 +177,12 @@ function JoinPanel({ back, step }) {
     <>
       <div className={styles.ring} aria-hidden="true" />
       <div className={styles.panelInner}>
-        <PanelTop back={back} aside={<p className={styles.eyebrow}>For rental companies</p>} />
+        <PanelTop back={back} aside={<p className={styles.eyebrow}>For operators</p>} />
         <div className={styles.panelBottom}>
           <p className={`${styles.panelHeadline} ${play ? styles.rise : ""}`}>
-            Put your cars
+            Put your cars and tours
             <br />
-            in front of renters.
+            in front of travellers.
           </p>
           <div className={styles.timeline}>
             <div className={styles.track} aria-hidden="true">

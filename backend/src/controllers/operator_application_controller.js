@@ -185,7 +185,9 @@ export async function submitOperatorApplication(req, res, next) {
         where: { id: createdApplication.id },
         include: { documents: { select: documentPublicSelect } },
       });
-    });
+      // Several writes plus the document bytes: Prisma's 5 s default is too
+      // tight on a slow database link, as for bookings.
+    }, { maxWait: 10000, timeout: 15000 });
 
     await prisma.auditLog.create({
       data: {
@@ -336,7 +338,7 @@ export async function reviewOperatorApplication(req, res, next) {
       }
 
       return updated;
-    });
+    }, { maxWait: 10000, timeout: 15000 });
 
     await prisma.refreshToken.deleteMany({ where: { user: { operatorId: application.operatorId } } });
 

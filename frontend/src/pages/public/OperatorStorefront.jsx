@@ -21,6 +21,14 @@ import { BRAND } from "../../constants/brand";
 import results from "../../assets/styles/public/CarResults.module.css";
 import styles from "../../assets/styles/public/OperatorStorefront.module.css";
 import useHeaderOverlay from "../../hooks/useHeaderOverlay";
+import { TourCard } from "./TourResults";
+import tourStyles from "../../assets/styles/public/Tours.module.css";
+
+const OPERATOR_TYPE_LABEL = {
+  CAR_RENTAL: "Car rental company",
+  TOUR_GUIDE: "Licensed tour guide",
+  DRIVER: "Licensed driver",
+};
 
 // Operator seller page (SRS 4.2.7, FR-CUST-007). Built first as the
 // operator's own shop front: the link they share on WhatsApp and social
@@ -165,6 +173,7 @@ function Hero({ operator, carCount, cities }) {
         <div className={styles.identity}>
           <div className={styles.nameRow}>
             <h1 className={styles.name}>{operator.companyName}</h1>
+            {operator.operatorType && <span className={styles.typeBadge}>{OPERATOR_TYPE_LABEL[operator.operatorType]}</span>}
             {operator.verified && (
               <span className={styles.verified} title="Business registration and licence checked by the platform">
                 <Check size={14} aria-hidden="true" /> Verified business
@@ -537,6 +546,7 @@ export default function OperatorStorefront() {
 
   const sections = [
     operator.takingBookings && data.cars.length > 0 && { id: "cars", label: "Cars" },
+    operator.takingBookings && data.tours?.length > 0 && { id: "tours", label: "Tours" },
     operator.about && { id: "about", label: "About" },
     { id: "contact", label: "Branches & contact" },
     operator.takingBookings && { id: "terms", label: "Booking terms" },
@@ -776,6 +786,21 @@ export default function OperatorStorefront() {
               </div>
             </div>
           </div>
+        </section>
+      )}
+
+      {operator.takingBookings && data.tours?.length > 0 && (
+        <section id="tours" className={`${styles.section} ${styles.narrowWrap}`} aria-labelledby="tours-h">
+          <h2 id="tours-h" className={styles.h2}>
+            Tours by {operator.companyName}
+          </h2>
+          <ul className={tourStyles.grid}>
+            {data.tours.map((tour) => (
+              <li key={tour.id}>
+                <TourCard tour={tour} />
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

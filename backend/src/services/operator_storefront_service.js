@@ -9,6 +9,7 @@ import { deletePublicFile } from "./media_storage.js";
 import { BALANCE_DUE_HOURS_BEFORE_PICKUP, DEPOSIT_WINDOW_HOURS, klPlainDate } from "./car_pricing_service.js";
 import { horizonAvailability } from "./car_availability_service.js";
 import { LISTING_INCLUDE, PUBLIC_LISTING_WHERE, loadOperatorFacts, refundRuleFor, toCarDto } from "./public_car_service.js";
+import { PUBLIC_TOUR_WHERE, TOUR_INCLUDE, toTourDto } from "./public_tour_service.js";
 
 const DEFAULT_DOWN_PAYMENT_PCT = 30;
 const MOST_BOOKED_WINDOW_DAYS = 90;
@@ -163,6 +164,7 @@ async function findOperator(handle) {
       id: true,
       slug: true,
       companyName: true,
+      operatorType: true,
       logoUrl: true,
       coverImageUrl: true,
       about: true,
@@ -200,6 +202,15 @@ export async function getStorefront(handle) {
         orderBy: { createdAt: "desc" },
       });
 
+  // Charter tours and guide packages show on the same page.
+  const tourListings = suspended
+    ? []
+    : await prisma.listing.findMany({
+        where: { ...PUBLIC_TOUR_WHERE, operatorId: operator.id },
+        include: TOUR_INCLUDE,
+        orderBy: { createdAt: "desc" },
+      });
+
   const [factsMap, availability, popular] = await Promise.all([
     loadOperatorFacts([operator.id]),
     horizonAvailability(listings),
@@ -217,6 +228,7 @@ export async function getStorefront(handle) {
       id: operator.id,
       slug: operator.slug,
       companyName: operator.companyName,
+      operatorType: operator.operatorType,
       logoUrl: operator.logoUrl,
       coverImageUrl: operator.coverImageUrl,
       about: operator.about,
@@ -234,6 +246,7 @@ export async function getStorefront(handle) {
     terms: termsFor(facts.config),
     mostBookedIds: popular,
     cars,
+    tours: tourListings.map((l) => toTourDto(l, facts)),
   };
 }
 

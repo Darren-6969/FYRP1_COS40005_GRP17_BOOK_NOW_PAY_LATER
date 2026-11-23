@@ -62,7 +62,7 @@ export const searchCarsSchema = z
     return_time: hhmm.optional().describe("Return time, HH:MM 24-hour. Default 10:00."),
     brands: z.array(z.string().trim().min(1).max(40)).max(5).optional().describe("Car brands, e.g. Toyota, Perodua, Proton."),
     models: z.array(z.string().trim().min(1).max(40)).max(5).optional().describe("Exact model names, e.g. Bezza, Vios, Alza."),
-    vehicle_types: z.array(z.enum(["Compact", "Sedan", "SUV", "MPV", "Pickup"])).max(5).optional(),
+    vehicle_types: z.array(z.enum(["Compact", "Hatchback", "Sedan", "SUV", "MPV", "Pickup", "Van"])).max(7).optional(),
     min_seats: z.coerce.number().int().min(1).max(15).optional().describe("Seats needed. Cars with at least this many seats match."),
     transmission: z.enum(["AUTOMATIC", "MANUAL"]).optional(),
     powertrain: z.array(z.enum(["Petrol", "Diesel", "Hybrid", "Electric"])).max(4).optional(),

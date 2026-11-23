@@ -13,6 +13,7 @@ import {
 } from "../../utils/customerUtils";
 import { refreshNotifications } from "../../utils/notifyRefresh";
 import CarBookingPanel from "../../components/booking/CarBookingPanel";
+import TourBookingPanel from "../../components/booking/TourBookingPanel";
 import CarAlternativeCard from "../../components/booking/CarAlternativeCard";
 import CancelBookingDialog from "../../components/booking/CancelBookingDialog";
 import RefundSummary, { CancellationNotice } from "../../components/booking/RefundSummary";
@@ -114,7 +115,8 @@ export default function BookingDetail() {
             {booking.operator?.companyName || "Host"}
           </p>
 
-          {!isCarBooking && (
+          {/* Car and tour bookings have their own panels below. */}
+          {!isCarBooking && !booking.tour && (
           <div className="customer-info-list detail customer-booking-info-grid">
             <div>
               <span>Service Type</span>
@@ -225,9 +227,11 @@ export default function BookingDetail() {
           />
         )}
 
-        <BookingDocumentsCard booking={booking} />
+        {/* Tours need no driving licence: the operator drives. */}
+        {!booking.tour && <BookingDocumentsCard booking={booking} />}
 
         {isCarBooking && <CarBookingPanel booking={booking} />}
+        {booking.tour && <TourBookingPanel booking={booking} />}
         <CancellationNotice booking={booking} />
         <RefundSummary booking={booking} />
 

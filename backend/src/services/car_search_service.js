@@ -109,7 +109,12 @@ export function quoteFor(listing, hours) {
 const labelled = (vs) => vs.map((v) => ({ value: v, label: v }));
 
 const FACETS = {
-  type: { label: "Vehicle type", values: labelled(["Compact", "Sedan", "SUV", "MPV", "Pickup"]), get: (l) => l.vehicleType },
+  type: {
+    label: "Vehicle type",
+    // Every type the listing form offers, so no car is left out of the filter.
+    values: labelled(["Compact", "Hatchback", "Sedan", "SUV", "MPV", "Pickup", "Van"]),
+    get: (l) => l.vehicleType,
+  },
   seats: {
     label: "Seat count",
     values: [

@@ -68,7 +68,8 @@
 
 /* The floating pill: centred, 12px from the top, deep green with a blur. */
 .headerScrolled .inner {
-  max-width: 820px;
+  /* Room for four links (Tours came back) without wrapping. */
+  max-width: 880px;
   margin-top: 12px;
   height: 56px;
   padding: 0 6px 0 18px;
@@ -130,6 +131,8 @@
 
 .navLink {
   position: relative;
+  /* "Car rental" stays on one line in the bar and in the pill. */
+  white-space: nowrap;
   font-size: 14px;
   font-weight: 500;
   color: var(--hdr-text) !important;
@@ -172,7 +175,12 @@
 /* In the pill the current page is a filled pill instead of the underline. */
 @media (min-width: 901px) {
   .headerScrolled .navLink {
-    padding: 8px 14px;
+    padding: 8px 12px;
+  }
+
+  /* In the pill the links carry their own padding, so the gap can shrink. */
+  .headerScrolled .nav {
+    gap: 2px;
   }
 
   .headerScrolled .navLink::after {

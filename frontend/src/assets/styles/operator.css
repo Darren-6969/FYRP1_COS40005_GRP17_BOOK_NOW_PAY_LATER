@@ -6414,3 +6414,378 @@
 .operator-nav-count[data-overdue] {
   background: #e11d48;
 }
+
+/* =========================
+   Listing form: photos, refund callout and save bar
+   (operator types plan, Nov 2026). Helper text uses #5b6779,
+   which meets 4.5:1 on white; the older #8793a7 does not.
+========================= */
+
+.listing-help {
+  margin: 0;
+  color: #5b6779;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.listing-callout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border: 1px solid #d8e3ff;
+  border-radius: 14px;
+  background: #f5f8ff;
+  color: #27344b;
+}
+
+.listing-callout-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #2f67ee;
+}
+
+.listing-callout strong {
+  display: block;
+  font-size: 14px;
+}
+
+.listing-callout p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.listing-callout a {
+  color: #2458d8;
+  font-weight: 700;
+}
+
+.listing-photo-count {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.listing-dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 160px;
+  padding: 24px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 16px;
+  background: #f8fafc;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.listing-dropzone:hover {
+  border-color: #2f67ee;
+  background: #f5f8ff;
+}
+
+/* Visually hidden but still focusable, so keyboard users reach the picker. */
+.listing-dropzone-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.listing-dropzone:focus-within {
+  outline: 3px solid #2f67ee;
+  outline-offset: 2px;
+}
+
+.listing-dropzone.is-busy {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+.listing-dropzone-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #e8efff;
+  color: #2f67ee;
+}
+
+.listing-dropzone-title {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.listing-dropzone-meta {
+  max-width: 46ch;
+  color: #5b6779;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.listing-upload-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.listing-upload-preview img {
+  width: 160px;
+  height: 110px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: #f1f5f9;
+}
+
+.listing-upload-preview strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #0f172a;
+}
+
+.listing-upload-preview .operator-secondary-btn {
+  margin-top: 8px;
+}
+
+.listing-stock-photos {
+  margin-top: 8px;
+}
+
+.listing-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 16px;
+  color: #5b6779;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.listing-divider::before,
+.listing-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.listing-stock-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.listing-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.listing-action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 14px 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(6px);
+}
+
+.listing-action-note {
+  margin: 0;
+  color: #5b6779;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.listing-action-bar .operator-form-actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.listing-action-bar .operator-primary-btn,
+.listing-action-bar .operator-secondary-btn {
+  min-height: 44px;
+  padding: 0 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listing-dropzone {
+    transition: none;
+  }
+}
+
+/* Photos waiting to be saved, in order (listing form). */
+.listing-pending {
+  margin-top: 16px;
+}
+
+.listing-pending-title {
+  margin: 0 0 10px;
+  color: #27344b;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.listing-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.listing-photo-card {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: #f1f5f9;
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.listing-photo-card:active {
+  cursor: grabbing;
+}
+
+.listing-photo-card.is-cover {
+  border-color: #2f67ee;
+}
+
+.listing-photo-card:focus-visible {
+  outline: 3px solid #2f67ee;
+  outline-offset: 3px;
+}
+
+.listing-photo-card.is-dragging {
+  opacity: 0.45;
+}
+
+.listing-photo-card.is-drop-target {
+  border-color: #2f67ee;
+  box-shadow: 0 0 0 4px rgba(47, 103, 238, 0.18);
+  transform: scale(1.02);
+}
+
+.listing-photo-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+}
+
+.listing-photo-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.78);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.listing-photo-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+/* Quiet until the photo is hovered or a button is focused. */
+.listing-photo-action {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.62);
+  color: #ffffff;
+  opacity: 0.7;
+  cursor: pointer;
+  position: relative;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+/* A larger invisible hit area keeps the target at 44 px. */
+.listing-photo-action::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+
+.listing-photo-card:hover .listing-photo-action,
+.listing-photo-card:focus-within .listing-photo-action {
+  opacity: 1;
+}
+
+.listing-photo-action:hover {
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.listing-photo-action-danger:hover {
+  background: #b91c1c;
+}
+
+.listing-photo-action:focus-visible {
+  opacity: 1;
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}
+
+@media (hover: none) {
+  .listing-photo-action {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listing-photo-card,
+  .listing-photo-action {
+    transition: none;
+  }
+
+  .listing-photo-card.is-drop-target {
+    transform: none;
+  }
+}

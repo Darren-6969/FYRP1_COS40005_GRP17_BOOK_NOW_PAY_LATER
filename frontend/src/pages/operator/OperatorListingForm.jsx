@@ -13,7 +13,70 @@ import {
 import {
   operatorService,
 } from "../../services/operator_service";
+import { ImagePlus, Info, Search, Star, X } from "lucide-react";
 import { useDirtyState } from "../../hooks/useDirtyState";
+import { getUser } from "../../utils/session";
+
+// The operator's type decides which listings it can create (the server
+// checks it too, in operator_type_rules.js). Admins see every category.
+// Sessions from before operator types existed count as car rental.
+function sessionOperatorType() {
+  const user = getUser();
+  if (user?.role === "MASTER_SELLER") return null;
+  return user?.operator?.operatorType || "CAR_RENTAL";
+}
+
+const CATEGORY_OPTIONS = {
+  CAR_RENTAL: [
+    { value: "CAR_RENTAL", label: "Car Rental" },
+    { value: "TOUR", label: "Charter Tour (with your car)" },
+    // TEST-ITEM-MISC: delete this option when testing is finished
+    { value: "MISCELLANEOUS", label: "Miscellaneous (test item)" },
+  ],
+  TOUR_GUIDE: [{ value: "TOUR", label: "Tour Package" }],
+  DRIVER: [],
+};
+
+const MAX_PHOTOS = 5;
+
+const VEHICLE_TYPES = [
+  ["COMPACT", "Compact"],
+  ["HATCHBACK", "Hatchback"],
+  ["SEDAN", "Sedan"],
+  ["SUV", "SUV"],
+  ["MPV", "MPV"],
+  ["PICKUP", "Pickup"],
+  ["VAN", "Van"],
+];
+
+// Behind the public Powertrain and Drivetrain filters.
+const POWERTRAINS = [
+  ["PETROL", "Petrol"],
+  ["DIESEL", "Diesel"],
+  ["HYBRID", "Hybrid"],
+  ["EV", "Electric"],
+];
+
+const DRIVETRAINS = [
+  ["TWO_WD", "2WD"],
+  ["FOUR_WD", "4WD"],
+  ["AWD", "AWD"],
+];
+
+const ALL_CATEGORY_OPTIONS = [
+  { value: "CAR_RENTAL", label: "Car Rental" },
+  { value: "TOUR", label: "Tour" },
+  // TEST-ITEM-MISC: delete this option when testing is finished
+  { value: "MISCELLANEOUS", label: "Miscellaneous (test item)" },
+];
+
+// "08:00, 13:00" -> ["08:00", "13:00"]; the server checks the format.
+function textToTimes(value) {
+  return String(value || "")
+    .split(/[,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 const initialForm = {
   category: "CAR_RENTAL",
@@ -38,6 +101,13 @@ const initialForm = {
   seats: "",
   transmission: "AUTOMATIC",
   luggageCapacity: "",
+  powertrain: "",
+  drivetrain: "",
+  fuelPolicy: "",
+  mileagePolicy: "UNLIMITED",
+  mileageLimitKm: "",
+  mileageExcessRate: "",
+  travelArea: "",
 
   pickupRules: "",
   returnRules: "",
@@ -51,6 +121,7 @@ const initialForm = {
   cancellationPolicy: "",
   meetingPoint: "",
   maxGroupSize: "",
+  pickupTimes: "",
 
   refundPolicy: "",
   termsAndConditions: "",
@@ -63,8 +134,16 @@ export default function OperatorListingForm() {
 
   const isEdit = Boolean(id);
 
+  const operatorType = sessionOperatorType();
+  const categoryOptions = operatorType ? CATEGORY_OPTIONS[operatorType] || [] : ALL_CATEGORY_OPTIONS;
+  const isGuide = operatorType === "TOUR_GUIDE";
+
   const [form, setForm] =
-    useState(initialForm);
+    useState(() => ({
+      ...initialForm,
+      // A tour guide can only list tours.
+      category: categoryOptions[0]?.value || initialForm.category,
+    }));
 
   // FR-SUB-004: an untouched edit form cannot be saved, so opening and saving
   // it does not count as activity.
@@ -86,13 +165,15 @@ export default function OperatorListingForm() {
   const [vehicleImages, setVehicleImages] =
     useState([]);
 
-  const [selectedVehicleImage, setSelectedVehicleImage] =
-    useState(null);
+  // Photos to add on save, in the order the operator arranged them: uploads
+  // and stock photos together. The first is the cover on a new listing; when
+  // editing they go after the current photos.
+  const [pendingPhotos, setPendingPhotos] =
+    useState([]);
 
-  const [
-    uploadedVehicleImage,
-    setUploadedVehicleImage,
-  ] = useState(null);
+  // Drag to reorder: the photo being dragged and the one it is over.
+  const [dragPhoto, setDragPhoto] =
+    useState({ from: null, over: null });
 
   const [listingImages, setListingImages] =
   useState([]);
@@ -113,6 +194,14 @@ export default function OperatorListingForm() {
 
   const isTour =
     form.category === "TOUR";
+
+  // A charter tour bundles the operator's car with the tour package, so it
+  // lists the car too. Guides list the package only. (Admins: not enforced.)
+  const isCharter =
+    isTour && operatorType === "CAR_RENTAL";
+
+  // Cars and charter tours can use the stock photo finder.
+  const hasVehicle = isCar || isCharter;
 
   // TEST-ITEM-MISC: the fixed-price test item. Delete this line and every other
   // TEST-ITEM-MISC block in this file when testing is finished
@@ -222,6 +311,14 @@ export default function OperatorListingForm() {
         luggageCapacity:
           listing.luggageCapacity || "",
 
+        powertrain: listing.powertrain || "",
+        drivetrain: listing.drivetrain || "",
+        fuelPolicy: listing.fuelPolicy || "",
+        mileagePolicy: listing.mileagePolicy || "UNLIMITED",
+        mileageLimitKm: listing.mileageLimitKm ?? "",
+        mileageExcessRate: listing.mileageExcessRate ?? "",
+        travelArea: listing.travelArea || "",
+
         pickupRules:
           listing.pickupRules || "",
 
@@ -263,6 +360,9 @@ export default function OperatorListingForm() {
 
         maxGroupSize:
           listing.maxGroupSize || "",
+
+        pickupTimes:
+          (listing.pickupTimes || []).join(", "),
 
         refundPolicy:
           listing.refundPolicy || "",
@@ -450,7 +550,7 @@ export default function OperatorListingForm() {
       !form.price ||
       Number(form.price) <= 0
     ) {
-      return isMisc ? "Enter a valid price." : "Enter a valid daily rate."; // TEST-ITEM-MISC
+      return isMisc || isTour ? "Enter a valid price." : "Enter a valid daily rate."; // TEST-ITEM-MISC
     }
 
     if (isCar) {
@@ -503,6 +603,29 @@ export default function OperatorListingForm() {
       if (!form.transmission) {
         return "Transmission is required.";
       }
+
+      // Customers filter by these, so a car without them would be hidden.
+      if (!form.powertrain) {
+        return "Powertrain is required.";
+      }
+
+      if (!form.drivetrain) {
+        return "Drivetrain is required.";
+      }
+
+      if (form.mileagePolicy === "LIMITED") {
+        const limit = Number(form.mileageLimitKm);
+        if (!Number.isInteger(limit) || limit < 1) {
+          return "Enter the daily mileage allowance in km.";
+        }
+
+        if (
+          form.mileageExcessRate !== "" &&
+          (!Number.isFinite(Number(form.mileageExcessRate)) || Number(form.mileageExcessRate) < 0)
+        ) {
+          return "The charge per extra km must be 0 or more.";
+        }
+      }
     }
 
     if (isTour) {
@@ -511,6 +634,39 @@ export default function OperatorListingForm() {
         Number(form.durationDays) < 1
       ) {
         return "Tour duration must be at least 1 day.";
+      }
+
+      if (
+        !Number.isInteger(Number(form.maxGroupSize)) ||
+        Number(form.maxGroupSize) < 1
+      ) {
+        return "Enter the maximum number of passengers.";
+      }
+
+      if (isCharter) {
+        if (!form.vehicleMake.trim() || !form.vehicleModel.trim()) {
+          return "Enter the make and model of the car used for this tour.";
+        }
+
+        if (!form.vehicleType) {
+          return "Choose the vehicle type of the car used for this tour.";
+        }
+
+        const seats = Number(form.seats);
+        if (!Number.isInteger(seats) || seats < 2) {
+          return "Enter the number of seats in the car, including the driver.";
+        }
+
+        if (Number(form.maxGroupSize) > seats - 1) {
+          return `The car has ${seats} seats, so it takes up to ${seats - 1} passengers besides the driver.`;
+        }
+      }
+
+      const badTime = textToTimes(form.pickupTimes).find(
+        (time) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)
+      );
+      if (badTime) {
+        return `Pickup time "${badTime}" must be in HH:mm format, for example 08:30.`;
       }
     }
 
@@ -550,10 +706,8 @@ export default function OperatorListingForm() {
         form.termsAndConditions.trim() ||
         null,
 
-      carsxeImageUrl:
-        uploadedVehicleImage?.url ||
-        selectedVehicleImage?.url ||
-        null,
+      imageUrls:
+        pendingPhotos.map((photo) => photo.url),
     };
 
     if (isCar) {
@@ -607,6 +761,18 @@ export default function OperatorListingForm() {
                 form.luggageCapacity
               )
             : null,
+
+        powertrain: form.powertrain,
+        drivetrain: form.drivetrain,
+        fuelPolicy: form.fuelPolicy || null,
+        mileagePolicy: form.mileagePolicy,
+        mileageLimitKm:
+          form.mileagePolicy === "LIMITED" ? Number(form.mileageLimitKm) : null,
+        mileageExcessRate:
+          form.mileagePolicy === "LIMITED" && form.mileageExcessRate !== ""
+            ? Number(form.mileageExcessRate)
+            : null,
+        travelArea: form.travelArea.trim() || null,
 
         pickupRules:
           form.pickupRules.trim() ||
@@ -663,10 +829,15 @@ export default function OperatorListingForm() {
               )
             : null,
 
-        vehicleMake: null,
-        vehicleModel: null,
-        modelYear: null,
-        seats: null,
+        pickupTimes:
+          textToTimes(form.pickupTimes),
+
+        // A charter tour lists the car it uses; a guide package has none.
+        vehicleMake: isCharter ? form.vehicleMake.trim() : null,
+        vehicleModel: isCharter ? form.vehicleModel.trim() : null,
+        vehicleType: isCharter ? form.vehicleType : null,
+        modelYear: isCharter && form.modelYear ? Number(form.modelYear) : null,
+        seats: isCharter && form.seats ? Number(form.seats) : null,
         transmission: null,
         luggageCapacity: null,
         pickupRules: null,
@@ -692,71 +863,115 @@ export default function OperatorListingForm() {
     return payload;
   };
 
+  // Room left for new photos (up to 5 per listing, counting saved ones).
+  const photoRoom =
+    MAX_PHOTOS -
+    (isEdit ? listingImages.length : 0) -
+    pendingPhotos.length;
+
+  const addPendingPhoto = (photo) =>
+    setPendingPhotos((current) =>
+      current.some((item) => item.url === photo.url) ||
+      current.length + (isEdit ? listingImages.length : 0) >= MAX_PHOTOS
+        ? current
+        : [...current, photo]
+    );
+
+  const removePendingPhoto = (url) =>
+    setPendingPhotos((current) => current.filter((item) => item.url !== url));
+
+  // Moves a photo from one place in the list to another.
+  const movePendingPhoto = (from, to) =>
+    setPendingPhotos((current) => {
+      if (from === null || to < 0 || to >= current.length || to === from) return current;
+      const next = [...current];
+      const [photo] = next.splice(from, 1);
+      next.splice(to, 0, photo);
+      return next;
+    });
+
+  const endPhotoDrag = () => setDragPhoto({ from: null, over: null });
+
+  // Keyboard alternative to dragging: arrow keys move the focused photo, and
+  // focus follows it to its new place.
+  const handlePhotoKeyDown = (event, index, url) => {
+    const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key];
+    const to = event.key === "Home" ? 0 : event.key === "End" ? pendingPhotos.length - 1 : step ? index + step : null;
+    if (to === null) return;
+    event.preventDefault();
+    movePendingPhoto(index, to);
+    window.requestAnimationFrame(() => {
+      document.querySelector(`[data-photo-url="${CSS.escape(url)}"]`)?.focus();
+    });
+  };
+
+  const toggleStockPhoto = (image) => {
+    if (pendingPhotos.some((item) => item.url === image.url)) {
+      removePendingPhoto(image.url);
+    } else if (photoRoom > 0) {
+      addPendingPhoto({ url: image.url, thumbnailUrl: image.thumbnailUrl || image.url, source: "stock" });
+    } else {
+      setError(`A listing can have up to ${MAX_PHOTOS} photos. Remove one first.`);
+    }
+  };
+
   const uploadOwnVehicleImage =
   async (event) => {
-    const file =
-      event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
     const allowedTypes = [
       "image/png",
       "image/jpeg",
       "image/webp",
     ];
 
-    if (
-      !allowedTypes.includes(
-        file.type
-      )
-    ) {
-      setError(
-        "Please upload a PNG, JPG, JPEG, or WebP image."
-      );
-
-      event.target.value = "";
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!files.length) {
       return;
     }
 
-    if (
-      file.size >
-      5 * 1024 * 1024
-    ) {
+    if (files.length > photoRoom) {
       setError(
-        "Car photo must be 5MB or below."
+        photoRoom > 0
+          ? `You can add ${photoRoom} more photo${photoRoom === 1 ? "" : "s"}. Only the first ${photoRoom} were added.`
+          : `A listing can have up to ${MAX_PHOTOS} photos. Remove one first.`
       );
-
-      event.target.value = "";
-      return;
+    } else {
+      setError("");
     }
+
+    const accepted = [];
+    for (const file of files.slice(0, Math.max(0, photoRoom))) {
+      if (!allowedTypes.includes(file.type)) {
+        setError(`${file.name} is not a PNG, JPG or WebP image.`);
+        continue;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setError(`${file.name} is over 5 MB.`);
+        continue;
+      }
+      accepted.push(file);
+    }
+
+    if (!accepted.length) return;
 
     try {
       setUploadingVehicleImage(
         true
       );
 
-      setError("");
-
-      const res =
-        await operatorService.uploadListingImage(
-          file
-        );
-
-      setUploadedVehicleImage({
-        url: res.data.url,
-      });
-
-      // Uploaded image becomes the selected image.
-      setSelectedVehicleImage(
-        null
-      );
+      // One at a time, so the photos keep the order they were picked in.
+      for (const file of accepted) {
+        const res =
+          await operatorService.uploadListingImage(
+            file
+          );
+        addPendingPhoto({ url: res.data.url, thumbnailUrl: res.data.url, source: "upload" });
+      }
     } catch (err) {
       setError(
         err.response?.data
           ?.message ||
-          "Failed to upload car photo."
+          "Failed to upload a photo. Try again."
       );
     } finally {
       setUploadingVehicleImage(
@@ -1065,19 +1280,17 @@ export default function OperatorListingForm() {
                   handleChange
                 }
               >
-                <option value="CAR_RENTAL">
-                  Car Rental
-                </option>
-
-                <option value="TOUR">
-                  Tour Package
-                </option>
-
-                {/* TEST-ITEM-MISC: delete this option when testing is finished */}
-                <option value="MISCELLANEOUS">
-                  Miscellaneous (test item)
-                </option>
+                {categoryOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
+              {operatorType === "DRIVER" && (
+                <small>
+                  Driver listings are not open yet. We will let you know when you can add one.
+                </small>
+              )}
             </label>
 
             <label className="operator-field">
@@ -1322,6 +1535,103 @@ export default function OperatorListingForm() {
                   placeholder="2"
                 />
               </label>
+
+              <label className="operator-field">
+                Powertrain *
+
+                <select name="powertrain" value={form.powertrain} onChange={handleChange}>
+                  <option value="">Select powertrain</option>
+                  {POWERTRAINS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <small className="listing-help">Customers filter by this.</small>
+              </label>
+
+              <label className="operator-field">
+                Drivetrain *
+
+                <select name="drivetrain" value={form.drivetrain} onChange={handleChange}>
+                  <option value="">Select drivetrain</option>
+                  {DRIVETRAINS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <small className="listing-help">Customers filter by this. AWD shows under 4WD.</small>
+              </label>
+            </div>
+          </section>
+        )}
+
+        {/* ===================================================
+            CHARTER TOUR VEHICLE (car + tour package bundle)
+        ==================================================== */}
+
+        {isCharter && (
+          <section className="operator-card">
+            <div className="operator-card-head">
+              <div>
+                <h2>Car for this Tour</h2>
+                <p>
+                  The car customers ride in. A charter tour is your car, a driver and the tour package together,
+                  priced per car.
+                </p>
+              </div>
+            </div>
+
+            <div className="operator-form-grid">
+              <label className="operator-field">
+                Make *
+                <input name="vehicleMake" value={form.vehicleMake} onChange={handleChange} placeholder="Toyota" />
+              </label>
+
+              <label className="operator-field">
+                Model *
+                <input name="vehicleModel" value={form.vehicleModel} onChange={handleChange} placeholder="Innova" />
+              </label>
+
+              <label className="operator-field">
+                Vehicle Type *
+                <select name="vehicleType" value={form.vehicleType} onChange={handleChange}>
+                  <option value="">Select vehicle type</option>
+                  {VEHICLE_TYPES.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="operator-field">
+                Model Year
+                <input
+                  type="number"
+                  name="modelYear"
+                  min="1990"
+                  max="2100"
+                  value={form.modelYear}
+                  onChange={handleChange}
+                  placeholder="2022"
+                />
+              </label>
+
+              <label className="operator-field">
+                Seats, including the driver *
+                <input
+                  type="number"
+                  name="seats"
+                  min="2"
+                  max="60"
+                  value={form.seats}
+                  onChange={handleChange}
+                  placeholder="7"
+                />
+                <small>Maximum passengers can be at most seats minus one.</small>
+              </label>
             </div>
           </section>
         )}
@@ -1359,7 +1669,7 @@ export default function OperatorListingForm() {
               </label>
 
               <label className="operator-field">
-                Maximum Group Size
+                Maximum Passengers *
 
                 <input
                   type="number"
@@ -1374,6 +1684,20 @@ export default function OperatorListingForm() {
                 />
               </label>
 
+              <label className="operator-field">
+                Pickup Times
+
+                <input
+                  name="pickupTimes"
+                  value={form.pickupTimes}
+                  onChange={handleChange}
+                  placeholder="Example: 08:00, 13:00"
+                />
+                <small>
+                  Times customers can choose, in 24-hour format. Leave empty to let the customer suggest a time.
+                </small>
+              </label>
+
               <label className="operator-field operator-field-full">
                 Meeting Point
 
@@ -1386,6 +1710,9 @@ export default function OperatorListingForm() {
                     handleChange
                   }
                 />
+                <small>
+                  Pickup points and their charges come from the branch, on the Branches page.
+                </small>
               </label>
 
               <ListField
@@ -1587,7 +1914,7 @@ export default function OperatorListingForm() {
 
     {isTour && (
       <label className="operator-field">
-        Price (RM) *
+        {isGuide ? "Package Price (RM) *" : "Price per Car (RM) *"}
 
         <input
           type="number"
@@ -1597,6 +1924,10 @@ export default function OperatorListingForm() {
           value={form.price}
           onChange={handleChange}
         />
+
+        <small>
+          One price for the whole group, up to the maximum passengers. Never per person.
+        </small>
 
         {rateErrors.price && (
           <small className="operator-rate-error">
@@ -1642,7 +1973,9 @@ export default function OperatorListingForm() {
     <label className="operator-field">
       {isCar
         ? "Car Count *"
-        : "Allocation / Quantity *"}
+        : isTour
+          ? "Groups per Day *"
+          : "Allocation / Quantity *"}
 
       <input
         type="number"
@@ -1762,6 +2095,73 @@ export default function OperatorListingForm() {
 
             <div className="operator-form-grid">
 
+              <label className="operator-field">
+                Fuel Policy
+
+                <select name="fuelPolicy" value={form.fuelPolicy} onChange={handleChange}>
+                  <option value="">Not set (customers are told to ask you)</option>
+                  <option value="FULL_TO_FULL">Full to full</option>
+                  <option value="SAME_TO_SAME">Same to same</option>
+                </select>
+              </label>
+
+              <label className="operator-field">
+                Mileage *
+
+                <select name="mileagePolicy" value={form.mileagePolicy} onChange={handleChange}>
+                  <option value="UNLIMITED">Unlimited</option>
+                  <option value="LIMITED">Limited per day</option>
+                </select>
+                <small className="listing-help">
+                  Unlimited shows an "Unlimited mileage" badge on the car.
+                </small>
+              </label>
+
+              {form.mileagePolicy === "LIMITED" && (
+                <>
+                  <label className="operator-field">
+                    Daily Allowance (km) *
+
+                    <input
+                      type="number"
+                      name="mileageLimitKm"
+                      min="1"
+                      step="1"
+                      value={form.mileageLimitKm}
+                      onChange={handleChange}
+                      placeholder="300"
+                    />
+                  </label>
+
+                  <label className="operator-field">
+                    Charge per Extra km (RM)
+
+                    <input
+                      type="number"
+                      name="mileageExcessRate"
+                      min="0"
+                      step="0.01"
+                      value={form.mileageExcessRate}
+                      onChange={handleChange}
+                      placeholder="0.60"
+                    />
+                    <small className="listing-help">Leave empty to say customers should ask you.</small>
+                  </label>
+                </>
+              )}
+
+              <label className="operator-field operator-field-full">
+                Travel Area
+
+                <input
+                  name="travelArea"
+                  maxLength={500}
+                  value={form.travelArea}
+                  onChange={handleChange}
+                  placeholder="Example: Anywhere in Sarawak. Not allowed into Sabah or Brunei."
+                />
+              </label>
+
               <label className="operator-field operator-field-full">
                 Pickup Rules
 
@@ -1827,21 +2227,28 @@ export default function OperatorListingForm() {
 
           <div className="operator-form-grid">
 
-            <div className="operator-field operator-field-full">
-              Refund rule
-
-              <p className="operator-muted-text">
-                Refunds follow your shop's rule and the platform refund policy, so there is
-                nothing to write here. By default you keep the deposit and a paid balance is
-                refunded in full. Change the deposit rule in{" "}
-                <Link to="/operator/settings">Shop Settings</Link>.
-              </p>
+            <div className="operator-field-full listing-callout" role="note">
+              <Info size={18} aria-hidden="true" className="listing-callout-icon" />
+              <div>
+                <strong>Refunds follow your shop rule</strong>
+                <p>
+                  {isTour
+                    ? "For tours you keep the down payment when a customer cancels, and any balance they paid is refunded in full."
+                    : "By default you keep the deposit when a customer cancels, and any balance they paid is refunded in full."}{" "}
+                  {isCar && (
+                    <>
+                      Change the deposit rule in <Link to="/operator/settings">Shop Settings</Link>.
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
 
-            <label className="operator-field operator-field-full">
+            <label className="operator-field operator-field-full" htmlFor="listing-terms">
               Terms & Conditions
 
               <textarea
+                id="listing-terms"
                 name="termsAndConditions"
                 rows="4"
                 value={
@@ -1850,95 +2257,148 @@ export default function OperatorListingForm() {
                 onChange={
                   handleChange
                 }
+                placeholder={
+                  isTour
+                    ? "Example: Children under 3 travel free on a lap. Smoking is not allowed in the car."
+                    : "Example: No pets. A cleaning fee applies if the car is returned very dirty."
+                }
               />
+              <small className="listing-help">
+                Customers see these before they send a request and accept them when they book.
+              </small>
             </label>
           </div>
         </section>
         )}
 
         {/* ===================================================
-            VEHICLE PHOTOS - CARSXE
+            PHOTOS: upload your own, or (cars and charter tours)
+            find a stock photo of the model
         ==================================================== */}
 
-        <div className="operator-field operator-field-full">
-          <strong>
-            {isMisc ? "Upload the Item Photo" : "Upload Your Own Car Photos"} {/* TEST-ITEM-MISC */}
-          </strong>
-
-          <label className="operator-image-upload-box">
-            <input
-              type="file"
-              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-              onChange={uploadOwnVehicleImage}
-              disabled={uploadingVehicleImage}
-              multiple
-            />
-
-            <span className="operator-image-upload-icon">
-              📷
-            </span>
-
-            <strong>
-              {isMisc ? "Choose a Photo" : "Choose Car Photos"} {/* TEST-ITEM-MISC */}
-            </strong>
-
-            <small>
-              PNG, JPG, JPEG or WebP
-              <br />
-              Maximum 5 photos • 5MB per photo
-            </small>
-          </label>
-</div>
-
-          {uploadingVehicleImage && (
-            <div className="operator-empty-state">
-              Uploading car photo...
+        <section className="operator-card" aria-labelledby="listing-photos-h">
+          <div className="operator-card-head">
+            <div>
+              <h2 id="listing-photos-h">Photos</h2>
+              <p>
+                {isMisc /* TEST-ITEM-MISC */
+                  ? "Add a photo of the item."
+                  : isTour
+                    ? isCharter
+                      ? "Show the places on the tour and the car customers ride in. The first photo is the cover."
+                      : "Show the places on the tour. The first photo is the cover."
+                    : "Your own photos of this exact car work best. The first photo is the cover."}
+              </p>
             </div>
+            {isEdit && (
+              <span className="listing-photo-count">
+                {listingImages.length} of {MAX_PHOTOS} photos
+              </span>
+            )}
+          </div>
+
+          {photoRoom > 0 && (
+            <label className={`listing-dropzone ${uploadingVehicleImage ? "is-busy" : ""}`}>
+              <input
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                onChange={uploadOwnVehicleImage}
+                disabled={uploadingVehicleImage}
+                multiple
+                className="listing-dropzone-input"
+              />
+              <span className="listing-dropzone-icon" aria-hidden="true">
+                <ImagePlus size={26} />
+              </span>
+              <span className="listing-dropzone-title">
+                {uploadingVehicleImage ? "Uploading photos..." : "Choose photos to upload"}
+              </span>
+              <span className="listing-dropzone-meta">
+                PNG, JPG or WebP, up to 5 MB each. You can add {photoRoom} more.
+              </span>
+            </label>
           )}
 
-          {uploadedVehicleImage?.url && (
-            <div
-              style={{
-                marginTop: "16px",
-              }}
-            >
-              <p>
-                <strong>
-                  Uploaded Photo
-                </strong>
+          {pendingPhotos.length > 0 && (
+            <div className="listing-pending">
+              <p className="listing-pending-title" id="listing-pending-title">
+                {isEdit
+                  ? "New photos, added after your current photos when you save"
+                  : "Your photos, in the order customers see them"}
               </p>
-
-              <img
-                src={
-                  uploadedVehicleImage.url
-                }
-                alt="Uploaded vehicle"
-                style={{
-                  width: "100%",
-                  maxWidth: "420px",
-                  height: "240px",
-                  objectFit: "cover",
-                  borderRadius: "12px",
-                }}
-              />
-
-              <div
-                style={{
-                  marginTop: "10px",
-                }}
-              >
-                <button
-                  type="button"
-                  className="operator-secondary-btn"
-                  onClick={() =>
-                    setUploadedVehicleImage(
-                      null
-                    )
-                  }
-                >
-                  Remove Uploaded Photo
-                </button>
-              </div>
+              <p className="listing-help" id="listing-pending-hint">
+                Drag a photo to move it. With the keyboard, focus a photo and use the arrow keys.
+              </p>
+              <ol className="listing-photo-grid" aria-labelledby="listing-pending-title">
+                {pendingPhotos.map((photo, index) => {
+                  const position = (isEdit ? listingImages.length : 0) + index + 1;
+                  const cover = position === 1;
+                  const dragging = dragPhoto.from === index;
+                  const dropTarget = dragPhoto.over === index && dragPhoto.from !== null && !dragging;
+                  return (
+                    <li
+                      key={photo.url}
+                      data-photo-url={photo.url}
+                      className={[
+                        "listing-photo-card",
+                        cover ? "is-cover" : "",
+                        dragging ? "is-dragging" : "",
+                        dropTarget ? "is-drop-target" : "",
+                      ].join(" ")}
+                      draggable
+                      tabIndex={0}
+                      aria-label={`Photo ${position}${cover ? ", cover" : ""}${photo.source === "stock" ? ", stock photo" : ""}`}
+                      aria-describedby="listing-pending-hint"
+                      onKeyDown={(event) => handlePhotoKeyDown(event, index, photo.url)}
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", photo.url);
+                        setDragPhoto({ from: index, over: index });
+                      }}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                        if (dragPhoto.over !== index) setDragPhoto((d) => ({ ...d, over: index }));
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        movePendingPhoto(dragPhoto.from, index);
+                        endPhotoDrag();
+                      }}
+                      onDragEnd={endPhotoDrag}
+                    >
+                      <img src={photo.thumbnailUrl || photo.url} alt="" draggable={false} />
+                      <span className="listing-photo-badge">
+                        {position}
+                        {cover ? " · Cover" : ""}
+                        {photo.source === "stock" ? " · Stock" : ""}
+                      </span>
+                      <div className="listing-photo-actions">
+                        {!isEdit && !cover && (
+                          <button
+                            type="button"
+                            className="listing-photo-action"
+                            onClick={() => movePendingPhoto(index, 0)}
+                            aria-label={`Make photo ${position} the cover`}
+                            title="Make cover"
+                          >
+                            <Star size={16} aria-hidden="true" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="listing-photo-action listing-photo-action-danger"
+                          onClick={() => removePendingPhoto(photo.url)}
+                          aria-label={`Remove photo ${position}`}
+                          title="Remove"
+                        >
+                          <X size={16} aria-hidden="true" />
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
             </div>
           )}
 
@@ -1951,17 +2411,18 @@ export default function OperatorListingForm() {
               >
                 <img
                   src={image.imageUrl}
-                  alt={`Listing Photo ${index + 1}`}
+                  alt={`Listing photo ${index + 1}`}
                   className="operator-listing-image-preview"
                 />
 
                 <div className="operator-listing-image-info">
                   <div>
-                    <span className="operator-image-label">
-                      Photo Position
-                    </span>
+                    <label className="operator-image-label" htmlFor={`photo-position-${image.id}`}>
+                      Photo position
+                    </label>
 
                     <select
+                      id={`photo-position-${image.id}`}
                       value={index + 1}
                       onChange={(event) =>
                         handleImagePositionChange(
@@ -1991,11 +2452,11 @@ export default function OperatorListingForm() {
 
                     {image.isPrimary ? (
                       <span className="operator-primary-badge">
-                        Primary
+                        Cover
                       </span>
                     ) : (
                       <span className="operator-secondary-badge">
-                        Secondary
+                        Extra
                       </span>
                     )}
                   </div>
@@ -2020,116 +2481,68 @@ export default function OperatorListingForm() {
               </div>
             ))}
           </div>
-        )}
+          )}
 
-          <div
-            style={{
-              margin: "24px 0",
-            }}
-          >
-            <strong>
-              OR
-            </strong>
-          </div>
+          {hasVehicle && (
+            <div className="listing-stock-photos">
+              <div className="listing-divider" role="separator">
+                <span>or use a stock photo of the model</span>
+              </div>
 
-        {isCar && (
-        <section className="operator-card">
-            <div className="operator-card-head">
-            <div>
-                <h2>
-                Vehicle Photo
-                </h2>
-
-                <p>
-                Find a representative vehicle photo
-                automatically using the selected
-                make, model and year.
+              <div className="listing-stock-head">
+                <p className="listing-help">
+                  {form.vehicleMake && form.vehicleModel
+                    ? `Search photos of the ${[form.modelYear, form.vehicleMake, form.vehicleModel].filter(Boolean).join(" ")}.`
+                    : "Enter the make and model above first."}
                 </p>
-            </div>
+                <button
+                  type="button"
+                  className="operator-secondary-btn listing-icon-btn"
+                  onClick={findVehicleImages}
+                  disabled={loadingVehicleImages || !form.vehicleMake || !form.vehicleModel}
+                >
+                  <Search size={16} aria-hidden="true" />
+                  {loadingVehicleImages ? "Finding Photos..." : "Find Photos"}
+                </button>
+              </div>
 
-            <button
-                type="button"
-                className="operator-secondary-btn"
-                onClick={findVehicleImages}
-                disabled={
-                loadingVehicleImages
-                }
-            >
-                {loadingVehicleImages
-                ? "Finding Photos..."
-                : "Find Vehicle Photos"}
-            </button>
-            </div>
-
-            {vehicleImages.length > 0 ? (
-            <div className="carsxe-image-grid">
-                {vehicleImages.map(
-                (image, index) => {
-                    const selected =
-                    selectedVehicleImage?.url ===
-                    image.url;
-
+              {vehicleImages.length > 0 && (
+                <div className="carsxe-image-grid">
+                  {vehicleImages.map((image, index) => {
+                    const selected = pendingPhotos.some((item) => item.url === image.url);
                     return (
-                    <button
+                      <button
                         key={`${image.url}-${index}`}
                         type="button"
-                        className={`carsxe-image-option ${
-                        selected
-                            ? "selected"
-                            : ""
-                        }`}
-                        onClick={() =>
-                        setSelectedVehicleImage(
-                            image
-                        )
-                        }
-                    >
-                        <img
-                        src={
-                            image.thumbnailUrl ||
-                            image.url
-                        }
-                        alt={`${form.vehicleMake} ${form.vehicleModel}`}
-                        />
-
-                        <span>
-                        {selected
-                            ? "Selected"
-                            : "Use Photo"}
-                        </span>
-                    </button>
+                        className={`carsxe-image-option ${selected ? "selected" : ""}`}
+                        aria-pressed={selected}
+                        onClick={() => toggleStockPhoto(image)}
+                        disabled={!selected && photoRoom <= 0}
+                      >
+                        <img src={image.thumbnailUrl || image.url} alt={`${form.vehicleMake} ${form.vehicleModel}`} />
+                        <span>{selected ? "Added, tap to remove" : "Add Photo"}</span>
+                      </button>
                     );
-                }
-                )}
-            </div>
-            ) : (
-            <div className="operator-empty-state">
-                Enter vehicle make, model and
-                optional year, then click
-                "Find Vehicle Photos".
-            </div>
-            )}
+                  })}
+                </div>
+              )}
 
-            {selectedVehicleImage && (
-            <div className="operator-selected-image-preview">
-                <strong>
-                Selected Photo
-                </strong>
-
-                <img
-                src={selectedVehicleImage.url}
-                alt={`${form.vehicleMake} ${form.vehicleModel}`}
-                />
             </div>
-            )}
+          )}
         </section>
-        )}
 
         {/* ===================================================
             ACTIONS
         ==================================================== */}
 
-        <section className="operator-card">
+        <section className="listing-action-bar" aria-label="Save listing">
+          <p className="listing-action-note">
+            {isEdit
+              ? dirty || pendingPhotos.length > 0
+                ? "You have unsaved changes."
+                : "No changes yet."
+              : "New listings are saved as drafts. Publish them from Listings when ready."}
+          </p>
           <div className="operator-form-actions">
 
             <button
@@ -2152,7 +2565,8 @@ export default function OperatorListingForm() {
               className="operator-primary-btn"
               disabled={
                 saving ||
-                (isEdit && !dirty)
+                uploadingVehicleImage ||
+                (isEdit && !dirty && pendingPhotos.length === 0)
               }
             >
               {saving

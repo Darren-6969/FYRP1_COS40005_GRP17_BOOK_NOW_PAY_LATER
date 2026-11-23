@@ -51,7 +51,10 @@ import {
 import { CANCELLERS, cancelBooking } from "../services/booking_cancellation_service.js";
 import {
   carListingSelect,
+  isCarBooking,
+  isTourBooking,
   mapCarBooking,
+  mapTourBooking,
   operatorResponseConfigSelect,
 } from "../services/car_booking_view.js";
 import {
@@ -264,8 +267,13 @@ function mapBooking(booking) {
     // Public platform car bookings (SRS 4.2.6): the same car, driver and
     // pricing snapshot view the customer sees. Null for tour and host bookings.
     car:
-      booking.listingId
+      isCarBooking(booking)
         ? mapCarBooking(booking)
+        : null,
+
+    tour:
+      isTourBooking(booking)
+        ? mapTourBooking(booking)
         : null,
 
     totalAmount:
@@ -3263,7 +3271,7 @@ export async function listAlternativeCarOptions(req, res, next) {
       return res.status(404).json({ message: "Booking not found" });
     }
 
-    if (!booking.listingId) {
+    if (!isCarBooking(booking)) {
       return res.status(400).json({ message: "Alternative cars are only for car bookings." });
     }
 
@@ -3291,7 +3299,7 @@ export async function previewAlternativeQuote(req, res, next) {
       return res.status(404).json({ message: "Booking not found" });
     }
 
-    if (!booking.listingId) {
+    if (!isCarBooking(booking)) {
       return res.status(400).json({ message: "Price previews are only for car bookings." });
     }
 
@@ -3464,6 +3472,15 @@ export async function suggestAlternative(req, res, next) {
 
     if (!booking) {
       return res.status(404).json({ message: "Booking not found" });
+    }
+
+    // Tours: accept or reject with a reason. Suggesting another tour or date
+    // is not built yet, so the stock rules for it don't exist either.
+    if (isTourBooking(booking)) {
+      return res.status(400).json({
+        code: "ALTERNATIVE_NOT_FOR_TOURS",
+        message: "Suggesting an alternative is not available for tour bookings. Reject with a reason instead.",
+      });
     }
 
     if (booking.listingId) {

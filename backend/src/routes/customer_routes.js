@@ -26,6 +26,8 @@ import { validate } from "../middlewares/validate_middleware.js";
 import { createBookingSchema } from "../validators/booking_validator.js";
 import { carBookingSchema } from "../validators/car_booking_validator.js";
 import { createCarBooking } from "../controllers/car_booking_controller.js";
+import { tourBookingSchema } from "../validators/tour_booking_validator.js";
+import { createTourBooking } from "../controllers/tour_booking_controller.js";
 import { requireIdempotencyKey } from "../services/idempotency_service.js";
 import { getCancellationQuoteHandler } from "../controllers/refund_controller.js";
 import {
@@ -85,6 +87,7 @@ router.get("/bookings", getCustomerBookings);
 router.post("/bookings", requireIdempotencyKey, validate(createBookingSchema), createCustomerBooking);
 // Public platform car requests: server-priced, idempotent (Idempotency-Key header).
 router.post("/car-bookings", requireVerifiedCustomer, requireIdempotencyKey, validate(carBookingSchema), createCarBooking);
+router.post("/tour-bookings", requireVerifiedCustomer, requireIdempotencyKey, validate(tourBookingSchema), createTourBooking);
 router.get("/bookings/:id", getCustomerBookingById);
 router.get("/bookings/:id/cancellation-quote", getCancellationQuoteHandler);
 router.get("/bookings/:id/manual-payment", getCustomerManualPaymentOptions);

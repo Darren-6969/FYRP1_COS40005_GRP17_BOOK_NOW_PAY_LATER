@@ -192,3 +192,35 @@ export function missingApprovalDocuments(operatorType, documentTypes) {
 export function approvalDocumentsMessage(missing) {
   return `${documentList(missing)} must be submitted and checked before approval.`;
 }
+
+// ── Charter tours ─────────────────────────────────────────────────────
+// A car rental operator's tour bundles its car with the tour package, so the
+// listing names the car: make, model, type and seats. Passengers must fit
+// beside the driver. Returns a message, or null when the listing is fine.
+// `listing` is the listing as it will be saved (existing values merged with
+// the change).
+export function charterTourProblem(operatorType, listing) {
+  if (typeOrDefault(operatorType) !== "CAR_RENTAL" || listing.category !== "TOUR") return null;
+
+  const text = (value) => String(value ?? "").trim();
+  if (!text(listing.vehicleMake) || !text(listing.vehicleModel)) {
+    return "Enter the make and model of the car used for this tour.";
+  }
+  if (!text(listing.vehicleType)) return "Choose the vehicle type of the car used for this tour.";
+
+  const seats = Number(listing.seats);
+  if (!Number.isInteger(seats) || seats < 2) {
+    return "Enter the number of seats in the car, including the driver.";
+  }
+
+  const passengers = Number(listing.maxGroupSize);
+  if (Number.isInteger(passengers) && passengers > seats - 1) {
+    return `The car has ${seats} seats, so it takes up to ${seats - 1} passengers besides the driver.`;
+  }
+  return null;
+}
+
+export function assertCharterTourValid(operatorType, listing) {
+  const problem = charterTourProblem(operatorType, listing);
+  if (problem) throw fail(400, problem, "CHARTER_TOUR_INCOMPLETE");
+}

@@ -670,3 +670,17 @@
     opacity: 0.55;
   }
 }
+
+/* What kind of operator this is (operator types plan). */
+.typeBadge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--pub-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--pub-info-bg);
+  color: var(--pub-info-fg);
+  border-radius: 6px;
+  padding: 5px 9px;
+}

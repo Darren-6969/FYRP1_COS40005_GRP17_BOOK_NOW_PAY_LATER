@@ -50,3 +50,42 @@ export async function writeImageOrder(listingId, orderedIds, tx) {
 
   return order;
 }
+
+// Up to 5 photos per listing (FR-LIST-001).
+export const MAX_LISTING_PHOTOS = 5;
+
+const MAX_URL_LENGTH = 2048;
+
+function photoError(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  error.appCode = "LISTING_PHOTOS_INVALID";
+  return error;
+}
+
+/**
+ * The photos a create or edit request adds, in the order the operator put
+ * them: `imageUrls` (the list the form sends), plus `carsxeImageUrl`, the
+ * single photo older clients send. Each is a URL from the upload endpoint or
+ * the stock photo search. Repeats are dropped.
+ */
+export function photoUrlsFrom(body = {}) {
+  const raw = [
+    ...(Array.isArray(body.imageUrls) ? body.imageUrls : []),
+    ...(body.carsxeImageUrl ? [body.carsxeImageUrl] : []),
+  ];
+
+  const urls = [];
+  for (const value of raw) {
+    const url = typeof value === "string" ? value.trim() : "";
+    if (!url || url.length > MAX_URL_LENGTH || !/^(https?:\/\/|\/)/.test(url)) {
+      throw photoError("One of the photos is not a valid image link. Upload it again.");
+    }
+    if (!urls.includes(url)) urls.push(url);
+  }
+
+  if (urls.length > MAX_LISTING_PHOTOS) {
+    throw photoError(`A listing can have up to ${MAX_LISTING_PHOTOS} photos.`);
+  }
+  return urls;
+}

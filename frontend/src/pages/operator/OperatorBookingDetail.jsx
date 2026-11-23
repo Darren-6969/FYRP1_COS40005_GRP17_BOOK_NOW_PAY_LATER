@@ -26,6 +26,7 @@ import {
   timeLeft,
 } from "../../components/booking/carBookingParts";
 
+import TourBookingPanel from "../../components/booking/TourBookingPanel";
 import BookingAttentionBanner from "../../components/operator/BookingAttentionBanner";
 import BookingDocumentsChecklist from "../../components/operator/BookingDocumentsChecklist";
 import OperatorCounterVerification from "../../components/operator/OperatorCounterVerification";
@@ -267,9 +268,11 @@ export default function OperatorBookingDetail() {
     "REJECTED",
   ].includes(bookingStatus);
 
+  // Tours: accept or reject only (no alternative tours yet).
   const canSuggestAlternative =
   bookingStatus === "PENDING" &&
-  !booking.alternativeUsed;
+  !booking.alternativeUsed &&
+  !booking.tour;
 
   // Module 4: a customer-requested location is free until the operator
   // prices it. The operator can quote a charge, accept as is (no charge) or
@@ -569,6 +572,8 @@ export default function OperatorBookingDetail() {
         </div>
       </div>
 
+
+      <TourBookingPanel booking={booking} variant="operator" />
 
       {/* =========================
           Trip

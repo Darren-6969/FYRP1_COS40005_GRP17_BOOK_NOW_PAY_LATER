@@ -1,0 +1,490 @@
+/* Tour results, detail and booking pages. Uses the public tokens only. */
+
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 32px 20px 72px;
+  color: var(--pub-ink);
+  font-family: var(--pub-font-body);
+}
+
+.h1 {
+  margin: 0;
+  font-family: var(--pub-font-display);
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.h2 {
+  margin: 0 0 12px;
+  font-family: var(--pub-font-display);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.lede {
+  margin: 8px 0 0;
+  max-width: 60ch;
+  color: var(--pub-text);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-bottom: 8px;
+  color: var(--pub-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--pub-ink);
+}
+
+/* ── filters ───────────────────────────────────────── */
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 24px 0;
+  padding: 16px;
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
+  background: var(--pub-surface);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pub-label);
+}
+
+.input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--pub-control-line);
+  border-radius: var(--pub-radius);
+  background: var(--pub-surface);
+  color: var(--pub-ink);
+  font: inherit;
+}
+
+.textarea {
+  min-height: 96px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.input:focus-visible,
+.button:focus-visible,
+.card:focus-visible,
+.check input:focus-visible {
+  outline: 3px solid var(--pub-focus);
+  outline-offset: 2px;
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--pub-error-fg);
+}
+
+.hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pub-text);
+}
+
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--pub-error-fg);
+}
+
+.count {
+  margin: 0 0 16px;
+  color: var(--pub-text);
+}
+
+/* ── result cards ──────────────────────────────────── */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
+  background: var(--pub-surface);
+  color: inherit;
+  text-decoration: none;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.card:hover {
+  box-shadow: var(--pub-shadow-card);
+  transform: translateY(-2px);
+}
+
+.photo {
+  aspect-ratio: 16 / 10;
+  width: 100%;
+  object-fit: cover;
+  background: repeating-linear-gradient(45deg, var(--pub-stripe-a) 0 12px, var(--pub-stripe-b) 12px 24px);
+}
+
+.cardBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+
+.kind {
+  align-self: flex-start;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--pub-ok-bg);
+  color: var(--pub-ok-fg);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.kindGuided {
+  background: var(--pub-info-bg);
+  color: var(--pub-info-fg);
+}
+
+.cardTitle {
+  margin: 0;
+  font-family: var(--pub-font-display);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.meta {
+  margin: 0;
+  font-size: 14px;
+  color: var(--pub-text);
+}
+
+.price {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--pub-line-soft);
+}
+
+.priceMain {
+  font-family: var(--pub-font-display);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.priceUnit {
+  font-size: 14px;
+  color: var(--pub-text);
+}
+
+.secure {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--pub-moss-text);
+  font-weight: 600;
+}
+
+.empty {
+  padding: 40px 20px;
+  border: 1px dashed var(--pub-control-line);
+  border-radius: var(--pub-radius-lg);
+  text-align: center;
+  color: var(--pub-text);
+}
+
+/* ── detail ────────────────────────────────────────── */
+
+.detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 32px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+@media (max-width: 920px) {
+  .detail {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hero {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--pub-radius-lg);
+  background: var(--pub-surface-sunk);
+}
+
+.thumbs {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  overflow-x: auto;
+}
+
+.thumb {
+  flex: 0 0 auto;
+  width: 96px;
+  height: 64px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--pub-radius-sm);
+  overflow: hidden;
+  background: none;
+  cursor: pointer;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbOn {
+  border-color: var(--pub-brand);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fact {
+  padding: 6px 12px;
+  border: 1px solid var(--pub-line);
+  border-radius: 999px;
+  font-size: 14px;
+  background: var(--pub-surface);
+}
+
+.section {
+  margin-top: 32px;
+}
+
+.prose {
+  margin: 0;
+  white-space: pre-line;
+  color: var(--pub-text);
+}
+
+.list {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--pub-text);
+}
+
+.list li + li {
+  margin-top: 6px;
+}
+
+.twoCol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 24px;
+}
+
+.operator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.logo {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--pub-radius);
+  object-fit: cover;
+  background: var(--pub-surface-sunk);
+}
+
+.verified {
+  margin-left: 6px;
+  color: var(--pub-moss-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── booking panel and form ────────────────────────── */
+
+.panel {
+  position: sticky;
+  top: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
+  background: var(--pub-surface);
+  box-shadow: var(--pub-shadow-card);
+}
+
+.panelPrice {
+  margin: 0;
+  font-family: var(--pub-font-display);
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.lines {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--pub-line-soft);
+}
+
+.line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+}
+
+.line dt {
+  color: var(--pub-text);
+}
+
+.line dd {
+  margin: 0;
+  font-weight: 600;
+  /* Amounts never break across lines ("RM" / "225"). */
+  white-space: nowrap;
+}
+
+.lineStrong dd,
+.lineStrong dt {
+  color: var(--pub-ink);
+  font-weight: 800;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pub-cta);
+  color: var(--pub-on-cta);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--pub-cta-hover);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.notice {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--pub-notice-line);
+  border-radius: var(--pub-radius);
+  background: var(--pub-notice-bg);
+  color: var(--pub-notice-fg);
+  font-size: 14px;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 32px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+@media (max-width: 920px) {
+  .form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.formCard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
+  background: var(--pub-surface);
+}
+
+.phoneWrap {
+  display: flex;
+  align-items: stretch;
+}
+
+.phonePrefix {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid var(--pub-control-line);
+  border-right: 0;
+  border-radius: var(--pub-radius) 0 0 var(--pub-radius);
+  background: var(--pub-surface-sunk);
+  font-weight: 600;
+}
+
+.phoneWrap .input {
+  flex: 1;
+  border-radius: 0 var(--pub-radius) var(--pub-radius) 0;
+}
+
+.check {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 10px;
+  align-items: start;
+  font-size: 15px;
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+}

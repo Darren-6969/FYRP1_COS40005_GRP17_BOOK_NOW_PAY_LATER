@@ -1,5 +1,9 @@
 import prisma from "../config/db.js";
-import { writeImageOrder } from "../services/listing_image_order_service.js";
+import {
+  MAX_LISTING_PHOTOS,
+  photoUrlsFrom,
+  writeImageOrder,
+} from "../services/listing_image_order_service.js";
 import { deletePublicFile } from "../services/media_storage.js";
 import { parseId } from "../utils/parseId.js";
 
@@ -14,9 +18,14 @@ import {
 import { getPlatformSettings } from "../services/platform_settings_service.js";
 import {
   assertCategoryAllowed,
+  assertCharterTourValid,
   normalisePickupTimes,
   tourPriceUnitFor,
 } from "../services/operator_type_rules.js";
+import {
+  missingRequiredVehicleFields,
+  normaliseVehicleFields,
+} from "../services/listing_vehicle_fields.js";
 import { assertSubscriptionActive } from "../services/subscription_admin_service.js";
 import {
   assertListingQuantitySafe,
@@ -1169,7 +1178,6 @@ export async function createListing(
       refundPolicy,
       termsAndConditions,
 
-      carsxeImageUrl,
     } = req.body;
 
     if (
@@ -1269,6 +1277,9 @@ export async function createListing(
       });
     }
 
+    // Photos in the order the operator arranged them; the first is the cover.
+    const photoUrls = photoUrlsFrom(req.body);
+
     // The operator's type decides which categories it can list. Checked
     // against the branch's operator so an admin creating on an operator's
     // behalf is held to the same rule.
@@ -1279,6 +1290,9 @@ export async function createListing(
       operatorType,
       category
     );
+
+    // A charter tour lists the car it uses.
+    assertCharterTourValid(operatorType, req.body);
 
     // Tours: departure times from the operator, price unit from the server.
     const tourFields =
@@ -1306,6 +1320,24 @@ export async function createListing(
             "Vehicle make, model and transmission are required for car rental listings.",
         });
       }
+    }
+
+    // Powertrain, drivetrain, fuel, mileage and travel area: what the public
+    // filters and the car page read. Cars only.
+    let vehicleFields = {};
+    if (category === "CAR_RENTAL") {
+      const checked = normaliseVehicleFields(req.body);
+      if (checked.error) {
+        return res.status(400).json({ code: "VEHICLE_FIELDS_INVALID", message: checked.error });
+      }
+      const missing = missingRequiredVehicleFields(checked.data);
+      if (missing.length) {
+        return res.status(400).json({
+          code: "VEHICLE_FIELDS_INVALID",
+          message: `${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"} required for car rental listings.`,
+        });
+      }
+      vehicleFields = checked.data;
     }
 
     const listing =
@@ -1436,6 +1468,8 @@ export async function createListing(
 
           ...tourFields,
 
+          ...vehicleFields,
+
           refundPolicy:
             refundPolicy || null,
 
@@ -1443,23 +1477,18 @@ export async function createListing(
             termsAndConditions ||
             null,
 
-            ...(carsxeImageUrl
-                    ? {
-                        images: {
-                            create: {
-                            imageUrl:
-                                carsxeImageUrl,
-
-                            storageKey:
-                                null,
-
-                            sortOrder: 0,
-
-                            isPrimary: true,
-                            },
-                        },
-                        }
-                    : {}),
+          ...(photoUrls.length
+            ? {
+                images: {
+                  create: photoUrls.map((imageUrl, index) => ({
+                    imageUrl,
+                    storageKey: null,
+                    sortOrder: index,
+                    isPrimary: index === 0,
+                  })),
+                },
+              }
+            : {}),
         },
 
         include:
@@ -1776,10 +1805,24 @@ export async function updateListing(
       ...req.body,
     };
 
-    const carsxeImageUrl =
-    data.carsxeImageUrl;
+    // Photos added while editing go after the existing ones, in the order
+    // the operator arranged them; the photo positions reorder them after.
+    const photoUrls = photoUrlsFrom(data);
 
     delete data.carsxeImageUrl;
+    delete data.imageUrls;
+
+    if (photoUrls.length) {
+      const existingPhotos = await prisma.listingImage.count({
+        where: { listingId: id },
+      });
+      if (existingPhotos + photoUrls.length > MAX_LISTING_PHOTOS) {
+        return res.status(400).json({
+          code: "LISTING_PHOTOS_INVALID",
+          message: `This listing has ${existingPhotos} photos. A listing can have up to ${MAX_LISTING_PHOTOS}.`,
+        });
+      }
+    }
 
     delete data.id;
     delete data.operatorId;
@@ -1818,6 +1861,23 @@ export async function updateListing(
     ) {
       data.priceUnit =
         tourPriceUnitFor(operatorType);
+    }
+
+    // Checked on the listing as it will be saved.
+    assertCharterTourValid(operatorType, {
+      ...existing,
+      ...data,
+    });
+
+    if ((data.category ?? existing.category) === "CAR_RENTAL") {
+      const checked = normaliseVehicleFields(req.body, {
+        partial: true,
+        current: existing,
+      });
+      if (checked.error) {
+        return res.status(400).json({ code: "VEHICLE_FIELDS_INVALID", message: checked.error });
+      }
+      Object.assign(data, checked.data);
     }
 
     const rates =
@@ -2002,29 +2062,23 @@ export async function updateListing(
     );
 
 
-        // A photo added while editing becomes the primary photo, in front
-        // of the existing ones (it used to share position 0 with the old
-        // first photo).
-        if (carsxeImageUrl) {
-        await prisma.$transaction(async (tx) => {
-            const added = await tx.listingImage.create({
-            data: {
-                listingId: id,
-
-                imageUrl:
-                carsxeImageUrl,
-
-                storageKey:
-                null,
-
-                sortOrder: 0,
-
-                isPrimary: false,
-            },
-            });
-
-            await writeImageOrder(id, [added.id], tx);
-        });
+        if (photoUrls.length) {
+          await prisma.$transaction(async (tx) => {
+            const count = await tx.listingImage.count({ where: { listingId: id } });
+            for (const [index, imageUrl] of photoUrls.entries()) {
+              await tx.listingImage.create({
+                data: {
+                  listingId: id,
+                  imageUrl,
+                  storageKey: null,
+                  sortOrder: count + index,
+                  isPrimary: false,
+                },
+              });
+            }
+            // Positions 0..n-1 with one cover, as everywhere else.
+            await writeImageOrder(id, [], tx);
+          });
         }
 
         const listing =
