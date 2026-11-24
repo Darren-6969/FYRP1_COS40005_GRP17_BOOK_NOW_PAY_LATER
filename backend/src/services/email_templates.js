@@ -886,6 +886,28 @@ export function autoRejectReminderTemplate({
   });
 }
 
+// BNPLB-184: a booking request took the last car of a listing on some dates.
+export function stockExhaustedTemplate({ booking, listingName, datesText, alertUrl }) {
+  return baseTemplate({
+    title: "Fully Booked",
+    buttonText: "Add or Move a Car",
+    buttonUrl: alertUrl,
+    operator: booking?.operator,
+    body: `
+      <p style="margin-top:0;">Dear Operator,</p>
+      <p>
+        ${escapeHtml(listingName)} is now fully booked on ${escapeHtml(datesText)}.
+        Customers can't request it for those dates until a car is free.
+      </p>
+      <p>
+        If you have another car of this model, raise the car count or move one
+        from another branch so you don't miss the next request.
+      </p>
+      ${bookingTable(booking)}
+    `,
+  });
+}
+
 // Sent to the customer as soon as a booking request is recorded. No payment
 // is taken at this point; the operator accepts, suggests an alternative or
 // declines, and each of those sends its own email.

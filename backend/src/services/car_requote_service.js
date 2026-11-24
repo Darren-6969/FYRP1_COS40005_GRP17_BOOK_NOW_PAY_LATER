@@ -323,6 +323,9 @@ export async function quoteAlternative({
     problems,
     pointsChanged,
     droppedAddons,
+    // BNPLB-184: dates on which holding this offer takes the listing's last
+    // car. This booking's own hold was left out of the count above.
+    exhaustedDates: r.dates.filter((date) => (stock.remaining.get(date) ?? 0) - 1 <= 0),
     // What the operator and customer see for the offer.
     snapshot: {
       ...pricingSnapshot,

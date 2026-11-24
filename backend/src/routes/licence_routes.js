@@ -8,6 +8,8 @@ import {
   getPeakDates,
   getMyLicenceDocument,
   getBookingLicenceDocument,
+  getReusableLicences,
+  attachLicenceToBooking,
   licenceUpload,
   reviewLicenceDocument,
   submitLicenceDocument,
@@ -88,6 +90,10 @@ router.get(
   getMyLicenceDocument
 );
 router.get("/bookings/:bookingId", ...customerOnly, getBookingLicenceDocument);
+// BNPLB-181: licences on the account that can serve this booking, and
+// attaching one without a new upload.
+router.get("/bookings/:bookingId/reusable", ...customerOnly, getReusableLicences);
+router.post("/bookings/:bookingId/attach", ...customerOnly, attachLicenceToBooking);
 
 /*
  * Customer uploads a driving licence.

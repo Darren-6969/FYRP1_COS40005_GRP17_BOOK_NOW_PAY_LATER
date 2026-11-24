@@ -94,8 +94,15 @@ export default function OperatorNotificationsScreen() {
     }
 
     const t = contentOf(n);
-    // Stock Availability Alert
+    // BNPLB-184: the sold-out alert opens the listing with its dates.
     if (t.includes("STOCK_EXHAUSTED")) {
+      const query = n.link?.split("?")[1] ?? "";
+      const params = new URLSearchParams(query);
+      const listingId = params.get("stockAlert");
+      if (listingId && /^\d+$/.test(listingId)) {
+        const dates = encodeURIComponent(params.get("dates") ?? "");
+        return router.push(`/operator/stock-alert?listingId=${listingId}&dates=${dates}` as Href);
+      }
       return router.push("/operator/(tabs)/listings" as Href);
     }
     if (t.includes("PERMIT")) {return router.push("/operator/permit-checks" as Href);}

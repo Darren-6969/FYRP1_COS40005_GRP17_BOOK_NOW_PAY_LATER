@@ -13,8 +13,17 @@ import DocumentReviewTable from "../../components/operator/DocumentReviewTable";
 const LICENCE_REASONS = [
   ["EXPIRED", "Expired"],
   ["UNREADABLE", "Unreadable"],
+  ["DIFFERENT_DRIVER", "Different driver"],
   ["NOT_A_LICENCE", "Not a driving licence"],
 ];
+
+// "5 Dec 2026" for a plain YYYY-MM-DD date.
+function plainDateText(value) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeZone: "UTC" }).format(
+    new Date(`${String(value).slice(0, 10)}T00:00:00Z`)
+  );
+}
 
 const PERMIT_REASONS = [
   ["EXPIRED", "Expired"],
@@ -47,6 +56,26 @@ const LICENCE_COLUMNS = [
         <small>{formatOperatorDateTime(document.submittedAt)}</small>
       </>
     ),
+  },
+  {
+    // BNPLB-180: what the customer entered, beside what it is checked against.
+    key: "details",
+    label: "Name and expiry",
+    render: (document) => {
+      const expired =
+        document.expiresAt &&
+        document.booking?.returnDate &&
+        String(document.expiresAt) < String(document.booking.returnDate);
+      return (
+        <>
+          <strong>{document.holderName || "Name not given"}</strong>
+          <small>Driver: {document.booking?.driverName || "-"}</small>
+          <small className={expired ? "doc-review-late" : ""}>
+            Expires {plainDateText(document.expiresAt)}, return {plainDateText(document.booking?.returnDate)}
+          </small>
+        </>
+      );
+    },
   },
   {
     key: "due",

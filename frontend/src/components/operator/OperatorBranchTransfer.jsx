@@ -51,6 +51,9 @@ function vehicleLabel(listing) {
 
 export default function OperatorBranchTransfer({
   onClose,
+  // BNPLB-184: opened from a sold-out alert with both cars chosen.
+  initialSourceListingId = null,
+  initialDestinationListingId = null,
 }) {
   const [branches, setBranches] = useState([]);
   const [listings, setListings] = useState([]);
@@ -107,6 +110,24 @@ export default function OperatorBranchTransfer({
   useEffect(() => {
     loadData();
   }, []);
+
+  // Fill in the cars chosen on the alert once the listings have loaded.
+  const [prefilled, setPrefilled] = useState(false);
+  useEffect(() => {
+    if (prefilled || !listings.length || !initialSourceListingId) return;
+    const sourceListing = listings.find((item) => item.id === Number(initialSourceListingId));
+    const destinationListing = listings.find((item) => item.id === Number(initialDestinationListingId));
+    if (sourceListing) {
+      setSourceBranchId(String(sourceListing.branchId));
+      setSourceListingId(String(sourceListing.id));
+    }
+    if (destinationListing) {
+      setDestinationBranchId(String(destinationListing.branchId));
+      setDestinationListingId(String(destinationListing.id));
+    }
+    setReason("Sold-out dates at the destination branch");
+    setPrefilled(true);
+  }, [listings, prefilled, initialSourceListingId, initialDestinationListingId]);
 
   const activeBranches = useMemo(
     () => branches.filter((branch) => branch.isActive),

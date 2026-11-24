@@ -27,6 +27,14 @@ export default function CustomerLicence() {
   const [file, setFile] =
     useState(null);
 
+  // BNPLB-180: entered with every licence upload.
+  const [holderName, setHolderName] =
+    useState("");
+  const [expiresAt, setExpiresAt] =
+    useState("");
+  const [issuingCountry, setIssuingCountry] =
+    useState("Malaysia");
+
   const [loading, setLoading] =
     useState(true);
 
@@ -71,16 +79,27 @@ export default function CustomerLicence() {
 
       if (!file) return;
 
+      if (holderName.trim().length < 2 || !expiresAt || issuingCountry.trim().length < 2) {
+        setError("Enter the name on the licence, its expiry date and the country that issued it.");
+        return;
+      }
+
       try {
         setSaving(true);
         setError("");
         setMessage("");
 
         await submitLicenceDocument(
-          file
+          file,
+          {
+            holderName: holderName.trim(),
+            expiresAt,
+            issuingCountry: issuingCountry.trim(),
+          }
         );
 
         setFile(null);
+        setExpiresAt("");
 
         setMessage(
           document?.status ===
@@ -300,6 +319,39 @@ export default function CustomerLicence() {
                 </span>
               </div>
             </label>
+
+            <div className="licence-details-fields">
+              <label>
+                Name on the licence
+                <input
+                  type="text"
+                  maxLength={120}
+                  value={holderName}
+                  placeholder="As printed on the licence"
+                  onChange={(event) => setHolderName(event.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                Expiry date
+                <input
+                  type="date"
+                  value={expiresAt}
+                  onChange={(event) => setExpiresAt(event.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                Issued in
+                <input
+                  type="text"
+                  maxLength={60}
+                  value={issuingCountry}
+                  onChange={(event) => setIssuingCountry(event.target.value)}
+                  required
+                />
+              </label>
+            </div>
 
             <button
               className="btn primary licence-upload-button"

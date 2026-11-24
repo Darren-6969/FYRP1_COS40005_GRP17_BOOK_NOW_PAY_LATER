@@ -1,6 +1,8 @@
 import { uniqueOperatorSlug } from "../services/operator_storefront_service.js";
 import crypto from "crypto";
 import prisma from "../config/db.js";
+import { bookingDriverName, bookingReturnDay, plainDateOf } from "../services/licence_check_service.js";
+import { notifyStockExhausted } from "../services/availability_alert_service.js";
 import bcrypt from "bcryptjs";
 import { sendEmail } from "../services/email_service.js";
 import { generateForecast, generateAnalytics } from "../services/sarima_service.js";
@@ -116,20 +118,26 @@ function includeBookingRelations() {
         name: true,
         email: true,
         role: true,
-        // Latest driving licence upload, for the licence status shown on
-        // the booking page (account-level until the per-booking check).
-        licenceDocuments: {
-          orderBy: { submittedAt: "desc" },
-          take: 1,
-          select: {
-            // id lets the booking page open the document after review,
-            // when it is no longer in the review queue.
-            id: true,
-            status: true,
-            submittedAt: true,
-            reviewedAt: true,
-          },
-        },
+      },
+    },
+    // BNPLB-181: the licence check belongs to the booking, so the page shows
+    // the latest licence attached to this booking, not the customer's latest
+    // upload for any booking.
+    licenceDocuments: {
+      orderBy: [{ submittedAt: "desc" }, { id: "desc" }],
+      take: 1,
+      select: {
+        // id lets the booking page open the document after review,
+        // when it is no longer in the review queue.
+        id: true,
+        status: true,
+        submittedAt: true,
+        reviewedAt: true,
+        rejectionReason: true,
+        holderName: true,
+        expiresAt: true,
+        issuingCountry: true,
+        reusedFromId: true,
       },
     },
     // Latest International Driving Permit uploaded for this booking.
@@ -231,16 +239,13 @@ function mapInvoice(invoice) {
   };
 }
 
-// Customer with the latest licence upload flattened into the fields the
-// operator booking page reads. NOT_SUBMITTED when nothing was uploaded.
-function mapBookingCustomer(customer) {
+// Customer with this booking's latest licence flattened into the fields the
+// operator booking page reads. NOT_SUBMITTED when nothing was attached.
+function mapBookingCustomer(customer, latest = null) {
   if (!customer) return customer;
 
-  const { licenceDocuments, ...rest } = customer;
-  const latest = licenceDocuments?.[0] || null;
-
   return {
-    ...rest,
+    ...customer,
     licenceStatus: latest?.status || "NOT_SUBMITTED",
     licenceDocumentId: latest?.id || null,
     licenceSubmittedAt: latest?.submittedAt || null,
@@ -254,15 +259,33 @@ function mapBookingCustomer(customer) {
 function mapBooking(booking) {
   if (!booking) return null;
 
-  const { permitDocuments, ...bookingRest } = booking;
+  const { permitDocuments, licenceDocuments, ...bookingRest } = booking;
+  const licence = licenceDocuments?.[0] || null;
 
   return {
     ...bookingRest,
 
     customer:
       mapBookingCustomer(
-        booking.customer
+        booking.customer,
+        licence
       ),
+
+    // BNPLB-180: what the customer entered for this booking's licence, shown
+    // beside the driver name and return date the operator checks it against.
+    licence: licence
+      ? {
+          id: licence.id,
+          status: licence.status,
+          rejectionReason: licence.rejectionReason,
+          holderName: licence.holderName,
+          expiresAt: plainDateOf(licence.expiresAt),
+          issuingCountry: licence.issuingCountry,
+          reused: Boolean(licence.reusedFromId),
+          driverName: bookingDriverName(booking),
+          returnDate: bookingReturnDay(booking),
+        }
+      : null,
 
     // IDP: whether this booking needs one (operator decision, else the
     // driver's licence country) and the latest upload for it.
@@ -3413,6 +3436,15 @@ async function suggestCarAlternative(req, res, booking) {
 
   const kind = quote.snapshot.quote.kind;
   const isLocationCharge = kind === OFFER_KIND.LOCATION_CHARGE;
+
+  // BNPLB-184: offering another car or new dates moves this booking's hold,
+  // which can take the last car of the offered listing. A location charge
+  // keeps the car and dates the booking already held.
+  if (!isLocationCharge && quote.exhaustedDates?.length) {
+    notifyStockExhausted({ booking: updatedBooking, listing: quote.listing, dates: quote.exhaustedDates }).catch(
+      (err) => console.error("[offer] stock alert failed:", err.message)
+    );
+  }
 
   const details = {
     kind,

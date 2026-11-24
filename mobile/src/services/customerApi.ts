@@ -412,12 +412,58 @@ export type LicenceDocument = {
   originalName: string;
   mimeType: string;
   status: LicenceStatus;
-  /** EXPIRED, UNREADABLE or NOT_A_LICENCE when rejected. */
+  /** EXPIRED, UNREADABLE, DIFFERENT_DRIVER or NOT_A_LICENCE when rejected. */
   rejectionReason: string | null;
   submittedAt: string;
   reviewDueAt: string | null;
   reviewedAt: string | null;
+  /** BNPLB-180: entered with the upload. Null on licences from before 24 Nov 2026. */
+  holderName?: string | null;
+  expiresAt?: string | null;
+  issuingCountry?: string | null;
+  reusedFromId?: number | null;
 };
+
+/** BNPLB-180: entered with every licence upload. expiresAt is YYYY-MM-DD. */
+export type LicenceDetails = {
+  holderName: string;
+  expiresAt: string;
+  issuingCountry: string;
+};
+
+/** The licence attached to one booking (the check belongs to the booking). */
+export async function getBookingLicence(bookingId: number | string): Promise<{ document: LicenceDocument | null }> {
+  return apiRequest(`/licence-verification/bookings/${bookingId}`, { method: "GET" });
+}
+
+export type ReusableLicence = {
+  id: number;
+  holderName: string | null;
+  expiresAt: string | null;
+  issuingCountry: string | null;
+  status: LicenceStatus;
+  eligible: boolean;
+  /** Why it can't be attached, in words for the customer. */
+  reason: string | null;
+};
+
+/** BNPLB-181: licences on the account, with whether each can serve this booking. */
+export async function getReusableLicences(
+  bookingId: number | string
+): Promise<{ driverName: string | null; returnDate: string | null; licences: ReusableLicence[] }> {
+  return apiRequest(`/licence-verification/bookings/${bookingId}/reusable`, { method: "GET" });
+}
+
+/** BNPLB-181: attach a licence already on the account, without a new upload. */
+export async function attachLicence(
+  bookingId: number | string,
+  licenceId: number
+): Promise<{ message: string; document: LicenceDocument }> {
+  return apiRequest(`/licence-verification/bookings/${bookingId}/attach`, {
+    method: "POST",
+    body: JSON.stringify({ licenceId }),
+  });
+}
 
 export type MyLicenceResponse = {
   /** The latest licence on the account, any booking. Null if none yet. */
@@ -440,9 +486,13 @@ export async function getMyLicence(): Promise<MyLicenceResponse> {
 export async function uploadLicenceFile(input: {
   uri: string;
   bookingId?: number | string | null;
+  details: LicenceDetails;
 }): Promise<{ message: string; document: LicenceDocument }> {
   const formData = new FormData();
   formData.append("licence", new File(input.uri) as unknown as Blob);
+  formData.append("holderName", input.details.holderName);
+  formData.append("expiresAt", input.details.expiresAt);
+  formData.append("issuingCountry", input.details.issuingCountry);
 
   const path = input.bookingId
     ? `/licence-verification/bookings/${input.bookingId}`

@@ -207,6 +207,20 @@ export default function OperatorBookingDetailScreen() {
                 <StatusPill kind="licence" status={booking.customer?.licenceStatus} />
               </View>
             ) : null}
+            {/* BNPLB-180: what the customer entered, beside the driver and return date. */}
+            {car && !driverAccepted && booking.licence?.holderName ? (
+              <Line label="Name on licence" value={booking.licence.holderName} />
+            ) : null}
+            {car && !driverAccepted && booking.licence?.expiresAt ? (
+              <Line
+                label="Licence expires"
+                value={`${booking.licence.expiresAt}${
+                  booking.licence.returnDate && booking.licence.expiresAt < booking.licence.returnDate
+                    ? " (before the return)"
+                    : ""
+                }`}
+              />
+            ) : null}
             {(tour || driverJob)?.contact?.phone ? (
               <Line label="Phone" value={(tour || driverJob).contact.phone} first />
             ) : null}

@@ -27,6 +27,7 @@ import { createBookingOrchestrator } from "../services/booking_creation_orchestr
 import { bookingLocationText } from "../services/car_booking_snapshot.js";
 import { assertDriverForCar, carPlaces } from "../services/driver_booking_service.js";
 import { trackBookingEvent, trackEvent } from "../services/analytics_service.js";
+import { notifyStockExhausted } from "../services/availability_alert_service.js";
 
 const ENDPOINT = "POST /customer/car-bookings";
 const MIN_LEAD_MINUTES = 60;
@@ -221,22 +222,9 @@ export async function createCarBooking(req, res, next) {
         }),
       }),
 
-      // 3. Notify operator when vehicle stock becomes exhausted
-      ...(exhaustedDates?.length
-        ? [
-            notifyOperatorUsersByBooking({
-              booking,
-              title: "Vehicle Stock Exhausted",
-              message:
-                `${listing.name} has reached full allocation ` +
-                `for ${exhaustedDates.length} rental date(s). ` +
-                `Affected dates: ${exhaustedDates.join(", ")}. ` +
-                `Latest booking: ${booking.bookingCode}.`,
-              type: "STOCK_EXHAUSTED",
-              notifyMaster: false,
-            }),
-          ]
-        : []),
+      // 3. BNPLB-184: the sold-out alert, in-app and by email, opening the
+      // listing with these dates so the operator can add or move a car.
+      notifyStockExhausted({ booking, listing, dates: exhaustedDates }),
     ]).then((results) =>
       results
         .filter((x) => x.status === "rejected")

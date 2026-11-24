@@ -119,20 +119,28 @@ export const markAllCustomerNotificationsRead = () =>
 export const getMyLicenceDocument = () => api.get("/licence-verification/me");
 export const getBookingLicenceDocument = (bookingId) =>
   api.get(`/licence-verification/bookings/${bookingId}`);
-export const submitBookingLicenceDocument = (bookingId, file) => {
+// BNPLB-180: every licence upload carries { holderName, expiresAt, issuingCountry }.
+function licenceFormData(file, details = {}) {
   const formData = new FormData();
   formData.append("licence", file);
-  return api.post(`/licence-verification/bookings/${bookingId}`, formData, {
+  formData.append("holderName", details.holderName || "");
+  formData.append("expiresAt", details.expiresAt || "");
+  formData.append("issuingCountry", details.issuingCountry || "");
+  return formData;
+}
+export const submitBookingLicenceDocument = (bookingId, file, details) =>
+  api.post(`/licence-verification/bookings/${bookingId}`, licenceFormData(file, details), {
     headers: { "Content-Type": "multipart/form-data" },
   });
-};
-export const submitLicenceDocument = (file) => {
-  const formData = new FormData();
-  formData.append("licence", file);
-  return api.post("/licence-verification/me", formData, {
+export const submitLicenceDocument = (file, details) =>
+  api.post("/licence-verification/me", licenceFormData(file, details), {
     headers: { "Content-Type": "multipart/form-data" },
   });
-};
+// BNPLB-181: licences on the account that can serve a booking, and attaching one.
+export const getReusableLicences = (bookingId) =>
+  api.get(`/licence-verification/bookings/${bookingId}/reusable`);
+export const attachLicenceToBooking = (bookingId, licenceId) =>
+  api.post(`/licence-verification/bookings/${bookingId}/attach`, { licenceId });
 
 
 //

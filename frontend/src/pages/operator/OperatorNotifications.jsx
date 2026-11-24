@@ -17,6 +17,14 @@ export default function OperatorNotifications() {
   
 /*Notification Page Clickable for Details*/
 function getOperatorNotificationLink(item) {
+  // BNPLB-184: a notification that carries its own operator path opens it.
+  if (typeof item.link === "string" && item.link.startsWith("/operator/")) {
+    return item.link;
+  }
+  if (String(item.type || "").toUpperCase() === "STOCK_EXHAUSTED") {
+    return "/operator/listings";
+  }
+
   const text = `${item.title || ""} ${item.message || ""}`.toLowerCase();
   const type = `${item.type || ""}`.toLowerCase();
 

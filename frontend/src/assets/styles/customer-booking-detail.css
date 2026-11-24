@@ -300,6 +300,64 @@
   font-weight: 600;
 }
 
+.customer-theme .doc-upload-field input[type="text"] {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--pub-control-line);
+  border-radius: var(--pub-radius);
+  background: var(--pub-surface);
+  color: var(--pub-ink);
+  font: inherit;
+}
+
+/* BNPLB-181: licences already on the account, attached in one tap. */
+.customer-theme .booking-docs-reuse {
+  margin-top: 14px;
+}
+
+.customer-theme .booking-docs-reuse-title {
+  margin: 0 0 8px;
+  color: var(--pub-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.customer-theme .booking-docs-reuse ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.customer-theme .booking-docs-reuse li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--pub-line);
+  border-radius: var(--pub-radius-lg);
+  background: var(--pub-surface);
+}
+
+.customer-theme .booking-docs-reuse li > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.customer-theme .booking-docs-reuse li.is-refused {
+  background: var(--pub-surface-sunk);
+  color: var(--pub-label);
+}
+
+.customer-theme .booking-docs-reuse-reason {
+  color: var(--pub-label);
+  font-size: 13px;
+}
+
 
 .customer-theme .doc-upload-error {
   grid-column: 1 / -1;

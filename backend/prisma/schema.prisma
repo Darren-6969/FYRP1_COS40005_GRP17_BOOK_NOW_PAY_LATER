@@ -644,6 +644,16 @@ model CustomerLicenceDocument {
   reviewedAt      DateTime?
   reviewedById    Int?
   reviewedBy      User?                     @relation("LicenceReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  // BNPLB-180: entered by the customer at upload, checked by the operator
+  // against the image. Null on licences uploaded before 24 Nov 2026.
+  holderName      String?
+  expiresAt       DateTime?                 @db.Date
+  issuingCountry  String?
+  // BNPLB-181: a licence attached to a booking from one already on the
+  // account is a copy linked back to the original.
+  reusedFromId    Int?
+  reusedFrom      CustomerLicenceDocument?  @relation("LicenceReuse", fields: [reusedFromId], references: [id], onDelete: SetNull)
+  reuses          CustomerLicenceDocument[] @relation("LicenceReuse")
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
 
@@ -651,6 +661,7 @@ model CustomerLicenceDocument {
   @@index([reviewDueAt])
   @@index([customerId])
   @@index([bookingId])
+  @@index([reusedFromId])
 }
 
 model CustomerPermitDocument {
@@ -1092,6 +1103,8 @@ model Notification {
   title   String
   message String
   type    String
+  // BNPLB-184: where tapping the notification goes, as an app path.
+  link    String?
   isRead  Boolean @default(false)
 
   createdAt DateTime @default(now())

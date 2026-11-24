@@ -188,6 +188,8 @@ export async function resolveCancellationPolicy({
     database.customerLicenceDocument.findFirst({
       where: {
         customerId: booking.customerId,
+        // BNPLB-181: only a rejection on this booking's licence counts.
+        ...(booking.id ? { bookingId: booking.id } : {}),
         status: "REUPLOAD_REQUIRED",
         reviewedAt: { not: null },
       },

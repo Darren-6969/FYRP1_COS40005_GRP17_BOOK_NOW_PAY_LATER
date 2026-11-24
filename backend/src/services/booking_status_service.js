@@ -1,4 +1,5 @@
 import prisma from "../config/db.js";
+import { licenceValidForReturn } from "./licence_check_service.js";
 import { trackBookingEvent } from "./analytics_service.js";
 import { enqueueJob, requestDrain } from "./job_queue_service.js";
 import {
@@ -176,9 +177,10 @@ async function hasAcceptedDriver(bookingId, database = prisma) {
 // paid and, for a car rental, the driving licence is verified. Only car
 // rentals need a licence, the same rule the expiry sweep applies.
 //
-// Until the per-booking licence check exists (development plan Task 5), an
-// APPROVED licence on the customer's account counts. That was the rule the
-// Stripe webhook already used; Task 5 changes it here, in one place.
+// BNPLB-181: the licence check belongs to the booking. Only the latest
+// licence attached to this booking counts, approved by this booking's
+// operator and valid through the return date. A licence approved for another
+// booking no longer counts here; the customer attaches it in one tap instead.
 export async function isLicenceSatisfied(booking, database = prisma) {
   if (booking.serviceType !== "CAR_RENTAL") return true;
 
@@ -194,10 +196,20 @@ export async function isLicenceSatisfied(booking, database = prisma) {
   }
 
   const licence = await database.customerLicenceDocument.findFirst({
-    where: { customerId: booking.customerId, status: "APPROVED" },
-    select: { id: true },
+    where: { bookingId: booking.id, customerId: booking.customerId },
+    orderBy: [{ submittedAt: "desc" }, { id: "desc" }],
+    select: { status: true, expiresAt: true },
   });
-  return Boolean(licence);
+  if (!licence || licence.status !== "APPROVED") return false;
+
+  const dates =
+    booking.returnDate !== undefined
+      ? booking
+      : await database.booking.findUnique({
+          where: { id: booking.id },
+          select: { returnDate: true, alternativeReturnDate: true, alternativeUsed: true },
+        });
+  return licenceValidForReturn(licence, dates);
 }
 
 /**

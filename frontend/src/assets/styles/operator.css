@@ -6809,3 +6809,107 @@
   gap: 10px;
   margin-top: 12px;
 }
+
+/* BNPLB-184: sold-out alert on the Listings page */
+.stock-alert {
+  margin-bottom: 18px;
+  border-left: 4px solid #e8863f;
+}
+
+.stock-alert-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: #a84816;
+}
+
+.stock-alert-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.stock-alert-head h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #17232c;
+}
+
+.stock-alert-head p {
+  margin: 4px 0 0;
+  color: #55605a;
+}
+
+.stock-alert-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #55605a;
+  cursor: pointer;
+}
+
+.stock-alert-close:hover {
+  background: #eef1ef;
+}
+
+.stock-alert-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.stock-alert-action {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #dce5e8;
+  border-radius: 12px;
+}
+
+.stock-alert-action p {
+  margin: 0;
+  color: #55605a;
+  font-size: 14px;
+}
+
+.stock-alert-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stock-alert-inline label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.stock-alert-inline input {
+  width: 80px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #cbd5dc;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.stock-alert-sources {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stock-alert-sources li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}

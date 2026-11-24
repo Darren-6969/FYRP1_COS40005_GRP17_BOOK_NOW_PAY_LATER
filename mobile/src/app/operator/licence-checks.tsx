@@ -33,6 +33,11 @@ import { logger } from "@/utils/logger";
 const REASONS: { value: LicenceRejectionReason; label: string; detail: string }[] = [
   { value: "EXPIRED", label: "Expired", detail: "The licence is past its expiry date." },
   { value: "UNREADABLE", label: "Can't read it", detail: "Blurry, cut off or too dark to check." },
+  {
+    value: "DIFFERENT_DRIVER",
+    label: "Different driver",
+    detail: "The name isn't the driver on this booking. Applies to this booking only.",
+  },
   { value: "NOT_A_LICENCE", label: "Not a driving licence", detail: "The upload is a different document." },
 ];
 
@@ -242,6 +247,19 @@ export default function OperatorLicenceChecksScreen() {
                   </Pressable>
                 ) : null}
                 <AppText variant="caption">Sent {formatMYT(item.submittedAt, "dayDateTime")}</AppText>
+                {item.holderName ? (
+                  <AppText variant="caption">
+                    Name on licence: {item.holderName}
+                    {item.booking?.driverName ? ` · Driver: ${item.booking.driverName}` : ""}
+                  </AppText>
+                ) : null}
+                {item.expiresAt ? (
+                  <AppText variant="caption">
+                    Expires {item.expiresAt}
+                    {item.booking?.returnDate ? ` · Return ${item.booking.returnDate}` : ""}
+                    {item.booking?.returnDate && item.expiresAt < item.booking.returnDate ? " (expires before the return)" : ""}
+                  </AppText>
+                ) : null}
               </View>
 
               <Button
@@ -283,7 +301,7 @@ export default function OperatorLicenceChecksScreen() {
       <ConfirmSheet
         visible={!!approveDoc}
         title="Approve this licence?"
-        message={`Approve only if you've opened the document and it's a valid, current driving licence for ${approveDoc?.customer?.name || "the customer"}. It's then used for their car bookings, and a paid booking moves to ready for pick-up.`}
+        message={`Approve only if you've opened the document and it's a valid licence that names the booking's driver and lasts through the return date. A paid booking then moves to ready for pick-up.`}
         confirmLabel="Approve licence"
         onConfirm={approve}
         onCancel={() => setApproveDoc(null)}
