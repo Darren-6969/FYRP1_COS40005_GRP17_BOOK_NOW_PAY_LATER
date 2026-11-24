@@ -89,19 +89,25 @@
   min-height: 44px;
 }
 
+/* The kangaroo mark on a white disc, so its dark green ring still shows on
+   the dark header. */
 .brandTile {
   transition: transform var(--pub-dur) var(--pub-ease);
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: var(--pub-brand);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #ffffff;
   display: grid;
   place-items: center;
-  color: var(--pub-on-brand);
-  font-family: var(--pub-font-display);
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing: -0.03em;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.brandImg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .brandName {

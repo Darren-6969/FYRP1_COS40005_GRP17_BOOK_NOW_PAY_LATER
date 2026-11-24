@@ -21,7 +21,7 @@ const POINTS: { icon: keyof typeof Ionicons.glyphMap; title: string; text: strin
   {
     icon: "document-text-outline",
     title: "What we keep",
-    text: "Records of past bookings, payments, refunds and invoices, with your name on them, for as long as Malaysian law requires.",
+    text: "Records of past bookings, payments, refunds and invoices, with your name on them, for 7 years, as Malaysian tax and accounting law requires.",
   },
   {
     icon: "time-outline",

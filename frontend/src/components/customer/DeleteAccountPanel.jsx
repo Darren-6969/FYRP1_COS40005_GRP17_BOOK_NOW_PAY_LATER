@@ -78,7 +78,7 @@ export default function DeleteAccountPanel() {
         />
         <InfoCard
           title="What we keep"
-          text="Records of past bookings, payments, refunds and invoices, with your name on them, for as long as Malaysian law requires. They are not used for anything else."
+          text="Records of past bookings, payments, refunds and invoices, with your name on them, for 7 years, as Malaysian tax and accounting law requires. They are not used for anything else."
         />
         <InfoCard
           title="Before you ask"

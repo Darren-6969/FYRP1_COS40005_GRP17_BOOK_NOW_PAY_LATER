@@ -8,8 +8,7 @@ import { BRAND } from "./brand";
 
 const SITE = `${BRAND.name}${BRAND.suffix}`;
 
-// A null value shows as "Being added" on the Contact page rather than a
-// made-up value. The email is the one named in the Privacy Policy and Terms.
+// A null value is left off the Contact page rather than made up. The email is the one named in the Privacy Policy and Terms.
 export const CONTACT = {
   email: "gp17bnplqm@gmail.com",
   phone: null,
@@ -75,6 +74,14 @@ export const INFO_PAGES = {
           "Return it by the time on your booking. Late returns are charged by the hour at the counter and are not part of your booking total.",
         ],
       },
+      {
+        heading: "Tours and drivers",
+        list: [
+          "Tours are booked the same way: send a request, the tour guide or rental operator accepts, then you pay a deposit and the balance. A tour has one price per car or per package, not per person.",
+          "If you cancel a tour, or miss its balance deadline, the deposit is kept by the guide or operator.",
+          "If you would rather not drive, add a licensed driver when you book a car, or after the car is accepted. The driver is a separate booking with its own deposit and balance, paid through the platform.",
+        ],
+      },
     ],
     related: [
       { label: "Deposits and balances", to: "/info/deposits-and-balances" },
@@ -94,6 +101,7 @@ export const INFO_PAGES = {
         list: [
           "The deposit is a share of the rental that the operator sets, from 0% to 100%. The car's listing shows it before you book.",
           "The balance is the rest of the rental. Add-ons, pickup and drop-off charges and any night handover charge are paid with the balance.",
+          "Tours and driver bookings are split the same way, using the deposit the guide, driver or operator sets.",
           "Every amount is worked out by the platform from the operator's rates. What you see before you send the request is what you pay, unless you accept an offer that changes it.",
         ],
       },
@@ -116,6 +124,7 @@ export const INFO_PAGES = {
         heading: "If a payment is missed",
         paragraphs: [
           "A booking whose balance is not paid by its deadline can no longer be paid. It can be cancelled and the car released. The deposit is then kept by the operator, unless the listing shows a partial refund rule. Any balance you already paid is refunded in full. The refund rules page has the details.",
+          "Partial refund rules apply to car rentals only. A tour's deposit is always kept if the balance is missed or you cancel.",
         ],
       },
       {
@@ -261,9 +270,10 @@ export const INFO_PAGES = {
   // The button here is for people who cannot sign in: it goes through the
   // Assistant's "contact support" hand-off. Either way it lands in the admin
   // support queue as a "My account" ticket.
-  // The 30 day target and "as long as Malaysian law requires" were confirmed
-  // by the client on 23 Nov 2026. Keep the same wording in the customer
-  // profile tab, the in-app privacy policy and the deletion email.
+  // The 30 day target was confirmed by the client on 23 Nov 2026. Records
+  // are kept for 7 years (team decision, 24 Nov 2026, Privacy Policy). Keep
+  // the same wording in the customer profile tab, the app's delete screen,
+  // the Privacy Policy and the deletion email.
   "delete-account": {
     nav: "Delete your account",
     title: "Deleting your account",
@@ -301,7 +311,7 @@ export const INFO_PAGES = {
       {
         heading: "What we keep, and for how long",
         list: [
-          "Booking, payment, refund and invoice records, with your name on them. Malaysian law requires businesses to keep financial records, so we keep these for as long as the law requires, and then delete them. The phone number, email and driver's date of birth on each booking are removed.",
+          "Booking, payment, refund and invoice records, with your name on them. Malaysian tax and accounting law requires businesses to keep financial records, so we keep these for 7 years, and then delete them. The phone number, email and driver's date of birth on each booking are removed.",
           "Payment receipts you uploaded for a DuitNow payment, kept with the payment record they belong to.",
         ],
         paragraphs: ["Kept records are not used for anything else, such as marketing."],
@@ -372,12 +382,12 @@ export const INFO_PAGES = {
     title: `About ${SITE}`,
     summary: "What the platform is and how it works with rental operators.",
     // TODO(pilot): wording to be confirmed by the client before handover.
-    lead: `${SITE} is a car rental booking platform for Sarawak, built on a book now, pay later model.`,
+    lead: `${SITE} is a booking platform for car rental, tours and drivers in Sarawak, built on a book now, pay later model.`,
     sections: [
       {
         heading: "What we do",
         paragraphs: [
-          `${SITE} lists cars from independent rental operators in one place. You compare cars, send a booking request and pay through the platform. The operator named on each listing provides the car and hands it over.`,
+          `${SITE} lists cars from independent rental operators, tours from rental operators and licensed tour guides, and licensed drivers, all in one place. You compare, send a booking request and pay through the platform. The operator named on each listing provides the car, tour or driver.`,
         ],
       },
       {

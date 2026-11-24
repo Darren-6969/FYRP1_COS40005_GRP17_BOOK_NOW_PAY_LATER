@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, Moon, Sun } from "lucide-react";
 import { BRAND } from "../../constants/brand";
+// The kangaroo mark, the same as the dashboards and the app icon.
+import logoMark from "../../assets/logo-bnpl-mark.webp";
 import { clearSession } from "../../utils/session";
 import useSessionUser from "../../hooks/useSessionUser";
 import { logout } from "../../services/auth_service";
@@ -48,7 +50,7 @@ export function BrandMark() {
   return (
     <Link to="/" className={styles.brand} aria-label={`${BRAND.name}${BRAND.suffix} home`}>
       <span className={styles.brandTile} aria-hidden="true">
-        {BRAND.initial}
+        <img src={logoMark} alt="" className={styles.brandImg} width="128" height="128" />
       </span>
       <span className={styles.brandName}>
         {BRAND.name}

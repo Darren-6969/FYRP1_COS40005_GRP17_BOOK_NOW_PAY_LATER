@@ -23,6 +23,8 @@ function formatUpdated(sections) {
   return new Date(latest).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
 
+// Only the details that are filled in are shown, so the page never lists
+// empty rows.
 function ContactDetails() {
   const rows = [
     { label: "Email", value: CONTACT.email, href: CONTACT.email && `mailto:${CONTACT.email}` },
@@ -33,20 +35,14 @@ function ContactDetails() {
       href: CONTACT.whatsapp && `https://wa.me/${CONTACT.whatsapp.replace(/\D/g, "")}`,
     },
     { label: "Hours", value: CONTACT.hours },
-  ];
+  ].filter((row) => row.value);
   return (
     <dl className={styles.contact}>
       {rows.map((row) => (
         <div key={row.label} className={styles.contactRow}>
           <dt className={styles.contactLabel}>{row.label}</dt>
           <dd className={styles.contactValue}>
-            {!row.value ? (
-              <span className={styles.pending}>Being added</span>
-            ) : row.href ? (
-              <a href={row.href}>{row.value}</a>
-            ) : (
-              row.value
-            )}
+            {row.href ? <a href={row.href}>{row.value}</a> : row.value}
           </dd>
         </div>
       ))}

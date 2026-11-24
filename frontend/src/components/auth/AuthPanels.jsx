@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { BRAND } from "../../constants/brand";
+// The kangaroo mark, the same as the dashboards and the app icon.
+import logoMark from "../../assets/logo-bnpl-mark.webp";
 import styles from "../../assets/styles/public/Auth.module.css";
 
 const REDUCE_QUERY = "(prefers-reduced-motion: reduce)";
@@ -37,7 +39,7 @@ function Brand() {
   return (
     <span className={styles.brand}>
       <span className={styles.brandTile} aria-hidden="true">
-        {BRAND.initial}
+        <img src={logoMark} alt="" className={styles.brandImg} width="128" height="128" />
       </span>
       <span className={styles.brandName}>
         {BRAND.name}

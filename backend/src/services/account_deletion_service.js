@@ -101,14 +101,14 @@ function confirmationEmail(name) {
       "",
       "As you asked, we have deleted your account. You can no longer sign in, and your contact details, driving licence, saved cars, notifications and chats have been removed.",
       "",
-      "We keep records of your past bookings, payments, refunds and invoices for as long as Malaysian law requires. They are not used for anything else.",
+      "We keep records of your past bookings, payments, refunds and invoices for 7 years, as Malaysian tax and accounting law requires. They are not used for anything else.",
       "",
       "If you did not ask for this, reply to this email straight away.",
     ].join("\n"),
     html: `
       <p>Hello ${greeting},</p>
       <p>As you asked, we have deleted your account. You can no longer sign in, and your contact details, driving licence, saved cars, notifications and chats have been removed.</p>
-      <p>We keep records of your past bookings, payments, refunds and invoices for as long as Malaysian law requires. They are not used for anything else.</p>
+      <p>We keep records of your past bookings, payments, refunds and invoices for 7 years, as Malaysian tax and accounting law requires. They are not used for anything else.</p>
       <p>If you did not ask for this, reply to this email straight away.</p>
     `,
   };
