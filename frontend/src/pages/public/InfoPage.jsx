@@ -15,8 +15,8 @@ import styles from "../../assets/styles/public/InfoPage.module.css";
 // the admin Policies and answers page. constants/infoPages.js holds the
 // title, lead and navigation, and its sections are the fallback if the
 // library cannot be reached. Any other /info slug is "not available yet".
-const ORDER = Object.keys(INFO_PAGES);
-const LIBRARY_PAGES = new Set(["terms", "privacy", "refund-rules"]);
+const ORDER = Object.keys(INFO_PAGES).filter((key) => !INFO_PAGES[key].hidden);
+const LIBRARY_PAGES = new Set(["terms", "privacy", "terms-ms", "privacy-ms", "refund-rules"]);
 
 function formatUpdated(sections) {
   const latest = Math.max(...sections.map((s) => new Date(s.publishedAt).getTime()));

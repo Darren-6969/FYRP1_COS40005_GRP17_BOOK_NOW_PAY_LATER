@@ -33,8 +33,8 @@ const HOME_TOPICS = [
 
 const POLICY_PAGES = [
   { key: "refund-rules", title: "Refund rules" },
-  { key: "terms", title: "Terms of service" },
-  { key: "privacy", title: "Privacy and personal data" },
+  { key: "terms", title: "Terms of Service" },
+  { key: "privacy", title: "Privacy Policy" },
 ];
 
 // Help articles from the policy library, loaded once per visit.

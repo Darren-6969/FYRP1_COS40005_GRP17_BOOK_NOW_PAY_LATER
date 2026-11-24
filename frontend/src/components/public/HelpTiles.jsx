@@ -29,7 +29,7 @@ const ICONS = {
 };
 
 export default function HelpTiles() {
-  const pages = Object.entries(INFO_PAGES).filter(([slug]) => slug !== "contact");
+  const pages = Object.entries(INFO_PAGES).filter(([slug, page]) => slug !== "contact" && !page.hidden);
 
   return (
     <div className={styles.wrap}>

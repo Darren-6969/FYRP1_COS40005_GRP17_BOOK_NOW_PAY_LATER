@@ -36,8 +36,8 @@ const COLUMNS = [
 // The small row under the columns, next to the legal line.
 const BOTTOM_LINKS = [
   { label: "About", to: "/info/about" },
-  { label: "Terms of service", to: "/info/terms" },
-  { label: "Privacy and PDPA", to: "/info/privacy" },
+  { label: "Terms of Service", to: "/info/terms" },
+  { label: "Privacy Policy", to: "/info/privacy" },
 ];
 
 export default function PublicFooter() {

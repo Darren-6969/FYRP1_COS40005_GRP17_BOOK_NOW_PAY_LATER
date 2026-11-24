@@ -8,10 +8,10 @@ import { BRAND } from "./brand";
 
 const SITE = `${BRAND.name}${BRAND.suffix}`;
 
-// TODO(pilot): fill in before deploying. A null value shows as
-// "Being added" on the Contact page rather than a made-up address.
+// A null value shows as "Being added" on the Contact page rather than a
+// made-up value. The email is the one named in the Privacy Policy and Terms.
 export const CONTACT = {
-  email: null,
+  email: "gp17bnplqm@gmail.com",
   phone: null,
   whatsapp: null,
   hours: null,
@@ -176,104 +176,82 @@ export const INFO_PAGES = {
   },
 
   terms: {
-    nav: "Terms of service",
-    title: "Terms of service",
+    nav: "Terms of Service",
+    title: "Terms of Service",
     summary: "How booking works and what you agree to when you send a request.",
-    lead: `How booking a car through ${SITE} works, and what you agree to when you send a request.`,
+    lead: `The agreement between you and BNPL17 when you use ${SITE}, on the website or in the app.`,
+    // Only shown if the policy library cannot be reached. The full wording
+    // is in the library, so this never holds an older copy of the text.
     sections: [
       {
-        heading: "Who you are renting from",
+        heading: "The full text could not be loaded",
         paragraphs: [
-          `${SITE} is a booking platform. The car, the rental and the handover are provided by the independent rental operator named on each listing. ${SITE} takes the booking, shows you the price and collects your payments.`,
+          "Please refresh the page in a moment. If it still does not load, email gp17bnplqm@gmail.com and we will send you a copy.",
         ],
       },
-      {
-        heading: "Sending a request",
-        list: [
-          "Sending a booking request is free. Nothing is charged until the operator accepts it.",
-          "The car is held for you while the operator decides. Each listing shows how long the operator has to reply.",
-          "The operator can accept, decline with a reason, or offer you something different: another car, other dates, another price, or a charge for a pickup place you asked for. You accept or decline the offer before you pay anything. Declining ends the request.",
-          "If the operator does not reply in time, the request may close by itself and you can book another car.",
-        ],
-      },
-      {
-        heading: "Paying",
-        list: [
-          "Every amount is worked out by the platform from the operator's rates. The price you are shown before you send a request is the price you pay, unless you accept an offer that changes it.",
-          "Once the operator accepts, you pay a deposit. Each operator sets its own deposit, and every listing shows it.",
-          "The rest, the balance, is due before pickup by the deadline shown on your booking. Add-ons, pickup and drop-off charges and any night handover charge are paid with the balance.",
-          "If pickup is very soon after acceptance, the deposit and balance may be due together, and never later than one hour before pickup.",
-          "You can pay by card or by DuitNow with a receipt upload, where the operator accepts it.",
-        ],
-      },
-      {
-        heading: "Your driving licence",
-        list: [
-          "Every car booking needs a valid driving licence for the driver, uploaded by the same deadline as the balance. A licence you uploaded before is reused while it is still valid.",
-          "If your licence was issued outside Malaysia, you also upload an international driving permit.",
-          "The upload is a first check only. Rental staff inspect the original licence at handover.",
-        ],
-      },
-      {
-        heading: "Missed deadlines",
-        paragraphs: [
-          "If the balance or your licence is not in by its deadline, the booking can be cancelled and the car released. The deposit is then kept by the operator, unless the listing shows a partial refund rule. Any balance you have already paid is refunded in full. The refund rules page explains this in full.",
-        ],
-      },
-      {
-        heading: "At the counter",
-        list: [
-          "Returning the car late is charged by the hour at the counter. It is not part of your booking total.",
-          "A chauffeur is a request to the operator, not a priced add-on.",
-          "The operator's own rental terms on the listing also apply to your rental.",
-        ],
-      },
+    ],
+    related: [
+      { to: "/info/refund-rules", label: "Refund rules" },
+      { to: "/info/terms-ms", label: "Baca dalam Bahasa Malaysia" },
     ],
   },
 
   privacy: {
-    nav: "Privacy and PDPA",
-    title: "Privacy and personal data",
-    summary: "What we collect, why, and who can see it.",
-    lead: `What ${SITE} collects about you, why, and who sees it. Your personal data is handled under Malaysia's Personal Data Protection Act 2010 (PDPA).`,
+    nav: "Privacy Policy",
+    title: "Privacy Policy",
+    summary: "What we collect, why, who can see it, and your rights under the PDPA.",
+    lead: `What ${SITE} collects about you, why, who sees it and how long we keep it, under Malaysia's Personal Data Protection Act 2010 (PDPA).`,
+    // Only shown if the policy library cannot be reached. The full wording
+    // is in the library, so this never holds an older copy of the text.
     sections: [
       {
-        heading: "What we collect",
-        list: [
-          "Account details: your name, email address and password. The password is stored only in a scrambled form we cannot read.",
-          "Booking details: your phone number, the driver's name, the car, the dates and the places you asked for.",
-          "Your driving licence, and an international driving permit where one is needed.",
-          "Payment records: amounts, dates and status. Card details are entered on Stripe's page and never reach our servers. DuitNow receipts you upload are kept with the booking.",
-          "When you agreed to these terms and this notice, and the network address you agreed from, as a record of your consent.",
-          "Your booking history on the platform, such as a missed balance, a licence not uploaded in time, or not turning up for a pickup.",
-        ],
-      },
-      {
-        heading: "Why we use it",
-        list: [
-          "To send your request to the operator, take your payments and send you booking emails.",
-          "So the operator can check the driver and hand over the car.",
-          "To keep the platform safe and working, and to answer questions about a booking.",
-        ],
-        paragraphs: ["We do not sell your data and do not send marketing without your consent."],
-      },
-      {
-        heading: "Who can see it",
-        list: [
-          "The operator of your booking sees your name, phone number, driver details and licence for that booking only. Operators never see other operators' customers.",
-          "Licences and documents are private. They open only through short-lived links, for the people who need them.",
-          "Service providers that run parts of the platform for us: Stripe for card payments, Resend for email, and our hosting, database and file storage providers. Some of these store data outside Malaysia.",
-        ],
-      },
-      {
-        heading: "Your rights",
+        heading: "The full text could not be loaded",
         paragraphs: [
-          "You can ask to see the personal data we hold about you, ask us to correct it, or withdraw consent for anything optional. Use the contact details on the Contact page.",
-          "You can also ask us to delete your account and the personal data linked to it. Deleting your account explains how, and what we have to keep.",
+          "Please refresh the page in a moment. If it still does not load, email gp17bnplqm@gmail.com and we will send you a copy.",
         ],
       },
     ],
-    related: [{ to: "/info/delete-account", label: "Deleting your account" }],
+    related: [
+      { to: "/info/delete-account", label: "Deleting your account" },
+      { to: "/info/privacy-ms", label: "Baca dalam Bahasa Malaysia" },
+    ],
+  },
+
+  // Bahasa Malaysia versions (PDPA s.7 asks for the notice in both
+  // languages). Reached from the English pages; hidden from the side
+  // navigation and the Help tiles so each policy shows up once there.
+  "terms-ms": {
+    hidden: true,
+    nav: "Terma Perkhidmatan",
+    title: "Terma Perkhidmatan",
+    summary: "Terma Perkhidmatan dalam Bahasa Malaysia.",
+    lead: `Perjanjian antara anda dan BNPL17 apabila anda menggunakan ${SITE}, di laman web atau dalam aplikasi.`,
+    sections: [
+      {
+        heading: "Teks penuh tidak dapat dimuatkan",
+        paragraphs: [
+          "Sila muat semula halaman ini sebentar lagi. Jika masih tidak dapat dimuatkan, hantar e-mel ke gp17bnplqm@gmail.com dan kami akan menghantar salinannya kepada anda.",
+        ],
+      },
+    ],
+    related: [{ to: "/info/terms", label: "Read in English" }],
+  },
+
+  "privacy-ms": {
+    hidden: true,
+    nav: "Dasar Privasi",
+    title: "Dasar Privasi",
+    summary: "Dasar Privasi dalam Bahasa Malaysia.",
+    lead: `Data yang dikumpul oleh ${SITE} tentang anda, sebabnya, siapa yang melihatnya dan berapa lama kami menyimpannya, di bawah Akta Perlindungan Data Peribadi 2010 (PDPA).`,
+    sections: [
+      {
+        heading: "Teks penuh tidak dapat dimuatkan",
+        paragraphs: [
+          "Sila muat semula halaman ini sebentar lagi. Jika masih tidak dapat dimuatkan, hantar e-mel ke gp17bnplqm@gmail.com dan kami akan menghantar salinannya kepada anda.",
+        ],
+      },
+    ],
+    related: [{ to: "/info/privacy", label: "Read in English" }],
   },
 
   // Google Play requires a web page where users can ask for their account and
@@ -343,7 +321,7 @@ export const INFO_PAGES = {
         ],
       },
     ],
-    related: [{ to: "/info/privacy", label: "Privacy and personal data" }],
+    related: [{ to: "/info/privacy", label: "Privacy Policy" }],
   },
 
   "refund-rules": {
