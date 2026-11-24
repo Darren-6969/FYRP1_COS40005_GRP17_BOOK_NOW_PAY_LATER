@@ -13,6 +13,22 @@ export async function loginUser(
   });
 }
 
+/** Operator two-step sign-in: the code emailed after the password. Returns the session. */
+export async function verifyLoginCode(email: string, code: string) {
+  return apiRequest("/auth/verify-login-otp", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
+  });
+}
+
+/** Confirms a new account's email with the code sent at sign-up (or at sign-in). */
+export async function verifyEmailCode(email: string, code: string) {
+  return apiRequest("/auth/verify-email-otp", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
+  });
+}
+
 export async function registerUser(
   name: string,
   email: string,
