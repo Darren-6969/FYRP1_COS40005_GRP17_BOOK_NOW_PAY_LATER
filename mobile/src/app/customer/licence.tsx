@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useCallback, useEffect, useState, type ComponentProps, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SaveError } from "@/components/account/AccountScreen";
@@ -18,16 +19,21 @@ import {
   IconButton,
   SkeletonText,
   StatusPill,
+  TextField,
   useToast,
 } from "@/components/ui";
 import { Radius } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import {
+  attachLicence,
+  getBookingLicence,
   getCustomerBookings,
   getMyLicence,
+  getReusableLicences,
   uploadLicenceFile,
   type LicenceDocument,
   type MyLicenceResponse,
+  type ReusableLicence,
 } from "@/services/customerApi";
 import { bookingRef } from "@/utils/booking-view";
 import { formatMYT } from "@/utils/datetime";
@@ -63,6 +69,8 @@ function reasonText(reason: string | null) {
       return "The photo wasn't a driving licence. Upload a photo of your driving licence card.";
     case "EXPIRED":
       return "The licence had expired. Upload your current licence.";
+    case "DIFFERENT_DRIVER":
+      return "The name on the licence isn't the driver named on this booking. Attach or upload the driver's licence.";
     default:
       return "The operator couldn't verify it. Upload a clear photo of your current licence.";
   }
@@ -81,10 +89,20 @@ function bookingNeedingLicence(bookings: any[]): any | null {
   return waiting[0] ?? null;
 }
 
+/** YYYY-MM-DD in the phone's calendar, as the date picker shows it. */
+function dateString(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 type Loaded = {
   mine: MyLicenceResponse;
-  /** The account's latest licence (mine.document). */
+  /** The target booking's licence, or the account's latest when there is no booking. */
   doc: LicenceDocument | null;
+  /** BNPLB-181: licences on the account that could serve the target booking. */
+  reusable: ReusableLicence[];
   /** When this was loaded; deadlines are compared with it, not with the clock during render. */
   loadedAt: number;
   /** Where an upload goes. Null: the account only. */
@@ -95,11 +113,11 @@ type Loaded = {
  * F19: the customer's driving licence. Shows upload, under review,
  * approved, rejected with the reason, and expired.
  *
- * An approved licence on the account is reused for every car booking
- * (isLicenceSatisfied in booking_status_service.js). Uploads go against a
- * booking when there is one waiting, because the operator review queue only
- * lists licences linked to a booking. Opened from booking detail with
- * ?bookingId, or from Profile.
+ * BNPLB-181: the licence check belongs to each booking. A licence already on
+ * the account is attached in one tap when it names the driver and is valid
+ * through the return date; the operator of that booking still reviews it.
+ * Uploads carry the holder's name, expiry date and issuing country
+ * (BNPLB-180). Opened from booking detail with ?bookingId, or from Profile.
  */
 export default function LicenceScreen() {
   const router = useRouter();
@@ -115,13 +133,19 @@ export default function LicenceScreen() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<unknown>(null);
   const [replacing, setReplacing] = useState(false);
+  const [holderName, setHolderName] = useState("");
+  const [expiry, setExpiry] = useState<Date | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
+  const [country, setCountry] = useState("Malaysia");
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [attaching, setAttaching] = useState<number | null>(null);
 
   const load = useCallback(
     () =>
       startAsync(async () => {
     try {
-      // The account's latest licence, from any booking. An approved one is
-      // reused for every car booking, so it is what this screen shows.
+      // The account's latest licence. With a booking, that booking's own
+      // licence is what counts (BNPLB-181), so it is what this screen shows.
       const mine = await getMyLicence();
       let target: Loaded["target"] = null;
 
@@ -143,8 +167,20 @@ export default function LicenceScreen() {
           logger.debug("Couldn't load bookings for the licence target:", err);
         }
       }
-      const doc = mine.document;
-      setData({ mine, doc, target, loadedAt: Date.now() });
+      let doc = mine.document;
+      let reusable: ReusableLicence[] = [];
+      if (target) {
+        const [own, candidates] = await Promise.allSettled([
+          getBookingLicence(target.id),
+          getReusableLicences(target.id),
+        ]);
+        doc = own.status === "fulfilled" ? own.value.document : null;
+        reusable = candidates.status === "fulfilled" ? candidates.value.licences : [];
+        if (candidates.status === "fulfilled" && candidates.value.driverName) {
+          setHolderName((current) => current || candidates.value.driverName || "");
+        }
+      }
+      setData({ mine, doc, reusable, target, loadedAt: Date.now() });
     } catch (err) {
       logger.debug("Failed to load licence:", err);
       setLoadError(err);
@@ -204,16 +240,43 @@ export default function LicenceScreen() {
       setPhotoError("Add a photo of your driving licence.");
       return;
     }
+    if (holderName.trim().length < 2 || !expiry || country.trim().length < 2) {
+      setDetailsError("Enter the name on the licence, its expiry date and the country that issued it.");
+      return;
+    }
+    setDetailsError(null);
     setSendError(null);
     try {
-      await uploadLicenceFile({ uri: photo.uri, bookingId: data?.target?.id ?? null });
+      await uploadLicenceFile({
+        uri: photo.uri,
+        bookingId: data?.target?.id ?? null,
+        details: { holderName: holderName.trim(), expiresAt: dateString(expiry), issuingCountry: country.trim() },
+      });
       toast.show("Licence sent. The operator will check it.", { tone: "ok" });
       setPhoto(null);
+      setExpiry(null);
       setReplacing(false);
       await load();
     } catch (err) {
       logger.debug("Licence upload failed:", err);
       setSendError(err);
+    }
+  };
+
+  // BNPLB-181: attach a licence already on the account, without uploading.
+  const attach = async (licenceId: number) => {
+    if (!data?.target) return;
+    setSendError(null);
+    setAttaching(licenceId);
+    try {
+      await attachLicence(data.target.id, licenceId);
+      toast.show("Licence attached. The operator will check it.", { tone: "ok" });
+      await load();
+    } catch (err) {
+      logger.debug("Licence attach failed:", err);
+      setSendError(err);
+    } finally {
+      setAttaching(null);
     }
   };
 
@@ -325,6 +388,39 @@ export default function LicenceScreen() {
               />
             ) : null}
 
+            {canUpload && data.reusable.length ? (
+              <View style={styles.section}>
+                <AppText variant="headline" accessibilityRole="header">
+                  Licences on your account
+                </AppText>
+                {data.reusable.map((item) => (
+                  <GlassCard key={item.id}>
+                    <View style={styles.reuseRow}>
+                      <View style={styles.flex}>
+                        <AppText variant="bodyStrong" color={item.eligible ? "ink" : "label"}>
+                          {item.holderName || "Licence"}
+                        </AppText>
+                        <AppText variant="caption">
+                          {item.expiresAt ? `Valid until ${formatMYT(`${item.expiresAt}T00:00:00+08:00`, "dayDate")}` : "No expiry date on record"}
+                          {item.issuingCountry ? ` · ${item.issuingCountry}` : ""}
+                        </AppText>
+                        {!item.eligible && item.reason ? <AppText variant="caption">{item.reason}</AppText> : null}
+                      </View>
+                      {item.eligible ? (
+                        <Button
+                          label={attaching === item.id ? "Attaching..." : "Use this"}
+                          size="sm"
+                          variant="brand"
+                          disabled={attaching !== null}
+                          onPress={() => attach(item.id)}
+                        />
+                      ) : null}
+                    </View>
+                  </GlassCard>
+                ))}
+              </View>
+            ) : null}
+
             {canUpload ? (
               <View style={styles.section}>
                 <AppText variant="headline" accessibilityRole="header">
@@ -364,10 +460,66 @@ export default function LicenceScreen() {
                   )}
                 </Pressable>
                 <FieldError message={photoError} />
+                <TextField
+                  label="Name on the licence"
+                  value={holderName}
+                  onChangeText={(value) => {
+                    setHolderName(value);
+                    setDetailsError(null);
+                  }}
+                  autoComplete="name"
+                  maxLength={120}
+                  placeholder="As printed on the licence"
+                />
+                <AppText variant="label" color="ink">
+                  Licence expiry date
+                </AppText>
+                <Pressable
+                  onPress={() => setShowPicker(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Choose the licence expiry date"
+                  style={[styles.dateField, { backgroundColor: tokens.glass, borderColor: tokens.glassLine }]}
+                >
+                  <Ionicons name="calendar-outline" size={19} color={tokens.label} />
+                  <AppText variant="body" style={styles.flex}>
+                    {expiry ? dateString(expiry) : "Choose the date"}
+                  </AppText>
+                </Pressable>
+                {showPicker ? (
+                  <View>
+                    <DateTimePicker
+                      value={expiry || new Date()}
+                      mode="date"
+                      display={Platform.OS === "ios" ? "spinner" : "default"}
+                      minimumDate={new Date()}
+                      onChange={(event, date) => {
+                        if (Platform.OS === "android") setShowPicker(false);
+                        if (event.type === "set" && date) {
+                          setExpiry(date);
+                          setDetailsError(null);
+                        }
+                      }}
+                    />
+                    {Platform.OS === "ios" ? (
+                      <Button label="Done" variant="text" size="sm" onPress={() => setShowPicker(false)} />
+                    ) : null}
+                  </View>
+                ) : null}
+                <TextField
+                  label="Issued in"
+                  value={country}
+                  onChangeText={(value) => {
+                    setCountry(value);
+                    setDetailsError(null);
+                  }}
+                  maxLength={60}
+                  placeholder="Malaysia"
+                />
+                <FieldError message={detailsError} />
                 <AppText variant="caption">
                   {data.target
-                    ? `It will be checked for ${data.target.label}. Once verified, it's used for your other car bookings too.`
-                    : "Once verified, it's used for all your car bookings."}{" "}
+                    ? `It will be checked for ${data.target.label}. Later bookings can use it in one tap while it names the driver and is still valid.`
+                    : "Later bookings can use it in one tap while it names the driver and is still valid."}{" "}
                   Only operators you book with can see it. Bring the card itself when you pick up the car.
                 </AppText>
                 {view === "approved" ? (
@@ -423,7 +575,7 @@ function StateCard({
           icon: "checkmark-circle-outline",
           tone: { bg: tokens.okBg, fg: tokens.okFg },
           title: "Verified",
-          body: `Verified ${formatMYT(doc?.reviewedAt ?? doc?.submittedAt, "dayDate")}. It's used for all your car bookings, so you don't need to upload it again unless it changes.`,
+          body: `Verified ${formatMYT(doc?.reviewedAt ?? doc?.submittedAt, "dayDate")}. For your other car bookings you can attach it in one tap while it names the driver and is still valid.`,
         };
       case "expired":
         return {
@@ -509,6 +661,20 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     alignItems: "center",
     justifyContent: "center",
+  },
+  reuseRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  dateField: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 48,
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   photo: {
     height: 220,

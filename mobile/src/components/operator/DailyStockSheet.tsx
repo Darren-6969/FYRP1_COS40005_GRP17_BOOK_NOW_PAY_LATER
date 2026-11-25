@@ -49,9 +49,14 @@ function validDate(value: string) {
 export function DailyStockSheet({
   listing,
   onClose,
+  initialFrom,
+  initialTo,
 }: {
   listing: OperatorListing | null;
   onClose: () => void;
+  /** BNPLB-184: opened from a sold-out alert on its dates (YYYY-MM-DD). */
+  initialFrom?: string;
+  initialTo?: string;
 }) {
   const toast = useToast();
   const [fromDate, setFromDate] = useState(todayMY);
@@ -69,12 +74,12 @@ export function DailyStockSheet({
   const defaultQuantity = listing?.quantity ?? 0;
 
   useEffect(() => {
-    setFromDate(todayMY());
-    setToDate(todayMY());
+    setFromDate(initialFrom || todayMY());
+    setToDate(initialTo || initialFrom || todayMY());
     setQuantity(String(defaultQuantity));
     setAllocations([]);
     setError("");
-  }, [listingId, defaultQuantity]);
+  }, [listingId, defaultQuantity, initialFrom, initialTo]);
 
   const load = useCallback(async () => {
     if (

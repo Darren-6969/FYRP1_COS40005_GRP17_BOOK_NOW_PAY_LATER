@@ -17,6 +17,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, type ComponentProps } from "react";
 import { StyleSheet, View } from "react-native";
 
+import { UpdateBanner } from "@/components/UpdateBanner";
 import { AmbientBackground } from "@/components/ui/AmbientBackground";
 import { ToastProvider } from "@/components/ui/Toast";
 import { useTheme } from "@/hooks/use-theme";
@@ -99,6 +100,9 @@ function AppShell() {
             contentStyle: { backgroundColor: "transparent" },
           }}
         />
+
+        {/* Over every screen: a downloaded app update is ready to use. */}
+        <UpdateBanner />
       </NavThemeProvider>
     </View>
   );

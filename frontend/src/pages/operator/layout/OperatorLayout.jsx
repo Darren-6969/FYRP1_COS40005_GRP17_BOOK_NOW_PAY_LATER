@@ -105,6 +105,11 @@ export default function OperatorLayout() {
     function getNotificationLink(item) {
   const text = `${item.title || ""} ${item.message || ""}`;
   const type = String(item.type || "").toUpperCase();
+  // BNPLB-184: a notification that carries its own operator path opens it
+  // (the sold-out alert opens the listing with its dates).
+  if (typeof item.link === "string" && item.link.startsWith("/operator/")) {
+    return item.link;
+  }
   // Requirement 8.1 - Stock Availability Alert
   if (type === "STOCK_EXHAUSTED") {
     return "/operator/listings";

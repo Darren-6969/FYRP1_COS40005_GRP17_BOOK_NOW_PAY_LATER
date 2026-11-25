@@ -8,6 +8,7 @@ import {
   createInAppNotification,
   notifyOperatorUsersByBooking,
 } from "../services/notification_email_service.js";
+import { createAuditLog } from "../services/log_service.js";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -381,6 +382,20 @@ export async function downloadPermit(req, res, next) {
         message: "Permit not found.",
       });
     }
+
+    // SRS 4.8.2, BNPLB-183: every view of a driving document is logged.
+    await createAuditLog({
+      req,
+      action: "CUSTOMER_PERMIT_VIEWED",
+      entityType: "CustomerPermitDocument",
+      entityId: document.id,
+      details: {
+        customerId: document.customerId,
+        bookingId: document.bookingId,
+        operatorId: req.user.operatorId ?? null,
+        viewerRole: req.user.role,
+      },
+    });
 
     res.set({
       "Content-Type": document.mimeType,

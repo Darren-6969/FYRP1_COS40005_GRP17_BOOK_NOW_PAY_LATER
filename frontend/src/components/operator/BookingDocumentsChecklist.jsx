@@ -25,8 +25,37 @@ import "../../assets/styles/operator-booking-attention.css";
 const LICENCE_REJECT_REASONS = [
   ["EXPIRED", "Expired"],
   ["UNREADABLE", "Unreadable"],
+  ["DIFFERENT_DRIVER", "Different driver"],
   ["NOT_A_LICENCE", "Not a driving licence"],
 ];
+
+function plainDateText(value) {
+  if (!value) return null;
+  return new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeZone: "UTC" }).format(
+    new Date(`${String(value).slice(0, 10)}T00:00:00Z`)
+  );
+}
+
+// BNPLB-180: the name and expiry the customer entered, beside the driver and
+// return date the operator checks them against. Flags a clear mismatch.
+function licenceDetailsMeta(licence) {
+  if (!licence) return null;
+  const parts = [];
+  if (licence.holderName) {
+    parts.push(`Name on licence: ${licence.holderName}${licence.driverName ? ` (driver: ${licence.driverName})` : ""}`);
+  }
+  if (licence.expiresAt) {
+    const late = licence.returnDate && licence.expiresAt < licence.returnDate;
+    parts.push(
+      `Expires ${plainDateText(licence.expiresAt)}${
+        licence.returnDate ? `, return ${plainDateText(licence.returnDate)}` : ""
+      }${late ? " (expires before the return)" : ""}`
+    );
+  }
+  if (licence.issuingCountry) parts.push(`Issued in ${licence.issuingCountry}`);
+  if (licence.reused) parts.push("Attached from the customer's account");
+  return parts.join(" · ") || null;
+}
 
 const PERMIT_REJECT_REASONS = [
   ["EXPIRED", "Expired"],
@@ -139,13 +168,16 @@ function Checklist({ booking, onUpdated }) {
         icon={<IdCard size={20} aria-hidden="true" />}
         title="Driving licence"
         status={licenceStatus}
-        meta={
+        meta={[
+          licenceDetailsMeta(booking.licence),
           licenceStatus === "APPROVED" && booking.customer?.licenceVerifiedAt
             ? `Approved ${formatOperatorDateTime(booking.customer.licenceVerifiedAt)}`
             : booking.customer?.licenceSubmittedAt
               ? `Uploaded ${formatOperatorDateTime(booking.customer.licenceSubmittedAt)}`
-              : null
-        }
+              : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || null}
         kind="licence"
         reasons={LICENCE_REJECT_REASONS}
         onView={

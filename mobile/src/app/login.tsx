@@ -2,20 +2,29 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SaveError } from "@/components/account/AccountScreen";
+import { CODE_LENGTH, CodeInput } from "@/components/account/CodeInput";
 import { AppText, Button, FieldError, GlassCard, IconButton, SegmentedControl, TextField, type SegmentOption } from "@/components/ui";
 import { useTheme } from "@/hooks/use-theme";
 import { ApiError } from "@/services/api";
-import { loginUser, registerUser } from "@/services/authApi";
+import { loginUser, registerUser, verifyEmailCode, verifyLoginCode } from "@/services/authApi";
 import { saveSession } from "@/services/session";
 import { WEBSITE_URL } from "@/utils/chat-links";
 import { logger } from "@/utils/logger";
 
 type Mode = "login" | "register";
+/**
+ * The emailed code the server can ask for after the password:
+ * "login" is an operator's two-step sign-in (Shop settings, Security), and
+ * "email" confirms a new account's email address before its first sign-in.
+ */
+type CodeStep = "login" | "email";
+
+const RESEND_SECONDS = 30;
 type Field = "name" | "email" | "password" | "confirm" | "terms" | "privacy";
 type Errors = Partial<Record<Field, string>>;
 
@@ -56,8 +65,22 @@ export default function LoginScreen() {
   const [privacy, setPrivacy] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [submitError, setSubmitError] = useState<unknown>(null);
+  const [step, setStep] = useState<CodeStep | null>(null);
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [resendIn, setResendIn] = useState(0);
+  const [resent, setResent] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   const register = mode === "register";
+  const mail = email.trim();
+
+  // Counts down the wait before another code can be sent.
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
 
   const clear = (field: Field) => {
     if (errors[field]) setErrors((e) => ({ ...e, [field]: undefined }));
@@ -83,9 +106,83 @@ export default function LoginScreen() {
     router.replace((role === "CUSTOMER" ? "/customer/home" : "/operator/dashboard") as Href);
   };
 
+  const startCode = (next: CodeStep) => {
+    setStep(next);
+    setCode("");
+    setCodeError(null);
+    setSubmitError(null);
+    setResent(false);
+    setResendIn(RESEND_SECONDS);
+  };
+
+  const leaveCode = () => {
+    setStep(null);
+    setCode("");
+    setCodeError(null);
+    setSubmitError(null);
+  };
+
+  /** Password sign-in. An operator with two-step sign-in gets a code instead of a session. */
+  const signIn = async () => {
+    const data = await loginUser(mail, password);
+    if (data?.requiresOtp || data?.code === "OTP_REQUIRED") {
+      startCode("login");
+      return;
+    }
+    await enterApp(data);
+  };
+
+  const verify = async (value = code) => {
+    if (verifying) return;
+    if (value.length !== CODE_LENGTH) {
+      setCodeError(`Enter the ${CODE_LENGTH}-digit code from the email.`);
+      return;
+    }
+    setCodeError(null);
+    setSubmitError(null);
+    setVerifying(true);
+    try {
+      if (step === "login") {
+        await enterApp(await verifyLoginCode(mail, value));
+      } else {
+        await verifyEmailCode(mail, value);
+        // Email confirmed: sign in with the password already entered.
+        setStep(null);
+        await signIn();
+      }
+    } catch (err) {
+      logger.debug("Code check failed:", err);
+      if (err instanceof ApiError && (err.status === 400 || err.status === 429)) {
+        setCodeError(err.message);
+        setCode("");
+      } else {
+        setSubmitError(err);
+      }
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  /** Signing in again sends a fresh code for either step. */
+  const resend = async () => {
+    setCodeError(null);
+    setSubmitError(null);
+    try {
+      await loginUser(mail, password);
+    } catch (err) {
+      if (!(err instanceof ApiError && err.code === "EMAIL_VERIFICATION_REQUIRED")) {
+        logger.debug("Resending the code failed:", err);
+        setSubmitError(err);
+        return;
+      }
+    }
+    setCode("");
+    setResent(true);
+    setResendIn(RESEND_SECONDS);
+  };
+
   const submit = async () => {
     const next: Errors = {};
-    const mail = email.trim();
     if (!mail) next.email = "Enter your email address.";
     else if (!/^\S+@\S+\.\S+$/.test(mail)) next.email = "Enter a valid email address, for example name@email.com.";
 
@@ -106,9 +203,19 @@ export default function LoginScreen() {
     if (Object.values(next).some(Boolean)) return;
 
     try {
-      if (register) await registerUser(name.trim(), mail, password);
-      await enterApp(await loginUser(mail, password));
+      if (register) {
+        // The server emails a code to confirm the address before first sign-in.
+        await registerUser(name.trim(), mail, password);
+        startCode("email");
+        return;
+      }
+      await signIn();
     } catch (err) {
+      // An account whose email isn't confirmed yet: the server has just sent a code.
+      if (err instanceof ApiError && err.code === "EMAIL_VERIFICATION_REQUIRED") {
+        startCode("email");
+        return;
+      }
       logger.debug("Sign in failed:", err);
       setSubmitError(err);
     }
@@ -130,13 +237,71 @@ export default function LoginScreen() {
         <View style={styles.brand}>
           <Image source={require("../../assets/images/logo-circle.png")} style={styles.logo} accessible={false} />
           <AppText variant="largeTitle" accessibilityRole="header" align="center">
-            {register ? "Create your account" : "Welcome back"}
+            {step ? "Check your email" : register ? "Create your account" : "Welcome back"}
           </AppText>
           <AppText variant="body" align="center">
-            {register ? "Request a car for free. Pay only once it's accepted." : "Sign in to see your bookings and payments."}
+            {step
+              ? `We sent a ${CODE_LENGTH}-digit code to ${mail}. It expires in 10 minutes.`
+              : register
+                ? "Request a car for free. Pay only once it's accepted."
+                : "Sign in to see your bookings and payments."}
           </AppText>
         </View>
 
+        {step ? (
+          <GlassCard strong padding={16}>
+            <View style={styles.codeHead}>
+              <View style={[styles.codeIcon, { backgroundColor: tokens.glass }]}>
+                <Ionicons name={step === "login" ? "shield-checkmark-outline" : "mail-unread-outline"} size={20} color={tokens.brand} />
+              </View>
+              <AppText variant="body" style={styles.flex}>
+                {step === "login"
+                  ? "Your operator account asks for a code each time you sign in."
+                  : "Confirm your email address to finish creating your account."}
+              </AppText>
+            </View>
+
+            <View style={styles.fields}>
+              <CodeInput
+                label="Code from the email"
+                value={code}
+                onChange={(value) => {
+                  setCode(value);
+                  if (codeError) setCodeError(null);
+                  if (submitError) setSubmitError(null);
+                }}
+                onComplete={(value) => verify(value)}
+                error={codeError}
+              />
+              {resent && !codeError ? (
+                <AppText variant="caption" color="leafInk" accessibilityLiveRegion="polite">
+                  A new code is on its way. Use the newest email.
+                </AppText>
+              ) : null}
+            </View>
+
+            <SaveError error={submitError} />
+
+            <Button
+              label={step === "login" ? "Verify and sign in" : "Verify email"}
+              variant="brand"
+              loading={verifying}
+              disabled={code.length !== CODE_LENGTH}
+              style={styles.submit}
+              onPress={() => verify()}
+            />
+            <View style={styles.codeActions}>
+              <Button
+                label={resendIn > 0 ? `Send a new code in ${resendIn}s` : "Send a new code"}
+                variant="text"
+                size="sm"
+                disabled={resendIn > 0 || verifying}
+                onPress={resend}
+              />
+              <Button label="Use another email" variant="text" size="sm" disabled={verifying} onPress={leaveCode} />
+            </View>
+          </GlassCard>
+        ) : (
         <GlassCard strong padding={16}>
           <SegmentedControl options={MODES} value={mode} onChange={switchMode} accessibilityLabel="Sign in or create an account" />
 
@@ -251,9 +416,14 @@ export default function LoginScreen() {
 
           <Button label={register ? "Create account" : "Sign in"} variant={register ? "cta" : "brand"} style={styles.submit} onPress={submit} />
         </GlassCard>
+        )}
 
         <AppText variant="caption" align="center" style={styles.footnote}>
-          {register ? "Operators join through the website." : "Customers and operators sign in here."}
+          {step
+            ? "Can't find it? Check your spam folder."
+            : register
+              ? "Operators join through the website."
+              : "Customers and operators sign in here."}
         </AppText>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -360,6 +530,24 @@ const styles = StyleSheet.create({
   },
   submit: {
     marginTop: 16,
+  },
+  codeHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  codeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  codeActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    marginTop: 8,
   },
   footnote: {
     marginTop: 4,

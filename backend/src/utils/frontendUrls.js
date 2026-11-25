@@ -13,6 +13,13 @@ export function operatorPaymentsUrl() {
 }
 
 // App.jsx: /operator/bookings/:id -> OperatorBookingDetail
+// BNPLB-184: the operator Listings page opened on a sold-out alert. The same
+// path (without the host) is stored on the notification for the app.
+export function stockAlertPath(listingId, dates = []) {
+  const params = new URLSearchParams({ stockAlert: String(listingId), dates: dates.join(",") });
+  return `/operator/listings?${params.toString()}`;
+}
+
 export function operatorBookingUrl(bookingId) {
   return `${frontendBase()}/operator/bookings/${bookingId}`;
 }

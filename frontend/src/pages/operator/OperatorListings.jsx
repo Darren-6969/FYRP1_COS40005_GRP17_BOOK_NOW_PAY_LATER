@@ -6,6 +6,7 @@ import {
 
 import {
   Link,
+  useSearchParams,
 } from "react-router-dom";
 
 import {
@@ -14,6 +15,7 @@ import {
 } from "../../services/operator_service";
 
 import OperatorDailyStock from "../../components/operator/OperatorDailyStock";
+import StockAlertPanel from "../../components/operator/StockAlertPanel";
 
 const STATUS_TABS = [
   {
@@ -60,6 +62,23 @@ export default function OperatorListings() {
 
   const [selectedIds, setSelectedIds] =
     useState([]);
+
+  // BNPLB-184: ?stockAlert=<listingId>&dates=YYYY-MM-DD,... from the
+  // sold-out notification or email.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const alertListingId = Number(searchParams.get("stockAlert"));
+  const alertDates = (searchParams.get("dates") || "")
+    .split(",")
+    .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value));
+  const alertListing = alertListingId
+    ? listings.find((item) => item.id === alertListingId)
+    : null;
+  const dismissAlert = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("stockAlert");
+    next.delete("dates");
+    setSearchParams(next, { replace: true });
+  };
 
   const loadListings = async () => {
     try {
@@ -302,6 +321,17 @@ export default function OperatorListings() {
           + Create Listing
         </Link>
       </section>
+
+      {alertListing && alertDates.length > 0 && (
+        <StockAlertPanel
+          key={`${alertListing.id}-${alertDates.join(",")}`}
+          listing={alertListing}
+          dates={alertDates}
+          listings={listings}
+          onUpdated={loadListings}
+          onDismiss={dismissAlert}
+        />
+      )}
       {/* =====================================================
     SUBSCRIPTION USAGE
 ====================================================== */}

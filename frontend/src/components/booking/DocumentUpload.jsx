@@ -20,12 +20,21 @@ export default function DocumentUpload({
   buttonLabel,
   needsExpiry = false,
   minExpiry,
+  // BNPLB-180: a driving licence also needs the holder's name, its expiry
+  // date and the issuing country. onUpload then receives them as an object.
+  needsLicenceDetails = false,
+  defaultHolderName = "",
+  defaultCountry = "",
   onUpload,
 }) {
   const inputId = useId();
   const expiryId = useId();
+  const nameId = useId();
+  const countryId = useId();
   const [file, setFile] = useState(null);
   const [expiry, setExpiry] = useState("");
+  const [holderName, setHolderName] = useState(defaultHolderName);
+  const [country, setCountry] = useState(defaultCountry);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -54,10 +63,29 @@ export default function DocumentUpload({
       setError("Enter the date the permit is valid until.");
       return;
     }
+    if (needsLicenceDetails) {
+      if (holderName.trim().length < 2) {
+        setError("Enter the full name exactly as it appears on the licence.");
+        return;
+      }
+      if (!expiry) {
+        setError("Enter the date the licence expires.");
+        return;
+      }
+      if (country.trim().length < 2) {
+        setError("Enter the country that issued the licence.");
+        return;
+      }
+    }
     try {
       setBusy(true);
       setError("");
-      await onUpload(file, expiry);
+      await onUpload(
+        file,
+        needsLicenceDetails
+          ? { holderName: holderName.trim(), expiresAt: expiry, issuingCountry: country.trim() }
+          : expiry
+      );
       setFile(null);
       setExpiry("");
     } catch (err) {
@@ -124,6 +152,54 @@ export default function DocumentUpload({
       {/* Date (permit only) and the upload button sit beside the drop area
           on wide screens and below it on phones. */}
       <div className="doc-upload-side">
+        {needsLicenceDetails && (
+          <>
+            <div className="doc-upload-field">
+              <label htmlFor={nameId}>Name on the licence</label>
+              <input
+                id={nameId}
+                type="text"
+                autoComplete="name"
+                maxLength={120}
+                value={holderName}
+                placeholder="As printed on the licence"
+                onChange={(event) => {
+                  setHolderName(event.target.value);
+                  setError("");
+                }}
+              />
+            </div>
+            <div className="doc-upload-field">
+              <label htmlFor={expiryId}>Licence expiry date</label>
+              <DatePicker
+                id={expiryId}
+                value={expiry}
+                min={minExpiry}
+                placeholder="Choose the date"
+                onChange={(event) => {
+                  setExpiry(event.target.value);
+                  setError("");
+                }}
+              />
+            </div>
+            <div className="doc-upload-field">
+              <label htmlFor={countryId}>Issued in</label>
+              <input
+                id={countryId}
+                type="text"
+                autoComplete="country-name"
+                maxLength={60}
+                value={country}
+                placeholder="Malaysia"
+                onChange={(event) => {
+                  setCountry(event.target.value);
+                  setError("");
+                }}
+              />
+            </div>
+          </>
+        )}
+
         {needsExpiry && (
           <div className="doc-upload-field">
             <label htmlFor={expiryId}>Permit valid until</label>

@@ -63,7 +63,7 @@ export const POLICY_DOCUMENTS = [
         key: "driving-licence",
         title: "Driving licence",
         body: [
-          "- Every car booking needs a valid licence for the driver, uploaded by the same deadline as the balance. A licence you uploaded before is reused while it is still valid.",
+          "- Every car booking needs a valid licence for the driver, uploaded by the same deadline as the balance. You can attach a licence already on your account if it names the driver and is valid on your return date.",
           "- If the licence was issued outside Malaysia, you also upload an international driving permit.",
           "- The operator checks the upload. This is a first check only. The operator inspects the original licence at handover and can refuse the handover if it is not valid or does not match.",
         ].join("\n"),
@@ -789,7 +789,7 @@ export const ANSWER_TEMPLATES = [
     quickActionLabel: "Driving licence rules",
     keywords: ["licence", "license", "lesen", "idp", "driving permit"],
     placeholders: [],
-    body: "Every car booking needs the driver's valid driving licence, uploaded after the operator accepts and by the same deadline as the balance. A licence you uploaded before can be reused while it is still valid. If it was issued outside Malaysia, upload an international driving permit with it. Staff check the original at pickup.",
+    body: "Every car booking needs the driver's valid driving licence, uploaded after the operator accepts and by the same deadline as the balance. You can attach a licence already on your account if it names the driver and is still valid on your return date; the operator still checks it. If it was issued outside Malaysia, upload an international driving permit with it. Staff check the original at pickup.",
   },
   {
     key: "duitnow",

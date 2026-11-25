@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -137,6 +137,10 @@ function Selection({
 
 export default function BranchTransferScreen() {
   const router = useRouter();
+  // BNPLB-184: opened from a sold-out alert with both cars chosen.
+  const params = useLocalSearchParams<{ sourceListingId?: string; destinationListingId?: string }>();
+  const initialSource = Number(params.sourceListingId) || null;
+  const initialDestination = Number(params.destinationListingId) || null;
   const insets = useSafeAreaInsets();
   const toast = useToast();
 
@@ -183,15 +187,28 @@ export default function BranchTransferScreen() {
           getOperatorBranchTransfers(),
         ]);
 
+      const loadedListings = listingData.listings ?? [];
       setBranches(branchData.branches ?? []);
-      setListings(listingData.listings ?? []);
+      setListings(loadedListings);
       setHistory(historyData.transfers ?? []);
+
+      const from = initialSource ? loadedListings.find((item) => item.id === initialSource) : null;
+      const to = initialDestination ? loadedListings.find((item) => item.id === initialDestination) : null;
+      if (from) {
+        setSourceBranchId(from.branchId);
+        setSourceListingId(from.id);
+        if (to) {
+          setDestinationBranchId(to.branchId);
+          setDestinationListingId(to.id);
+        }
+        setReason((current) => current || "Sold-out dates at the destination branch");
+      }
     } catch (err) {
       setError(describeError(err).message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initialSource, initialDestination]);
 
   useEffect(() => {
     load();

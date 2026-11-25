@@ -23,9 +23,12 @@ export default function OperatorDailyStock({
   listing,
   onClose,
   onUpdated,
+  // BNPLB-184: opened from a sold-out alert on its dates.
+  initialFrom,
+  initialTo,
 }) {
-  const [fromDate, setFromDate] = useState(malaysiaToday);
-  const [toDate, setToDate] = useState(malaysiaToday);
+  const [fromDate, setFromDate] = useState(() => initialFrom || malaysiaToday());
+  const [toDate, setToDate] = useState(() => initialTo || initialFrom || malaysiaToday());
   const [quantity, setQuantity] = useState(
     String(listing.quantity)
   );

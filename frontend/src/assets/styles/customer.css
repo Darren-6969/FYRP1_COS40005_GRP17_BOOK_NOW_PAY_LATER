@@ -3035,6 +3035,30 @@
   align-items: stretch;
 }
 
+/* BNPLB-180: name, expiry and country entered with the licence. */
+.licence-details-fields {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.licence-details-fields label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.licence-details-fields input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #cbd5dc;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 400;
+}
+
 .licence-upload-area {
   min-height: 92px;
   border: 1.5px dashed #b9c9e6;

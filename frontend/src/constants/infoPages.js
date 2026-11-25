@@ -154,7 +154,7 @@ export const INFO_PAGES = {
         heading: "When to upload",
         list: [
           "By the same deadline as the balance. The date is on your booking.",
-          "A licence that was approved for an earlier booking is reused while it is still valid, so you do not need to upload it every time.",
+          "You can attach a licence already on your account if it names the driver and is still valid on your return date, so you do not need to upload it every time. The operator of each booking still checks it.",
           "If your licence is still being checked when the deadline passes, your booking is not cancelled for that.",
         ],
       },

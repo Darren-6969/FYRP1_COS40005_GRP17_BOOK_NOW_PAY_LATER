@@ -6,9 +6,10 @@ import {
   formatStatus,
 } from "../../utils/customerUtils";
 import {
+  attachLicenceToBooking,
   getBookingLicenceDocument,
-  getMyLicenceDocument,
   getMyPermit,
+  getReusableLicences,
   submitBookingLicenceDocument,
   submitPermitDocument,
 } from "../../services/customer_service";
@@ -55,18 +56,21 @@ export default function BookingDocumentsCard({ booking }) {
   const dueAt = booking.payment?.finalPaymentDueDate || pickup;
 
   const [licence, setLicence] = useState(undefined);
+  const [reusable, setReusable] = useState([]);
   const [permit, setPermit] = useState(undefined);
 
+  const driver = booking.car?.driver || booking.bookingDetails?.driver || null;
+
   const loadLicence = useCallback(async () => {
-    // The licence uploaded for this booking, else the latest one on the
-    // account (a valid licence is reused across bookings).
-    const [forBooking, onAccount] = await Promise.allSettled([
+    // BNPLB-181: the licence check belongs to this booking. A licence already
+    // on the account is offered for one-tap attaching, but only when it names
+    // the driver and is valid through the return date.
+    const [forBooking, candidates] = await Promise.allSettled([
       getBookingLicenceDocument(booking.id),
-      getMyLicenceDocument(),
+      getReusableLicences(booking.id),
     ]);
-    const bookingDoc = forBooking.status === "fulfilled" ? forBooking.value.data?.document : null;
-    const accountDoc = onAccount.status === "fulfilled" ? onAccount.value.data?.document : null;
-    setLicence(bookingDoc || accountDoc || null);
+    setLicence(forBooking.status === "fulfilled" ? forBooking.value.data?.document || null : null);
+    setReusable(candidates.status === "fulfilled" ? candidates.value.data?.licences || [] : []);
   }, [booking.id]);
 
   const loadPermit = useCallback(async () => {
@@ -92,16 +96,29 @@ export default function BookingDocumentsCard({ booking }) {
       icon: IdCard,
       title: "Driving licence",
       doc: licence,
-      note: licenceNote(licence, op, dueAt),
+      note: licenceNote(licence, op, dueAt, reusable.some((item) => item.eligible)),
       canUpload: open && (!licence || NEEDS_UPLOAD.includes(licence.status)),
       upload: (
-        <DocumentUpload
-          buttonLabel="Upload licence"
-          onUpload={async (file) => {
-            await submitBookingLicenceDocument(booking.id, file);
-            await loadLicence();
-          }}
-        />
+        <>
+          <ReusableLicences
+            licences={reusable}
+            onAttach={async (licenceId) => {
+              await attachLicenceToBooking(booking.id, licenceId);
+              await loadLicence();
+            }}
+          />
+          <DocumentUpload
+            buttonLabel={reusable.length ? "Upload a new licence" : "Upload licence"}
+            needsLicenceDetails
+            defaultHolderName={driver?.fullName || ""}
+            defaultCountry={driver?.licenceIssuedIn === "MY" ? "Malaysia" : ""}
+            minExpiry={todayInMalaysia()}
+            onUpload={async (file, details) => {
+              await submitBookingLicenceDocument(booking.id, file, details);
+              await loadLicence();
+            }}
+          />
+        </>
       ),
     },
   ];
@@ -172,9 +189,67 @@ export default function BookingDocumentsCard({ booking }) {
   );
 }
 
-function licenceNote(doc, op, dueAt) {
+// BNPLB-181: licences already on the account. One that names the driver and
+// is valid through the return date is attached in one tap; the others are
+// shown greyed with the reason.
+function ReusableLicences({ licences, onAttach }) {
+  const [busy, setBusy] = useState(null);
+  const [error, setError] = useState("");
+  if (!licences.length) return null;
+
+  const attach = async (id) => {
+    try {
+      setBusy(id);
+      setError("");
+      await onAttach(id);
+    } catch (err) {
+      setError(err.response?.data?.message || "Couldn't attach the licence. Try again.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="booking-docs-reuse">
+      <p className="booking-docs-reuse-title">Licences on your account</p>
+      <ul>
+        {licences.map((item) => (
+          <li key={item.id} className={item.eligible ? "" : "is-refused"}>
+            <div>
+              <strong>{item.holderName || "Licence"}</strong>
+              <span className="customer-muted">
+                {item.expiresAt ? `Valid until ${plainDate(item.expiresAt)}` : "No expiry date on record"}
+                {item.issuingCountry ? ` · ${item.issuingCountry}` : ""}
+              </span>
+              {!item.eligible && item.reason && <span className="booking-docs-reuse-reason">{item.reason}</span>}
+            </div>
+            {item.eligible && (
+              <button
+                type="button"
+                className="customer-primary-btn"
+                disabled={busy !== null}
+                onClick={() => attach(item.id)}
+              >
+                {busy === item.id ? "Attaching..." : "Use this licence"}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {error && (
+        <p className="doc-upload-error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function licenceNote(doc, op, dueAt, canReuse = false) {
   if (!doc) {
-    return `Upload a clear photo of the front and back before ${formatCustomerDate(dueAt)}.`;
+    return canReuse
+      ? `Use a licence already on your account, or upload one, before ${formatCustomerDate(dueAt)}.`
+      : `Upload a clear photo of the front and back before ${formatCustomerDate(dueAt)}.`;
   }
   switch (doc.status) {
     case "APPROVED":
@@ -182,7 +257,9 @@ function licenceNote(doc, op, dueAt) {
     case "UNDER_REVIEW":
       return `Uploaded ${formatCustomerDate(doc.submittedAt)}. ${op} checks it before pickup.`;
     default:
-      return `${doc.rejectionReason ? `Reason: ${formatStatus(doc.rejectionReason).toLowerCase()}. ` : ""}Upload a clearer photo of the front and back.`;
+      return doc.rejectionReason === "DIFFERENT_DRIVER"
+        ? "Reason: the name on the licence is not the driver's name. Attach or upload the driver's licence."
+        : `${doc.rejectionReason ? `Reason: ${formatStatus(doc.rejectionReason).toLowerCase()}. ` : ""}Upload a clearer photo of the front and back.`;
   }
 }
 

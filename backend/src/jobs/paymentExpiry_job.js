@@ -104,12 +104,13 @@ export function runPaymentExpiryJob() {
               id: true,
               name: true,
               email: true,
-              licenceDocuments: {
-                orderBy: { submittedAt: "desc" },
-                take: 1,
-                select: { status: true },
-              },
             },
+          },
+          // BNPLB-181: the licence check belongs to the booking.
+          licenceDocuments: {
+            orderBy: [{ submittedAt: "desc" }, { id: "desc" }],
+            take: 1,
+            select: { status: true },
           },
           payment: true,
           paymentScheduleEntries: {
@@ -152,7 +153,7 @@ export function runPaymentExpiryJob() {
           payment: booking.payment,
           licenceStatus: booking.driverBookings?.length
             ? driverLicenceStatus(booking)
-            : booking.customer.licenceDocuments[0]?.status ?? null,
+            : booking.licenceDocuments[0]?.status ?? null,
         })
       );
       if (!owed.length) continue;

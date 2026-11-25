@@ -22,6 +22,7 @@ import {
   releaseIdempotencyKey,
 } from "../services/idempotency_service.js";
 import { trackBookingEvent, trackEvent } from "../services/analytics_service.js";
+import { notifyStockExhausted } from "../services/availability_alert_service.js";
 
 const ENDPOINT = "POST /customer/tour-bookings";
 
@@ -120,17 +121,8 @@ export async function createTourBooking(req, res, next) {
         emailSubject: `New Booking Request - ${booking.bookingCode}`,
         emailHtml: bookingSubmittedTemplate({ booking, operatorUrl: `${frontend}/operator/bookings/${booking.id}` }),
       }),
-      ...(exhaustedDates?.length
-        ? [
-            notifyOperatorUsersByBooking({
-              booking,
-              title: "Tour fully booked",
-              message: `${listing.name} is fully booked on ${exhaustedDates.join(", ")}. Latest booking: ${booking.bookingCode}.`,
-              type: "STOCK_EXHAUSTED",
-              notifyMaster: false,
-            }),
-          ]
-        : []),
+      // BNPLB-184: the same actionable sold-out alert as car bookings.
+      notifyStockExhausted({ booking, listing, dates: exhaustedDates }),
     ]).then((results) =>
       results
         .filter((x) => x.status === "rejected")

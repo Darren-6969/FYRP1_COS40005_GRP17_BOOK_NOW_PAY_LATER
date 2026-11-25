@@ -18,6 +18,8 @@ export async function createInAppNotification({
   title,
   message,
   type = "INFO",
+  // BNPLB-184: an app path the notification opens, e.g. the stock alert.
+  link = null,
 }) {
   if (!userId) return null;
 
@@ -27,6 +29,7 @@ export async function createInAppNotification({
       title,
       message,
       type,
+      ...(link ? { link } : {}),
     },
   });
 
@@ -88,6 +91,7 @@ export async function notifyOperatorUsersByBooking({
   emailText,
   notifyMaster = true,
   emailMaster = false,
+  link = null,
 }) {
   const operatorUsers = await prisma.user.findMany({
     where: {
@@ -123,6 +127,7 @@ export async function notifyOperatorUsersByBooking({
       title,
       message,
       type,
+      link,
     });
 
     const isAdmin = user.role === "MASTER_SELLER";

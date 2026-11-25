@@ -90,6 +90,19 @@ export type OperatorBooking = {
     licenceVerifiedAt?: string | null;
   } | null;
 
+  /** BNPLB-180: this booking's licence details beside what they're checked against. */
+  licence?: {
+    id: number;
+    status: string;
+    rejectionReason?: string | null;
+    holderName?: string | null;
+    expiresAt?: string | null;
+    issuingCountry?: string | null;
+    reused?: boolean;
+    driverName?: string | null;
+    returnDate?: string | null;
+  } | null;
+
   // Payment information
   payment?: {
     status?: string;
@@ -334,6 +347,8 @@ export type OperatorNotification = {
   type: string;
   isRead: boolean;
   createdAt: string;
+  /** BNPLB-184: an app path to open, e.g. /operator/listings?stockAlert=12&dates=... */
+  link?: string | null;
 };
 
 export async function getOperatorNotifications(): Promise<{
@@ -891,6 +906,10 @@ export type OperatorLicenceDocument = {
   status: string;
   submittedAt: string;
   reviewDueAt: string;
+  /** BNPLB-180: entered by the customer. YYYY-MM-DD for expiresAt. */
+  holderName?: string | null;
+  expiresAt?: string | null;
+  issuingCountry?: string | null;
 
   customer?: {
     id: number;
@@ -903,6 +922,9 @@ export type OperatorLicenceDocument = {
     id: number;
     bookingCode: string;
     paymentDeadline?: string | null;
+    /** The driver and return day (YYYY-MM-DD) the licence is checked against. */
+    driverName?: string | null;
+    returnDate?: string | null;
   } | null;
 
   sla?: {
@@ -997,6 +1019,7 @@ export type LicenceReviewDecision = "APPROVED" | "REJECTED";
 export type LicenceRejectionReason =
   | "EXPIRED"
   | "UNREADABLE"
+  | "DIFFERENT_DRIVER"
   | "NOT_A_LICENCE";
 
 export async function reviewOperatorLicence(
