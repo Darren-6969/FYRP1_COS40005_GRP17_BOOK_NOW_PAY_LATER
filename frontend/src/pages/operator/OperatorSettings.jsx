@@ -188,7 +188,7 @@ const SETTINGS_MENU = [
     id: "payment-settings",
     title: "Payment Settings",
     description:
-      "Payment methods and receipt uploads.",
+      "Payment methods, Stripe payouts and receipt uploads.",
     icon: CreditCard,
   },
 
@@ -241,7 +241,11 @@ export default function OperatorSettings() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeSection, setActiveSection] = useState(null);
+  // Coming back from Stripe onboarding opens Payment Settings, where the
+  // Stripe Connect card lives.
+  const [activeSection, setActiveSection] = useState(() =>
+    searchParams.get("stripe") ? "payment-settings" : null
+  );
   const { dirty, markClean } = useDirtyState(form);
   const loadSettings = async () => {
     try {
@@ -907,12 +911,14 @@ const activeMenu = SETTINGS_MENU.find(
               />
             </div>
 
+            {form.acceptedPaymentMethods.stripe && <StripeConnectCard />}
+
             {form.acceptedPaymentMethods.duitnowSpay && <DuitNowAccountCard />}
 
             {form.acceptedPaymentMethods.duitnowSpay && (
               <FormField
                 label="DuitNow / SPay payment instructions"
-                helper="Shown to customers when manual transfer is available."
+                helper="Shown to customers when manual transfer is available. Add your bank name, account holder and account number here if customers can also pay by bank transfer."
               >
                 <textarea
                   rows={5}
@@ -923,7 +929,7 @@ const activeMenu = SETTINGS_MENU.find(
                       event.target.value
                     )
                   }
-                  placeholder="Enter manual payment instructions..."
+                  placeholder="Example: Bank transfer to [Bank name], [Account holder], account [number]. Upload your receipt after paying."
                 />
               </FormField>
             )}
@@ -1267,12 +1273,8 @@ const activeMenu = SETTINGS_MENU.find(
 
       case "integration-settings":
         return (
-          <div>
-            <div id="integration-settings">
-              <IntegrationSettings />
-            </div>
-
-            <StripeConnectCard />
+          <div id="integration-settings">
+            <IntegrationSettings />
           </div>
         );
 
@@ -1336,15 +1338,15 @@ const activeMenu = SETTINGS_MENU.find(
 
       {stripeReturn === "connected" && (
         <div className="operator-alert success">
-          Stripe onboarding completed. Your account restrictions should now be
-          lifted.
+          You are back from Stripe. Your account status is shown under
+          Payment Settings. Stripe may take a few minutes to verify new details.
         </div>
       )}
 
       {stripeReturn === "refresh" && (
         <div className="operator-alert warning">
-          The onboarding link expired. Open Integration / API Keys and click
-          Complete Stripe Onboarding to get a new one.
+          The onboarding link expired. Click Complete Stripe Onboarding in
+          Payment Settings to get a new one.
         </div>
       )}
 
@@ -1663,8 +1665,6 @@ function SecurityInfoCard({ icon, title, value, description }) {
 
 // ── Stripe Connect onboarding card ────────────────────────────────────────────
 
-// This part is kept from your existing code and should not be removed.
-
 function StripeConnectCard() {
 
   const [status, setStatus] = useState(null); // null = not loaded yet
@@ -1781,17 +1781,23 @@ function StripeConnectCard() {
         </div>
       )}
 
-      {/* Transfers capability is required for Destination Charges (the split payment model).
-          If inactive, the customer checkout will throw a Stripe error. */}
+      {status?.configured && status.account && (
+        <StripeAccountDetails accountId={status.accountId} account={status.account} />
+      )}
+
+      {/* Customer card payments are charged on the platform account, and the
+          hourly payout job (operatorPayout_job.js) transfers the operator's
+          share once the appeal window has passed. That transfer needs the
+          'transfers' capability, so without it payouts are held, not checkout. */}
       {status?.configured && status.capabilities?.transfers !== "active" && (
         <div
           className="operator-alert danger"
           style={{ fontSize: "0.8rem", marginBottom: "1rem" }}
         >
-          <strong>Transfers capability inactive.</strong> Customers cannot pay
-          until this is enabled. Click <em>Complete Stripe Onboarding</em> below
-          — it will request the capability automatically. With a real Stripe
-          account Stripe may need to verify your details first.
+          <strong>Transfers capability inactive.</strong> Customers can still
+          pay by card, but your payouts are held until this is enabled. Click{" "}
+          <em>Complete Stripe Onboarding</em> below to request it. Stripe may
+          need to verify your details first.
         </div>
       )}
 
@@ -1809,7 +1815,8 @@ function StripeConnectCard() {
 
       {/* Onboarding button — always shown so the merchant can re-enter the form */}
       <button
-        className="operator-btn"
+        type="button"
+        className="operator-primary-btn"
         onClick={handleStartOnboarding}
         disabled={launching}
         style={{ minWidth: "220px" }}
@@ -1829,7 +1836,7 @@ function StripeConnectCard() {
           className="operator-status success"
           style={{ marginTop: "0.5rem", display: "inline-block" }}
         >
-          Account active — charges and payouts enabled
+          Account active. Charges and payouts are enabled.
         </p>
       )}
 
@@ -1838,10 +1845,102 @@ function StripeConnectCard() {
           className="operator-status danger"
           style={{ marginTop: "0.5rem", display: "inline-block" }}
         >
-          Account restricted — complete onboarding to enable payouts
+          Account restricted. Complete onboarding to enable payouts.
         </p>
       )}
     </div>
+  );
+}
+
+const PAYOUT_INTERVAL_LABELS = {
+  daily: "Daily",
+  weekly: "Weekly",
+  monthly: "Monthly",
+  manual: "Manual",
+};
+
+function formatPayoutSchedule(schedule) {
+  if (!schedule?.interval) return null;
+  let text = PAYOUT_INTERVAL_LABELS[schedule.interval] || schedule.interval;
+  if (schedule.interval === "weekly" && schedule.weeklyAnchor) {
+    text += ` (${schedule.weeklyAnchor.charAt(0).toUpperCase()}${schedule.weeklyAnchor.slice(1)})`;
+  }
+  if (schedule.interval === "monthly" && schedule.monthlyAnchor) {
+    text += ` (day ${schedule.monthlyAnchor})`;
+  }
+  if (schedule.interval !== "manual" && Number.isInteger(schedule.delayDays)) {
+    text += `, ${schedule.delayDays} day${schedule.delayDays === 1 ? "" : "s"} after payment`;
+  }
+  return text;
+}
+
+// Basic details of the operator's own connected account, as returned by
+// GET /api/stripe/account-status. Bank details are the last 4 digits only.
+function StripeAccountDetails({ accountId, account }) {
+  const payout = account.payoutAccount;
+  const rows = [
+    ["Account name", account.displayName],
+    ["Stripe account ID", accountId],
+    ["Email", account.email],
+    ["Country", account.country],
+    ["Currency", account.defaultCurrency],
+    [
+      "Payout account",
+      payout
+        ? [payout.bankName, payout.last4 ? `ending ${payout.last4}` : null]
+            .filter(Boolean)
+            .join(" ")
+        : "Not added yet",
+    ],
+    ["Payout schedule", formatPayoutSchedule(account.payoutSchedule)],
+    [
+      "Connected since",
+      account.createdAt
+        ? new Date(account.createdAt).toLocaleDateString("en-MY", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            timeZone: "Asia/Kuala_Lumpur",
+          })
+        : null,
+    ],
+  ].filter(([, value]) => value);
+
+  if (!rows.length) return null;
+
+  return (
+    <dl
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+        gap: "0.75rem 1.25rem",
+        margin: "0 0 1rem",
+        padding: "1rem",
+        borderRadius: "16px",
+        background: "#f8fafc",
+        border: "1px solid #e2e8f0",
+        fontSize: "0.85rem",
+      }}
+    >
+      {rows.map(([label, value]) => (
+        <div key={label} style={{ minWidth: 0 }}>
+          <dt style={{ color: "#475569", fontWeight: 600, marginBottom: "0.2rem" }}>
+            {label}
+          </dt>
+          <dd
+            style={{
+              margin: 0,
+              fontWeight: 700,
+              overflowWrap: "anywhere",
+              fontFamily:
+                label === "Stripe account ID" ? "ui-monospace, monospace" : undefined,
+            }}
+          >
+            {value}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

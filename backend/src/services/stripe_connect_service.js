@@ -26,6 +26,56 @@ export function getStripeAccountState(account = {}) {
   return { stripeOnboardingStatus, stripeRequirements };
 }
 
+// Basic, non-sensitive details of a connected account for the operator's own
+// settings page. Stripe only ever exposes the last 4 digits of the payout
+// bank account, and that is all we pass on.
+export function getStripeAccountSummary(account = {}) {
+  const profile = account.business_profile || {};
+  const individual = account.individual || {};
+  const company = account.company || {};
+  const personName = [individual.first_name, individual.last_name]
+    .filter(Boolean)
+    .join(" ");
+
+  const bankAccounts = account.external_accounts?.data || [];
+  const payoutAccount =
+    bankAccounts.find((item) => item.default_for_currency) || bankAccounts[0] || null;
+
+  const schedule = account.settings?.payouts?.schedule || null;
+
+  return {
+    displayName:
+      account.settings?.dashboard?.display_name ||
+      profile.name ||
+      company.name ||
+      personName ||
+      null,
+    email: account.email || null,
+    country: account.country || null,
+    defaultCurrency: account.default_currency
+      ? account.default_currency.toUpperCase()
+      : null,
+    businessType: account.business_type || null,
+    createdAt: account.created ? new Date(account.created * 1000).toISOString() : null,
+    payoutAccount: payoutAccount
+      ? {
+          type: payoutAccount.object === "card" ? "card" : "bank_account",
+          bankName: payoutAccount.bank_name || payoutAccount.brand || null,
+          last4: payoutAccount.last4 || null,
+          currency: payoutAccount.currency ? payoutAccount.currency.toUpperCase() : null,
+        }
+      : null,
+    payoutSchedule: schedule
+      ? {
+          interval: schedule.interval || null,
+          delayDays: Number.isInteger(schedule.delay_days) ? schedule.delay_days : null,
+          weeklyAnchor: schedule.weekly_anchor || null,
+          monthlyAnchor: schedule.monthly_anchor ?? null,
+        }
+      : null,
+  };
+}
+
 export async function syncStripeAccountUpdated(account, database = prisma) {
   if (!account?.id) return { count: 0 };
 

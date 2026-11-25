@@ -21,7 +21,7 @@ function decodeQrImage(file) {
       const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
       const found = jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: "attemptBoth" });
       if (found?.data) resolve(found.data);
-      else reject(new Error("No QR code could be read from this image. Use a sharp screenshot of your DuitNow QR, or paste its text below."));
+      else reject(new Error("No QR code could be read from this image. Use a sharp, uncropped screenshot of your DuitNow QR and try again."));
     };
     image.onerror = () => {
       URL.revokeObjectURL(url);
@@ -36,7 +36,6 @@ function decodeQrImage(file) {
 export default function DuitNowAccountCard() {
   const [state, setState] = useState(null); // null = not loaded yet
   const [editing, setEditing] = useState(false);
-  const [pasted, setPasted] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -64,7 +63,6 @@ export default function DuitNowAccountCard() {
       const res = await operatorService.saveDuitnowAccount(payload);
       setState(res.data);
       setEditing(false);
-      setPasted("");
       setNotice("DuitNow account saved. Scan the test QR code below with your banking app to check it.");
     } catch (err) {
       setError(err.response?.data?.message || "Could not save the DuitNow account.");
@@ -166,29 +164,6 @@ export default function DuitNowAccountCard() {
               A screenshot of the DuitNow QR from your banking app or DuitNow account. It is read in your browser,
               and only the account details inside it are kept.
             </p>
-          </div>
-
-          <div>
-            <label style={{ fontSize: "0.85rem", display: "block", marginBottom: "0.25rem" }}>
-              Or paste the text of the QR code
-            </label>
-            <textarea
-              rows={3}
-              style={{ width: "100%" }}
-              value={pasted}
-              onChange={(event) => setPasted(event.target.value)}
-              placeholder="00020201021126..."
-              disabled={busy}
-            />
-            <button
-              type="button"
-              className="operator-secondary-btn"
-              style={{ marginTop: "0.5rem" }}
-              disabled={busy || !pasted.trim()}
-              onClick={() => save(pasted)}
-            >
-              Save DuitNow account
-            </button>
           </div>
         </div>
       )}

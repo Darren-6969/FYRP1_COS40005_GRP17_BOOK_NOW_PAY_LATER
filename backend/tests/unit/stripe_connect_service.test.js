@@ -4,6 +4,7 @@ import { processStripeWebhookEvent } from "../../src/routes/stripe_routes.js";
 import {
   createExpressOnboardingLink,
   getStripeAccountState,
+  getStripeAccountSummary,
   syncStripeAccountUpdated,
 } from "../../src/services/stripe_connect_service.js";
 
@@ -134,4 +135,61 @@ test("account.updated webhook persists the connected operator state", async () =
 
   assert.deepEqual(updateArgs.where, { stripeAccountId: "acct_webhook_operator" });
   assert.equal(updateArgs.data.stripeOnboardingStatus, "COMPLETE");
+});
+test("summarises a connected account with only the payout bank's last 4 digits", () => {
+  const summary = getStripeAccountSummary({
+    id: "acct_operator_123",
+    email: "owner@example.com",
+    country: "MY",
+    default_currency: "myr",
+    business_type: "company",
+    created: 1764072000,
+    business_profile: { name: "Golden Car Rental" },
+    settings: {
+      dashboard: { display_name: null },
+      payouts: { schedule: { interval: "daily", delay_days: 2 } },
+    },
+    external_accounts: {
+      data: [
+        { object: "bank_account", bank_name: "OLD BANK", last4: "1111", currency: "myr" },
+        {
+          object: "bank_account",
+          bank_name: "MAYBANK",
+          last4: "6789",
+          currency: "myr",
+          default_for_currency: true,
+          routing_number: "MBBEMYKL",
+        },
+      ],
+    },
+  });
+
+  assert.equal(summary.displayName, "Golden Car Rental");
+  assert.equal(summary.email, "owner@example.com");
+  assert.equal(summary.defaultCurrency, "MYR");
+  assert.equal(summary.createdAt, "2025-11-25T12:00:00.000Z");
+  assert.deepEqual(summary.payoutAccount, {
+    type: "bank_account",
+    bankName: "MAYBANK",
+    last4: "6789",
+    currency: "MYR",
+  });
+  assert.deepEqual(summary.payoutSchedule, {
+    interval: "daily",
+    delayDays: 2,
+    weeklyAnchor: null,
+    monthlyAnchor: null,
+  });
+  assert.equal(JSON.stringify(summary).includes("MBBEMYKL"), false);
+});
+
+test("summary falls back to the person's name and copes with a fresh account", () => {
+  const summary = getStripeAccountSummary({
+    individual: { first_name: "Darren", last_name: "Lee" },
+  });
+
+  assert.equal(summary.displayName, "Darren Lee");
+  assert.equal(summary.payoutAccount, null);
+  assert.equal(summary.payoutSchedule, null);
+  assert.equal(summary.createdAt, null);
 });

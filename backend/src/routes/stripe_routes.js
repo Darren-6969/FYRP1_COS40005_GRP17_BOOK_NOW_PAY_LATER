@@ -38,6 +38,7 @@ import {
   createExpressOnboardingLink,
   getStripeAccountState,
   syncStripeAccountUpdated,
+  getStripeAccountSummary,
 } from "../services/stripe_connect_service.js";
 import { trackPaymentSuccess } from "../services/analytics_service.js";
 import { completeProviderRefund } from "../services/refund_service.js";
@@ -904,6 +905,7 @@ router.get(
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
         detailsSubmitted: account.details_submitted,
+        account: getStripeAccountSummary(account),
         // Individual capabilities — 'transfers' must be 'active' for Destination Charges to work.
         capabilities: {
           cardPayments: account.capabilities?.card_payments ?? "inactive",
