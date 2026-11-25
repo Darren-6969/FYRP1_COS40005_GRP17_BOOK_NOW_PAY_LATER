@@ -1,5 +1,6 @@
 {
   "expo": {
+    "owner": "fyp-bnpl",
     "name": "BNPL",
     "slug": "mobile",
     "version": "1.0.0",
