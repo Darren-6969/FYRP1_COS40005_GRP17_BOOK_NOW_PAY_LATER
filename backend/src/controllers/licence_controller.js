@@ -236,7 +236,7 @@ function openCarBooking(booking) {
 
 /**
  * BNPLB-181. GET /licence-verification/bookings/:bookingId/reusable
- * The customer's licences with whether each can be attached to this booking.
+ * The customer's licences that can be attached to this booking.
  */
 export async function getReusableLicences(req, res, next) {
   try {
@@ -263,7 +263,10 @@ export async function getReusableLicences(req, res, next) {
         reviewedAt: licence.reviewedAt,
         ...checkLicenceReuse(licence, booking),
       }))
-      .sort((a, b) => Number(b.eligible) - Number(a.eligible));
+      // Only licences the customer can actually attach are offered. Refused
+      // ones (no details on record, expired, another driver) only crowd out
+      // the upload box.
+      .filter((licence) => licence.eligible);
 
     res.json({
       driverName: bookingDriverName(booking),
